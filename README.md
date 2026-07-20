@@ -74,8 +74,8 @@ activer. Ensuite, toutes les demandes sont transférées automatiquement.
 - Pour **changer l'adresse de réception**, modifiez l'email dans
   `action="https://formsubmit.co/ajax/…"` (une nouvelle activation sera demandée).
 - Anti-spam (champ piège) et mise en forme des emails (`_template=table`) sont inclus.
-- L'adresse affichée dans le bloc Contact (`contact@littledreamphotos.com`) est
-  indépendante — modifiez-la dans `index.html` si vous le souhaitez.
+- L'adresse affichée dans le bloc Contact (`littledreamphotos@hotmail.com`) est
+  indépendante du routage du formulaire — modifiez-la dans `index.html` si besoin.
 
 ## 🚀 Déploiement
 
