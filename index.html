@@ -16,7 +16,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Jost:wght@300;400;500;600&display=swap" rel="stylesheet" />
 
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%23b98a7a'/><text y='72' x='50' text-anchor='middle' font-size='60' font-family='Georgia'>L</text></svg>" />
-  <link rel="stylesheet" href="style.css?v=4" />
+  <link rel="stylesheet" href="style.css?v=5" />
 </head>
 <body>
 
@@ -122,8 +122,10 @@
         <p class="section-lead">Chaque séance est unique et pensée sur mesure. Découvrez chaque univers en portfolio, et retrouvez tous les détails sur la page Tarifs.</p>
       </header>
 
-      <div class="cards">
-        <article class="card reveal" data-tint="rose">
+      <div class="cards-carousel reveal">
+        <button class="car-btn car-prev" id="carPrev" type="button" aria-label="Vignettes précédentes">‹</button>
+        <div class="cards" id="prestaCards">
+        <article class="card" data-tint="rose">
           <a class="card-media" href="portfolio.html#maternite" style="background-image:url('images/maternite/maternite-01.jpeg'); background-position:center 32%"></a>
           <div class="card-body">
             <h3>Maternité</h3>
@@ -132,7 +134,7 @@
           </div>
         </article>
 
-        <article class="card reveal" data-tint="cream">
+        <article class="card" data-tint="cream">
           <a class="card-media" href="portfolio.html#naissance" style="background-image:url('images/naissance/naissance-05.jpeg'); background-position:center 42%"></a>
           <div class="card-body">
             <h3>Naissance &amp; Nouveau-né</h3>
@@ -141,7 +143,7 @@
           </div>
         </article>
 
-        <article class="card reveal" data-tint="sage">
+        <article class="card" data-tint="sage">
           <a class="card-media" href="portfolio.html#famille" style="background-image:url('images/famille/famille-03.jpeg'); background-position:center 40%"></a>
           <div class="card-body">
             <h3>Famille</h3>
@@ -150,7 +152,7 @@
           </div>
         </article>
 
-        <article class="card reveal" data-tint="peach">
+        <article class="card" data-tint="peach">
           <a class="card-media" href="portfolio.html#cake" style="background-image:url('images/cake/cake-05.jpeg'); background-position:center 42%"></a>
           <div class="card-body">
             <h3>Smash the Cake</h3>
@@ -159,7 +161,7 @@
           </div>
         </article>
 
-        <article class="card reveal" data-tint="mauve">
+        <article class="card" data-tint="mauve">
           <a class="card-media" href="portfolio.html#portrait" style="background-image:url('images/portrait/portrait-03.jpeg'); background-position:center 18%"></a>
           <div class="card-body">
             <h3>Portrait</h3>
@@ -168,7 +170,7 @@
           </div>
         </article>
 
-        <article class="card reveal" data-tint="taupe">
+        <article class="card" data-tint="taupe">
           <a class="card-media" href="portfolio.html#boudoir" style="background-image:url('images/boudoir/boudoir-01.jpeg'); background-position:center 30%"></a>
           <div class="card-body">
             <h3>Boudoir</h3>
@@ -177,7 +179,7 @@
           </div>
         </article>
 
-        <article class="card reveal" data-tint="sage">
+        <article class="card" data-tint="sage">
           <a class="card-media" href="tarifs.html#formations" style="background-image:url('images/cris.jpeg'); background-position:center 45%"></a>
           <div class="card-body">
             <h3>Formations</h3>
@@ -185,6 +187,8 @@
             <a href="tarifs.html#formations" class="card-link">En savoir plus →</a>
           </div>
         </article>
+        </div>
+        <button class="car-btn car-next" id="carNext" type="button" aria-label="Vignettes suivantes">›</button>
       </div>
 
       <div class="section-cta reveal">
@@ -308,6 +312,6 @@
     <p class="footer-copy">© <span id="year"></span> Little Dream Photography · Tous droits réservés</p>
   </footer>
 
-  <script src="script.js?v=4"></script>
+  <script src="script.js?v=5"></script>
 </body>
 </html>

@@ -187,12 +187,34 @@ h3 { font-size: 1.5rem; }
    PRESTATIONS
    ===================================================================== */
 .prestations { background: var(--ivory); }
-.cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.8rem; }
+
+/* Carrousel horizontal des prestations */
+.cards-carousel { position: relative; }
+.cards {
+  display: flex; gap: 1.8rem; overflow-x: auto; scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch; scroll-padding-left: 0; padding: .3rem .3rem 1rem;
+  scrollbar-width: none;
+}
+.cards::-webkit-scrollbar { display: none; }
 .card {
+  flex: 0 0 clamp(250px, 44%, 560px); scroll-snap-align: start;
   background: var(--white); border-radius: var(--radius); overflow: hidden;
   box-shadow: var(--shadow-sm); transition: transform .45s var(--ease), box-shadow .45s var(--ease);
 }
 .card:hover { transform: translateY(-8px); box-shadow: var(--shadow); }
+
+/* Flèches de navigation */
+.car-btn {
+  position: absolute; top: 34%; transform: translateY(-50%); z-index: 6;
+  width: 48px; height: 48px; border-radius: 50%; border: 1px solid var(--line);
+  background: var(--white); color: var(--rose-deep); box-shadow: var(--shadow-sm);
+  font-size: 1.7rem; line-height: 1; cursor: pointer; display: grid; place-items: center;
+  transition: background .3s var(--ease), color .3s var(--ease), opacity .3s var(--ease);
+}
+.car-btn:hover { background: var(--rose); color: #fff; border-color: var(--rose); }
+.car-prev { left: -12px; }
+.car-next { right: -12px; }
+@media (max-width: 720px) { .car-btn { display: none; } }
 .card-media { display: block; aspect-ratio: 4/5; transition: transform .6s var(--ease); }
 .card:hover .card-media { transform: scale(1.05); }
 .card-body { padding: 1.6rem 1.7rem 1.9rem; }

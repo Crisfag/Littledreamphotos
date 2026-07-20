@@ -13,6 +13,7 @@
     mobileNav();
     dropdownMenu();
     heroSlideshow();
+    prestaCarousel();
     revealOnScroll();
     galleryFilter();
     lightbox();
@@ -125,6 +126,35 @@
     function restart() { clearInterval(timer); start(); }
 
     start();
+  }
+
+  /* ---------- Carrousel des prestations ---------- */
+  function prestaCarousel() {
+    var track = document.getElementById("prestaCards");
+    var prev = document.getElementById("carPrev");
+    var next = document.getElementById("carNext");
+    if (!track || !prev || !next) return;
+
+    function step() {
+      var card = track.querySelector(".card");
+      if (!card) return 300;
+      var gap = parseFloat(getComputedStyle(track).columnGap) || 28;
+      return card.getBoundingClientRect().width + gap;
+    }
+
+    prev.addEventListener("click", function () { track.scrollBy({ left: -step(), behavior: "smooth" }); });
+    next.addEventListener("click", function () { track.scrollBy({ left: step(), behavior: "smooth" }); });
+
+    function update() {
+      var max = track.scrollWidth - track.clientWidth - 2;
+      prev.style.opacity = track.scrollLeft <= 2 ? ".35" : "1";
+      prev.style.pointerEvents = track.scrollLeft <= 2 ? "none" : "auto";
+      next.style.opacity = track.scrollLeft >= max ? ".35" : "1";
+      next.style.pointerEvents = track.scrollLeft >= max ? "none" : "auto";
+    }
+    track.addEventListener("scroll", update, { passive: true });
+    window.addEventListener("resize", update);
+    update();
   }
 
   /* ---------- Animations d'apparition ---------- */
