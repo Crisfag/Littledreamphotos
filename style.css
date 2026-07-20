@@ -352,7 +352,7 @@ h3 { font-size: 1.5rem; }
 .lightbox { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; background: rgba(30,26,23,.92); backdrop-filter: blur(4px); }
 .lightbox[hidden] { display: none; }
 .lb-figure {
-  width: min(86vw, 720px); aspect-ratio: 3/4; max-height: 82vh; border-radius: var(--radius);
+  width: min(92vw, 1000px); height: min(82vh, 900px); border-radius: var(--radius);
   background: linear-gradient(135deg, var(--blush), var(--taupe)); box-shadow: var(--shadow);
   animation: lbIn .4s var(--ease);
 }
