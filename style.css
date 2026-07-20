@@ -534,6 +534,7 @@ h3 { font-size: 1.5rem; }
 .cat-chip:hover { border-color: var(--rose); color: var(--rose); }
 
 .forfaits { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.8rem; align-items: stretch; }
+.forfaits.two { grid-template-columns: repeat(2, 1fr); max-width: 780px; margin-inline: auto; }
 .forfait-card {
   position: relative; background: var(--white); border-radius: var(--radius); padding: 2.4rem 1.9rem 2rem;
   box-shadow: var(--shadow-sm); border-top: 4px solid var(--blush); display: flex; flex-direction: column;
