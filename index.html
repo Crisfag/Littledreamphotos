@@ -6,10 +6,8 @@
   <title>Little Dream Photography — Photographe naissance, maternité & famille · Belgique</title>
   <meta name="description" content="Little Dream Photography, studio belge (région de Liège) spécialisé en photographie de maternité, naissance, nouveau-né, famille, smash the cake et portraits. Réservez votre séance." />
   <meta name="theme-color" content="#b98a7a" />
-
-  <!-- Open Graph -->
   <meta property="og:title" content="Little Dream Photography — Vos plus beaux souvenirs" />
-  <meta property="og:description" content="Photographe naissance, maternité & famille en Belgique. Capturons ensemble vos instants précieux." />
+  <meta property="og:description" content="Photographe naissance, maternité & famille en Belgique." />
   <meta property="og:type" content="website" />
   <meta property="og:locale" content="fr_BE" />
 
@@ -23,9 +21,9 @@
 <body>
 
   <!-- ===================== HEADER / NAV ===================== -->
-  <header class="site-header" id="top">
+  <header class="site-header" id="top" data-transparent>
     <nav class="nav container" aria-label="Navigation principale">
-      <a href="#top" class="brand">
+      <a href="#accueil" class="brand">
         <span class="brand-mark">Little Dream</span>
         <span class="brand-sub">Photography</span>
       </a>
@@ -35,152 +33,73 @@
       </button>
 
       <ul class="nav-links" id="navLinks">
-        <li><a href="#prestations">Prestations</a></li>
-        <li><a href="#galerie">Galerie</a></li>
-        <li><a href="#apropos">À propos</a></li>
-        <li><a href="#formations">Formations</a></li>
-        <li><a href="#avis">Avis</a></li>
+        <li><a href="#accueil">Accueil</a></li>
+        <li><a href="#histoire">Mon histoire</a></li>
+
+        <li class="has-dropdown">
+          <a href="#prestations" class="dd-trigger" aria-haspopup="true" aria-expanded="false">Prestations <span class="caret" aria-hidden="true">▾</span></a>
+          <ul class="dropdown">
+            <li><a href="portfolio.html#maternite">Maternité</a></li>
+            <li><a href="portfolio.html#naissance">Naissance &amp; Nouveau-né</a></li>
+            <li><a href="portfolio.html#famille">Famille</a></li>
+            <li><a href="portfolio.html#cake">Smash the Cake</a></li>
+            <li><a href="portfolio.html#portrait">Portrait &amp; Fashion</a></li>
+            <li><a href="tarifs.html#formations">Formations</a></li>
+          </ul>
+        </li>
+
+        <li class="has-dropdown">
+          <a href="portfolio.html" class="dd-trigger" aria-haspopup="true" aria-expanded="false">Portfolios <span class="caret" aria-hidden="true">▾</span></a>
+          <ul class="dropdown">
+            <li><a href="portfolio.html#maternite">Maternité</a></li>
+            <li><a href="portfolio.html#naissance">Naissance</a></li>
+            <li><a href="portfolio.html#famille">Famille</a></li>
+            <li><a href="portfolio.html#cake">Smash the Cake</a></li>
+            <li><a href="portfolio.html#portrait">Portrait</a></li>
+          </ul>
+        </li>
+
+        <li><a href="tarifs.html">Tarifs</a></li>
+        <li><a href="#temoignages">Témoignages</a></li>
         <li><a href="#contact" class="nav-cta">Réserver</a></li>
       </ul>
     </nav>
   </header>
 
-  <!-- ===================== HERO ===================== -->
-  <section class="hero" id="hero">
-    <div class="hero-media" aria-hidden="true"></div>
+  <!-- ===================== HERO — SLIDESHOW ===================== -->
+  <section class="hero" id="accueil">
+    <div class="hero-slides" id="heroSlides" aria-hidden="true">
+      <!-- Remplacez chaque dégradé par vos photos : style="background-image:url('images/hero-1.jpg')" -->
+      <div class="hero-slide is-active" data-tone="rose"  data-label="Maternité"></div>
+      <div class="hero-slide"           data-tone="cream" data-label="Naissance"></div>
+      <div class="hero-slide"           data-tone="sage"  data-label="Famille"></div>
+      <div class="hero-slide"           data-tone="mauve" data-label="Portrait"></div>
+    </div>
     <div class="hero-overlay"></div>
+
     <div class="hero-content container">
-      <p class="hero-eyebrow reveal">Studio photo · Belgique · depuis 2015</p>
-      <h1 class="hero-title reveal">Vos plus beaux rêves,<br />immortalisés pour toujours</h1>
-      <p class="hero-text reveal">De l'attente de bébé aux premiers pas, je capture avec douceur les instants qui comptent — maternité, naissance, famille et bien plus encore.</p>
-      <div class="hero-actions reveal">
+      <p class="hero-eyebrow">Studio photo · Belgique · depuis 2015</p>
+      <h1 class="hero-title">Vos plus beaux rêves,<br />immortalisés pour toujours</h1>
+      <p class="hero-text">Maternité, naissance, famille… je capture avec douceur les instants qui comptent.</p>
+      <div class="hero-actions">
         <a href="#contact" class="btn btn-primary">Réserver une séance</a>
-        <a href="#galerie" class="btn btn-ghost">Voir la galerie</a>
+        <a href="portfolio.html" class="btn btn-ghost">Voir mes portfolios</a>
       </div>
     </div>
-    <a href="#prestations" class="scroll-cue" aria-label="Défiler vers le bas"><span></span></a>
+
+    <div class="hero-dots" id="heroDots" aria-label="Choisir une image"></div>
+    <a href="#histoire" class="scroll-cue" aria-label="Défiler vers le bas"><span></span></a>
   </section>
 
-  <!-- ===================== INTRO / MARQUEE ===================== -->
-  <div class="marquee" aria-hidden="true">
-    <div class="marquee-track">
-      <span>Maternité</span><span>·</span><span>Naissance</span><span>·</span><span>Nouveau-né</span><span>·</span><span>Famille</span><span>·</span><span>Smash the Cake</span><span>·</span><span>Portrait</span><span>·</span><span>Formations</span><span>·</span>
-      <span>Maternité</span><span>·</span><span>Naissance</span><span>·</span><span>Nouveau-né</span><span>·</span><span>Famille</span><span>·</span><span>Smash the Cake</span><span>·</span><span>Portrait</span><span>·</span><span>Formations</span><span>·</span>
-    </div>
-  </div>
-
-  <!-- ===================== PRESTATIONS ===================== -->
-  <section class="section prestations" id="prestations">
-    <div class="container">
-      <header class="section-head reveal">
-        <p class="eyebrow">Ce que je propose</p>
-        <h2>Mes prestations</h2>
-        <p class="section-lead">Chaque séance est unique et pensée sur mesure. Une équipe maquillage &amp; coiffure vous accompagne pour que vous vous sentiez pleinement détendue et rayonnante.</p>
-      </header>
-
-      <div class="cards">
-        <article class="card reveal" data-tint="rose">
-          <div class="card-media" data-label="Maternité"></div>
-          <div class="card-body">
-            <h3>Maternité</h3>
-            <p>Sublimez ces neuf mois d'attente lors d'une séance grossesse douce et lumineuse, en studio ou en extérieur.</p>
-            <a href="#contact" class="card-link">Réserver →</a>
-          </div>
-        </article>
-
-        <article class="card reveal" data-tint="cream">
-          <div class="card-media" data-label="Naissance"></div>
-          <div class="card-body">
-            <h3>Naissance &amp; Nouveau-né</h3>
-            <p>Dans les premiers jours de bébé, je fige la tendresse et les tout petits détails qui s'oublient si vite.</p>
-            <a href="#contact" class="card-link">Réserver →</a>
-          </div>
-        </article>
-
-        <article class="card reveal" data-tint="sage">
-          <div class="card-media" data-label="Famille"></div>
-          <div class="card-body">
-            <h3>Famille</h3>
-            <p>En studio ou en pleine nature (jusqu'à 10 km du studio), des souvenirs complices à partager en tribu.</p>
-            <a href="#contact" class="card-link">Réserver →</a>
-          </div>
-        </article>
-
-        <article class="card reveal" data-tint="peach">
-          <div class="card-media" data-label="Smash the Cake"></div>
-          <div class="card-body">
-            <h3>Smash the Cake</h3>
-            <p>Le premier anniversaire de bébé célébré dans la joie, les éclats de rire et un gâteau à dévorer !</p>
-            <a href="#contact" class="card-link">Réserver →</a>
-          </div>
-        </article>
-
-        <article class="card reveal" data-tint="mauve">
-          <div class="card-media" data-label="Portrait & Fashion"></div>
-          <div class="card-body">
-            <h3>Portrait &amp; Fashion</h3>
-            <p>Un portrait qui vous ressemble : mise en beauté, lumière soignée et direction artistique élégante.</p>
-            <a href="#contact" class="card-link">Réserver →</a>
-          </div>
-        </article>
-
-        <article class="card reveal" data-tint="taupe">
-          <div class="card-media" data-label="Formations"></div>
-          <div class="card-body">
-            <h3>Formations</h3>
-            <p>Photographe débutant·e ou confirmé·e ? Je vous transmets ma technique pour développer votre propre style.</p>
-            <a href="#formations" class="card-link">En savoir plus →</a>
-          </div>
-        </article>
-      </div>
-    </div>
-  </section>
-
-  <!-- ===================== GALERIE FILTRABLE ===================== -->
-  <section class="section galerie" id="galerie">
-    <div class="container">
-      <header class="section-head reveal">
-        <p class="eyebrow">Portfolio</p>
-        <h2>Un aperçu de mon univers</h2>
-        <p class="section-lead">Filtrez par thème et cliquez sur une image pour l'agrandir.</p>
-      </header>
-
-      <div class="filters reveal" role="tablist" aria-label="Filtres de la galerie">
-        <button class="filter is-active" data-filter="all">Tout</button>
-        <button class="filter" data-filter="maternite">Maternité</button>
-        <button class="filter" data-filter="naissance">Naissance</button>
-        <button class="filter" data-filter="famille">Famille</button>
-        <button class="filter" data-filter="cake">Smash the Cake</button>
-        <button class="filter" data-filter="portrait">Portrait</button>
-      </div>
-
-      <div class="gallery" id="gallery">
-        <!-- items injectés / stylés via CSS; data-cat pour le filtre -->
-        <figure class="g-item tall" data-cat="maternite" data-label="Maternité" tabindex="0" role="button" aria-label="Agrandir la photo maternité"></figure>
-        <figure class="g-item" data-cat="naissance" data-label="Naissance" tabindex="0" role="button" aria-label="Agrandir la photo naissance"></figure>
-        <figure class="g-item" data-cat="famille" data-label="Famille" tabindex="0" role="button" aria-label="Agrandir la photo famille"></figure>
-        <figure class="g-item wide" data-cat="cake" data-label="Smash the Cake" tabindex="0" role="button" aria-label="Agrandir la photo smash the cake"></figure>
-        <figure class="g-item" data-cat="portrait" data-label="Portrait" tabindex="0" role="button" aria-label="Agrandir la photo portrait"></figure>
-        <figure class="g-item tall" data-cat="famille" data-label="Famille" tabindex="0" role="button" aria-label="Agrandir la photo famille"></figure>
-        <figure class="g-item" data-cat="maternite" data-label="Maternité" tabindex="0" role="button" aria-label="Agrandir la photo maternité"></figure>
-        <figure class="g-item" data-cat="naissance" data-label="Naissance" tabindex="0" role="button" aria-label="Agrandir la photo naissance"></figure>
-        <figure class="g-item wide" data-cat="portrait" data-label="Portrait" tabindex="0" role="button" aria-label="Agrandir la photo portrait"></figure>
-        <figure class="g-item" data-cat="cake" data-label="Smash the Cake" tabindex="0" role="button" aria-label="Agrandir la photo smash the cake"></figure>
-        <figure class="g-item tall" data-cat="naissance" data-label="Naissance" tabindex="0" role="button" aria-label="Agrandir la photo naissance"></figure>
-        <figure class="g-item" data-cat="famille" data-label="Famille" tabindex="0" role="button" aria-label="Agrandir la photo famille"></figure>
-      </div>
-    </div>
-  </section>
-
-  <!-- ===================== À PROPOS ===================== -->
-  <section class="section apropos" id="apropos">
+  <!-- ===================== MON HISTOIRE ===================== -->
+  <section class="section histoire" id="histoire">
     <div class="container about-grid">
       <div class="about-media reveal" data-label="Cris — Little Dream Photography"></div>
       <div class="about-text reveal">
-        <p class="eyebrow">À propos</p>
+        <p class="eyebrow">Mon histoire</p>
         <h2>Enchantée, moi c'est Cris</h2>
         <p>Depuis 2015, je mets tout mon cœur à raconter en images vos plus belles histoires. Little Dream Photography est né d'une passion : capturer l'émotion pure, celle d'un premier regard, d'un ventre rond, d'un fou rire en famille.</p>
-        <p>Basée en Belgique (région de Liège), je vous accueille dans mon studio ou vous rejoins en extérieur. Chaque séance se veut douce, bienveillante et sans stress — mon équipe maquillage et coiffure est là pour vous sublimer.</p>
+        <p>Basée en Belgique (région de Liège), je vous accueille dans mon studio ou vous rejoins en extérieur. Chaque séance se veut douce, bienveillante et sans stress — mon équipe maquillage et coiffure est là pour vous sublimer. Je transmets aussi ma passion à travers des formations pour photographes.</p>
         <ul class="about-stats">
           <li><strong>10+</strong><span>années d'expérience</span></li>
           <li><strong>500+</strong><span>familles photographiées</span></li>
@@ -191,27 +110,79 @@
     </div>
   </section>
 
-  <!-- ===================== FORMATIONS ===================== -->
-  <section class="section formations" id="formations">
-    <div class="container formations-inner reveal">
-      <div class="formations-text">
-        <p class="eyebrow light">Transmettre</p>
-        <h2>Formations photo</h2>
-        <p>Vous rêvez de vivre de votre passion ou simplement de progresser ? Je propose des formations personnalisées, du débutant qui découvre son appareil au photographe confirmé qui souhaite affiner son style et sa retouche.</p>
-        <ul class="check-list">
-          <li>Maîtrise de la lumière naturelle &amp; studio</li>
-          <li>Direction de modèles &amp; mise à l'aise</li>
-          <li>Post-traitement &amp; développement de votre signature</li>
-          <li>Accompagnement pour lancer votre activité</li>
-        </ul>
-        <a href="#contact" class="btn btn-light">Demander le programme</a>
+  <!-- ===================== PRESTATIONS ===================== -->
+  <section class="section prestations" id="prestations">
+    <div class="container">
+      <header class="section-head reveal">
+        <p class="eyebrow">Ce que je propose</p>
+        <h2>Mes prestations</h2>
+        <p class="section-lead">Chaque séance est unique et pensée sur mesure. Découvrez chaque univers en portfolio, et retrouvez tous les détails sur la page Tarifs.</p>
+      </header>
+
+      <div class="cards">
+        <article class="card reveal" data-tint="rose">
+          <a class="card-media" href="portfolio.html#maternite" data-label="Maternité"></a>
+          <div class="card-body">
+            <h3>Maternité</h3>
+            <p>Sublimez ces neuf mois d'attente lors d'une séance grossesse douce et lumineuse, en studio ou en extérieur.</p>
+            <a href="portfolio.html#maternite" class="card-link">Voir le portfolio →</a>
+          </div>
+        </article>
+
+        <article class="card reveal" data-tint="cream">
+          <a class="card-media" href="portfolio.html#naissance" data-label="Naissance"></a>
+          <div class="card-body">
+            <h3>Naissance &amp; Nouveau-né</h3>
+            <p>Dans les premiers jours de bébé, je fige la tendresse et les tout petits détails qui s'oublient si vite.</p>
+            <a href="portfolio.html#naissance" class="card-link">Voir le portfolio →</a>
+          </div>
+        </article>
+
+        <article class="card reveal" data-tint="sage">
+          <a class="card-media" href="portfolio.html#famille" data-label="Famille"></a>
+          <div class="card-body">
+            <h3>Famille</h3>
+            <p>En studio ou en pleine nature (jusqu'à 10 km du studio), des souvenirs complices à partager en tribu.</p>
+            <a href="portfolio.html#famille" class="card-link">Voir le portfolio →</a>
+          </div>
+        </article>
+
+        <article class="card reveal" data-tint="peach">
+          <a class="card-media" href="portfolio.html#cake" data-label="Smash the Cake"></a>
+          <div class="card-body">
+            <h3>Smash the Cake</h3>
+            <p>Le premier anniversaire de bébé célébré dans la joie, les éclats de rire et un gâteau à dévorer !</p>
+            <a href="portfolio.html#cake" class="card-link">Voir le portfolio →</a>
+          </div>
+        </article>
+
+        <article class="card reveal" data-tint="mauve">
+          <a class="card-media" href="portfolio.html#portrait" data-label="Portrait & Fashion"></a>
+          <div class="card-body">
+            <h3>Portrait &amp; Fashion</h3>
+            <p>Un portrait qui vous ressemble : mise en beauté, lumière soignée et direction artistique élégante.</p>
+            <a href="portfolio.html#portrait" class="card-link">Voir le portfolio →</a>
+          </div>
+        </article>
+
+        <article class="card reveal" data-tint="taupe">
+          <a class="card-media" href="tarifs.html#formations" data-label="Formations"></a>
+          <div class="card-body">
+            <h3>Formations</h3>
+            <p>Photographe débutant·e ou confirmé·e ? Je vous transmets ma technique pour développer votre propre style.</p>
+            <a href="tarifs.html#formations" class="card-link">En savoir plus →</a>
+          </div>
+        </article>
       </div>
-      <div class="formations-media" data-label="Formations" aria-hidden="true"></div>
+
+      <div class="section-cta reveal">
+        <a href="tarifs.html" class="btn btn-primary">Voir les tarifs</a>
+      </div>
     </div>
   </section>
 
   <!-- ===================== TÉMOIGNAGES ===================== -->
-  <section class="section avis" id="avis">
+  <section class="section avis" id="temoignages">
     <div class="container">
       <header class="section-head reveal">
         <p class="eyebrow">Elles témoignent</p>
@@ -238,39 +209,6 @@
           </blockquote>
         </div>
         <div class="t-dots" id="tDots" aria-label="Choisir un témoignage"></div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ===================== FAQ ===================== -->
-  <section class="section faq" id="faq">
-    <div class="container faq-inner">
-      <header class="section-head reveal">
-        <p class="eyebrow">Questions fréquentes</p>
-        <h2>Tout ce qu'il faut savoir</h2>
-      </header>
-
-      <div class="accordion reveal">
-        <details class="acc-item">
-          <summary>À quel moment réserver ma séance maternité ou naissance ?</summary>
-          <div class="acc-body"><p>Pour la maternité, l'idéal se situe entre la 28ᵉ et la 34ᵉ semaine. Pour le nouveau-né, la séance a lieu idéalement dans les 5 à 12 premiers jours de bébé — je vous conseille donc de réserver dès votre grossesse.</p></div>
-        </details>
-        <details class="acc-item">
-          <summary>Où se déroulent les séances ?</summary>
-          <div class="acc-body"><p>Dans mon studio en Belgique (région de Liège) ou en extérieur, dans un rayon d'environ 10 km autour du studio pour les séances famille.</p></div>
-        </details>
-        <details class="acc-item">
-          <summary>Le maquillage et la coiffure sont-ils inclus ?</summary>
-          <div class="acc-body"><p>Une mise en beauté (maquillage &amp; coiffure) peut être proposée pour vous sentir parfaitement détendue et rayonnante. Précisez-le lors de votre demande et je vous détaille les options.</p></div>
-        </details>
-        <details class="acc-item">
-          <summary>Quand vais-je recevoir mes photos ?</summary>
-          <div class="acc-body"><p>Vous recevez votre galerie retouchée en ligne sous 2 à 3 semaines après la séance, avec la possibilité de commander tirages et albums.</p></div>
-        </details>
-        <details class="acc-item">
-          <summary>Proposez-vous des formations pour photographes ?</summary>
-          <div class="acc-body"><p>Oui ! Des formations sur mesure, pour débutants comme pour confirmés. Contactez-moi pour recevoir le programme détaillé.</p></div>
-        </details>
       </div>
     </div>
   </section>
@@ -337,10 +275,10 @@
         <p>Photographe naissance, maternité &amp; famille — Belgique, depuis 2015.</p>
       </div>
       <nav class="footer-nav" aria-label="Liens de pied de page">
+        <a href="#histoire">Mon histoire</a>
         <a href="#prestations">Prestations</a>
-        <a href="#galerie">Galerie</a>
-        <a href="#apropos">À propos</a>
-        <a href="#formations">Formations</a>
+        <a href="portfolio.html">Portfolios</a>
+        <a href="tarifs.html">Tarifs</a>
         <a href="#contact">Réserver</a>
       </nav>
       <div class="footer-social">
@@ -349,14 +287,6 @@
     </div>
     <p class="footer-copy">© <span id="year"></span> Little Dream Photography · Tous droits réservés</p>
   </footer>
-
-  <!-- ===================== LIGHTBOX ===================== -->
-  <div class="lightbox" id="lightbox" hidden>
-    <button class="lb-close" id="lbClose" aria-label="Fermer">×</button>
-    <button class="lb-nav lb-prev" id="lbPrev" aria-label="Précédent">‹</button>
-    <figure class="lb-figure" id="lbFigure" data-label=""></figure>
-    <button class="lb-nav lb-next" id="lbNext" aria-label="Suivant">›</button>
-  </div>
 
   <script src="script.js"></script>
 </body>

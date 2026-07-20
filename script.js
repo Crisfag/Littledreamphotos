@@ -11,6 +11,8 @@
     setYear();
     stickyHeader();
     mobileNav();
+    dropdownMenu();
+    heroSlideshow();
     revealOnScroll();
     galleryFilter();
     lightbox();
@@ -46,6 +48,12 @@
       toggle.classList.remove("open");
       toggle.setAttribute("aria-expanded", "false");
       toggle.setAttribute("aria-label", "Ouvrir le menu");
+      // referme aussi les sous-menus déroulants ouverts
+      links.querySelectorAll(".has-dropdown.open").forEach(function (li) {
+        li.classList.remove("open");
+        var t = li.querySelector(".dd-trigger");
+        if (t) t.setAttribute("aria-expanded", "false");
+      });
     };
 
     toggle.addEventListener("click", function () {
@@ -55,13 +63,68 @@
       toggle.setAttribute("aria-label", open ? "Fermer le menu" : "Ouvrir le menu");
     });
 
-    links.querySelectorAll("a").forEach(function (a) {
+    // On ferme le menu au clic d'un vrai lien, mais pas sur un déclencheur de sous-menu
+    links.querySelectorAll("a:not(.dd-trigger)").forEach(function (a) {
       a.addEventListener("click", close);
     });
 
     document.addEventListener("keydown", function (e) {
       if (e.key === "Escape") close();
     });
+  }
+
+  /* ---------- Menu déroulant (mobile : accordéon ; desktop : survol) ---------- */
+  function dropdownMenu() {
+    var triggers = document.querySelectorAll(".dd-trigger");
+    if (!triggers.length) return;
+    var mq = window.matchMedia("(max-width: 720px)");
+
+    triggers.forEach(function (t) {
+      t.addEventListener("click", function (e) {
+        if (!mq.matches) return; // desktop : le lien navigue, le survol ouvre
+        e.preventDefault();
+        var li = t.closest(".has-dropdown");
+        if (!li) return;
+        var open = li.classList.toggle("open");
+        t.setAttribute("aria-expanded", String(open));
+      });
+    });
+  }
+
+  /* ---------- Slideshow d'en-tête (accueil) ---------- */
+  function heroSlideshow() {
+    var wrap = document.getElementById("heroSlides");
+    if (!wrap) return;
+    var slides = wrap.querySelectorAll(".hero-slide");
+    if (slides.length < 2) return;
+
+    var dotsWrap = document.getElementById("heroDots");
+    var index = 0;
+    var timer;
+
+    if (dotsWrap) {
+      slides.forEach(function (_, i) {
+        var b = document.createElement("button");
+        b.setAttribute("aria-label", "Image " + (i + 1));
+        if (i === 0) b.classList.add("is-active");
+        b.addEventListener("click", function () { go(i); restart(); });
+        dotsWrap.appendChild(b);
+      });
+    }
+    var dots = dotsWrap ? dotsWrap.querySelectorAll("button") : [];
+
+    function go(i) {
+      slides[index].classList.remove("is-active");
+      if (dots.length) dots[index].classList.remove("is-active");
+      index = (i + slides.length) % slides.length;
+      slides[index].classList.add("is-active");
+      if (dots.length) dots[index].classList.add("is-active");
+    }
+    function next() { go(index + 1); }
+    function start() { timer = setInterval(next, 5000); }
+    function restart() { clearInterval(timer); start(); }
+
+    start();
   }
 
   /* ---------- Animations d'apparition ---------- */
@@ -88,17 +151,25 @@
     var items = document.querySelectorAll(".g-item");
     if (!buttons.length) return;
 
-    buttons.forEach(function (btn) {
-      btn.addEventListener("click", function () {
-        buttons.forEach(function (b) { b.classList.remove("is-active"); });
-        btn.classList.add("is-active");
-        var f = btn.getAttribute("data-filter");
-        items.forEach(function (item) {
-          var show = f === "all" || item.getAttribute("data-cat") === f;
-          item.classList.toggle("is-hidden", !show);
-        });
+    function apply(f) {
+      buttons.forEach(function (b) { b.classList.toggle("is-active", b.getAttribute("data-filter") === f); });
+      items.forEach(function (item) {
+        var show = f === "all" || item.getAttribute("data-cat") === f;
+        item.classList.toggle("is-hidden", !show);
       });
+    }
+
+    buttons.forEach(function (btn) {
+      btn.addEventListener("click", function () { apply(btn.getAttribute("data-filter")); });
     });
+
+    // Lien direct : portfolio.html#maternite → applique le filtre correspondant
+    function fromHash() {
+      var h = (location.hash || "").replace("#", "");
+      if (h && document.querySelector('.filter[data-filter="' + h + '"]')) apply(h);
+    }
+    fromHash();
+    window.addEventListener("hashchange", fromHash);
   }
 
   /* ---------- Lightbox ---------- */

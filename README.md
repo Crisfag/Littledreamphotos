@@ -1,83 +1,81 @@
-# Little Dream Photography — Nouveau site
+# Little Dream Photography — Site
 
 Site vitrine moderne et interactif pour **Little Dream Photography** (photographe
 maternité · naissance · famille · smash the cake · portrait · formations, Belgique).
 
 Construit en **HTML / CSS / JavaScript purs** — aucun outil de build, aucune
-dépendance à installer. Il suffit d'ouvrir `index.html`.
+dépendance à installer.
 
 ## 📁 Contenu
 
 ```
 .
-├── index.html      # Structure de toutes les sections
+├── index.html      # Accueil : slideshow → mon histoire → prestations → témoignages → contact
+├── portfolio.html  # Portfolios filtrables par thème (avec lightbox)
+├── tarifs.html     # Formules & tarifs + formations
 ├── style.css       # Design (doux & épuré) + responsive + animations
-├── script.js       # Menu mobile, galerie filtrable, lightbox, carrousel, formulaire
+├── script.js       # Slideshow, menu déroulant, filtres, lightbox, carrousel, formulaire
 ├── images/         # Déposez ici vos vraies photos
 └── README.md       # Ce fichier
 ```
 
 ## ✨ Fonctionnalités
 
-- **Hero** plein écran animé avec appels à l'action
-- **Prestations** en cartes (maternité, naissance, famille, smash the cake, portrait, formations)
-- **Galerie filtrable** par thème avec **lightbox** (clic pour agrandir, flèches ←/→, Échap pour fermer)
-- **Section À propos** avec statistiques
-- **Formations** mises en avant
-- **Carrousel de témoignages** automatique
-- **FAQ** dépliable
-- **Formulaire de réservation** avec validation en direct
-- **Animations au défilement**, menu mobile, navigation fluide
+- **Accueil épuré** dans l'ordre demandé : en-tête en **slideshow** animé → *Mon histoire* → *Prestations* → *Témoignages* → *Contact*
+- **Menu déroulant navigable** (sous-menus Prestations & Portfolios) — survol sur ordinateur, accordéon sur mobile
+- **Portfolios filtrables** par thème avec **lightbox** (les liens du menu, ex. `portfolio.html#famille`, ouvrent directement le bon filtre)
+- **Page Tarifs modernisée** : formules en cartes, formule mise en avant, section Formations
+- **Carrousel de témoignages**, **formulaire de réservation** avec validation, **animations au défilement**
 - 100 % **responsive** (mobile, tablette, desktop) et accessible au clavier
 
-## 🖼️ Remplacer les images de démonstration
+## 🖼️ Ajouter vos vraies photos
 
 Le site utilise pour l'instant de jolis dégradés de couleur en guise de photos.
-Pour mettre vos vraies images :
+Déposez vos images dans `images/`, puis :
 
-1. Déposez vos photos dans le dossier `images/` (ex. `maternite-1.jpg`).
-2. Dans `index.html`, sur l'élément concerné, ajoutez un attribut `style`
-   pointant vers votre image. Par exemple pour une carte de prestation :
+### Le slideshow d'accueil (`index.html`)
+Sur chaque `<div class="hero-slide" ...>`, ajoutez un `style` :
+```html
+<div class="hero-slide is-active" style="background-image:url('images/hero-1.jpg')"></div>
+<div class="hero-slide"           style="background-image:url('images/hero-2.jpg')"></div>
+```
+Ajoutez ou retirez des `hero-slide` : le nombre de puces s'adapte tout seul.
 
-   ```html
-   <div class="card-media" data-label="Maternité"
-        style="background-image:url('images/maternite-1.jpg')"></div>
-   ```
+### Cartes de prestations & vignettes de galerie
+Même principe, sur les éléments `.card-media` (accueil) et `.g-item` (portfolio) :
+```html
+<a class="card-media" href="portfolio.html#maternite"
+   style="background-image:url('images/maternite.jpg')"></a>
 
-   Et pour une vignette de galerie :
+<figure class="g-item tall" data-cat="maternite"
+        style="background-image:url('images/galerie-1.jpg')" ...></figure>
+```
 
-   ```html
-   <figure class="g-item tall" data-cat="maternite" data-label="Maternité"
-           style="background-image:url('images/galerie-1.jpg')" ...></figure>
-   ```
+> Astuce : images optimisées (largeur ~1600 px, `.jpg`/`.webp`, < 300 Ko) pour un site rapide.
 
-3. (Optionnel) Supprimez l'étiquette de catégorie affichée en bas des visuels en
-   retirant l'attribut `data-label`, ou laissez-la comme légende.
+## 💶 Renseigner les tarifs
 
-> Astuce : privilégiez des images optimisées (largeur ~1600 px, format `.jpg` ou
-> `.webp`, < 300 Ko) pour un site rapide.
+Dans `tarifs.html`, remplacez chaque **« Sur devis »** par votre vrai prix
+(ex. `195 €`), et ajustez les durées / le nombre de photos / le contenu des
+formules. Un bloc de commentaire en haut du fichier le rappelle.
 
 ## ✉️ Activer l'envoi du formulaire
 
 Le formulaire affiche un message de confirmation mais n'envoie pas encore d'email
-(pas de backend). Pour recevoir les demandes, branchez un service gratuit, au choix :
+(pas de backend). Branchez un service gratuit :
 
-- **Netlify Forms** : ajoutez `netlify` sur la balise `<form>` — rien d'autre à coder si le site est hébergé sur Netlify.
-- **Formspree** : mettez `action="https://formspree.io/f/VOTRE_ID"` et `method="POST"` sur le `<form>`.
+- **Netlify Forms** : ajoutez l'attribut `netlify` sur la balise `<form>`.
+- **Formspree** : `action="https://formspree.io/f/VOTRE_ID"` et `method="POST"`.
 - **EmailJS** : envoi côté client via leur SDK.
 
-Pensez aussi à remplacer l'adresse `contact@littledreamphotos.com` dans
-`index.html` par votre vraie adresse.
+Pensez aussi à remplacer l'adresse `contact@littledreamphotos.com` par la vôtre.
 
 ## 🚀 Déploiement
 
-- **Netlify / Vercel** : glissez-déposez ce dossier, ou pointez le répertoire de
-  publication vers `littledreamphotos/`.
-- **GitHub Pages** : activez Pages sur la branche et le dossier.
-- **Test local** : ouvrez simplement `index.html` dans votre navigateur, ou lancez
-  `python3 -m http.server` dans ce dossier puis visitez `http://localhost:8000`.
+- **GitHub Pages** : *Settings → Pages → Source : `main` / `root`*.
+- **Netlify / Vercel** : « Import from Git », aucun réglage de build (site statique).
+- **Test local** : `python3 -m http.server` dans ce dossier → `http://localhost:8000`.
 
 ---
 
-*Réalisé avec ❤️ — n'hésitez pas à me demander des ajustements de couleurs, de
-textes ou l'ajout de nouvelles sections.*
+*Réalisé avec ❤️ — demandez-moi tout ajustement de couleurs, textes ou sections.*

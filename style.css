@@ -410,3 +410,150 @@ h3 { font-size: 1.5rem; }
   .contact-form { grid-template-columns: 1fr; padding: 1.6rem; }
   .about-stats { gap: 1.4rem; }
 }
+
+/* =====================================================================
+   AJOUTS — slideshow, menu déroulant, sous-pages, tarifs
+   ===================================================================== */
+
+/* ----- Nav : resserrer l'espacement (plus d'items) ----- */
+.nav-links { gap: 1.55rem; }
+
+/* ----- Menu déroulant ----- */
+.has-dropdown { position: relative; }
+.dd-trigger .caret { font-size: .7em; display: inline-block; transition: transform .3s var(--ease); }
+.has-dropdown:hover .dd-trigger .caret,
+.has-dropdown:focus-within .dd-trigger .caret { transform: rotate(180deg); }
+.dropdown {
+  position: absolute; top: 100%; left: 50%; transform: translate(-50%, 10px);
+  min-width: 230px; padding: .6rem; margin-top: .4rem;
+  background: var(--ivory); border-radius: var(--radius-sm); box-shadow: var(--shadow);
+  opacity: 0; visibility: hidden; transition: opacity .28s var(--ease), transform .28s var(--ease);
+  z-index: 80;
+}
+.dropdown::before { content: ""; position: absolute; top: -10px; left: 0; right: 0; height: 10px; }
+.has-dropdown:hover > .dropdown,
+.has-dropdown:focus-within > .dropdown,
+.has-dropdown.open > .dropdown {
+  opacity: 1; visibility: visible; transform: translate(-50%, 0);
+}
+.dropdown li { display: block; }
+.dropdown a {
+  display: block; padding: .6rem .9rem; border-radius: 6px;
+  color: var(--charcoal) !important; text-transform: none; letter-spacing: .02em;
+  font-size: .9rem; font-weight: 400; transition: background .25s, color .25s;
+}
+.dropdown a::after { display: none !important; }
+.dropdown a:hover { background: var(--sand); color: var(--rose-deep) !important; }
+
+/* ----- Header sur sous-pages (toujours solide) ----- */
+.subpage { padding-top: 0; }
+.subpage .site-header {
+  background: rgba(253, 251, 248, .95); backdrop-filter: blur(10px); box-shadow: 0 1px 0 var(--line);
+}
+.subpage .site-header .brand,
+.subpage .site-header .nav-links a { color: var(--charcoal); }
+.subpage .site-header .nav-cta { border-color: var(--rose); color: var(--rose) !important; }
+.subpage .site-header .nav-cta:hover { color: var(--white) !important; }
+.subpage .site-header .nav-toggle span { background: var(--ink); }
+
+/* =====================================================================
+   HERO — SLIDESHOW
+   ===================================================================== */
+.hero-slides { position: absolute; inset: 0; }
+.hero-slide {
+  position: absolute; inset: 0; opacity: 0; transform: scale(1.06);
+  background-size: cover; background-position: center;
+  transition: opacity 1.6s var(--ease);
+  animation: heroDrift 8s var(--ease) infinite alternate;
+}
+.hero-slide.is-active { opacity: 1; }
+@keyframes heroDrift { to { transform: scale(1.14); } }
+/* Dégradés de substitution par tonalité (remplacer par vos photos) */
+.hero-slide[data-tone="rose"]  { background-image: linear-gradient(135deg, #c9a294, #b98a7a 55%, #8a7a6d); }
+.hero-slide[data-tone="cream"] { background-image: linear-gradient(135deg, #f0ddca, #cdb39c 60%, #9c8574); }
+.hero-slide[data-tone="sage"]  { background-image: linear-gradient(135deg, #cdd4c4, #a8b0a0 55%, #7d8778); }
+.hero-slide[data-tone="mauve"] { background-image: linear-gradient(135deg, #d9c6cf, #a98a97 55%, #7d6470); }
+
+.hero-dots { position: absolute; left: 50%; bottom: 2.4rem; transform: translateX(-50%); z-index: 4; display: flex; gap: .6rem; }
+.hero-dots button { width: 34px; height: 4px; border-radius: 2px; border: 0; background: rgba(255,255,255,.45); cursor: pointer; padding: 0; transition: background .3s; }
+.hero-dots button.is-active { background: #fff; }
+
+/* =====================================================================
+   PAGE HERO (sous-pages)
+   ===================================================================== */
+.page-hero { position: relative; min-height: 46vh; display: flex; align-items: center; color: var(--white); overflow: hidden; margin-top: 0; }
+.page-hero-bg { position: absolute; inset: 0; background-size: cover; background-position: center; transform: scale(1.05); animation: heroZoom 16s var(--ease) infinite alternate; }
+.page-hero-bg[data-tone="rose"]  { background-image: linear-gradient(135deg, #c9a294, #b98a7a 55%, #8a7a6d); }
+.page-hero-bg[data-tone="mauve"] { background-image: linear-gradient(135deg, #c2a6b0, #a98a97 55%, #6f5763); }
+.page-hero::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(43,37,33,.32), rgba(43,37,33,.5)); }
+.page-hero-inner { position: relative; z-index: 2; text-align: center; margin-inline: auto; max-width: 720px; padding: 7rem 0 3rem; }
+.page-hero-inner h1 { font-size: clamp(2.4rem, 5.5vw, 4rem); margin-bottom: .8rem; }
+.page-hero-inner p { color: rgba(255,255,255,.9); font-size: 1.1rem; }
+
+/* ----- boutons additionnels ----- */
+.btn-outline { background: transparent; color: var(--rose-deep); border-color: var(--rose); }
+.btn-outline:hover { background: var(--rose); color: #fff; transform: translateY(-2px); box-shadow: var(--shadow-sm); }
+.section-cta { text-align: center; margin-top: 3.2rem; }
+
+/* =====================================================================
+   TARIFS
+   ===================================================================== */
+.pricing { background: var(--ivory); }
+.price-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.8rem; }
+.price-card {
+  position: relative; background: var(--white); border-radius: var(--radius); overflow: hidden;
+  box-shadow: var(--shadow-sm); display: flex; flex-direction: column;
+  transition: transform .45s var(--ease), box-shadow .45s var(--ease);
+}
+.price-card:hover { transform: translateY(-8px); box-shadow: var(--shadow); }
+.price-card.featured { outline: 2px solid var(--rose); }
+.price-media { aspect-ratio: 16/10; }
+.price-body { padding: 1.7rem 1.7rem 2rem; display: flex; flex-direction: column; flex: 1; }
+.price-badge {
+  align-self: flex-start; background: var(--rose); color: #fff; font-size: .68rem;
+  letter-spacing: .12em; text-transform: uppercase; padding: .35rem .8rem; border-radius: 999px; margin-bottom: .8rem;
+}
+.price-body h3 { margin-bottom: .4rem; }
+.price-tag { font-family: var(--serif); margin-bottom: 1.2rem; color: var(--rose-deep); }
+.price-tag .price-from { font-family: var(--sans); font-size: .72rem; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); display: inline-block; margin-right: .3rem; }
+.price-tag .price-value { font-size: 2rem; font-weight: 600; }
+.price-tag.light { color: var(--ivory); }
+.price-tag.light .price-from { color: var(--blush); }
+.price-features { margin-bottom: 1.6rem; flex: 1; }
+.price-features li { position: relative; padding-left: 1.6rem; margin-bottom: .6rem; color: var(--muted); font-size: .95rem; }
+.price-features li::before { content: "✓"; position: absolute; left: 0; color: var(--rose); font-weight: 600; }
+.price-note { text-align: center; margin-top: 2.4rem; color: var(--muted); font-size: .95rem; }
+
+/* ----- Bande CTA ----- */
+.cta-band { background: var(--sand); text-align: center; }
+.cta-inner { max-width: 640px; margin-inline: auto; }
+.cta-inner h2 { margin-bottom: .8rem; }
+.cta-inner p { color: var(--muted); margin-bottom: 1.8rem; }
+
+/* =====================================================================
+   RESPONSIVE — ajouts
+   ===================================================================== */
+@media (max-width: 900px) {
+  .price-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 720px) {
+  /* Menu déroulant en accordéon dans le menu mobile */
+  .dropdown {
+    position: static; transform: none; opacity: 1; visibility: visible;
+    box-shadow: none; background: transparent; min-width: 0; padding: .2rem 0 .4rem .8rem;
+    margin: 0; max-height: 0; overflow: hidden; transition: max-height .35s var(--ease);
+  }
+  .has-dropdown.open > .dropdown { max-height: 400px; }
+  .has-dropdown:hover > .dropdown, .has-dropdown:focus-within > .dropdown { transform: none; }
+  .dropdown a { color: var(--charcoal) !important; font-size: .95rem !important; padding: .5rem .4rem; }
+  .dd-trigger .caret { float: right; }
+  .has-dropdown.open > .dd-trigger .caret { transform: rotate(180deg); }
+  .nav-links { align-items: stretch; }
+  .page-hero-inner { padding-top: 6rem; }
+}
+
+@media (max-width: 560px) {
+  .price-grid { grid-template-columns: 1fr; }
+}
+
