@@ -183,10 +183,11 @@
 
     var current = -1;
 
+    // Vignettes agrandissables : uniquement celles qui contiennent une vraie image
     function visibleItems() {
       return Array.prototype.filter.call(
         document.querySelectorAll(".g-item"),
-        function (el) { return !el.classList.contains("is-hidden"); }
+        function (el) { return !el.classList.contains("is-hidden") && el.querySelector("img"); }
       );
     }
 
@@ -195,13 +196,10 @@
       if (!items.length) return;
       current = (index + items.length) % items.length;
       var el = items[current];
-      figure.setAttribute("data-label", el.getAttribute("data-label") || "");
+      var img = el.querySelector("img");
       figure.setAttribute("data-cat", el.getAttribute("data-cat") || "");
-      // Affiche la vraie image (ou le dégradé de substitution) de la vignette cliquée
-      var hasImg = !!el.style.backgroundImage;
-      var bg = el.style.backgroundImage || getComputedStyle(el).backgroundImage;
-      figure.style.backgroundImage = bg && bg !== "none" ? bg : "";
-      figure.style.backgroundSize = hasImg ? "contain" : "cover";
+      figure.style.backgroundImage = img ? 'url("' + img.getAttribute("src") + '")' : "";
+      figure.style.backgroundSize = "contain";
       figure.style.backgroundRepeat = "no-repeat";
       figure.style.backgroundPosition = "center";
       figure.style.backgroundColor = "#211a17";
@@ -211,6 +209,7 @@
     }
 
     function open(el) {
+      if (!el.querySelector("img")) return; // ignore le placeholder « à venir »
       var items = visibleItems();
       show(items.indexOf(el));
     }
