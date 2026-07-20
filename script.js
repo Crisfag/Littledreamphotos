@@ -326,12 +326,6 @@
         return;
       }
 
-      // Tant que l'identifiant Formspree n'est pas renseigné : mode démonstration.
-      if (form.action.indexOf("VOTRE_ID") !== -1 || !("fetch" in window)) {
-        done();
-        return;
-      }
-
       if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = "Envoi en cours…"; }
 
       fetch(form.action, {

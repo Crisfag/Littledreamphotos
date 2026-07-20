@@ -61,23 +61,21 @@ Dans `tarifs.html`, remplacez chaque **« Sur devis »** par votre vrai prix
 (ex. `195 €`), et ajustez les durées / le nombre de photos / le contenu des
 formules. Un bloc de commentaire en haut du fichier le rappelle.
 
-## ✉️ Activer l'envoi du formulaire (Formspree)
+## ✉️ Formulaire de contact (FormSubmit — aucun compte requis)
 
-Le formulaire est **déjà branché sur Formspree** (envoi en AJAX, anti-spam inclus).
-Tant que l'identifiant n'est pas renseigné, il reste en **mode démonstration**
-(affiche juste le message de confirmation). Pour recevoir les demandes par email :
+Le formulaire est branché sur **FormSubmit**, qui envoie les demandes par email
+sans inscription. Les demandes arrivent sur **littledreamphotos@hotmail.com**
+(défini dans l'attribut `action` du `<form>` de `index.html`).
 
-1. Créez un compte gratuit sur **https://formspree.io** (50 demandes/mois).
-2. Créez un nouveau formulaire → Formspree vous donne un identifiant du type `xdorwkab`.
-3. Dans `index.html`, remplacez `VOTRE_ID` par cet identifiant :
-   ```html
-   <form ... action="https://formspree.io/f/xdorwkab" method="POST" ...>
-   ```
-4. Testez : la première demande envoyée déclenche un email de confirmation
-   Formspree — validez-le, et c'est actif.
+**Activation (une seule fois)** : à la **première demande** envoyée depuis le site,
+FormSubmit envoie un email de confirmation à cette adresse — cliquez le lien pour
+activer. Ensuite, toutes les demandes sont transférées automatiquement.
 
-Pensez aussi à remplacer l'adresse `contact@littledreamphotos.com` (dans le bloc
-Contact et le message d'erreur) par votre vraie adresse si besoin.
+- Pour **changer l'adresse de réception**, modifiez l'email dans
+  `action="https://formsubmit.co/ajax/…"` (une nouvelle activation sera demandée).
+- Anti-spam (champ piège) et mise en forme des emails (`_template=table`) sont inclus.
+- L'adresse affichée dans le bloc Contact (`contact@littledreamphotos.com`) est
+  indépendante — modifiez-la dans `index.html` si vous le souhaitez.
 
 ## 🚀 Déploiement
 

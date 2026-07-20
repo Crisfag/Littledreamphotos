@@ -240,11 +240,13 @@
         </ul>
       </div>
 
-      <!-- Remplacez VOTRE_ID par l'identifiant de votre formulaire Formspree (voir README) -->
-      <form class="contact-form reveal" id="contactForm" action="https://formspree.io/f/VOTRE_ID" method="POST" novalidate>
+      <!-- Envoi via FormSubmit (aucun compte requis) — les demandes arrivent sur l'email ci-dessous -->
+      <form class="contact-form reveal" id="contactForm" action="https://formsubmit.co/ajax/littledreamphotos@hotmail.com" method="POST" novalidate>
         <!-- anti-spam : ce champ doit rester vide -->
-        <input type="text" name="_gotcha" tabindex="-1" autocomplete="off" style="position:absolute;left:-9999px" aria-hidden="true" />
+        <input type="text" name="_honey" tabindex="-1" autocomplete="off" style="position:absolute;left:-9999px" aria-hidden="true" />
         <input type="hidden" name="_subject" value="Nouvelle demande — Little Dream Photography" />
+        <input type="hidden" name="_template" value="table" />
+        <input type="hidden" name="_captcha" value="false" />
         <div class="field">
           <label for="name">Votre nom</label>
           <input type="text" id="name" name="name" required autocomplete="name" />
