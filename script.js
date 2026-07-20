@@ -134,6 +134,8 @@
     var prev = document.getElementById("carPrev");
     var next = document.getElementById("carNext");
     if (!track || !prev || !next) return;
+    var dotsWrap = document.getElementById("carDots");
+    var cards = track.querySelectorAll(".card");
 
     function step() {
       var card = track.querySelector(".card");
@@ -145,12 +147,33 @@
     prev.addEventListener("click", function () { track.scrollBy({ left: -step(), behavior: "smooth" }); });
     next.addEventListener("click", function () { track.scrollBy({ left: step(), behavior: "smooth" }); });
 
+    // Construit un point par vignette
+    var dots = [];
+    if (dotsWrap) {
+      cards.forEach(function (_, i) {
+        var b = document.createElement("button");
+        b.type = "button";
+        b.setAttribute("aria-label", "Aller à la vignette " + (i + 1));
+        if (i === 0) b.classList.add("is-active");
+        b.addEventListener("click", function () { track.scrollTo({ left: i * step(), behavior: "smooth" }); });
+        dotsWrap.appendChild(b);
+        dots.push(b);
+      });
+    }
+
     function update() {
       var max = track.scrollWidth - track.clientWidth - 2;
       prev.style.opacity = track.scrollLeft <= 2 ? ".35" : "1";
       prev.style.pointerEvents = track.scrollLeft <= 2 ? "none" : "auto";
       next.style.opacity = track.scrollLeft >= max ? ".35" : "1";
       next.style.pointerEvents = track.scrollLeft >= max ? "none" : "auto";
+
+      if (dots.length) {
+        var idx = Math.round(track.scrollLeft / step());
+        if (track.scrollLeft >= max) idx = dots.length - 1;
+        idx = Math.max(0, Math.min(idx, dots.length - 1));
+        dots.forEach(function (d, i) { d.classList.toggle("is-active", i === idx); });
+      }
     }
     track.addEventListener("scroll", update, { passive: true });
     window.addEventListener("resize", update);

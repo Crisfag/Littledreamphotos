@@ -215,6 +215,15 @@ h3 { font-size: 1.5rem; }
 .car-prev { left: -12px; }
 .car-next { right: -12px; }
 @media (max-width: 720px) { .car-btn { display: none; } }
+
+/* Points indicateurs */
+.car-dots { display: flex; justify-content: center; gap: .55rem; margin-top: 1.6rem; }
+.car-dots button {
+  width: 9px; height: 9px; padding: 0; border: 0; border-radius: 50%;
+  background: var(--blush); cursor: pointer; transition: transform .3s var(--ease), background .3s var(--ease);
+}
+.car-dots button:hover { background: var(--rose); }
+.car-dots button.is-active { background: var(--rose); transform: scale(1.35); }
 .card-media { display: block; aspect-ratio: 4/5; transition: transform .6s var(--ease); }
 .card:hover .card-media { transform: scale(1.05); }
 .card-body { padding: 1.6rem 1.7rem 1.9rem; }
