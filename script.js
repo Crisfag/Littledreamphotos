@@ -273,11 +273,13 @@
     start();
   }
 
-  /* ---------- Validation du formulaire de contact ---------- */
+  /* ---------- Formulaire de contact (envoi via Formspree) ---------- */
   function contactForm() {
     var form = document.getElementById("contactForm");
     if (!form) return;
     var success = document.getElementById("formSuccess");
+    var error = document.getElementById("formError");
+    var submitBtn = form.querySelector('button[type="submit"]');
 
     function validateField(field) {
       var wrap = field.closest(".field");
@@ -294,8 +296,26 @@
       });
     });
 
+    function done() {
+      form.querySelectorAll("input, select, textarea, button").forEach(function (el) {
+        if (el.type !== "submit") el.disabled = true;
+      });
+      if (submitBtn) submitBtn.disabled = true;
+      if (success) {
+        success.hidden = false;
+        success.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }
+
+    function fail() {
+      if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Envoyer ma demande"; }
+      if (error) { error.hidden = false; error.scrollIntoView({ behavior: "smooth", block: "center" }); }
+    }
+
     form.addEventListener("submit", function (e) {
       e.preventDefault();
+      if (error) error.hidden = true;
+
       var allOk = true;
       form.querySelectorAll("[required]").forEach(function (field) {
         if (!validateField(field)) allOk = false;
@@ -305,15 +325,23 @@
         if (firstInvalid) firstInvalid.focus();
         return;
       }
-      // Démo : pas de backend. On affiche un message de confirmation.
-      // Pour un envoi réel, brancher un service (Formspree, Netlify Forms, EmailJS…).
-      form.querySelectorAll("input, select, textarea, button").forEach(function (el) {
-        if (el.type !== "submit") el.disabled = true;
-      });
-      if (success) {
-        success.hidden = false;
-        success.scrollIntoView({ behavior: "smooth", block: "center" });
+
+      // Tant que l'identifiant Formspree n'est pas renseigné : mode démonstration.
+      if (form.action.indexOf("VOTRE_ID") !== -1 || !("fetch" in window)) {
+        done();
+        return;
       }
+
+      if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = "Envoi en cours…"; }
+
+      fetch(form.action, {
+        method: "POST",
+        body: new FormData(form),
+        headers: { Accept: "application/json" }
+      }).then(function (res) {
+        if (res.ok) { done(); }
+        else { fail(); }
+      }).catch(fail);
     });
   }
 })();

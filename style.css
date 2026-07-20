@@ -334,6 +334,8 @@ h3 { font-size: 1.5rem; }
 .field.invalid .err { display: block; }
 .field.invalid input, .field.invalid select, .field.invalid textarea { border-color: #c0564b; }
 .form-success { grid-column: 1 / -1; color: var(--rose-deep); font-weight: 500; text-align: center; }
+.form-error { grid-column: 1 / -1; color: #c0564b; font-weight: 500; text-align: center; }
+.form-error a { text-decoration: underline; }
 
 /* =====================================================================
    FOOTER

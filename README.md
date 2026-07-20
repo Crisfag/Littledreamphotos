@@ -61,16 +61,23 @@ Dans `tarifs.html`, remplacez chaque **« Sur devis »** par votre vrai prix
 (ex. `195 €`), et ajustez les durées / le nombre de photos / le contenu des
 formules. Un bloc de commentaire en haut du fichier le rappelle.
 
-## ✉️ Activer l'envoi du formulaire
+## ✉️ Activer l'envoi du formulaire (Formspree)
 
-Le formulaire affiche un message de confirmation mais n'envoie pas encore d'email
-(pas de backend). Branchez un service gratuit :
+Le formulaire est **déjà branché sur Formspree** (envoi en AJAX, anti-spam inclus).
+Tant que l'identifiant n'est pas renseigné, il reste en **mode démonstration**
+(affiche juste le message de confirmation). Pour recevoir les demandes par email :
 
-- **Netlify Forms** : ajoutez l'attribut `netlify` sur la balise `<form>`.
-- **Formspree** : `action="https://formspree.io/f/VOTRE_ID"` et `method="POST"`.
-- **EmailJS** : envoi côté client via leur SDK.
+1. Créez un compte gratuit sur **https://formspree.io** (50 demandes/mois).
+2. Créez un nouveau formulaire → Formspree vous donne un identifiant du type `xdorwkab`.
+3. Dans `index.html`, remplacez `VOTRE_ID` par cet identifiant :
+   ```html
+   <form ... action="https://formspree.io/f/xdorwkab" method="POST" ...>
+   ```
+4. Testez : la première demande envoyée déclenche un email de confirmation
+   Formspree — validez-le, et c'est actif.
 
-Pensez aussi à remplacer l'adresse `contact@littledreamphotos.com` par la vôtre.
+Pensez aussi à remplacer l'adresse `contact@littledreamphotos.com` (dans le bloc
+Contact et le message d'erreur) par votre vraie adresse si besoin.
 
 ## 🚀 Déploiement
 
