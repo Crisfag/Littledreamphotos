@@ -126,7 +126,7 @@ h3 { font-size: 1.5rem; }
 /* =====================================================================
    HERO
    ===================================================================== */
-.hero { position: relative; min-height: 66vh; max-height: 760px; display: flex; align-items: center; color: var(--white); overflow: hidden; }
+.hero { position: relative; min-height: 74vh; max-height: 820px; display: flex; align-items: center; color: var(--white); overflow: hidden; }
 .hero-media {
   position: absolute; inset: 0;
   background:
@@ -143,9 +143,9 @@ h3 { font-size: 1.5rem; }
 }
 @keyframes heroZoom { to { transform: scale(1.16) translateY(-2%); } }
 .hero-overlay { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(43,37,33,.35), rgba(43,37,33,.15) 40%, rgba(43,37,33,.55)); }
-.hero-content { position: relative; z-index: 2; max-width: 760px; padding-top: 4rem; }
+.hero-content { position: relative; z-index: 2; max-width: 760px; padding: 5rem 0 5.5rem; }
 .hero-eyebrow { font-size: .8rem; letter-spacing: .34em; text-transform: uppercase; margin-bottom: 1.4rem; }
-.hero-title { font-size: clamp(2.6rem, 7vw, 5.2rem); font-weight: 500; letter-spacing: .01em; }
+.hero-title { font-size: clamp(2.6rem, 7vw, 5.2rem); font-weight: 500; letter-spacing: .01em; color: var(--white); }
 .hero-text { margin: 1.6rem 0 2.4rem; font-size: 1.15rem; max-width: 540px; color: rgba(255,255,255,.92); }
 .hero-actions { display: flex; gap: 1rem; flex-wrap: wrap; }
 
@@ -490,7 +490,7 @@ h3 { font-size: 1.5rem; }
 .page-hero-bg[data-tone="mauve"] { background-image: linear-gradient(135deg, #c2a6b0, #a98a97 55%, #6f5763); }
 .page-hero::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(43,37,33,.32), rgba(43,37,33,.5)); }
 .page-hero-inner { position: relative; z-index: 2; text-align: center; margin-inline: auto; max-width: 720px; padding: 7rem 0 3rem; }
-.page-hero-inner h1 { font-size: clamp(2.4rem, 5.5vw, 4rem); margin-bottom: .8rem; }
+.page-hero-inner h1 { font-size: clamp(2.4rem, 5.5vw, 4rem); margin-bottom: .8rem; color: var(--white); }
 .page-hero-inner p { color: rgba(255,255,255,.9); font-size: 1.1rem; }
 
 /* ----- boutons additionnels ----- */
