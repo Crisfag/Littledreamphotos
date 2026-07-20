@@ -197,6 +197,14 @@
       var el = items[current];
       figure.setAttribute("data-label", el.getAttribute("data-label") || "");
       figure.setAttribute("data-cat", el.getAttribute("data-cat") || "");
+      // Affiche la vraie image (ou le dégradé de substitution) de la vignette cliquée
+      var hasImg = !!el.style.backgroundImage;
+      var bg = el.style.backgroundImage || getComputedStyle(el).backgroundImage;
+      figure.style.backgroundImage = bg && bg !== "none" ? bg : "";
+      figure.style.backgroundSize = hasImg ? "contain" : "cover";
+      figure.style.backgroundRepeat = "no-repeat";
+      figure.style.backgroundPosition = "center";
+      figure.style.backgroundColor = "#211a17";
       lb.hidden = false;
       document.body.style.overflow = "hidden";
       closeBtn.focus();

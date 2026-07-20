@@ -30,8 +30,10 @@ dépendance à installer.
 
 ## 🖼️ Ajouter vos vraies photos
 
-Le site utilise pour l'instant de jolis dégradés de couleur en guise de photos.
-Déposez vos images dans `images/`, puis :
+Les photos sont rangées par catégorie : `images/maternite/`, `images/naissance/`, etc.
+La catégorie **Maternité est déjà intégrée** (slideshow d'accueil + galerie + carte).
+Pour les autres, déposez vos images dans le sous-dossier correspondant sur le même
+modèle (`images/naissance/naissance-01.jpeg`…), puis :
 
 ### Le slideshow d'accueil (`index.html`)
 Sur chaque `<div class="hero-slide" ...>`, ajoutez un `style` :
