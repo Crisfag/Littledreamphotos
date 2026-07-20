@@ -567,9 +567,16 @@ h3 { font-size: 1.5rem; }
 }
 .cat-chip:hover { border-color: var(--rose); color: var(--rose); }
 
-.forfaits { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.8rem; align-items: stretch; }
-.forfaits.two { grid-template-columns: repeat(2, 1fr); max-width: 780px; margin-inline: auto; }
+/* Forfaits en carrousel horizontal */
+.forfaits {
+  display: flex; gap: 1.8rem; align-items: stretch;
+  overflow-x: auto; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch;
+  scrollbar-width: none; padding: .3rem .3rem 1rem;
+}
+.forfaits::-webkit-scrollbar { display: none; }
+.forfaits.two { justify-content: center; }
 .forfait-card {
+  flex: 0 0 clamp(300px, 31%, 360px); scroll-snap-align: start;
   position: relative; background: var(--white); border-radius: var(--radius); padding: 2.4rem 1.9rem 2rem;
   box-shadow: var(--shadow-sm); border-top: 4px solid var(--blush); display: flex; flex-direction: column;
   transition: transform .45s var(--ease), box-shadow .45s var(--ease);
@@ -618,9 +625,14 @@ h3 { font-size: 1.5rem; }
    ===================================================================== */
 @media (max-width: 900px) {
   .price-grid { grid-template-columns: repeat(2, 1fr); }
-  .forfaits { grid-template-columns: 1fr; max-width: 440px; margin-inline: auto; }
   .options-list { grid-template-columns: 1fr; }
   .soon-grid { grid-template-columns: 1fr; }
+}
+
+/* Smartphone : 1 vignette et demie visible dans le carrousel des forfaits */
+@media (max-width: 700px) {
+  .forfait-card { flex: 0 0 66%; padding: 2rem 1.4rem 1.8rem; }
+  .forfaits.two { justify-content: flex-start; }
 }
 
 @media (max-width: 720px) {
