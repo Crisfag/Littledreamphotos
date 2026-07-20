@@ -14,6 +14,7 @@
     dropdownMenu();
     heroSlideshow();
     prestaCarousel();
+    forfaitCarousels();
     revealOnScroll();
     galleryFilter();
     lightbox();
@@ -178,6 +179,47 @@
     track.addEventListener("scroll", update, { passive: true });
     window.addEventListener("resize", update);
     update();
+  }
+
+  /* ---------- Points indicateurs des carrousels de forfaits (page Tarifs) ---------- */
+  function forfaitCarousels() {
+    document.querySelectorAll(".forfaits").forEach(function (track) {
+      var cards = track.querySelectorAll(".forfait-card");
+      if (cards.length < 2) return;
+
+      var dotsWrap = document.createElement("div");
+      dotsWrap.className = "car-dots forfait-dots";
+      track.insertAdjacentElement("afterend", dotsWrap);
+
+      function step() {
+        var gap = parseFloat(getComputedStyle(track).columnGap) || 28;
+        return cards[0].getBoundingClientRect().width + gap;
+      }
+
+      var dots = [];
+      cards.forEach(function (_, i) {
+        var b = document.createElement("button");
+        b.type = "button";
+        b.setAttribute("aria-label", "Aller au forfait " + (i + 1));
+        if (i === 0) b.classList.add("is-active");
+        b.addEventListener("click", function () { track.scrollTo({ left: i * step(), behavior: "smooth" }); });
+        dotsWrap.appendChild(b);
+        dots.push(b);
+      });
+
+      function update() {
+        var overflow = track.scrollWidth > track.clientWidth + 2;
+        dotsWrap.style.display = overflow ? "flex" : "none"; // masqué quand tout tient (desktop)
+        var max = track.scrollWidth - track.clientWidth - 2;
+        var idx = Math.round(track.scrollLeft / step());
+        if (track.scrollLeft >= max) idx = dots.length - 1;
+        idx = Math.max(0, Math.min(idx, dots.length - 1));
+        dots.forEach(function (d, i) { d.classList.toggle("is-active", i === idx); });
+      }
+      track.addEventListener("scroll", update, { passive: true });
+      window.addEventListener("resize", update);
+      update();
+    });
   }
 
   /* ---------- Animations d'apparition ---------- */
