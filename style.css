@@ -524,6 +524,54 @@ h3 { font-size: 1.5rem; }
 .price-features li::before { content: "✓"; position: absolute; left: 0; color: var(--rose); font-weight: 600; }
 .price-note { text-align: center; margin-top: 2.4rem; color: var(--muted); font-size: .95rem; }
 
+/* ----- Forfaits (3 niveaux) ----- */
+.cat-chips { display: flex; flex-wrap: wrap; justify-content: center; gap: .6rem; margin-bottom: 3.2rem; }
+.cat-chip {
+  background: transparent; border: 1px solid var(--line); color: var(--charcoal);
+  padding: .5rem 1.1rem; border-radius: 999px; font-size: .78rem; letter-spacing: .08em;
+  text-transform: uppercase; transition: all .3s var(--ease);
+}
+.cat-chip:hover { border-color: var(--rose); color: var(--rose); }
+
+.forfaits { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.8rem; align-items: stretch; }
+.forfait-card {
+  position: relative; background: var(--white); border-radius: var(--radius); padding: 2.4rem 1.9rem 2rem;
+  box-shadow: var(--shadow-sm); border-top: 4px solid var(--blush); display: flex; flex-direction: column;
+  transition: transform .45s var(--ease), box-shadow .45s var(--ease);
+}
+.forfait-card:hover { transform: translateY(-8px); box-shadow: var(--shadow); }
+.forfait-card.featured { border-top-color: var(--rose); box-shadow: 0 22px 55px -22px rgba(156,111,97,.5); }
+.forfait-name { font-size: .82rem; letter-spacing: .2em; text-transform: uppercase; color: var(--rose); }
+.forfait-price { font-family: var(--serif); font-size: 3.2rem; line-height: 1; color: var(--ink); margin: .5rem 0 1.5rem; }
+.forfait-price span { font-size: 1.4rem; color: var(--muted); vertical-align: super; margin-left: .1rem; }
+.forfait-features { flex: 1; margin-bottom: 1.7rem; }
+.forfait-features li { position: relative; padding-left: 1.5rem; margin-bottom: .62rem; color: var(--muted); font-size: .92rem; }
+.forfait-features li::before { content: "✓"; position: absolute; left: 0; color: var(--rose); font-weight: 600; }
+.forfait-features strong { color: var(--charcoal); font-weight: 500; }
+.forfait-card .price-badge { position: absolute; top: -.85rem; left: 50%; transform: translateX(-50%); margin: 0; white-space: nowrap; }
+
+/* ----- Encart options ----- */
+.options-box {
+  margin-top: 2.6rem; background: var(--white); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 1.8rem 2rem;
+}
+.options-box h3 { font-size: 1.3rem; margin-bottom: 1rem; }
+.options-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: .7rem 2rem; }
+.options-list li { display: flex; justify-content: space-between; gap: 1rem; padding: .55rem 0; border-bottom: 1px dashed var(--line); color: var(--charcoal); font-size: .95rem; }
+.options-list li b { color: var(--rose-deep); white-space: nowrap; font-weight: 600; }
+
+/* ----- Autres prestations (teaser) ----- */
+.soon-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.4rem; }
+.soon-card {
+  background: var(--white); border-radius: var(--radius); box-shadow: var(--shadow-sm);
+  padding: 1.6rem 1.7rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+  transition: transform .4s var(--ease), box-shadow .4s var(--ease);
+}
+.soon-card:hover { transform: translateY(-4px); box-shadow: var(--shadow); }
+.soon-card h3 { font-size: 1.3rem; }
+.soon-card p { color: var(--muted); font-size: .85rem; margin-top: .2rem; }
+.soon-card .btn { flex: none; }
+
 /* ----- Bande CTA ----- */
 .cta-band { background: var(--sand); text-align: center; }
 .cta-inner { max-width: 640px; margin-inline: auto; }
@@ -535,6 +583,9 @@ h3 { font-size: 1.5rem; }
    ===================================================================== */
 @media (max-width: 900px) {
   .price-grid { grid-template-columns: repeat(2, 1fr); }
+  .forfaits { grid-template-columns: 1fr; max-width: 440px; margin-inline: auto; }
+  .options-list { grid-template-columns: 1fr; }
+  .soon-grid { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 720px) {

@@ -16,9 +16,9 @@
 
   <!--
     ┌─────────────────────────────────────────────────────────────────┐
-    │  À COMPLÉTER : remplacez chaque « Sur devis » ci-dessous par      │
-    │  votre vrai prix (ex. « 195 € »). Ajustez aussi les durées, le   │
-    │  nombre de photos incluses et le contenu des formules.           │
+    │  Tarifs MATERNITÉ intégrés depuis votre page (Mini/Light/Gourmand │
+    │  + options). Pour les AUTRES prestations et les FORMATIONS,       │
+    │  envoyez-moi les formules/prix : je les intègre à l'identique.    │
     └─────────────────────────────────────────────────────────────────┘
   -->
 
@@ -73,111 +73,125 @@
     </div>
   </section>
 
-  <!-- ===================== TARIFS ===================== -->
-  <section class="section pricing">
+  <!-- ===================== ACCÈS RAPIDE PRESTATIONS ===================== -->
+  <section class="section pricing" style="padding-bottom:0">
     <div class="container">
-      <div class="price-grid">
+      <nav class="cat-chips" aria-label="Aller à une prestation">
+        <a class="cat-chip" href="#maternite">Maternité</a>
+        <a class="cat-chip" href="#naissance">Naissance</a>
+        <a class="cat-chip" href="#famille">Famille</a>
+        <a class="cat-chip" href="#cake">Smash the Cake</a>
+        <a class="cat-chip" href="#portrait">Portrait</a>
+        <a class="cat-chip" href="#formations">Formations</a>
+      </nav>
+    </div>
+  </section>
 
-        <article class="price-card" id="maternite">
-          <div class="price-media" data-tint="rose" data-label="Maternité"></div>
-          <div class="price-body">
-            <h3>Maternité</h3>
-            <p class="price-tag"><span class="price-from">dès</span> <span class="price-value">Sur devis</span></p>
-            <ul class="price-features">
-              <li>Séance d'environ 1h30 (studio ou extérieur)</li>
-              <li>Mise en beauté possible (maquillage &amp; coiffure)</li>
-              <li>Prêt de robes de grossesse</li>
-              <li>Galerie privée en ligne</li>
-              <li>Photos retouchées incluses</li>
-            </ul>
-            <a href="index.html#contact" class="btn btn-outline btn-block">Réserver</a>
-          </div>
+  <!-- ===================== TARIFS MATERNITÉ ===================== -->
+  <section class="section pricing" id="maternite">
+    <div class="container">
+      <header class="section-head reveal">
+        <p class="eyebrow">Maternité</p>
+        <h2>Les forfaits Maternité</h2>
+        <p class="section-lead">Les séances se déroulent en studio ou en extérieur (jusqu'à 10 km du studio). Un large choix de robes et tenues de créateurs est mis à disposition et inclus dans votre forfait ; nous choisissons ensemble le style et les couleurs. Je vous guide du début à la fin — poses mimées à l'appui — pour un moment hors du temps.</p>
+      </header>
+
+      <div class="forfaits">
+        <article class="forfait-card reveal">
+          <span class="forfait-name">Forfait Mini</span>
+          <p class="forfait-price">170<span>€</span></p>
+          <ul class="forfait-features">
+            <li>Nos échanges préparatifs</li>
+            <li>Préparation du studio &amp; du shooting</li>
+            <li>Accès au dressing (robes &amp; tenues de créateurs)</li>
+            <li><strong>1 tenue</strong> de la garde-robe</li>
+            <li>Shooting de <strong>30 à 40 min</strong></li>
+            <li>Galerie en ligne pour votre sélection</li>
+            <li>Retouche minutieuse de votre sélection</li>
+            <li><strong>5 clichés</strong> retouchés HD couleur + leurs doubles en N&amp;B</li>
+            <li>Envoi numérique via WeTransfer</li>
+          </ul>
+          <a href="index.html#contact" class="btn btn-outline btn-block">Réserver</a>
         </article>
 
-        <article class="price-card featured" id="naissance">
-          <div class="price-media" data-tint="cream" data-label="Naissance"></div>
-          <div class="price-body">
-            <span class="price-badge">Le plus demandé</span>
-            <h3>Naissance &amp; Nouveau-né</h3>
-            <p class="price-tag"><span class="price-from">dès</span> <span class="price-value">Sur devis</span></p>
-            <ul class="price-features">
-              <li>Séance dans les 5 à 12 jours de bébé</li>
-              <li>Accessoires, wraps &amp; décors fournis</li>
-              <li>Ambiance cocooning &amp; chauffée</li>
-              <li>Galerie privée en ligne</li>
-              <li>Photos retouchées incluses</li>
-            </ul>
-            <a href="index.html#contact" class="btn btn-primary btn-block">Réserver</a>
-          </div>
+        <article class="forfait-card featured reveal">
+          <span class="price-badge">Le plus demandé</span>
+          <span class="forfait-name">Forfait Light</span>
+          <p class="forfait-price">250<span>€</span></p>
+          <ul class="forfait-features">
+            <li>Nos échanges préparatifs</li>
+            <li>Préparation du studio &amp; du shooting</li>
+            <li>Accès au dressing (robes &amp; tenues de créateurs)</li>
+            <li><strong>2 tenues</strong> de votre choix</li>
+            <li>Shooting d'une durée d'<strong>1h00</strong></li>
+            <li>Galerie en ligne pour votre sélection</li>
+            <li>Retouche minutieuse de votre sélection</li>
+            <li><strong>10 clichés</strong> retouchés HD couleur + leurs doubles en N&amp;B</li>
+            <li>Envoi numérique via WeTransfer</li>
+          </ul>
+          <a href="index.html#contact" class="btn btn-primary btn-block">Réserver</a>
         </article>
 
-        <article class="price-card" id="famille">
-          <div class="price-media" data-tint="sage" data-label="Famille"></div>
-          <div class="price-body">
-            <h3>Famille</h3>
-            <p class="price-tag"><span class="price-from">dès</span> <span class="price-value">Sur devis</span></p>
-            <ul class="price-features">
-              <li>Séance en studio ou extérieur (≤ 10 km)</li>
-              <li>Idéal en toutes saisons</li>
-              <li>Jusqu'à 5 personnes (option au-delà)</li>
-              <li>Galerie privée en ligne</li>
-              <li>Photos retouchées incluses</li>
-            </ul>
-            <a href="index.html#contact" class="btn btn-outline btn-block">Réserver</a>
-          </div>
+        <article class="forfait-card reveal">
+          <span class="forfait-name">Forfait Gourmand</span>
+          <p class="forfait-price">350<span>€</span></p>
+          <ul class="forfait-features">
+            <li>Nos échanges préparatifs</li>
+            <li>Préparation du studio &amp; du shooting</li>
+            <li>Accès au dressing (robes &amp; tenues de créateurs)</li>
+            <li><strong>4 tenues</strong> de votre choix</li>
+            <li>Shooting d'une durée d'<strong>1h30</strong></li>
+            <li>Galerie en ligne pour votre sélection</li>
+            <li>Retouche minutieuse de votre sélection</li>
+            <li><strong>15 clichés</strong> retouchés HD couleur + leurs doubles en N&amp;B</li>
+            <li>Envoi numérique via WeTransfer</li>
+          </ul>
+          <a href="index.html#contact" class="btn btn-outline btn-block">Réserver</a>
         </article>
-
-        <article class="price-card" id="cake">
-          <div class="price-media" data-tint="peach" data-label="Smash the Cake"></div>
-          <div class="price-body">
-            <h3>Smash the Cake</h3>
-            <p class="price-tag"><span class="price-from">dès</span> <span class="price-value">Sur devis</span></p>
-            <ul class="price-features">
-              <li>Décor &amp; ballons personnalisés</li>
-              <li>Gâteau prévu pour la séance</li>
-              <li>Moment de jeu &amp; d'éclaboussures</li>
-              <li>Galerie privée en ligne</li>
-              <li>Photos retouchées incluses</li>
-            </ul>
-            <a href="index.html#contact" class="btn btn-outline btn-block">Réserver</a>
-          </div>
-        </article>
-
-        <article class="price-card" id="portrait">
-          <div class="price-media" data-tint="mauve" data-label="Portrait & Fashion"></div>
-          <div class="price-body">
-            <h3>Portrait &amp; Fashion</h3>
-            <p class="price-tag"><span class="price-from">dès</span> <span class="price-value">Sur devis</span></p>
-            <ul class="price-features">
-              <li>Direction artistique personnalisée</li>
-              <li>Mise en beauté possible</li>
-              <li>Studio ou extérieur</li>
-              <li>Galerie privée en ligne</li>
-              <li>Photos retouchées incluses</li>
-            </ul>
-            <a href="index.html#contact" class="btn btn-outline btn-block">Réserver</a>
-          </div>
-        </article>
-
-        <article class="price-card" id="offre-naissance">
-          <div class="price-media" data-tint="taupe" data-label="Offre grossesse + naissance"></div>
-          <div class="price-body">
-            <h3>Duo Grossesse + Naissance</h3>
-            <p class="price-tag"><span class="price-from">dès</span> <span class="price-value">Sur devis</span></p>
-            <ul class="price-features">
-              <li>Les deux séances réunies</li>
-              <li>Tarif avantageux</li>
-              <li>Suivi de votre aventure de A à Z</li>
-              <li>Galerie privée en ligne</li>
-              <li>Photos retouchées incluses</li>
-            </ul>
-            <a href="index.html#contact" class="btn btn-outline btn-block">Réserver</a>
-          </div>
-        </article>
-
       </div>
 
-      <p class="price-note">Les tirages, albums et fichiers supplémentaires sont disponibles en option. Un acompte confirme la réservation de votre date.</p>
+      <div class="options-box reveal">
+        <h3>Options en supplément</h3>
+        <ul class="options-list">
+          <li><span>Mise en beauté — Make-up / prestation</span> <b>35 €</b></li>
+          <li><span>Coiffure / prestation</span> <b>35 €</b></li>
+          <li><span>Shooting un jour férié</span> <b>+50 €</b></li>
+          <li><span>Image retouchée supplémentaire</span> <b>30 € / unité</b></li>
+          <li><span>Impressions (folio, albums, posters…)</span> <b>Sur demande</b></li>
+        </ul>
+      </div>
+
+      <p class="price-note">Un acompte confirme la réservation de votre date.</p>
+    </div>
+  </section>
+
+  <!-- ===================== AUTRES PRESTATIONS ===================== -->
+  <section class="section pricing" style="background:var(--cream)">
+    <div class="container">
+      <header class="section-head reveal">
+        <p class="eyebrow">Autres prestations</p>
+        <h2>Naissance, famille &amp; plus</h2>
+        <p class="section-lead">Chaque prestation propose ses formules Mini · Light · Gourmand. Les tarifs détaillés arrivent — contactez-moi pour recevoir le forfait qui vous correspond.</p>
+      </header>
+
+      <div class="soon-grid">
+        <article class="soon-card reveal" id="naissance">
+          <div><h3>Naissance &amp; Nouveau-né</h3><p>Formules sur demande</p></div>
+          <a href="index.html#contact" class="btn btn-outline">Demander</a>
+        </article>
+        <article class="soon-card reveal" id="famille">
+          <div><h3>Famille</h3><p>Formules sur demande</p></div>
+          <a href="index.html#contact" class="btn btn-outline">Demander</a>
+        </article>
+        <article class="soon-card reveal" id="cake">
+          <div><h3>Smash the Cake</h3><p>Formules sur demande</p></div>
+          <a href="index.html#contact" class="btn btn-outline">Demander</a>
+        </article>
+        <article class="soon-card reveal" id="portrait">
+          <div><h3>Portrait &amp; Fashion</h3><p>Formules sur demande</p></div>
+          <a href="index.html#contact" class="btn btn-outline">Demander</a>
+        </article>
+      </div>
     </div>
   </section>
 
