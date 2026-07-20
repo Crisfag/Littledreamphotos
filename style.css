@@ -126,7 +126,7 @@ h3 { font-size: 1.5rem; }
 /* =====================================================================
    HERO
    ===================================================================== */
-.hero { position: relative; min-height: 100svh; display: flex; align-items: center; color: var(--white); overflow: hidden; }
+.hero { position: relative; min-height: 66vh; max-height: 760px; display: flex; align-items: center; color: var(--white); overflow: hidden; }
 .hero-media {
   position: absolute; inset: 0;
   background:
