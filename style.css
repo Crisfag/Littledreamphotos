@@ -144,7 +144,7 @@ h3 { font-size: 1.5rem; }
 @keyframes heroZoom { to { transform: scale(1.16) translateY(-2%); } }
 .hero-overlay { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(43,37,33,.35), rgba(43,37,33,.15) 40%, rgba(43,37,33,.55)); }
 .hero-content { position: relative; z-index: 2; max-width: 760px; padding: 5rem 0 5.5rem; }
-.hero-eyebrow { font-size: .8rem; letter-spacing: .34em; text-transform: uppercase; margin-bottom: 1.4rem; }
+.hero-eyebrow { font-size: clamp(.56rem, 2.7vw, .8rem); letter-spacing: .2em; text-transform: uppercase; margin-bottom: 1.4rem; white-space: nowrap; }
 .hero-title { font-size: clamp(2.6rem, 7vw, 5.2rem); font-weight: 500; letter-spacing: .01em; color: var(--white); }
 .hero-text { margin: 1.6rem 0 2.4rem; font-size: 1.15rem; max-width: 540px; color: rgba(255,255,255,.92); }
 .hero-actions { display: flex; gap: 1rem; flex-wrap: wrap; }
