@@ -594,6 +594,7 @@ h3 { font-size: 1.5rem; }
 .forfait-features li.excl::before { content: "✕"; color: #c0564b; }
 .forfait-features strong { color: var(--charcoal); font-weight: 500; }
 .forfait-card .price-badge { position: absolute; top: -.85rem; left: 50%; transform: translateX(-50%); margin: 0; white-space: nowrap; }
+.price-badge.nature { background: #869072; }
 
 /* ----- Encart options ----- */
 .options-box {
