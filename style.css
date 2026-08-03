@@ -533,11 +533,10 @@ h3 { font-size: 1.5rem; }
 
 /* ----- Feed Facebook (Page Plugin) ----- */
 .facebook-feed { background: var(--cream); }
-.fb-embed { display: flex; justify-content: center; margin-top: 2.4rem; }
-.fb-embed .fb-page,
-.fb-embed .fb-page span,
-.fb-embed .fb-page iframe { max-width: 100% !important; }
-.fb-embed .fb-page { border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow-sm); background: var(--white); }
+.fb-embed { width: 100%; max-width: 500px; margin: 2.4rem auto 0; }
+.fb-embed .fb-page { display: block; width: 100%; border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow-sm); background: var(--white); }
+.fb-embed .fb-page > span,
+.fb-embed .fb-page iframe { width: 100% !important; }
 .fb-fallback { text-align: center; margin-top: 1.8rem; }
 
 /* =====================================================================
