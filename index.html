@@ -16,7 +16,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Jost:wght@300;400;500;600&display=swap" rel="stylesheet" />
 
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%23b98a7a'/><text y='72' x='50' text-anchor='middle' font-size='60' font-family='Georgia'>L</text></svg>" />
-  <link rel="stylesheet" href="style.css?v=22" />
+  <link rel="stylesheet" href="style.css?v=23" />
 </head>
 <body>
 
@@ -291,6 +291,36 @@
     </div>
   </section>
 
+  <!-- ===================== FEED FACEBOOK ===================== -->
+  <section class="section facebook-feed" id="facebook" aria-label="Fil d'actualité Facebook">
+    <div class="container">
+      <header class="section-head reveal">
+        <p class="eyebrow">Actualités</p>
+        <h2>Suivez-moi sur Facebook</h2>
+        <p class="section-lead">Retrouvez mes dernières séances, coulisses et actualités directement depuis ma page Facebook.</p>
+      </header>
+      <div class="fb-embed reveal">
+        <div id="fb-root"></div>
+        <div class="fb-page"
+          data-href="https://www.facebook.com/littledreamphotographyseraing"
+          data-tabs="timeline"
+          data-width="500"
+          data-height="720"
+          data-small-header="false"
+          data-adapt-container-width="true"
+          data-hide-cover="false"
+          data-show-facepile="true">
+          <blockquote cite="https://www.facebook.com/littledreamphotographyseraing" class="fb-xfbml-parse-ignore">
+            <a href="https://www.facebook.com/littledreamphotographyseraing">Little Dream Photography</a>
+          </blockquote>
+        </div>
+      </div>
+      <p class="fb-fallback">
+        <a href="https://www.facebook.com/littledreamphotographyseraing/" target="_blank" rel="noopener" class="btn btn-outline">Voir ma page Facebook</a>
+      </p>
+    </div>
+  </section>
+
   <!-- ===================== FOOTER ===================== -->
   <footer class="site-footer">
     <div class="container footer-inner">
@@ -313,6 +343,9 @@
     <p class="footer-copy">© <span id="year"></span> Little Dream Photography · Tous droits réservés</p>
   </footer>
 
-  <script src="script.js?v=22"></script>
+  <!-- SDK Facebook pour le fil d'actualité (Page Plugin) -->
+  <script async defer crossorigin="anonymous" src="https://connect.facebook.net/fr_FR/sdk.js#xfbml=1&version=v19.0"></script>
+
+  <script src="script.js?v=23"></script>
 </body>
 </html>
