@@ -10,6 +10,7 @@
   function init() {
     setYear();
     stickyHeader();
+    socialBar();
     mobileNav();
     dropdownMenu();
     heroSlideshow();
@@ -37,6 +38,20 @@
     };
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
+  }
+
+  /* ---------- Barre sociale : apparaît une fois le héro dépassé (mobile) ---------- */
+  function socialBar() {
+    var bar = document.querySelector(".social-fixed");
+    if (!bar) return;
+    var hero = document.querySelector(".hero, .page-hero");
+    var onScroll = function () {
+      var threshold = hero ? Math.max(hero.offsetHeight - 70, 100) : 60;
+      bar.classList.toggle("is-visible", window.scrollY > threshold);
+    };
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
   }
 
   /* ---------- Menu mobile ---------- */
