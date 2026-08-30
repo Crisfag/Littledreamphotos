@@ -35,6 +35,16 @@
 /* ---------- Reset léger ---------- */
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+
+/* ----- Sélection de texte désactivée (hors champs de formulaire) ----- */
+body {
+  -webkit-user-select: none; -moz-user-select: none; user-select: none;
+  -webkit-touch-callout: none;
+}
+input, textarea, select {
+  -webkit-user-select: text; -moz-user-select: text; user-select: text;
+}
+img { -webkit-user-drag: none; user-drag: none; pointer-events: auto; }
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; }
@@ -398,7 +408,7 @@ h3 { font-size: 1.5rem; }
 .lb-figure[data-cat="cake"]      { background: linear-gradient(135deg, #f6d9c8, #e0a98c); }
 .lb-figure[data-cat="portrait"]  { background: linear-gradient(135deg, #d9c6cf, #a98a97); }
 @keyframes lbIn { from { opacity: 0; transform: scale(.94); } to { opacity: 1; transform: none; } }
-.lb-close, .lb-nav { position: absolute; background: rgba(255,255,255,.12); color: #fff; border: 0; cursor: pointer; border-radius: 50%; transition: background .3s; }
+.lb-close, .lb-nav { position: absolute; z-index: 5; background: rgba(255,255,255,.12); color: #fff; border: 0; cursor: pointer; border-radius: 50%; transition: background .3s; }
 .lb-close { top: 1.4rem; right: 1.4rem; width: 46px; height: 46px; font-size: 1.6rem; }
 .lb-nav { top: 50%; transform: translateY(-50%); width: 52px; height: 52px; font-size: 2rem; display: grid; place-items: center; }
 .lb-prev { left: max(1rem, 3vw); }

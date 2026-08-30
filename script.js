@@ -347,6 +347,23 @@
       else if (e.key === "ArrowLeft") show(current - 1);
       else if (e.key === "ArrowRight") show(current + 1);
     });
+
+    // Balayage tactile : glisser à droite → photo précédente, à gauche → suivante
+    var touchStartX = null, touchStartY = null;
+    lb.addEventListener("touchstart", function (e) {
+      touchStartX = e.changedTouches[0].clientX;
+      touchStartY = e.changedTouches[0].clientY;
+    }, { passive: true });
+    lb.addEventListener("touchend", function (e) {
+      if (touchStartX === null) return;
+      var dx = e.changedTouches[0].clientX - touchStartX;
+      var dy = e.changedTouches[0].clientY - touchStartY;
+      touchStartX = null;
+      if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy)) {
+        if (dx > 0) show(current - 1);
+        else show(current + 1);
+      }
+    }, { passive: true });
   }
 
   /* ---------- Carrousel de témoignages ---------- */
