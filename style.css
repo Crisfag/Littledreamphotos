@@ -830,3 +830,25 @@ h3 { font-size: 1.5rem; }
   .social-fixed a { width: 36px; height: 36px; }
   .social-fixed a svg { width: 16px; height: 16px; }
 }
+
+/* =====================================================================
+   POP-UP PROMO (Noël & saisonnières)
+   ===================================================================== */
+.promo-modal { position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; padding: 1.2rem; }
+.promo-modal[hidden] { display: none; }
+.promo-overlay { position: absolute; inset: 0; background: rgba(30, 26, 23, .78); backdrop-filter: blur(3px); }
+.promo-card {
+  position: relative; z-index: 1; width: 100%; max-width: 400px; max-height: 92vh;
+  overflow-y: auto; background: var(--white); border-radius: var(--radius);
+  box-shadow: var(--shadow); animation: lbIn .4s var(--ease);
+  display: flex; flex-direction: column; -webkit-overflow-scrolling: touch;
+}
+.promo-close {
+  position: absolute; top: .7rem; right: .7rem; z-index: 2;
+  width: 38px; height: 38px; border-radius: 50%; border: 0; cursor: pointer;
+  background: rgba(255, 255, 255, .92); color: var(--ink); font-size: 1.5rem; line-height: 1;
+  display: grid; place-items: center; box-shadow: var(--shadow-sm); transition: background .3s var(--ease), transform .3s var(--ease);
+}
+.promo-close:hover { background: #fff; transform: scale(1.08); }
+.promo-img { width: 100%; display: block; }
+.promo-cta { padding: 1.1rem 1.2rem 1.3rem; }

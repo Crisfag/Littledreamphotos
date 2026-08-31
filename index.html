@@ -16,9 +16,21 @@
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Jost:wght@300;400;500;600&display=swap" rel="stylesheet" />
 
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%23b98a7a'/><text y='72' x='50' text-anchor='middle' font-size='60' font-family='Georgia'>L</text></svg>" />
-  <link rel="stylesheet" href="style.css?v=36" />
+  <link rel="stylesheet" href="style.css?v=37" />
 </head>
 <body>
+
+  <!-- ===================== POP-UP PROMO NOËL ===================== -->
+  <div class="promo-modal" id="promoModal" hidden>
+    <div class="promo-overlay" data-close></div>
+    <div class="promo-card" role="dialog" aria-modal="true" aria-label="Mini séances de Noël">
+      <button class="promo-close" id="promoClose" aria-label="Fermer">×</button>
+      <img class="promo-img" src="images/promo/noel-mini-seances-2026.jpeg" alt="Mini séances de Noël — 2 décors inédits, au studio Little Dream Photography" />
+      <div class="promo-cta">
+        <a href="#contact" class="btn btn-primary btn-block" id="promoCta">Réserver ma séance de Noël</a>
+      </div>
+    </div>
+  </div>
 
   <!-- ===================== HEADER / NAV ===================== -->
   <header class="site-header" id="top" data-transparent>
@@ -367,6 +379,6 @@
   <!-- SDK Facebook pour le fil d'actualité (Page Plugin) -->
   <script async defer crossorigin="anonymous" src="https://connect.facebook.net/fr_FR/sdk.js#xfbml=1&version=v19.0"></script>
 
-  <script src="script.js?v=36"></script>
+  <script src="script.js?v=37"></script>
 </body>
 </html>

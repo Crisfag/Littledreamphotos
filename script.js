@@ -11,6 +11,7 @@
     setYear();
     stickyHeader();
     socialBar();
+    promoModal();
     mobileNav();
     dropdownMenu();
     heroSlideshow();
@@ -52,6 +53,36 @@
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("resize", onScroll);
+  }
+
+  /* ---------- Pop-up promo (affichée une fois par session) ---------- */
+  function promoModal() {
+    var modal = document.getElementById("promoModal");
+    if (!modal) return;
+    var closeBtn = document.getElementById("promoClose");
+    var overlay = modal.querySelector(".promo-overlay");
+    var cta = document.getElementById("promoCta");
+
+    function open() {
+      modal.hidden = false;
+      document.body.style.overflow = "hidden";
+    }
+    function close() {
+      modal.hidden = true;
+      document.body.style.overflow = "";
+      try { sessionStorage.setItem("noelPromoSeen", "1"); } catch (e) {}
+    }
+
+    closeBtn.addEventListener("click", close);
+    overlay.addEventListener("click", close);
+    if (cta) cta.addEventListener("click", close);
+    document.addEventListener("keydown", function (e) {
+      if (!modal.hidden && e.key === "Escape") close();
+    });
+
+    var alreadySeen = false;
+    try { alreadySeen = sessionStorage.getItem("noelPromoSeen") === "1"; } catch (e) {}
+    if (!alreadySeen) setTimeout(open, 700);
   }
 
   /* ---------- Menu mobile ---------- */
