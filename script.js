@@ -292,12 +292,17 @@
     var items = document.querySelectorAll(".g-item");
     if (!buttons.length) return;
 
+    var noelPanel = document.getElementById("noelPanel");
+    var galleryCta = document.getElementById("galleryCta");
+
     function apply(f) {
       buttons.forEach(function (b) { b.classList.toggle("is-active", b.getAttribute("data-filter") === f); });
       items.forEach(function (item) {
         var show = f === "all" || item.getAttribute("data-cat") === f;
         item.classList.toggle("is-hidden", !show);
       });
+      if (noelPanel) noelPanel.classList.toggle("is-active", f === "noel");
+      if (galleryCta) galleryCta.classList.toggle("is-hidden", f === "noel");
     }
 
     buttons.forEach(function (btn) {

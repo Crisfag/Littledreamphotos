@@ -852,3 +852,93 @@ h3 { font-size: 1.5rem; }
 .promo-close:hover { background: #fff; transform: scale(1.08); }
 .promo-img { width: 100%; display: block; }
 .promo-cta { padding: 1.1rem 1.2rem 1.3rem; }
+
+/* =====================================================================
+   NOËL — thème festif partagé (portfolio & tarifs)
+   ===================================================================== */
+:root {
+  --noel-green: #1f3a2c;
+  --noel-green-deep: #14261c;
+  --noel-red: #a3372c;
+  --noel-gold: #c9a24b;
+}
+.filter-noel.is-active,
+.filter-noel:hover { background: var(--noel-green) !important; border-color: var(--noel-green) !important; color: #fff !important; }
+.section-cta.is-hidden { display: none; }
+
+.noel-panel { display: none; }
+.noel-panel.is-active { display: block; margin: 0 0 3rem; }
+.noel-card {
+  position: relative; overflow: hidden; border-radius: var(--radius);
+  background: linear-gradient(155deg, var(--noel-green) 0%, var(--noel-green-deep) 100%);
+  box-shadow: var(--shadow);
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+}
+.noel-card::before {
+  content: ""; position: absolute; inset: 0; opacity: .5; pointer-events: none;
+  background-image: radial-gradient(rgba(255,255,255,.55) 1px, transparent 1.4px);
+  background-size: 26px 26px;
+}
+.noel-media { position: relative; min-height: 320px; }
+.noel-media img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.noel-content { position: relative; z-index: 1; padding: clamp(2rem, 4vw, 3.2rem); color: #f3ede1; }
+.noel-eyebrow {
+  font-size: .78rem; letter-spacing: .24em; text-transform: uppercase; font-weight: 500;
+  color: var(--noel-gold); margin-bottom: .8rem;
+}
+.noel-title { font-family: var(--serif); color: #fff; font-size: clamp(1.9rem, 3.4vw, 2.6rem); margin-bottom: 1.1rem; }
+.noel-text { color: rgba(243,237,225,.9); line-height: 1.75; margin-bottom: 1.6rem; }
+.noel-text strong { color: #fff; font-weight: 500; }
+.noel-infos { margin-bottom: 1.6rem; }
+.noel-infos li {
+  display: flex; align-items: baseline; gap: .7rem; padding: .55rem 0;
+  border-bottom: 1px solid rgba(255,255,255,.14); color: rgba(243,237,225,.92); font-size: .96rem;
+}
+.noel-infos li:last-child { border-bottom: 0; }
+.noel-infos strong { color: var(--noel-gold); font-weight: 500; }
+.noel-ico { font-size: 1.05rem; }
+.noel-urgency {
+  background: rgba(255,255,255,.08); border: 1px solid rgba(201,162,75,.4);
+  border-radius: var(--radius-sm); padding: 1rem 1.2rem; margin-bottom: 1.8rem;
+  color: #f3ede1; font-size: .92rem; line-height: 1.6;
+}
+.noel-actions { display: flex; gap: 1rem; flex-wrap: wrap; }
+.noel-btn { background: var(--noel-red); color: #fff; }
+.noel-btn:hover { background: #8a2c22; transform: translateY(-2px); box-shadow: var(--shadow-sm); }
+.noel-btn-outline { background: transparent; color: #fff; border-color: rgba(255,255,255,.55); }
+.noel-btn-outline:hover { background: rgba(255,255,255,.12); }
+
+@media (max-width: 800px) {
+  .noel-card { grid-template-columns: 1fr; }
+  .noel-media { min-height: 260px; }
+}
+@media (max-width: 560px) {
+  .noel-actions .btn { width: 100%; }
+}
+
+/* ----- Section tarif Noël ----- */
+.noel-pricing { background: var(--noel-green-deep); }
+.noel-pricing .section-head .eyebrow { color: var(--noel-gold); }
+.noel-pricing .section-head h2 { color: #fff; font-family: var(--serif); }
+.noel-pricing .section-lead { color: rgba(243,237,225,.85); }
+.noel-price-cards { display: flex; flex-wrap: wrap; justify-content: center; gap: 1.8rem; margin: 0 0 2.4rem; }
+.noel-price-card {
+  position: relative; width: min(320px, 100%); padding: 2.2rem 1.9rem;
+  background: rgba(255,255,255,.05); border: 1px solid rgba(201,162,75,.35);
+  border-radius: var(--radius); text-align: center; color: #f3ede1;
+}
+.noel-price-card.is-popular { border-color: var(--noel-gold); background: rgba(255,255,255,.08); }
+.noel-price-badge {
+  display: inline-block; background: var(--noel-gold); color: var(--noel-green-deep);
+  font-size: .68rem; letter-spacing: .12em; text-transform: uppercase; font-weight: 600;
+  padding: .35rem .8rem; border-radius: 999px; margin-bottom: 1rem;
+}
+.noel-price-card h3 { font-family: var(--serif); color: #fff; font-size: 1.3rem; margin-bottom: .6rem; }
+.noel-price-value { font-family: var(--serif); font-size: 2.6rem; color: var(--noel-gold); margin-bottom: 1.2rem; }
+.noel-price-value span { font-size: 1.1rem; color: rgba(243,237,225,.8); }
+.noel-price-card ul { text-align: left; margin-bottom: 1.6rem; }
+.noel-price-card li {
+  position: relative; padding-left: 1.5rem; margin-bottom: .55rem;
+  color: rgba(243,237,225,.9); font-size: .92rem;
+}
+.noel-price-card li::before { content: "✓"; position: absolute; left: 0; color: var(--noel-gold); font-weight: 600; }
