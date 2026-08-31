@@ -851,7 +851,10 @@ h3 { font-size: 1.5rem; }
 }
 .promo-close:hover { background: #fff; transform: scale(1.08); }
 .promo-img { width: 100%; display: block; }
-.promo-cta { padding: 1.1rem 1.2rem 1.3rem; }
+.promo-cta {
+  position: sticky; bottom: 0; z-index: 3; background: var(--white);
+  padding: 1.1rem 1.2rem 1.3rem; box-shadow: 0 -10px 16px -12px rgba(30,26,23,.18);
+}
 
 /* =====================================================================
    NOËL — thème festif partagé (portfolio & tarifs)
