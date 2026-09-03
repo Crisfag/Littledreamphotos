@@ -23,8 +23,14 @@ CREATE TABLE IF NOT EXISTS photos (
   preview_width  INTEGER NOT NULL DEFAULT 0,  -- niveau vignette (grille 2 × 2)
   preview_height INTEGER NOT NULL DEFAULT 0,
   forensic_id  TEXT NOT NULL DEFAULT '', -- empreinte invisible gravée dans les pixels
+  selected     INTEGER NOT NULL DEFAULT 0,  -- coup de cœur du client (0/1)
+  selected_at  INTEGER,                     -- epoch secondes ; NULL = pas sélectionnée
   created_at   INTEGER NOT NULL
 );
+
+-- Si une base existe déjà (galeries déjà envoyées) sans ces deux colonnes :
+--   ALTER TABLE photos ADD COLUMN selected INTEGER NOT NULL DEFAULT 0;
+--   ALTER TABLE photos ADD COLUMN selected_at INTEGER;
 
 CREATE INDEX IF NOT EXISTS idx_photos_gallery ON photos(gallery_id, position);
 
@@ -32,7 +38,7 @@ CREATE TABLE IF NOT EXISTS access_log (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
   gallery_id TEXT NOT NULL,
   viewer_id  TEXT NOT NULL DEFAULT '',
-  event      TEXT NOT NULL,   -- login, login_failed, view, capture_suspected, blur, print
+  event      TEXT NOT NULL,   -- login, login_failed, view, select, deselect, capture_suspected, blur, print
   detail     TEXT NOT NULL DEFAULT '',
   ip_hash    TEXT NOT NULL DEFAULT '',
   user_agent TEXT NOT NULL DEFAULT '',

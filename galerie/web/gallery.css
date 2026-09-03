@@ -160,6 +160,77 @@ h1 { font-family: var(--serif); font-weight: 500; font-size: clamp(1.9rem, 4vw, 
 }
 .gp-notice strong { color: var(--charcoal); font-weight: 500; }
 
+/* ---------- Barre de sélection ---------- */
+
+.gp-toolbar {
+  max-width: 1180px;
+  margin: 0 auto 1.25rem;
+  padding: 0 clamp(.75rem, 3vw, 1.5rem);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.gp-toolbar-count { font-size: .88rem; color: var(--muted); }
+.gp-toolbar-filter {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  font-size: .86rem;
+  color: var(--charcoal);
+  cursor: pointer;
+  -webkit-user-select: none; user-select: none;
+}
+.gp-toolbar-filter input {
+  width: 1.1rem;
+  height: 1.1rem;
+  accent-color: var(--rose);
+  cursor: pointer;
+}
+
+/* ---------- Cœur (coup de cœur) ---------- */
+
+.gp-heart {
+  border: 0;
+  background: rgba(43, 37, 33, .38);
+  color: #fff;
+  cursor: pointer;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  line-height: 1;
+  transition: background .2s var(--ease), transform .12s var(--ease);
+}
+.gp-heart::before {
+  content: "\2661"; /* cœur creux */
+  display: block;
+}
+.gp-heart-active::before { content: "\2665"; } /* cœur plein */
+.gp-heart:hover { transform: scale(1.08); }
+.gp-heart:active { transform: scale(.94); }
+.gp-heart-active { color: #e0665a; background: rgba(253, 251, 248, .9); }
+
+/* Sur une vignette : coin supérieur droit, par-dessus le bouton d'ouverture
+   (ajouté après lui dans le HTML, donc peint au-dessus). */
+.gp-item .gp-heart {
+  position: absolute;
+  top: .5rem;
+  right: .5rem;
+  width: 2rem;
+  height: 2rem;
+  font-size: 1.05rem;
+  z-index: 1;
+}
+.gp-item-selected {
+  outline: 2px solid var(--rose);
+  outline-offset: -2px;
+}
+
+/* Filtre « ma sélection » : masque par CSS, ne retire rien du DOM — aucune
+   tuile n'est retéléchargée au seul geste de cocher un cœur. */
+.gp-grid-filtered .gp-item:not(.gp-item-selected) { display: none; }
+
 /* ---------- Grille ---------- */
 
 .gp-grid {
@@ -265,15 +336,28 @@ h1 { font-family: var(--serif); font-weight: 500; font-size: clamp(1.9rem, 4vw, 
   line-height: 1;
   z-index: 2;
 }
-.gp-viewer-counter {
+.gp-viewer-bar {
   position: absolute;
   bottom: clamp(.6rem, 2.5vw, 1.25rem);
   left: 50%;
   transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: .7rem;
+}
+.gp-viewer-counter {
   color: rgba(247, 242, 236, .7);
   font-size: .82rem;
   letter-spacing: .12em;
 }
+.gp-viewer-heart {
+  width: 2.3rem;
+  height: 2.3rem;
+  font-size: 1.25rem;
+  background: rgba(253, 251, 248, .12);
+}
+.gp-viewer-heart:hover { background: rgba(253, 251, 248, .24); }
+.gp-viewer-heart.gp-heart-active { background: rgba(253, 251, 248, .92); }
 
 /* ---------- Voile de dissuasion ---------- */
 

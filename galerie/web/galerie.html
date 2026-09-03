@@ -83,8 +83,19 @@
       </p>
     </aside>
 
+    <div class="gp-toolbar" id="gp-toolbar" hidden>
+      <p class="gp-toolbar-count" id="gp-selection-count">Aucune photo sélectionnée pour l'instant</p>
+      <label class="gp-toolbar-filter">
+        <input type="checkbox" id="gp-filter-selected" />
+        <span>Afficher uniquement ma sélection</span>
+      </label>
+    </div>
+
     <div class="gp-grid" id="gp-grid"></div>
     <p class="gp-empty" id="gp-empty" hidden>Les photos de cette galerie arrivent bientôt.</p>
+    <p class="gp-empty" id="gp-filter-empty" hidden>
+      Vous n'avez encore rien sélectionné — cliquez sur le cœur d'une photo pour commencer.
+    </p>
 
     <footer class="gp-footer">
       <p>Little Dream Photos — toutes les images de cette page sont protégées par le droit d'auteur.</p>
@@ -99,7 +110,11 @@
       <canvas id="gp-viewer-canvas" role="img" aria-label="Photo agrandie"></canvas>
     </div>
     <button type="button" class="gp-viewer-nav gp-viewer-next" id="gp-next" aria-label="Photo suivante">&#8250;</button>
-    <p class="gp-viewer-counter" id="gp-counter"></p>
+    <div class="gp-viewer-bar">
+      <button type="button" class="gp-heart gp-viewer-heart" id="gp-viewer-heart"
+              aria-label="Ajouter aux favoris" title="Ajouter aux favoris"></button>
+      <p class="gp-viewer-counter" id="gp-counter"></p>
+    </div>
   </div>
 
   <!-- ============ Voile de dissuasion ============ -->

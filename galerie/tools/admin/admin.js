@@ -14,6 +14,8 @@
     login_failed: "Mot de passe erroné",
     login_expired: "Tentative après expiration",
     view: "Photo ouverte",
+    select: "Coup de cœur",
+    deselect: "Coup de cœur retiré",
     capture_suspected: "Capture suspectée",
     blur: "Photo floutée",
     print: "Tentative d'impression",
@@ -182,6 +184,9 @@
         "</div>" +
         '<div class="ad-card-meta">' +
         "<span>" + g.photo_count + (g.photo_count > 1 ? " photos" : " photo") + "</span>" +
+        (g.selected_count > 0
+          ? '<span class="ad-badge ad-badge-selected">♥ ' + g.selected_count + "</span>"
+          : "") +
         (status.label ? '<span class="ad-badge ' + status.cls + '">' + esc(status.label) + "</span>" : "") +
         "</div>" +
         "</article>"
@@ -209,6 +214,10 @@
   // (une grille 2×2 par défaut) — les mêmes tuiles que charge la galerie
   // cliente, lues ici via le serveur d'administration plutôt qu'une session
   // client. Pas de fichier « miniature » à part : une seule source de vérité.
+  function isSelected(photo) {
+    return Number(photo.selected) === 1;
+  }
+
   function photoThumb(photo) {
     var cols = state.config.previewCols || 2;
     var rows = state.config.previewRows || 2;
@@ -218,26 +227,37 @@
         cells += '<img loading="lazy" src="/local/tiles/' + esc(photo.id) + "/0/" + col + "/" + row + '" alt="" />';
       }
     }
+    var selected = isSelected(photo);
     return (
-      '<div class="ad-photo" data-photo-id="' + esc(photo.id) + '">' +
+      '<div class="ad-photo' + (selected ? " ad-photo-selected" : "") + '" data-photo-id="' + esc(photo.id) + '">' +
       '<div class="ad-photo-frame" style="aspect-ratio:' + photo.width + "/" + photo.height +
       ";grid-template-columns:repeat(" + cols + ",1fr);grid-template-rows:repeat(" + rows + ',1fr)">' +
       cells +
-      '<span class="ad-photo-dims">' + photo.width + "×" + photo.height + "</span>" +
+      '<span class="ad-photo-dims">n° ' + (photo.position + 1) + " · " + photo.width + "×" + photo.height + "</span>" +
+      (selected ? '<span class="ad-photo-heart" title="Sélectionnée par le client">♥</span>' : "") +
       "</div>" +
       '<button type="button" class="ad-photo-remove" title="Supprimer cette photo" aria-label="Supprimer cette photo">&times;</button>' +
       "</div>"
     );
   }
 
-  function logRow(entry) {
+  // Pour les évènements « view », « select » et « deselect », le détail
+  // consigné est l'identifiant technique de la photo — on l'affiche plutôt
+  // sous la forme lisible « Photo n° X » quand on peut la retrouver.
+  var PHOTO_ID_EVENTS = new Set(["view", "select", "deselect"]);
+
+  function logRow(entry, photosById) {
     var label = EVENT_LABELS[entry.event] || entry.event;
     var cls = /failed|expired|capture/.test(entry.event) ? "ad-log-warn" : "";
+    var detail = entry.detail || "";
+    if (PHOTO_ID_EVENTS.has(entry.event) && photosById[detail]) {
+      detail = "Photo n° " + (photosById[detail].position + 1);
+    }
     return (
       '<tr class="' + cls + '">' +
       "<td>" + esc(formatDateTime(entry.ts)) + "</td>" +
       "<td>" + esc(label) + "</td>" +
-      "<td>" + esc(entry.detail || "") + "</td>" +
+      "<td>" + esc(detail) + "</td>" +
       "</tr>"
     );
   }
@@ -254,6 +274,11 @@
       return renderList();
     }
     state.current = data;
+
+    var photosById = {};
+    data.photos.forEach(function (p) {
+      photosById[p.id] = p;
+    });
 
     var status = galleryStatus(data.gallery);
     el.view.innerHTML =
@@ -277,13 +302,19 @@
       '<label class="ad-btn ad-btn-primary">Choisir des fichiers<input type="file" id="ad-file-input" accept="image/*" multiple hidden /></label>' +
       '<div id="ad-upload-queue" class="ad-upload-queue"></div>' +
       "</section>" +
-      '<section><h3 id="ad-photos-heading">Photos (' + data.photos.length + ")</h3>" +
+      '<section><div class="ad-section-header">' +
+      '<h3 id="ad-photos-heading">Photos (' + data.photos.length + ")</h3>" +
+      (data.photos.some(isSelected)
+        ? '<button type="button" class="ad-btn" id="ad-copy-selection">Copier la sélection (' +
+          data.photos.filter(isSelected).length + ")</button>"
+        : "") +
+      "</div>" +
       '<div class="ad-photos" id="ad-photos">' + data.photos.map(photoThumb).join("") + "</div>" +
       "</section>" +
       '<section><h3>Journal d\'accès</h3>' +
       (data.log.length
         ? '<div class="ad-table-wrap"><table class="ad-table"><thead><tr><th>Quand</th><th>Évènement</th><th>Détail</th></tr></thead><tbody>' +
-          data.log.map(logRow).join("") + "</tbody></table></div>"
+          data.log.map(function (entry) { return logRow(entry, photosById); }).join("") + "</tbody></table></div>"
         : '<p class="ad-hint">Aucun accès enregistré pour l\'instant.</p>') +
       "</section>" +
       '<section class="ad-danger"><h3>Zone sensible</h3>' +
@@ -294,6 +325,21 @@
     document.getElementById("ad-back").addEventListener("click", function () {
       renderList();
     });
+    var copySelectionBtn = document.getElementById("ad-copy-selection");
+    if (copySelectionBtn) {
+      copySelectionBtn.addEventListener("click", function () {
+        var picked = data.photos.filter(isSelected);
+        var text =
+          "Sélection — " + data.gallery.title + " (" + data.gallery.slug + ")\n" +
+          picked.length + " photo(s) sur " + data.photos.length + " sélectionnée(s)\n\n" +
+          picked.map(function (p) { return "Photo n° " + (p.position + 1); }).join("\n");
+        navigator.clipboard.writeText(text).then(function () {
+          toast("Sélection copiée (" + picked.length + (picked.length > 1 ? " photos)." : " photo)."));
+        }).catch(function () {
+          toast("Impossible de copier la sélection.", true);
+        });
+      });
+    }
     document.getElementById("ad-delete-gallery").addEventListener("click", function () {
       confirmAction('Supprimer définitivement « ' + data.gallery.title + ' » et ses ' + data.photos.length + " photo(s) ?", async function () {
         try {

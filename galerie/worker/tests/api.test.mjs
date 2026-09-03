@@ -156,6 +156,8 @@ check("le bon mot de passe ouvre une session", login.ok && Boolean(session.token
 check("le manifeste décrit les photos",
       session.photos?.length === 1 && session.photos[0].previewWidth === 500,
       JSON.stringify(session.photos?.[0]));
+check("une photo n'est sélectionnée par personne au départ",
+      session.photos?.[0]?.selected === false);
 check("le mot de passe n'est jamais renvoyé",
       !JSON.stringify(session).includes("password_hash") && !JSON.stringify(session).includes("mot-de-passe-solide"));
 
@@ -228,6 +230,79 @@ const otherGallery = await other.json();
 const crossTile = await fetch(`${BASE}/api/gallery/${SLUG}-voisine/tile/${photoId}/1/0/0`, { headers: bearer });
 check("un jeton ne donne accès qu'à sa galerie", crossTile.status === 403, `HTTP ${crossTile.status}`);
 
+/* ---------- Sélection client (coup de cœur) ---------- */
+
+const selectNoAuth = await fetch(`${BASE}/api/gallery/${SLUG}/select`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ photoId, selected: true }),
+});
+check("sélectionner sans jeton est refusé", selectNoAuth.status === 401);
+
+const selectOn = await fetch(`${BASE}/api/gallery/${SLUG}/select`, {
+  method: "POST",
+  headers: { ...bearer, "content-type": "application/json" },
+  body: JSON.stringify({ photoId, selected: true }),
+});
+const selectOnBody = await selectOn.json();
+check("le client peut sélectionner une photo", selectOn.ok && selectOnBody.selected === true);
+
+const detailAfterSelect = await (await admin("GET", `/api/admin/galleries/${SLUG}`)).json();
+const selectedPhoto = detailAfterSelect.photos.find((p) => p.id === photoId);
+check("la sélection apparaît côté administration",
+      selectedPhoto?.selected === 1 && Number.isInteger(selectedPhoto?.selected_at),
+      JSON.stringify(selectedPhoto));
+
+const listAfterSelect = await (await admin("GET", "/api/admin/galleries")).json();
+const galleryRow = listAfterSelect.galleries.find((g) => g.slug === SLUG);
+check("le compteur de sélection apparaît dans la liste des galeries",
+      galleryRow?.selected_count === 1, JSON.stringify(galleryRow));
+
+const reLogin = await fetch(`${BASE}/api/gallery/${SLUG}/login`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ password: "mot-de-passe-solide" }),
+});
+const reLoginBody = await reLogin.json();
+check("la sélection est visible à la reconnexion",
+      reLoginBody.photos?.find((p) => p.id === photoId)?.selected === true);
+
+const selectOff = await fetch(`${BASE}/api/gallery/${SLUG}/select`, {
+  method: "POST",
+  headers: { ...bearer, "content-type": "application/json" },
+  body: JSON.stringify({ photoId, selected: false }),
+});
+const selectOffBody = await selectOff.json();
+check("le client peut retirer une sélection", selectOff.ok && selectOffBody.selected === false);
+
+const detailAfterDeselect = await (await admin("GET", `/api/admin/galleries/${SLUG}`)).json();
+const deselectedPhoto = detailAfterDeselect.photos.find((p) => p.id === photoId);
+check("le retrait de sélection efface la date de sélection",
+      deselectedPhoto?.selected === 0 && deselectedPhoto?.selected_at == null,
+      JSON.stringify(deselectedPhoto));
+
+const selectMissingPhoto = await fetch(`${BASE}/api/gallery/${SLUG}/select`, {
+  method: "POST",
+  headers: { ...bearer, "content-type": "application/json" },
+  body: JSON.stringify({ photoId: "pho_NExistePas000", selected: true }),
+});
+check("sélectionner une photo inconnue est refusé", selectMissingPhoto.status === 404);
+
+const selectCrossGallery = await fetch(`${BASE}/api/gallery/${SLUG}-voisine/select`, {
+  method: "POST",
+  headers: { ...bearer, "content-type": "application/json" },
+  body: JSON.stringify({ photoId, selected: true }),
+});
+check("le jeton d'une autre galerie ne permet pas de sélectionner",
+      selectCrossGallery.status === 403, `HTTP ${selectCrossGallery.status}`);
+
+const selectBadBody = await fetch(`${BASE}/api/gallery/${SLUG}/select`, {
+  method: "POST",
+  headers: { ...bearer, "content-type": "application/json" },
+  body: JSON.stringify({ selected: true }),
+});
+check("sélectionner sans identifiant de photo est refusé", selectBadBody.status === 400);
+
 /* ---------- Journal d'accès ---------- */
 
 await fetch(`${BASE}/api/gallery/${SLUG}/event`, {
@@ -244,10 +319,12 @@ check("un évènement inconnu est refusé", bogusEvent.status === 400);
 
 const logResponse = await admin("GET", `/api/admin/galleries/${SLUG}/log`);
 const { log } = await logResponse.json();
-check("le journal consigne connexion, échec et capture",
+check("le journal consigne connexion, échec, capture et sélection",
       log.some((e) => e.event === "login") &&
       log.some((e) => e.event === "login_failed") &&
-      log.some((e) => e.event === "capture_suspected"),
+      log.some((e) => e.event === "capture_suspected") &&
+      log.some((e) => e.event === "select" && e.detail === photoId) &&
+      log.some((e) => e.event === "deselect" && e.detail === photoId),
       log.map((e) => e.event).join(", "));
 check("le journal ne contient aucune IP en clair",
       log.every((e) => !/^\d+\.\d+\.\d+\.\d+$/.test(e.ip_hash || "")));

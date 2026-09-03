@@ -34,10 +34,98 @@
     photos: [],
     gallery: null,
     current: -1,
+    viewerList: null,
+    filterSelected: false,
     drawn: {},
   };
 
   var el = {};
+  var heartButtons = {}; // photoId -> bouton cœur de la grille, pour une mise à jour directe
+
+  /* ---------- Sélection (coup de cœur) ---------- */
+
+  function selectedCount() {
+    var count = 0;
+    for (var i = 0; i < state.photos.length; i++) if (state.photos[i].selected) count++;
+    return count;
+  }
+
+  // La liste que parcourt la visionneuse (Précédent/Suivant) : toutes les
+  // photos, ou seulement les sélectionnées si le filtre est actif.
+  function visiblePhotos() {
+    if (!state.filterSelected) return state.photos;
+    return state.photos.filter(function (p) {
+      return p.selected;
+    });
+  }
+
+  function heartLabel(selected) {
+    return selected ? "Retirer des favoris" : "Ajouter aux favoris";
+  }
+
+  function paintHeart(button, selected) {
+    button.classList.toggle("gp-heart-active", selected);
+    button.setAttribute("aria-pressed", selected ? "true" : "false");
+    button.setAttribute("aria-label", heartLabel(selected));
+    button.title = heartLabel(selected);
+  }
+
+  function updateSelectionUI() {
+    var count = selectedCount();
+    if (el.selectionCount) {
+      el.selectionCount.textContent =
+        count === 0 ? "Aucune photo sélectionnée pour l'instant"
+          : count + (count > 1 ? " photos sélectionnées" : " photo sélectionnée");
+    }
+    if (el.filterEmpty) {
+      el.filterEmpty.hidden = !(state.filterSelected && count === 0);
+    }
+    if (el.toolbar) el.toolbar.hidden = state.photos.length === 0;
+  }
+
+  /**
+   * Bascule le coup de cœur d'une photo. Mise à jour immédiate de
+   * l'affichage (les deux cœurs — grille et visionneuse — s'il y en a un
+   * ouvert), puis confirmation au Worker ; en cas d'échec, l'affichage
+   * revient en arrière plutôt que de mentir sur l'état réel.
+   */
+  function toggleSelect(photo) {
+    var next = !photo.selected;
+    photo.selected = next;
+    reflectSelection(photo);
+
+    fetch(apiUrl("/select"), {
+      method: "POST",
+      headers: Object.assign({ "content-type": "application/json" }, authHeaders()),
+      body: JSON.stringify({ photoId: photo.id, selected: next }),
+    })
+      .then(function (response) {
+        if (response.status === 401) throw new Error("session");
+        if (!response.ok) throw new Error("échec");
+      })
+      .catch(function (err) {
+        photo.selected = !next;
+        reflectSelection(photo);
+        if (err.message === "session") {
+          sessionLost("Votre session a expiré. Saisissez à nouveau le mot de passe.");
+        }
+      });
+  }
+
+  // Répercute l'état d'une photo sur tout ce qui l'affiche, sans jamais
+  // reconstruire la grille ni retélécharger de tuile : le filtre « ma
+  // sélection » masque/affiche par CSS, pas en retirant les photos du DOM.
+  function reflectSelection(photo) {
+    var heart = heartButtons[photo.id];
+    if (heart) {
+      paintHeart(heart, photo.selected);
+      heart.closest(".gp-item").classList.toggle("gp-item-selected", photo.selected);
+    }
+    if (el.viewerHeart && state.viewerList && state.viewerList[state.current] === photo) {
+      paintHeart(el.viewerHeart, photo.selected);
+    }
+    updateSelectionUI();
+  }
 
   function $(id) {
     return document.getElementById(id);
@@ -174,9 +262,13 @@
 
   function buildGrid() {
     el.grid.innerHTML = "";
+    heartButtons = {};
+    // La grille contient toujours toutes les photos ; le filtre « ma
+    // sélection » les masque par CSS (.gp-grid-filtered), pour ne jamais
+    // retélécharger de tuile au seul geste de cocher un cœur.
     state.photos.forEach(function (photo, index) {
       var figure = document.createElement("figure");
-      figure.className = "gp-item";
+      figure.className = "gp-item" + (photo.selected ? " gp-item-selected" : "");
       var ratio = (photo.height / photo.width) * 100;
       figure.style.setProperty("--ratio", ratio.toFixed(3) + "%");
 
@@ -191,27 +283,52 @@
       button.className = "gp-open";
       button.setAttribute("aria-label", "Agrandir la photo " + (index + 1));
       button.addEventListener("click", function () {
-        openViewer(index);
+        openViewer(photo);
       });
       figure.appendChild(button);
+
+      var heart = document.createElement("button");
+      heart.type = "button";
+      heart.className = "gp-heart";
+      paintHeart(heart, photo.selected);
+      heart.addEventListener("click", function (event) {
+        event.preventDefault();
+        event.stopPropagation();
+        toggleSelect(photo);
+      });
+      figure.appendChild(heart);
+      heartButtons[photo.id] = heart;
 
       el.grid.appendChild(figure);
       paint(canvas, photo, LEVEL_PREVIEW);
     });
+    updateSelectionUI();
   }
 
   /* ---------- Visionneuse ---------- */
 
-  function openViewer(index) {
-    if (index < 0 || index >= state.photos.length) return;
+  // Ouvre la visionneuse sur une photo précise. La liste parcourue par
+  // Précédent/Suivant est figée à cet instant (état du filtre compris) :
+  // cocher ou décocher un cœur en cours de visionnage ne fait donc pas
+  // sauter les photos suivantes sous les pieds du visiteur.
+  function openViewer(photo) {
+    state.viewerList = visiblePhotos();
+    var index = state.viewerList.indexOf(photo);
+    showViewerAt(index === -1 ? 0 : index);
+  }
+
+  function showViewerAt(index) {
+    var list = state.viewerList;
+    if (!list || index < 0 || index >= list.length) return;
     state.current = index;
-    var photo = state.photos[index];
+    var photo = list[index];
 
     el.viewer.hidden = false;
     document.body.classList.add("gp-locked");
-    el.counter.textContent = index + 1 + " / " + state.photos.length;
+    el.counter.textContent = index + 1 + " / " + list.length;
     el.prev.disabled = index === 0;
-    el.next.disabled = index === state.photos.length - 1;
+    el.next.disabled = index === list.length - 1;
+    if (el.viewerHeart) paintHeart(el.viewerHeart, photo.selected);
     el.closeBtn.focus();
 
     var canvas = el.viewerCanvas;
@@ -224,11 +341,15 @@
     el.viewer.hidden = true;
     document.body.classList.remove("gp-locked");
     state.current = -1;
+    state.viewerList = null;
   }
 
   function step(delta) {
-    var target = state.current + delta;
-    if (target >= 0 && target < state.photos.length) openViewer(target);
+    showViewerAt(state.current + delta);
+  }
+
+  function currentViewerPhoto() {
+    return state.viewerList && state.current >= 0 ? state.viewerList[state.current] : null;
   }
 
   /* ---------- Voile de dissuasion ---------- */
@@ -457,8 +578,13 @@
       prev: $("gp-prev"),
       next: $("gp-next"),
       closeBtn: $("gp-close"),
+      viewerHeart: $("gp-viewer-heart"),
       veil: $("gp-veil"),
       missing: $("gp-missing"),
+      toolbar: $("gp-toolbar"),
+      selectionCount: $("gp-selection-count"),
+      filterCheckbox: $("gp-filter-selected"),
+      filterEmpty: $("gp-filter-empty"),
     };
 
     state.slug = readSlug();
@@ -488,6 +614,19 @@
     el.viewer.addEventListener("click", function (event) {
       if (event.target === el.viewer) closeViewer();
     });
+    if (el.viewerHeart) {
+      el.viewerHeart.addEventListener("click", function () {
+        var photo = currentViewerPhoto();
+        if (photo) toggleSelect(photo);
+      });
+    }
+    if (el.filterCheckbox) {
+      el.filterCheckbox.addEventListener("change", function () {
+        state.filterSelected = el.filterCheckbox.checked;
+        el.grid.classList.toggle("gp-grid-filtered", state.filterSelected);
+        updateSelectionUI();
+      });
+    }
 
     installGuards();
     el.password.focus();

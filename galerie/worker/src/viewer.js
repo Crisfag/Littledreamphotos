@@ -98,7 +98,7 @@ async function handleLogin(request, env, slug) {
   await logAccess(env, { galleryId: gallery.id, viewerId, event: "login", ipHash, userAgent });
 
   const { results: photos } = await env.DB.prepare(
-    `SELECT id, width, height, cols, rows, preview_width, preview_height FROM photos
+    `SELECT id, width, height, cols, rows, preview_width, preview_height, selected FROM photos
      WHERE gallery_id = ? ORDER BY position ASC, created_at ASC`
   )
     .bind(gallery.id)
@@ -121,6 +121,7 @@ async function handleLogin(request, env, slug) {
       rows: p.rows,
       previewWidth: p.preview_width,
       previewHeight: p.preview_height,
+      selected: !!p.selected,
     })),
   });
 }
@@ -170,6 +171,45 @@ async function handleTile(request, env, slug, photoId, level, col, row) {
   });
 }
 
+// Coup de cœur du client : n'importe quel visiteur connecté à la galerie
+// peut le poser ou le retirer — c'est une sélection partagée (le couple, la
+// famille), pas un compte individuel. Persistée en base plutôt que dans le
+// navigateur : le photographe doit la voir même si le client change d'appareil.
+async function handleSelect(request, env, slug) {
+  const auth = await authorize(request, env, slug);
+  if (auth.error) return auth.error;
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return fail(400, "Requête invalide");
+  }
+  const photoId = typeof body?.photoId === "string" ? body.photoId : "";
+  const selected = body?.selected === true;
+  if (!photoId) return fail(400, "Photo manquante");
+
+  const photo = await env.DB.prepare("SELECT id FROM photos WHERE id = ? AND gallery_id = ?")
+    .bind(photoId, auth.gallery.id)
+    .first();
+  if (!photo) return fail(404, "Photo introuvable");
+
+  await env.DB.prepare("UPDATE photos SET selected = ?, selected_at = ? WHERE id = ?")
+    .bind(selected ? 1 : 0, selected ? now() : null, photoId)
+    .run();
+
+  await logAccess(env, {
+    galleryId: auth.gallery.id,
+    viewerId: auth.viewerId,
+    event: selected ? "select" : "deselect",
+    detail: photoId,
+    ipHash: await hashIp(request.headers.get("CF-Connecting-IP") || "", env.TOKEN_SECRET),
+    userAgent: request.headers.get("User-Agent") || "",
+  });
+
+  return json({ ok: true, selected });
+}
+
 async function handleEvent(request, env, slug) {
   const auth = await authorize(request, env, slug);
   if (auth.error) return auth.error;
@@ -211,6 +251,9 @@ export async function handleViewer(request, env, ctx, path) {
       request, env, slug, parts[4],
       Number(parts[5]), Number(parts[6]), Number(parts[7])
     );
+  }
+  if (action === "select" && request.method === "POST") {
+    return handleSelect(request, env, slug);
   }
   if (action === "event" && request.method === "POST") {
     return handleEvent(request, env, slug);

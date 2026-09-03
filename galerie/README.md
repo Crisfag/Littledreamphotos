@@ -80,6 +80,15 @@ Mot de passe → jeton de session signé, valable deux heures → les tuiles ne
 partent qu'avec ce jeton, sans jamais être mises en cache. Les photos sont
 peintes dans un `<canvas>`, jamais dans une balise `<img>`.
 
+Le client peut aussi **marquer ses coups de cœur** — un cœur sur chaque
+vignette et dans la visionneuse, une case « afficher uniquement ma sélection »
+pour ne revoir que celles-là. C'est la vraie raison d'envoyer une galerie de
+visionnage : le client choisit, vous ne retouchez et ne livrez que ce qu'il a
+choisi. La sélection est partagée entre tous ceux qui ont le mot de passe
+(le couple, la famille) plutôt que liée à un compte individuel, et elle
+survit à une reconnexion — elle est enregistrée côté Worker, pas dans le
+navigateur.
+
 ---
 
 ## Installation
@@ -155,7 +164,13 @@ node admin-server.mjs
   barre de progression individuelle. Plusieurs photos partent en parallèle.
   Les vignettes affichées sont les vraies tuiles servies au client — pas un
   aperçu généré à part.
-- **Journal d'accès** intégré à la fiche de chaque galerie.
+- **Sélection du client** visible sur chaque vignette (un cœur) et sur le
+  tableau de bord (badge ♥ N sur la carte de la galerie). Un bouton « Copier
+  la sélection » colle la liste des photos choisies (par numéro — voir
+  *Retrouver l'origine d'une fuite* pour la même convention) dans le
+  presse-papiers.
+- **Journal d'accès** intégré à la fiche de chaque galerie, coups de cœur
+  compris.
 - **Suppression** d'une photo isolée ou de la galerie entière, avec
   confirmation.
 
@@ -253,18 +268,23 @@ des tuiles, refus du mauvais mot de passe, absence de toute balise `<img>`,
 neutralisation du menu contextuel et de la copie, voile sur « Impr. écran » et
 sur perte de focus, consignation au journal.
 
-**API du Worker** — 46 vérifications contre le vrai moteur Cloudflare (D1 et R2
+**API du Worker** — 57 vérifications contre le vrai moteur Cloudflare (D1 et R2
 émulés localement par `wrangler dev`) : création et cloisonnement des galeries,
 authentification, expiration, limitation des tentatives de mot de passe,
-suppression en cascade (galerie et photo isolée), journal sans IP en clair.
+suppression en cascade (galerie et photo isolée), sélection client posée et
+retirée, journal sans IP en clair.
 
 **Interface d'administration** — 13 vérifications dans un vrai navigateur,
 contre le vrai Worker local : création d'une galerie, glisser-déposer de
 photos avec suivi de progression, vraies vignettes affichées, suppression
-d'une photo et d'une galerie. Vérifié à la main au-delà de la suite
-automatisée : un parcours client complet (mauvais mot de passe, connexion,
-ouverture d'une photo) apparaît correctement dans le journal affiché côté
-administration.
+d'une photo et d'une galerie.
+
+**Sélection client** — 15 vérifications dans un vrai navigateur, contre le
+vrai Worker local (galerie créée par le test lui-même, nettoyée à la fin) :
+coup de cœur posé depuis la grille et depuis la visionneuse, compteur à jour,
+filtre « ma sélection » qui masque sans retélécharger et borne la navigation
+de la visionneuse, sélection qui survit à une reconnexion complète, cohérence
+entre ce que voit le client et ce que lit l'administration.
 
 ```bash
 cd tools
@@ -273,6 +293,7 @@ node tests/watermark.test.mjs         # lisibilité du filigrane visible
 node tests/calibration.mjs            # seuils de détection (≈ 6 min)
 node tests/viewer.test.mjs            # interface cliente, serveur d'aperçu lancé
 node tests/admin.test.mjs             # interface d'administration, admin-server.mjs lancé
+node tests/selection.test.mjs         # sélection client, autonome (crée sa propre galerie)
 
 cd ../worker
 npx wrangler dev --local --port 8788  # dans un autre terminal
@@ -283,8 +304,9 @@ BASE=http://127.0.0.1:8788 node tests/api.test.mjs
 
 ## Ce qu'il reste à faire
 
-- **Sélection des photos par le client** — coup de cœur, commentaires : c'est
-  la vraie raison pour laquelle on envoie une galerie de visionnage.
+- **Commentaires du client, photo par photo** — le coup de cœur existe ; un
+  mot laissé sur une photo précise (« celle-ci en noir et blanc ? ») n'existe
+  pas encore.
 - **Hébergement de l'interface d'administration** — elle tourne aujourd'hui
   sur la machine du photographe (nécessaire pour sharp). Packagée en
   application de bureau, ou déportée sur un petit service qui fait tourner
