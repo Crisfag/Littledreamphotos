@@ -1,0 +1,4 @@
+node_modules/
+apercu/
+galerie-*.json
+.env

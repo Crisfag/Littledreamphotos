@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>Votre galerie privée — Little Dream Photos</title>
+  <meta name="robots" content="noindex, nofollow, noarchive, noimageindex" />
+  <meta name="referrer" content="no-referrer" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Jost:wght@300;400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="gallery.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%23b98a7a'/><text y='72' x='50' text-anchor='middle' font-size='60' font-family='Georgia'>L</text></svg>" />
+
+  <script>
+    /* ------------------------------------------------------------------
+       À renseigner une seule fois : l'adresse de votre Worker.
+       ------------------------------------------------------------------ */
+    window.GALERIE_CONFIG = {
+      api: "https://galerie-protegee.VOTRE-SOUS-DOMAINE.workers.dev",
+      // Remplace le presse-papiers après une capture d'écran. Mettez false
+      // pour ne jamais y toucher.
+      clipboardGuard: true,
+    };
+  </script>
+</head>
+<body>
+
+  <!-- ============ Mot de passe ============ -->
+  <main class="gp-shell" id="gp-login">
+    <section class="gp-card">
+      <p class="gp-eyebrow">Little Dream Photos</p>
+      <h1>Votre galerie privée</h1>
+      <p class="gp-lede">
+        Saisissez le mot de passe que je vous ai transmis pour découvrir
+        vos photos.
+      </p>
+      <form id="gp-form" autocomplete="off">
+        <label class="gp-field">
+          <span>Mot de passe</span>
+          <input type="password" id="gp-password" name="password"
+                 autocomplete="current-password" required />
+        </label>
+        <p class="gp-error" id="gp-error" hidden></p>
+        <button type="submit" class="gp-btn" id="gp-submit">Voir mes photos</button>
+      </form>
+    </section>
+  </main>
+
+  <!-- ============ Lien incomplet ============ -->
+  <main class="gp-shell" id="gp-missing" hidden>
+    <section class="gp-card">
+      <h1>Lien incomplet</h1>
+      <p class="gp-lede">
+        Ce lien ne désigne aucune galerie. Utilisez le lien complet reçu par
+        message — il ressemble à <code>…/galerie.html?g=votre-seance</code>.
+      </p>
+    </section>
+  </main>
+
+  <!-- ============ Galerie ============ -->
+  <div id="gp-gallery" hidden>
+    <header class="gp-header">
+      <p class="gp-eyebrow">Little Dream Photos</p>
+      <h1 id="gp-title">Votre galerie</h1>
+      <p class="gp-subtitle" id="gp-subtitle"></p>
+      <p class="gp-expiry" id="gp-expiry" hidden></p>
+    </header>
+
+    <!--
+      Transparence : le client doit savoir que ses photos portent une marque.
+      C'est ce qui rend la dissuasion efficace — et c'est aussi la seule
+      manière loyale de tracer des images.
+    -->
+    <aside class="gp-notice">
+      <p>
+        <strong>Ces photos sont des épreuves de visionnage.</strong>
+        Elles sont en basse définition, filigranées, et portent une empreinte
+        invisible propre à votre galerie. Merci de ne pas les enregistrer ni
+        les diffuser : les fichiers définitifs, en pleine qualité et sans
+        filigrane, vous seront livrés après votre sélection.
+      </p>
+    </aside>
+
+    <div class="gp-grid" id="gp-grid"></div>
+    <p class="gp-empty" id="gp-empty" hidden>Les photos de cette galerie arrivent bientôt.</p>
+
+    <footer class="gp-footer">
+      <p>Little Dream Photos — toutes les images de cette page sont protégées par le droit d'auteur.</p>
+    </footer>
+  </div>
+
+  <!-- ============ Visionneuse ============ -->
+  <div class="gp-viewer" id="gp-viewer" hidden role="dialog" aria-modal="true" aria-label="Photo agrandie">
+    <button type="button" class="gp-viewer-close" id="gp-close" aria-label="Fermer">&times;</button>
+    <button type="button" class="gp-viewer-nav gp-viewer-prev" id="gp-prev" aria-label="Photo précédente">&#8249;</button>
+    <div class="gp-viewer-stage">
+      <canvas id="gp-viewer-canvas" role="img" aria-label="Photo agrandie"></canvas>
+    </div>
+    <button type="button" class="gp-viewer-nav gp-viewer-next" id="gp-next" aria-label="Photo suivante">&#8250;</button>
+    <p class="gp-viewer-counter" id="gp-counter"></p>
+  </div>
+
+  <!-- ============ Voile de dissuasion ============ -->
+  <div class="gp-veil" id="gp-veil" hidden aria-hidden="true">
+    <p>Photos masquées</p>
+    <span>Elles réapparaissent dès que vous revenez sur la page.</span>
+  </div>
+
+  <script src="gallery.js"></script>
+</body>
+</html>

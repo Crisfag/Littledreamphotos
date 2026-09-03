@@ -1,0 +1,25 @@
+name = "galerie-protegee"
+main = "src/index.js"
+compatibility_date = "2025-01-01"
+
+# Origines autorisées à appeler l'API (le site qui héberge la page galerie).
+[vars]
+ALLOWED_ORIGINS = "https://www.littledreamphotos.com,http://localhost:8000"
+
+# Base de métadonnées : galeries, photos, journal d'accès.
+# Créer avec :  npx wrangler d1 create galerie-protegee
+# puis recopier l'identifiant renvoyé ci-dessous.
+[[d1_databases]]
+binding = "DB"
+database_name = "galerie-protegee"
+database_id = "00000000-0000-0000-0000-000000000000"  # remplacer par l'identifiant renvoyé
+
+# Stockage des tuiles d'images.
+# Créer avec :  npx wrangler r2 bucket create galerie-tuiles
+[[r2_buckets]]
+binding = "TILES"
+bucket_name = "galerie-tuiles"
+
+# Secrets (jamais dans ce fichier) :
+#   npx wrangler secret put ADMIN_TOKEN
+#   npx wrangler secret put TOKEN_SECRET

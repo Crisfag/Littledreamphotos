@@ -1,0 +1,21 @@
+{
+  "name": "galerie-protegee-tools",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "galerie-prepare": "./prepare.mjs",
+    "galerie-detect": "./detect.mjs"
+  },
+  "dependencies": {
+    "sharp": "^0.33.5"
+  },
+  "devDependencies": {
+    "playwright": "^1.62.1"
+  },
+  "scripts": {
+    "test": "node tests/forensic.test.mjs 1600 && node tests/watermark.test.mjs",
+    "test:viewer": "node tests/viewer.test.mjs",
+    "test:calibration": "node tests/calibration.mjs",
+    "preview": "node preview-server.mjs"
+  }
+}
