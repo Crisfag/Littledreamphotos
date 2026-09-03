@@ -116,6 +116,19 @@ check("une tuile hors grille est refusée à l'envoi", outOfBounds.status === 40
 const badLevel = await admin("PUT", `/api/admin/tiles/${photoId}/7/0/0`, TILE, true);
 check("un niveau inconnu est refusé", badLevel.status === 400);
 
+/* ---------- Lecture de tuile côté administration ---------- */
+
+const adminTile = await admin("GET", `/api/admin/tiles/${photoId}/1/0/0`);
+const adminTileBytes = await adminTile.arrayBuffer();
+check("l'administration peut relire une tuile", adminTile.ok && adminTileBytes.byteLength === TILE.length,
+      `${adminTileBytes.byteLength} octets, ${adminTile.headers.get("content-type")}`);
+
+const adminTileMissing = await admin("GET", `/api/admin/tiles/${photoId}/1/99/99`);
+check("une tuile administrative hors grille est refusée", adminTileMissing.status === 404);
+
+const adminTileNoAuth = await fetch(`${BASE}/api/admin/tiles/${photoId}/1/0/0`);
+check("la lecture administrative refuse les requêtes sans jeton", adminTileNoAuth.status === 401);
+
 /* ---------- Accès client ---------- */
 
 const wrongPassword = await fetch(`${BASE}/api/gallery/${SLUG}/login`, {
@@ -170,6 +183,41 @@ const previewTile = await fetch(`${BASE}/api/gallery/${SLUG}/tile/${photoId}/0/1
 check("le niveau vignette est servi", previewTile.ok);
 const previewOut = await fetch(`${BASE}/api/gallery/${SLUG}/tile/${photoId}/0/3/0`, { headers: bearer });
 check("les bornes du niveau vignette sont propres", previewOut.status === 404, `HTTP ${previewOut.status}`);
+
+/* ---------- Détail d'une galerie ---------- */
+
+const detail = await (await admin("GET", `/api/admin/galleries/${SLUG}`)).json();
+check("le détail décrit la galerie et ses photos",
+      detail.gallery?.slug === SLUG && detail.photos?.length === 1 &&
+      detail.photos[0].id === photoId && detail.photos[0].preview_width === 500,
+      JSON.stringify(detail.photos?.[0]));
+check("le détail ne renvoie pas le mot de passe",
+      !JSON.stringify(detail).includes("password"));
+
+const missingDetail = await admin("GET", "/api/admin/galleries/galerie-inexistante");
+check("le détail d'une galerie inconnue renvoie 404", missingDetail.status === 404);
+
+/* ---------- Suppression d'une photo isolée ---------- */
+
+const secondPhotoId = "pho_TestPhoto02";
+await admin("POST", `/api/admin/galleries/${SLUG}/photos`, {
+  id: secondPhotoId, position: 1, width: 400, height: 300, cols: 1, rows: 1,
+});
+await admin("PUT", `/api/admin/tiles/${secondPhotoId}/0/0/0`, TILE, true);
+await admin("PUT", `/api/admin/tiles/${secondPhotoId}/1/0/0`, TILE, true);
+
+const removedPhoto = await admin("DELETE", `/api/admin/galleries/${SLUG}/photos/${secondPhotoId}`);
+check("une photo isolée est supprimée", removedPhoto.ok);
+
+const afterPhotoDelete = await (await admin("GET", `/api/admin/galleries/${SLUG}`)).json();
+check("la photo supprimée disparaît du détail",
+      afterPhotoDelete.photos.length === 1 && afterPhotoDelete.photos[0].id === photoId);
+
+const orphanTileOfDeletedPhoto = await fetch(`${BASE}/api/gallery/${SLUG}/tile/${secondPhotoId}/1/0/0`, { headers: bearer });
+check("les tuiles de la photo supprimée ont disparu", orphanTileOfDeletedPhoto.status === 403 || orphanTileOfDeletedPhoto.status === 404);
+
+const missingPhotoDelete = await admin("DELETE", `/api/admin/galleries/${SLUG}/photos/pho_NExistePas000`);
+check("supprimer une photo inconnue renvoie 404", missingPhotoDelete.status === 404);
 
 /* ---------- Cloisonnement entre galeries ---------- */
 

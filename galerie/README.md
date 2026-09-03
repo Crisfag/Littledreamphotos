@@ -38,9 +38,23 @@ juridiquement.
 ```
 galerie/
 ├── worker/     API sur Cloudflare Workers (authentification, tuiles, journaux)
-├── tools/      Outils photographe : préparation, aperçu local, détection de fuite
+├── tools/      Outils photographe : ligne de commande, interface web, détection de fuite
 └── web/        Page vue par le client
 ```
+
+Deux façons d'envoyer une galerie, au choix — elles utilisent exactement le
+même code de traitement (`tools/lib/pipeline.mjs`) et produisent des tuiles
+identiques :
+
+- **`prepare.mjs`**, en ligne de commande — pratique pour scripter ou traiter
+  un gros lot d'un coup.
+- **`admin-server.mjs`**, une interface web locale — glisser-déposer,
+  suivi de progression par photo, tableau de bord des galeries, journal
+  d'accès. Tourne sur votre machine (`http://127.0.0.1:4000`) : c'est elle qui
+  a besoin de sharp pour traiter les images, donc elle ne peut pas être
+  hébergée sur Cloudflare comme le reste. Le navigateur ne voit jamais le
+  jeton d'administration ni la clé forensique — seul ce serveur local les
+  porte.
 
 Un déploiement par photographe. C'est gratuit dans les offres d'entrée de
 Cloudflare, vos photos restent sur votre compte, et ça évite une base de
@@ -112,6 +126,10 @@ npm install
 export GALERIE_API=https://galerie-protegee.votre-sous-domaine.workers.dev
 export GALERIE_ADMIN_TOKEN=…
 export GALERIE_FORENSIC_KEY=$(openssl rand -hex 32)
+
+# Optionnel : adresse publique de web/galerie.html, pour que l'interface
+# affiche un lien complet à donner au client plutôt qu'un simple « ?g=… ».
+export GALERIE_SITE=https://www.littledreamphotos.com/galerie.html
 ```
 
 > **La clé forensique se génère une fois et ne change jamais.** Sans elle,
@@ -122,7 +140,29 @@ export GALERIE_FORENSIC_KEY=$(openssl rand -hex 32)
 
 ## Utilisation
 
-### Envoyer une galerie
+### Interface web (recommandé pour l'usage courant)
+
+```bash
+node admin-server.mjs
+# → http://127.0.0.1:4000
+```
+
+- **Nouvelle galerie** : titre, client, mot de passe (généré si laissé vide),
+  date d'expiration. Le mot de passe n'est affiché qu'une seule fois, à la
+  création — notez-le tout de suite.
+- **Glisser-déposer** des photos sur la page de la galerie : chacune est
+  traitée (réduction, empreinte, filigrane, découpage) et envoyée avec une
+  barre de progression individuelle. Plusieurs photos partent en parallèle.
+  Les vignettes affichées sont les vraies tuiles servies au client — pas un
+  aperçu généré à part.
+- **Journal d'accès** intégré à la fiche de chaque galerie.
+- **Suppression** d'une photo isolée ou de la galerie entière, avec
+  confirmation.
+
+Ce serveur n'écoute que sur `127.0.0.1` : il n'est joignable que depuis votre
+propre machine, jamais depuis le réseau.
+
+### Ligne de commande (pour scripter, ou traiter un gros lot)
 
 ```bash
 node prepare.mjs \
@@ -171,6 +211,8 @@ curl -H "Authorization: Bearer $GALERIE_ADMIN_TOKEN" \
 
 Connexions, tentatives ratées, photos ouvertes, captures suspectées. Les
 adresses IP ne sont jamais stockées en clair, seulement une empreinte salée.
+La même chose est visible directement sur la fiche de la galerie dans
+l'interface web.
 
 ---
 
@@ -211,23 +253,43 @@ des tuiles, refus du mauvais mot de passe, absence de toute balise `<img>`,
 neutralisation du menu contextuel et de la copie, voile sur « Impr. écran » et
 sur perte de focus, consignation au journal.
 
+**API du Worker** — 46 vérifications contre le vrai moteur Cloudflare (D1 et R2
+émulés localement par `wrangler dev`) : création et cloisonnement des galeries,
+authentification, expiration, limitation des tentatives de mot de passe,
+suppression en cascade (galerie et photo isolée), journal sans IP en clair.
+
+**Interface d'administration** — 13 vérifications dans un vrai navigateur,
+contre le vrai Worker local : création d'une galerie, glisser-déposer de
+photos avec suivi de progression, vraies vignettes affichées, suppression
+d'une photo et d'une galerie. Vérifié à la main au-delà de la suite
+automatisée : un parcours client complet (mauvais mot de passe, connexion,
+ouverture d'une photo) apparaît correctement dans le journal affiché côté
+administration.
+
 ```bash
 cd tools
 node tests/forensic.test.mjs 1600     # robustesse de l'empreinte
 node tests/watermark.test.mjs         # lisibilité du filigrane visible
 node tests/calibration.mjs            # seuils de détection (≈ 6 min)
-node tests/viewer.test.mjs            # interface, serveur d'aperçu lancé
+node tests/viewer.test.mjs            # interface cliente, serveur d'aperçu lancé
+node tests/admin.test.mjs             # interface d'administration, admin-server.mjs lancé
+
+cd ../worker
+npx wrangler dev --local --port 8788  # dans un autre terminal
+BASE=http://127.0.0.1:8788 node tests/api.test.mjs
 ```
 
 ---
 
 ## Ce qu'il reste à faire
 
-- **Interface d'administration web** — aujourd'hui tout passe par la ligne de
-  commande. Acceptable pour un photographe à l'aise avec un terminal, bloquant
-  pour partager l'outil largement.
 - **Sélection des photos par le client** — coup de cœur, commentaires : c'est
   la vraie raison pour laquelle on envoie une galerie de visionnage.
+- **Hébergement de l'interface d'administration** — elle tourne aujourd'hui
+  sur la machine du photographe (nécessaire pour sharp). Packagée en
+  application de bureau, ou déportée sur un petit service qui fait tourner
+  sharp pour de vrai (un conteneur, pas Cloudflare Workers), elle deviendrait
+  utilisable par quelqu'un qui n'ouvre jamais un terminal.
 - **Application mobile** — la seule voie qui bloque réellement la capture
   d'écran (`FLAG_SECURE` sur Android, détection sur iOS). À mettre en face du
   fait qu'il faut alors convaincre le client d'installer une application.

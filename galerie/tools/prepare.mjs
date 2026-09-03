@@ -8,14 +8,14 @@
 // Pour chaque photo : réduction à une taille d'écran, gravure de l'empreinte
 // invisible, application du filigrane visible, découpage en tuiles, envoi.
 // L'original haute définition ne quitte jamais votre disque.
+//
+// Wrapper en ligne de commande autour de lib/pipeline.mjs et lib/client.mjs —
+// c'est le même code que le serveur d'administration (admin-server.mjs) utilise.
 
-import sharp from "sharp";
-import { randomBytes } from "node:crypto";
 import { basename } from "node:path";
-import { mkdir, writeFile } from "node:fs/promises";
-import { embed, forensicIdFor } from "./lib/forensic.mjs";
-import { watermarkSvg } from "./lib/watermark.mjs";
-import { gridFor, tileRect, LEVEL_PREVIEW, LEVEL_FULL, PREVIEW_MAX, PREVIEW_COLS, PREVIEW_ROWS } from "./lib/tiles.mjs";
+import { mkdir, writeFile, readFile } from "node:fs/promises";
+import { processPhoto, DEFAULTS } from "./lib/pipeline.mjs";
+import { WorkerClient } from "./lib/client.mjs";
 
 function parseArgs(argv) {
   const options = {
@@ -23,9 +23,9 @@ function parseArgs(argv) {
     adminToken: process.env.GALERIE_ADMIN_TOKEN || "",
     forensicKey: process.env.GALERIE_FORENSIC_KEY || "",
     brand: process.env.GALERIE_BRAND || "Little Dream Photos",
-    maxWidth: 1600,
-    quality: 82,
-    opacity: 0.11,
+    maxWidth: DEFAULTS.maxWidth,
+    quality: DEFAULTS.quality,
+    opacity: DEFAULTS.opacity,
     dryRun: false,
     files: [],
   };
@@ -77,23 +77,10 @@ Variables d'environnement
   GALERIE_ADMIN_TOKEN   jeton d'administration
   GALERIE_FORENSIC_KEY  clé du filigrane invisible — à conserver précieusement :
                         sans elle, plus aucune fuite n'est traçable
-`;
 
-async function api(options, method, path, body, raw = false) {
-  const response = await fetch(`${options.api.replace(/\/$/, "")}${path}`, {
-    method,
-    headers: {
-      authorization: `Bearer ${options.adminToken}`,
-      ...(raw ? { "content-type": "application/octet-stream" } : body ? { "content-type": "application/json" } : {}),
-    },
-    body: raw ? body : body ? JSON.stringify(body) : undefined,
-  });
-  if (!response.ok) {
-    const detail = await response.text().catch(() => "");
-    throw new Error(`${method} ${path} → ${response.status} ${detail}`);
-  }
-  return response.status === 204 ? null : response.json();
-}
+Astuce : « node admin-server.mjs » ouvre une interface web équivalente, avec
+glisser-déposer et suivi de progression — pratique pour l'usage courant.
+`;
 
 async function main() {
   const options = parseArgs(process.argv);
@@ -122,10 +109,11 @@ async function main() {
   }
 
   const watermarkText = [options.brand, options.client].filter(Boolean).join("  ·  ");
+  const client = options.dryRun ? null : new WorkerClient(options);
 
   let galleryId = "local";
-  if (!options.dryRun) {
-    const created = await api(options, "POST", "/api/admin/galleries", {
+  if (client) {
+    const created = await client.createGallery({
       slug: options.slug,
       title: options.title || options.slug,
       clientName: options.client || "",
@@ -143,90 +131,35 @@ async function main() {
   const index = [];
   for (const [position, file] of options.files.entries()) {
     const label = basename(file);
+    const input = await readFile(file);
 
-    // 1. Réduction à une taille d'écran. C'est la protection la plus efficace
-    //    et la plus simple : une capture d'écran de 1600 px ne s'imprime pas.
-    const resized = sharp(file)
-      .rotate() // respecte l'orientation EXIF avant de perdre les métadonnées
-      .resize({ width: options.maxWidth, height: options.maxWidth, fit: "inside", withoutEnlargement: true })
-      .removeAlpha()
-      .toColourspace("srgb");
-    const { data, info } = await resized.raw().toBuffer({ resolveWithObject: true });
+    const { photo, tiles, watermarkedFull, stats } = await processPhoto(input, {
+      galleryId,
+      forensicKey: options.forensicKey,
+      watermarkText,
+      maxWidth: options.maxWidth,
+      quality: options.quality,
+      opacity: options.opacity,
+      position,
+    });
 
-    // 2. L'identifiant de la photo est tiré ici, pas côté serveur : l'empreinte
-    //    en dépend, et il faut donc la connaître avant de graver les pixels.
-    const { cols, rows } = gridFor(info.width, info.height);
-    const photoId = `pho_${randomBytes(9).toString("base64url")}`;
-    const forensicId = forensicIdFor(galleryId, photoId, options.forensicKey);
-
-    // 3. Empreinte invisible, gravée avant le filigrane visible : elle reste
-    //    donc lisible même si quelqu'un parvient à retirer la trame.
-    const pixels = Buffer.from(data);
-    const stats = embed({ data: pixels, width: info.width, height: info.height, channels: info.channels }, forensicId, options.forensicKey);
-
-
-    // 4. Filigrane visible par-dessus.
-    const watermarked = await sharp(pixels, {
-      raw: { width: info.width, height: info.height, channels: info.channels },
-    })
-      .composite([{ input: watermarkSvg({ width: info.width, height: info.height, text: watermarkText, opacity: options.opacity }) }])
-      .jpeg({ quality: 95 })
-      .toBuffer();
-
-    // 5. Version réduite pour la grille de vignettes.
-    const previewBuffer = await sharp(watermarked)
-      .resize({ width: PREVIEW_MAX, height: PREVIEW_MAX, fit: "inside" })
-      .toBuffer();
-    const preview = await sharp(previewBuffer).metadata();
-
-    // 6. Enregistrement auprès du Worker, une fois toutes les dimensions connues.
-    if (!options.dryRun) {
-      await api(options, "POST", `/api/admin/galleries/${options.slug}/photos`, {
-        id: photoId,
-        position,
-        width: info.width,
-        height: info.height,
-        cols,
-        rows,
-        previewWidth: preview.width,
-        previewHeight: preview.height,
-        forensicId: String(forensicId),
-      });
-    }
-
-    // 7. Découpage et envoi, niveau par niveau.
-    const levels = [
-      { level: LEVEL_PREVIEW, source: previewBuffer, width: preview.width, height: preview.height, cols: PREVIEW_COLS, rows: PREVIEW_ROWS },
-      { level: LEVEL_FULL, source: watermarked, width: info.width, height: info.height, cols, rows },
-    ];
-
-    let sent = 0;
-    for (const target of levels) {
-      for (let row = 0; row < target.rows; row++) {
-        for (let col = 0; col < target.cols; col++) {
-          const rect = tileRect(target.width, target.height, target.cols, target.rows, col, row);
-          const tile = await sharp(target.source)
-            .extract(rect)
-            .jpeg({ quality: options.quality, chromaSubsampling: "4:2:0", mozjpeg: true })
-            .toBuffer();
-          if (options.dryRun) {
-            await mkdir(`${outDir}/${position}/${target.level}`, { recursive: true });
-            await writeFile(`${outDir}/${position}/${target.level}/${col}_${row}.jpg`, tile);
-          } else {
-            await api(options, "PUT", `/api/admin/tiles/${photoId}/${target.level}/${col}/${row}`, tile, true);
-          }
-          sent++;
-        }
+    if (client) {
+      await client.addPhoto(options.slug, photo);
+      for (const tile of tiles) {
+        await client.putTile(photo.id, tile.level, tile.col, tile.row, tile.buffer);
       }
+    } else {
+      for (const tile of tiles) {
+        await mkdir(`${outDir}/${position}/${tile.level}`, { recursive: true });
+        await writeFile(`${outDir}/${position}/${tile.level}/${tile.col}_${tile.row}.jpg`, tile.buffer);
+      }
+      await writeFile(`${outDir}/${position}-complet.jpg`, watermarkedFull);
     }
 
-    if (options.dryRun) {
-      await writeFile(`${outDir}/${position}-complet.jpg`, watermarked);
-    }
-    index.push({ position, photoId, forensicId, file: label, width: info.width, height: info.height });
+    index.push({ position, photoId: photo.id, forensicId: photo.forensicId, file: label, width: photo.width, height: photo.height });
     console.log(
       `  ${String(position + 1).padStart(3)}. ${label.padEnd(28)} ` +
-      `${info.width}×${info.height}  ${sent} tuiles  empreinte ${forensicId}  (${stats.blocks} blocs)`
+      `${photo.width}×${photo.height}  ${tiles.length} tuiles  empreinte ${photo.forensicId}  (${stats.blocks} blocs)`
     );
   }
 

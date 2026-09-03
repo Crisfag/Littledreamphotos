@@ -4,7 +4,8 @@
   "type": "module",
   "bin": {
     "galerie-prepare": "./prepare.mjs",
-    "galerie-detect": "./detect.mjs"
+    "galerie-detect": "./detect.mjs",
+    "galerie-admin": "./admin-server.mjs"
   },
   "dependencies": {
     "sharp": "^0.33.5"
@@ -16,6 +17,7 @@
     "test": "node tests/forensic.test.mjs 1600 && node tests/watermark.test.mjs",
     "test:viewer": "node tests/viewer.test.mjs",
     "test:calibration": "node tests/calibration.mjs",
-    "preview": "node preview-server.mjs"
+    "preview": "node preview-server.mjs",
+    "admin": "node admin-server.mjs"
   }
 }

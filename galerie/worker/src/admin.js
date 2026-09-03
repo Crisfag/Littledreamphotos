@@ -77,6 +77,26 @@ async function listGalleries(env) {
   return json({ galleries: results });
 }
 
+async function getGallery(env, slug) {
+  const gallery = await env.DB.prepare(
+    `SELECT id, slug, title, client_name, watermark_text, expires_at, created_at
+     FROM galleries WHERE slug = ?`
+  )
+    .bind(slug)
+    .first();
+  if (!gallery) return fail(404, "Galerie introuvable");
+
+  const { results: photos } = await env.DB.prepare(
+    `SELECT id, position, width, height, cols, rows, preview_width, preview_height,
+            forensic_id, created_at
+     FROM photos WHERE gallery_id = ? ORDER BY position ASC, created_at ASC`
+  )
+    .bind(gallery.id)
+    .all();
+
+  return json({ gallery, photos });
+}
+
 async function deleteGallery(env, slug) {
   const gallery = await env.DB.prepare("SELECT id FROM galleries WHERE slug = ?")
     .bind(slug)
@@ -160,6 +180,30 @@ async function addPhoto(request, env, slug) {
   return json({ id, galleryId: gallery.id }, { status: 201 });
 }
 
+async function deletePhoto(env, slug, photoId) {
+  const gallery = await env.DB.prepare("SELECT id FROM galleries WHERE slug = ?")
+    .bind(slug)
+    .first();
+  if (!gallery) return fail(404, "Galerie introuvable");
+
+  const photo = await env.DB.prepare("SELECT id FROM photos WHERE id = ? AND gallery_id = ?")
+    .bind(photoId, gallery.id)
+    .first();
+  if (!photo) return fail(404, "Photo introuvable");
+
+  let cursor;
+  do {
+    const listed = await env.TILES.list({ prefix: `${gallery.id}/${photoId}/`, cursor });
+    if (listed.objects.length) {
+      await env.TILES.delete(listed.objects.map((o) => o.key));
+    }
+    cursor = listed.truncated ? listed.cursor : undefined;
+  } while (cursor);
+
+  await env.DB.prepare("DELETE FROM photos WHERE id = ?").bind(photoId).run();
+  return json({ ok: true });
+}
+
 async function putTile(request, env, photoId, level, col, row) {
   const photo = await env.DB.prepare("SELECT * FROM photos WHERE id = ?").bind(photoId).first();
   if (!photo) return fail(404, "Photo introuvable");
@@ -174,6 +218,23 @@ async function putTile(request, env, photoId, level, col, row) {
     httpMetadata: { contentType: "image/jpeg" },
   });
   return json({ ok: true });
+}
+
+// Lecture d'une tuile côté administration : sert à afficher de vraies
+// vignettes dans l'interface d'admin, sans passer par une session client.
+async function getTile(env, photoId, level, col, row) {
+  const photo = await env.DB.prepare("SELECT * FROM photos WHERE id = ?").bind(photoId).first();
+  if (!photo) return fail(404, "Photo introuvable");
+  if (level !== 0 && level !== 1) return fail(400, "Niveau inconnu");
+  const cols = level === 0 ? 2 : photo.cols;
+  const rows = level === 0 ? 2 : photo.rows;
+  if (!(col >= 0 && col < cols && row >= 0 && row < rows)) return fail(404, "Tuile introuvable");
+
+  const object = await env.TILES.get(`${photo.gallery_id}/${photoId}/${level}/${col}_${row}.jpg`);
+  if (!object) return fail(404, "Tuile introuvable");
+  return new Response(object.body, {
+    headers: { "content-type": "image/jpeg", "cache-control": "private, max-age=300" },
+  });
 }
 
 async function galleryLog(request, env, slug) {
@@ -204,9 +265,13 @@ export async function handleAdmin(request, env, ctx, path) {
       if (request.method === "GET") return listGalleries(env);
     }
     const slug = parts[3];
+    if (parts.length === 4 && request.method === "GET") return getGallery(env, slug);
     if (parts.length === 4 && request.method === "DELETE") return deleteGallery(env, slug);
     if (parts.length === 5 && parts[4] === "photos" && request.method === "POST") {
       return addPhoto(request, env, slug);
+    }
+    if (parts.length === 6 && parts[4] === "photos" && request.method === "DELETE") {
+      return deletePhoto(env, slug, parts[5]);
     }
     if (parts.length === 5 && parts[4] === "log" && request.method === "GET") {
       return galleryLog(request, env, slug);
@@ -227,6 +292,9 @@ export async function handleAdmin(request, env, ctx, path) {
   // /api/admin/tiles/<photoId>/<niveau>/<colonne>/<ligne>
   if (section === "tiles" && parts.length === 7 && request.method === "PUT") {
     return putTile(request, env, parts[3], Number(parts[4]), Number(parts[5]), Number(parts[6]));
+  }
+  if (section === "tiles" && parts.length === 7 && request.method === "GET") {
+    return getTile(env, parts[3], Number(parts[4]), Number(parts[5]), Number(parts[6]));
   }
 
   return fail(404, "Route inconnue");

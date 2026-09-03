@@ -1,0 +1,300 @@
+/* =====================================================================
+   Interface d'administration — habillage
+   Même palette que la galerie cliente, mise en page dense pour l'usage
+   quotidien (tableau de bord, tableaux, formulaires).
+   ===================================================================== */
+
+:root {
+  --cream:     #f7f2ec;
+  --ivory:     #fdfbf8;
+  --sand:      #efe6db;
+  --rose:      #b98a7a;
+  --rose-deep: #9c6f61;
+  --charcoal:  #3a332e;
+  --ink:       #2b2521;
+  --muted:     #7c716a;
+  --line:      #e5dbd0;
+  --danger:    #a4423a;
+  --danger-bg: #fbeceb;
+  --success:   #4b7a5c;
+  --serif: "Cormorant Garamond", Georgia, serif;
+  --sans:  "Jost", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --radius: 12px;
+  --ease: cubic-bezier(.22, .61, .36, 1);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+[hidden] { display: none !important; }
+
+body {
+  font-family: var(--sans);
+  font-weight: 300;
+  color: var(--charcoal);
+  background: var(--cream);
+  line-height: 1.55;
+}
+
+h1, h2, h3 { font-family: var(--serif); font-weight: 600; color: var(--ink); }
+h2 { font-size: 1.6rem; }
+h3 { font-size: 1.15rem; margin-bottom: .9rem; }
+
+.ad-shell { max-width: 1080px; margin: 0 auto; padding: 0 1.25rem 5rem; }
+
+/* ---------- Barre supérieure ---------- */
+
+.ad-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.5rem 0;
+  flex-wrap: wrap;
+}
+.ad-brand { display: flex; align-items: center; gap: .75rem; }
+.ad-brand-mark {
+  display: grid; place-items: center;
+  width: 2.4rem; height: 2.4rem;
+  border-radius: 8px;
+  background: var(--rose);
+  color: #fff;
+  font-family: var(--serif); font-size: 1.3rem;
+}
+.ad-brand-name { font-family: var(--serif); font-weight: 600; font-size: 1.05rem; color: var(--ink); }
+.ad-brand-sub { font-size: .78rem; color: var(--muted); letter-spacing: .03em; }
+
+/* ---------- Boutons ---------- */
+
+.ad-btn {
+  font-family: var(--sans);
+  font-size: .86rem;
+  font-weight: 500;
+  color: var(--charcoal);
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: .55rem 1.1rem;
+  cursor: pointer;
+  transition: background .15s var(--ease), border-color .15s var(--ease), transform .15s var(--ease);
+}
+.ad-btn:hover { border-color: var(--rose); transform: translateY(-1px); }
+.ad-btn:disabled { opacity: .6; cursor: default; transform: none; }
+.ad-btn-primary { background: var(--rose); border-color: var(--rose); color: #fff; }
+.ad-btn-primary:hover { background: var(--rose-deep); border-color: var(--rose-deep); }
+.ad-btn-danger { background: var(--danger-bg); border-color: #f1cfcc; color: var(--danger); }
+.ad-btn-danger:hover { background: #f6dad8; border-color: var(--danger); }
+
+/* ---------- Liste des galeries ---------- */
+
+.ad-loading, .ad-hint { color: var(--muted); font-size: .88rem; }
+.ad-empty { text-align: center; padding: 4rem 1rem; }
+.ad-empty h2 { margin-bottom: .6rem; }
+
+.ad-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: .9rem;
+}
+.ad-card {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 1.15rem 1.25rem;
+  cursor: pointer;
+  transition: border-color .15s var(--ease), transform .15s var(--ease), box-shadow .15s var(--ease);
+}
+.ad-card:hover, .ad-card:focus-visible {
+  border-color: var(--rose);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px -18px rgba(58, 51, 46, .4);
+  outline: none;
+}
+.ad-card h3 { font-size: 1.15rem; margin-bottom: .2rem; }
+.ad-card-sub { font-size: .82rem; color: var(--muted); margin-bottom: .8rem; }
+.ad-card-meta { display: flex; align-items: center; justify-content: space-between; font-size: .8rem; color: var(--muted); }
+
+.ad-badge {
+  font-size: .72rem;
+  padding: .2rem .6rem;
+  border-radius: 999px;
+  background: var(--sand);
+  color: var(--charcoal);
+  white-space: nowrap;
+}
+.ad-badge-soon { background: #fbeecb; color: #8a6a1f; }
+.ad-badge-expired { background: var(--danger-bg); color: var(--danger); }
+
+/* ---------- Vue détail ---------- */
+
+.ad-back {
+  background: none; border: 0; color: var(--muted);
+  font-family: var(--sans); font-size: .85rem; cursor: pointer;
+  margin: 1rem 0; padding: 0;
+}
+.ad-back:hover { color: var(--rose); }
+
+.ad-detail-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+
+.ad-share, main section {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 1.25rem 1.4rem;
+  margin-bottom: 1.1rem;
+}
+
+.ad-copy-row { display: flex; gap: .5rem; }
+.ad-copy-row input {
+  flex: 1;
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-size: .86rem;
+  padding: .55rem .7rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--ivory);
+  color: var(--ink);
+}
+.ad-copy-row .ad-btn { flex-shrink: 0; }
+
+/* ---------- Dépôt de fichiers ---------- */
+
+.ad-dropzone {
+  text-align: center;
+  border: 2px dashed var(--line);
+  transition: border-color .15s var(--ease), background .15s var(--ease);
+}
+.ad-dropzone-active { border-color: var(--rose); background: var(--cream); }
+.ad-dropzone p { margin-bottom: .8rem; color: var(--muted); font-size: .9rem; }
+.ad-dropzone p strong { color: var(--ink); }
+
+.ad-upload-queue { margin-top: 1rem; text-align: left; }
+.ad-upload-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 120px 80px;
+  align-items: center;
+  gap: .75rem;
+  padding: .4rem 0;
+  font-size: .82rem;
+}
+.ad-upload-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ad-upload-bar { height: 6px; background: var(--sand); border-radius: 999px; overflow: hidden; }
+.ad-upload-fill { height: 100%; width: 0; background: var(--rose); transition: width .2s var(--ease); }
+.ad-upload-state { text-align: right; color: var(--muted); }
+.ad-upload-done .ad-upload-fill { background: var(--success); }
+.ad-upload-done .ad-upload-state { color: var(--success); }
+.ad-upload-failed .ad-upload-fill { background: var(--danger); }
+.ad-upload-failed .ad-upload-state { color: var(--danger); cursor: help; }
+
+/* ---------- Vignettes ---------- */
+
+.ad-photos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: .6rem;
+}
+.ad-photo { position: relative; }
+.ad-photo-frame {
+  position: relative;
+  background: var(--sand);
+  border-radius: 8px;
+  display: grid;
+  overflow: hidden;
+}
+.ad-photo-frame img { display: block; width: 100%; height: 100%; object-fit: cover; -webkit-user-drag: none; }
+.ad-photo-dims {
+  position: absolute; left: .35rem; bottom: .35rem;
+  font-size: .68rem; color: var(--muted);
+  background: rgba(253, 251, 248, .88);
+  padding: .1rem .35rem; border-radius: 4px;
+}
+.ad-photo-remove {
+  position: absolute; top: -6px; right: -6px;
+  width: 22px; height: 22px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--danger);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity .15s var(--ease);
+}
+.ad-photo:hover .ad-photo-remove, .ad-photo-remove:focus-visible { opacity: 1; }
+
+/* ---------- Journal ---------- */
+
+.ad-table-wrap { overflow-x: auto; }
+.ad-table { width: 100%; border-collapse: collapse; font-size: .84rem; }
+.ad-table th { text-align: left; color: var(--muted); font-weight: 500; padding: .4rem .6rem; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.ad-table td { padding: .45rem .6rem; border-bottom: 1px solid var(--line); }
+.ad-table tr:last-child td { border-bottom: 0; }
+.ad-log-warn td:nth-child(2) { color: var(--danger); }
+
+.ad-danger { border-color: #f1cfcc; }
+
+/* ---------- Modales ---------- */
+
+.ad-modal-backdrop {
+  position: fixed; inset: 0; z-index: 50;
+  background: rgba(43, 37, 33, .5);
+  display: grid; place-items: center;
+  padding: 1.25rem;
+}
+.ad-modal {
+  width: min(480px, 100%);
+  background: #fff;
+  border-radius: var(--radius);
+  padding: 1.75rem;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+.ad-modal-narrow { width: min(400px, 100%); }
+.ad-modal h2 { margin-bottom: .6rem; }
+.ad-lede { color: var(--muted); font-size: .9rem; margin-bottom: 1.2rem; }
+
+.ad-field { display: block; margin-bottom: 1rem; }
+.ad-field span { display: block; font-size: .8rem; color: var(--muted); margin-bottom: .35rem; }
+.ad-field em { font-style: normal; opacity: .75; }
+.ad-field input {
+  width: 100%;
+  font-family: var(--sans);
+  font-size: .95rem;
+  padding: .6rem .75rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--ivory);
+  color: var(--ink);
+}
+.ad-field input:focus { outline: none; border-color: var(--rose); box-shadow: 0 0 0 3px rgba(185, 138, 122, .16); }
+.ad-field-row { display: grid; grid-template-columns: 1fr 1fr; gap: .9rem; }
+
+.ad-error {
+  background: var(--danger-bg); color: var(--danger);
+  border-radius: 8px; padding: .55rem .75rem; font-size: .85rem; margin-bottom: 1rem;
+}
+.ad-modal-actions { display: flex; justify-content: flex-end; gap: .6rem; margin-top: .4rem; }
+
+.ad-error-panel { background: #fff; border: 1px solid #f1cfcc; border-radius: var(--radius); padding: 1.5rem; margin-top: 1rem; }
+.ad-error-panel h2 { font-size: 1.15rem; margin-bottom: .5rem; }
+.ad-error-panel p { color: var(--danger); font-size: .88rem; }
+
+/* ---------- Notification ---------- */
+
+.ad-toast {
+  position: fixed; left: 50%; bottom: 1.5rem; transform: translateX(-50%) translateY(0);
+  background: var(--ink); color: var(--cream);
+  padding: .7rem 1.2rem; border-radius: 999px;
+  font-size: .85rem;
+  box-shadow: 0 12px 30px -12px rgba(0, 0, 0, .5);
+  z-index: 80;
+  opacity: 0;
+  transition: opacity .2s var(--ease), transform .2s var(--ease);
+}
+.ad-toast-visible { opacity: 1; transform: translateX(-50%) translateY(-4px); }
+.ad-toast-error { background: var(--danger); }
+
+@media (max-width: 560px) {
+  .ad-field-row { grid-template-columns: 1fr; }
+  .ad-upload-item { grid-template-columns: minmax(0, 1fr) 70px; }
+  .ad-upload-bar { grid-column: span 2; }
+}

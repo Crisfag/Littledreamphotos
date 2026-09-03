@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Administration — Galeries protégées</title>
+  <meta name="robots" content="noindex, nofollow" />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Jost:wght@300;400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="admin.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%23b98a7a'/><text y='72' x='50' text-anchor='middle' font-size='60' font-family='Georgia'>L</text></svg>" />
+</head>
+<body>
+  <div class="ad-shell">
+    <header class="ad-topbar">
+      <div class="ad-brand">
+        <span class="ad-brand-mark">L</span>
+        <div>
+          <p class="ad-brand-name">Little Dream Photos</p>
+          <p class="ad-brand-sub">Galeries protégées — administration</p>
+        </div>
+      </div>
+      <button type="button" class="ad-btn ad-btn-primary" id="ad-new-gallery">+ Nouvelle galerie</button>
+    </header>
+
+    <main id="ad-view">
+      <!-- Rempli par admin.js : liste des galeries, ou détail d'une galerie -->
+    </main>
+  </div>
+
+  <!-- ============ Modale : nouvelle galerie ============ -->
+  <div class="ad-modal-backdrop" id="ad-create-modal" hidden>
+    <div class="ad-modal" role="dialog" aria-modal="true" aria-labelledby="ad-create-title">
+      <h2 id="ad-create-title">Nouvelle galerie</h2>
+      <form id="ad-create-form">
+        <label class="ad-field">
+          <span>Titre <em>(affiché au client)</em></span>
+          <input type="text" name="title" required placeholder="Séance famille Dupont" />
+        </label>
+        <label class="ad-field">
+          <span>Client</span>
+          <input type="text" name="clientName" placeholder="Famille Dupont" />
+        </label>
+        <label class="ad-field">
+          <span>Identifiant dans l'adresse <em>(généré depuis le titre si vide)</em></span>
+          <input type="text" name="slug" placeholder="dupont-mai" pattern="[a-z0-9][a-z0-9-]*" />
+        </label>
+        <div class="ad-field-row">
+          <label class="ad-field">
+            <span>Mot de passe <em>(généré si vide)</em></span>
+            <input type="text" name="password" placeholder="généré automatiquement" autocomplete="off" />
+          </label>
+          <label class="ad-field">
+            <span>Expire le <em>(optionnel)</em></span>
+            <input type="date" name="expires" />
+          </label>
+        </div>
+        <p class="ad-error" id="ad-create-error" hidden></p>
+        <div class="ad-modal-actions">
+          <button type="button" class="ad-btn" data-close-modal>Annuler</button>
+          <button type="submit" class="ad-btn ad-btn-primary" id="ad-create-submit">Créer la galerie</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ============ Modale : galerie créée, informations à transmettre ============ -->
+  <div class="ad-modal-backdrop" id="ad-created-modal" hidden>
+    <div class="ad-modal" role="dialog" aria-modal="true" aria-labelledby="ad-created-title">
+      <h2 id="ad-created-title">Galerie créée</h2>
+      <p class="ad-lede">
+        Transmettez ces deux informations à votre client — le mot de passe
+        n'est affiché qu'une seule fois, ici.
+      </p>
+      <label class="ad-field">
+        <span>Lien</span>
+        <div class="ad-copy-row">
+          <input type="text" id="ad-created-link" readonly />
+          <button type="button" class="ad-btn" data-copy="ad-created-link">Copier</button>
+        </div>
+      </label>
+      <p class="ad-hint" id="ad-created-hint">
+        GALERIE_SITE n'est pas configuré : complétez l'adresse de votre page
+        galerie.html devant ce lien avant de le transmettre.
+      </p>
+      <label class="ad-field">
+        <span>Mot de passe</span>
+        <div class="ad-copy-row">
+          <input type="text" id="ad-created-password" readonly />
+          <button type="button" class="ad-btn" data-copy="ad-created-password">Copier</button>
+        </div>
+      </label>
+      <div class="ad-modal-actions">
+        <button type="button" class="ad-btn ad-btn-primary" data-close-modal>C'est noté</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ Confirmation générique ============ -->
+  <div class="ad-modal-backdrop" id="ad-confirm-modal" hidden>
+    <div class="ad-modal ad-modal-narrow" role="alertdialog" aria-modal="true" aria-labelledby="ad-confirm-title">
+      <h2 id="ad-confirm-title">Confirmer</h2>
+      <p class="ad-lede" id="ad-confirm-text"></p>
+      <div class="ad-modal-actions">
+        <button type="button" class="ad-btn" data-close-modal>Annuler</button>
+        <button type="button" class="ad-btn ad-btn-danger" id="ad-confirm-ok">Confirmer</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="ad-toast" id="ad-toast" hidden></div>
+
+  <script src="admin.js"></script>
+</body>
+</html>
