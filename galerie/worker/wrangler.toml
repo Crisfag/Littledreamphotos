@@ -12,7 +12,7 @@ ALLOWED_ORIGINS = "https://www.littledreamphotos.com,http://localhost:8000"
 [[d1_databases]]
 binding = "DB"
 database_name = "galerie-protegee"
-database_id = "00000000-0000-0000-0000-000000000000"  # remplacer par l'identifiant renvoyé
+database_id = "3993cb4e-2d56-40c4-b848-40f313dbd2d3"
 
 # Stockage des tuiles d'images.
 # Créer avec :  npx wrangler r2 bucket create galerie-tuiles
