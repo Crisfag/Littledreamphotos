@@ -41,6 +41,9 @@
 
   var el = {};
   var heartButtons = {}; // photoId -> bouton cœur de la grille, pour une mise à jour directe
+  var commentBadges = {}; // photoId -> pastille « a un commentaire » de la grille
+  var COMMENT_DEBOUNCE_MS = 700;
+  var commentTimer = null;
 
   /* ---------- Sélection (coup de cœur) ---------- */
 
@@ -125,6 +128,100 @@
       paintHeart(el.viewerHeart, photo.selected);
     }
     updateSelectionUI();
+  }
+
+  /* ---------- Commentaire (note laissée sur une photo) ---------- */
+
+  function hasComment(photo) {
+    return !!(photo.comment && photo.comment.trim());
+  }
+
+  // Répercute le commentaire d'une photo sur la pastille de la grille et sur
+  // le bouton de la visionneuse, sans jamais reconstruire la grille.
+  function reflectComment(photo) {
+    var badge = commentBadges[photo.id];
+    if (badge) badge.hidden = !hasComment(photo);
+    if (el.commentToggle && state.viewerList && state.viewerList[state.current] === photo) {
+      el.commentToggle.classList.toggle("gp-comment-has-text", hasComment(photo));
+    }
+  }
+
+  function setCommentStatus(text) {
+    if (el.commentStatus) el.commentStatus.textContent = text;
+  }
+
+  function saveComment(photo, value) {
+    setCommentStatus("Enregistrement…");
+    fetch(apiUrl("/comment"), {
+      method: "POST",
+      headers: Object.assign({ "content-type": "application/json" }, authHeaders()),
+      body: JSON.stringify({ photoId: photo.id, comment: value }),
+    })
+      .then(function (response) {
+        if (response.status === 401) throw new Error("session");
+        if (!response.ok) throw new Error("échec");
+        return response.json();
+      })
+      .then(function (data) {
+        // La valeur renvoyée est normalisée par le serveur (espaces retirés,
+        // longueur bornée) : c'est elle qui fait foi, pas ce qui a été tapé.
+        photo.comment = data.comment;
+        reflectComment(photo);
+        if (el.commentInput && currentViewerPhoto() === photo && el.commentInput.value !== data.comment) {
+          el.commentInput.value = data.comment;
+        }
+        setCommentStatus("Enregistré");
+        setTimeout(function () {
+          if (el.commentStatus && el.commentStatus.textContent === "Enregistré") setCommentStatus("");
+        }, 1800);
+      })
+      .catch(function (err) {
+        setCommentStatus("Échec de l'enregistrement — réessayez");
+        if (err.message === "session") {
+          sessionLost("Votre session a expiré. Saisissez à nouveau le mot de passe.");
+        }
+      });
+  }
+
+  // Sauvegarde immédiate d'une saisie encore en attente (débounce non écoulé)
+  // — appelé avant de changer de photo ou de fermer la visionneuse, pour ne
+  // jamais perdre ce qui vient d'être tapé.
+  function flushPendingComment() {
+    if (!commentTimer) return;
+    clearTimeout(commentTimer);
+    commentTimer = null;
+    var photo = currentViewerPhoto();
+    if (photo && el.commentInput && el.commentInput.value !== (photo.comment || "")) {
+      saveComment(photo, el.commentInput.value);
+    }
+  }
+
+  function wireCommentInput() {
+    if (!el.commentInput) return;
+    el.commentInput.addEventListener("input", function () {
+      clearTimeout(commentTimer);
+      var photo = currentViewerPhoto();
+      var value = el.commentInput.value;
+      commentTimer = setTimeout(function () {
+        commentTimer = null;
+        if (photo) saveComment(photo, value);
+      }, COMMENT_DEBOUNCE_MS);
+    });
+    el.commentInput.addEventListener("blur", flushPendingComment);
+    // Empêche les flèches gauche/droite de faire changer de photo pendant la
+    // frappe. Échap reste actif : il ferme la visionneuse normalement (le
+    // commentaire en cours est sauvegardé au passage par closeViewer).
+    el.commentInput.addEventListener("keydown", function (event) {
+      if (event.key === "ArrowLeft" || event.key === "ArrowRight") event.stopPropagation();
+    });
+  }
+
+  function toggleCommentPanel() {
+    if (!el.commentPanel) return;
+    var willOpen = el.commentPanel.hidden;
+    el.commentPanel.hidden = !willOpen;
+    if (el.commentToggle) el.commentToggle.setAttribute("aria-expanded", willOpen ? "true" : "false");
+    if (willOpen && el.commentInput) el.commentInput.focus();
   }
 
   function $(id) {
@@ -263,6 +360,7 @@
   function buildGrid() {
     el.grid.innerHTML = "";
     heartButtons = {};
+    commentBadges = {};
     // La grille contient toujours toutes les photos ; le filtre « ma
     // sélection » les masque par CSS (.gp-grid-filtered), pour ne jamais
     // retélécharger de tuile au seul geste de cocher un cœur.
@@ -299,6 +397,15 @@
       figure.appendChild(heart);
       heartButtons[photo.id] = heart;
 
+      // Pastille non interactive : le clic passe à travers vers .gp-open,
+      // qui couvre déjà toute la vignette.
+      var commentBadge = document.createElement("span");
+      commentBadge.className = "gp-comment-badge";
+      commentBadge.setAttribute("aria-hidden", "true");
+      commentBadge.hidden = !hasComment(photo);
+      figure.appendChild(commentBadge);
+      commentBadges[photo.id] = commentBadge;
+
       el.grid.appendChild(figure);
       paint(canvas, photo, LEVEL_PREVIEW);
     });
@@ -320,6 +427,7 @@
   function showViewerAt(index) {
     var list = state.viewerList;
     if (!list || index < 0 || index >= list.length) return;
+    flushPendingComment(); // sauvegarde ce qui était en cours de frappe sur la photo précédente
     state.current = index;
     var photo = list[index];
 
@@ -329,6 +437,9 @@
     el.prev.disabled = index === 0;
     el.next.disabled = index === list.length - 1;
     if (el.viewerHeart) paintHeart(el.viewerHeart, photo.selected);
+    if (el.commentInput) el.commentInput.value = photo.comment || "";
+    setCommentStatus("");
+    reflectComment(photo);
     el.closeBtn.focus();
 
     var canvas = el.viewerCanvas;
@@ -338,10 +449,13 @@
   }
 
   function closeViewer() {
+    flushPendingComment();
     el.viewer.hidden = true;
     document.body.classList.remove("gp-locked");
     state.current = -1;
     state.viewerList = null;
+    if (el.commentPanel) el.commentPanel.hidden = true;
+    if (el.commentToggle) el.commentToggle.setAttribute("aria-expanded", "false");
   }
 
   function step(delta) {
@@ -585,6 +699,10 @@
       selectionCount: $("gp-selection-count"),
       filterCheckbox: $("gp-filter-selected"),
       filterEmpty: $("gp-filter-empty"),
+      commentToggle: $("gp-comment-toggle"),
+      commentPanel: $("gp-comment-panel"),
+      commentInput: $("gp-comment-input"),
+      commentStatus: $("gp-comment-status"),
     };
 
     state.slug = readSlug();
@@ -627,6 +745,10 @@
         updateSelectionUI();
       });
     }
+    if (el.commentToggle) {
+      el.commentToggle.addEventListener("click", toggleCommentPanel);
+    }
+    wireCommentInput();
 
     installGuards();
     el.password.focus();

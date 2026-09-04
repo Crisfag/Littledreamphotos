@@ -158,6 +158,8 @@ check("le manifeste décrit les photos",
       JSON.stringify(session.photos?.[0]));
 check("une photo n'est sélectionnée par personne au départ",
       session.photos?.[0]?.selected === false);
+check("une photo n'a aucun commentaire au départ",
+      session.photos?.[0]?.comment === "");
 check("le mot de passe n'est jamais renvoyé",
       !JSON.stringify(session).includes("password_hash") && !JSON.stringify(session).includes("mot-de-passe-solide"));
 
@@ -303,6 +305,89 @@ const selectBadBody = await fetch(`${BASE}/api/gallery/${SLUG}/select`, {
 });
 check("sélectionner sans identifiant de photo est refusé", selectBadBody.status === 400);
 
+/* ---------- Commentaire du client ---------- */
+
+const commentNoAuth = await fetch(`${BASE}/api/gallery/${SLUG}/comment`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ photoId, comment: "en noir et blanc svp" }),
+});
+check("commenter sans jeton est refusé", commentNoAuth.status === 401);
+
+const commentOn = await fetch(`${BASE}/api/gallery/${SLUG}/comment`, {
+  method: "POST",
+  headers: { ...bearer, "content-type": "application/json" },
+  body: JSON.stringify({ photoId, comment: "  en noir et blanc svp  " }),
+});
+const commentOnBody = await commentOn.json();
+check("le client peut laisser un commentaire, avec les espaces superflus retirés",
+      commentOn.ok && commentOnBody.comment === "en noir et blanc svp", JSON.stringify(commentOnBody));
+
+const detailAfterComment = await (await admin("GET", `/api/admin/galleries/${SLUG}`)).json();
+const commentedPhoto = detailAfterComment.photos.find((p) => p.id === photoId);
+check("le commentaire apparaît côté administration",
+      commentedPhoto?.comment === "en noir et blanc svp" && Number.isInteger(commentedPhoto?.comment_at),
+      JSON.stringify(commentedPhoto));
+
+const listAfterComment = await (await admin("GET", "/api/admin/galleries")).json();
+const galleryRowAfterComment = listAfterComment.galleries.find((g) => g.slug === SLUG);
+check("le compteur de commentaires apparaît dans la liste des galeries",
+      galleryRowAfterComment?.comment_count === 1, JSON.stringify(galleryRowAfterComment));
+
+const reLoginAfterComment = await fetch(`${BASE}/api/gallery/${SLUG}/login`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ password: "mot-de-passe-solide" }),
+});
+const reLoginAfterCommentBody = await reLoginAfterComment.json();
+check("le commentaire est visible à la reconnexion",
+      reLoginAfterCommentBody.photos?.find((p) => p.id === photoId)?.comment === "en noir et blanc svp");
+
+const tooLong = "x".repeat(600);
+const commentTruncated = await fetch(`${BASE}/api/gallery/${SLUG}/comment`, {
+  method: "POST",
+  headers: { ...bearer, "content-type": "application/json" },
+  body: JSON.stringify({ photoId, comment: tooLong }),
+});
+const commentTruncatedBody = await commentTruncated.json();
+check("un commentaire trop long est tronqué plutôt que refusé",
+      commentTruncated.ok && commentTruncatedBody.comment.length === 500);
+
+const commentCleared = await fetch(`${BASE}/api/gallery/${SLUG}/comment`, {
+  method: "POST",
+  headers: { ...bearer, "content-type": "application/json" },
+  body: JSON.stringify({ photoId, comment: "" }),
+});
+const commentClearedBody = await commentCleared.json();
+check("un commentaire vide efface la note", commentCleared.ok && commentClearedBody.comment === "");
+
+const detailAfterClear = await (await admin("GET", `/api/admin/galleries/${SLUG}`)).json();
+const clearedPhoto = detailAfterClear.photos.find((p) => p.id === photoId);
+check("effacer un commentaire efface aussi sa date",
+      clearedPhoto?.comment === "" && clearedPhoto?.comment_at == null, JSON.stringify(clearedPhoto));
+
+const commentMissingPhoto = await fetch(`${BASE}/api/gallery/${SLUG}/comment`, {
+  method: "POST",
+  headers: { ...bearer, "content-type": "application/json" },
+  body: JSON.stringify({ photoId: "pho_NExistePas000", comment: "test" }),
+});
+check("commenter une photo inconnue est refusé", commentMissingPhoto.status === 404);
+
+const commentCrossGallery = await fetch(`${BASE}/api/gallery/${SLUG}-voisine/comment`, {
+  method: "POST",
+  headers: { ...bearer, "content-type": "application/json" },
+  body: JSON.stringify({ photoId, comment: "test" }),
+});
+check("le jeton d'une autre galerie ne permet pas de commenter",
+      commentCrossGallery.status === 403, `HTTP ${commentCrossGallery.status}`);
+
+const commentBadBody = await fetch(`${BASE}/api/gallery/${SLUG}/comment`, {
+  method: "POST",
+  headers: { ...bearer, "content-type": "application/json" },
+  body: JSON.stringify({ photoId }),
+});
+check("commenter sans champ comment est refusé", commentBadBody.status === 400);
+
 /* ---------- Journal d'accès ---------- */
 
 await fetch(`${BASE}/api/gallery/${SLUG}/event`, {
@@ -319,12 +404,13 @@ check("un évènement inconnu est refusé", bogusEvent.status === 400);
 
 const logResponse = await admin("GET", `/api/admin/galleries/${SLUG}/log`);
 const { log } = await logResponse.json();
-check("le journal consigne connexion, échec, capture et sélection",
+check("le journal consigne connexion, échec, capture, sélection et commentaire",
       log.some((e) => e.event === "login") &&
       log.some((e) => e.event === "login_failed") &&
       log.some((e) => e.event === "capture_suspected") &&
       log.some((e) => e.event === "select" && e.detail === photoId) &&
-      log.some((e) => e.event === "deselect" && e.detail === photoId),
+      log.some((e) => e.event === "deselect" && e.detail === photoId) &&
+      log.some((e) => e.event === "comment" && e.detail === photoId),
       log.map((e) => e.event).join(", "));
 check("le journal ne contient aucune IP en clair",
       log.every((e) => !/^\d+\.\d+\.\d+\.\d+$/.test(e.ip_hash || "")));

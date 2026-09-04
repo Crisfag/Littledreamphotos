@@ -123,6 +123,7 @@ h3 { font-size: 1.15rem; margin-bottom: .9rem; }
 .ad-badge-soon { background: #fbeecb; color: #8a6a1f; }
 .ad-badge-expired { background: var(--danger-bg); color: var(--danger); }
 .ad-badge-selected { background: #fbe8e6; color: #b3564a; }
+.ad-badge-comment { background: var(--sand); color: var(--charcoal); }
 
 /* ---------- Vue détail ---------- */
 
@@ -235,6 +236,16 @@ h3 { font-size: 1.15rem; margin-bottom: .9rem; }
   color: #b3564a;
   font-size: .8rem;
   line-height: 1;
+}
+.ad-photo-comment {
+  position: absolute; top: .35rem; left: .35rem;
+  width: 20px; height: 20px;
+  display: grid; place-items: center;
+  border-radius: 999px;
+  background: #fff;
+  font-size: .7rem;
+  line-height: 1;
+  cursor: help;
 }
 
 /* ---------- Journal ---------- */

@@ -16,6 +16,7 @@
     view: "Photo ouverte",
     select: "Coup de cœur",
     deselect: "Coup de cœur retiré",
+    comment: "Remarque laissée",
     capture_suspected: "Capture suspectée",
     blur: "Photo floutée",
     print: "Tentative d'impression",
@@ -187,6 +188,9 @@
         (g.selected_count > 0
           ? '<span class="ad-badge ad-badge-selected">♥ ' + g.selected_count + "</span>"
           : "") +
+        (g.comment_count > 0
+          ? '<span class="ad-badge ad-badge-comment">💬 ' + g.comment_count + "</span>"
+          : "") +
         (status.label ? '<span class="ad-badge ' + status.cls + '">' + esc(status.label) + "</span>" : "") +
         "</div>" +
         "</article>"
@@ -218,6 +222,10 @@
     return Number(photo.selected) === 1;
   }
 
+  function hasComment(photo) {
+    return Boolean(photo.comment && photo.comment.trim());
+  }
+
   function photoThumb(photo) {
     var cols = state.config.previewCols || 2;
     var rows = state.config.previewRows || 2;
@@ -228,6 +236,7 @@
       }
     }
     var selected = isSelected(photo);
+    var commented = hasComment(photo);
     return (
       '<div class="ad-photo' + (selected ? " ad-photo-selected" : "") + '" data-photo-id="' + esc(photo.id) + '">' +
       '<div class="ad-photo-frame" style="aspect-ratio:' + photo.width + "/" + photo.height +
@@ -235,16 +244,17 @@
       cells +
       '<span class="ad-photo-dims">n° ' + (photo.position + 1) + " · " + photo.width + "×" + photo.height + "</span>" +
       (selected ? '<span class="ad-photo-heart" title="Sélectionnée par le client">♥</span>' : "") +
+      (commented ? '<span class="ad-photo-comment" title="' + esc(photo.comment) + '">💬</span>' : "") +
       "</div>" +
       '<button type="button" class="ad-photo-remove" title="Supprimer cette photo" aria-label="Supprimer cette photo">&times;</button>' +
       "</div>"
     );
   }
 
-  // Pour les évènements « view », « select » et « deselect », le détail
-  // consigné est l'identifiant technique de la photo — on l'affiche plutôt
-  // sous la forme lisible « Photo n° X » quand on peut la retrouver.
-  var PHOTO_ID_EVENTS = new Set(["view", "select", "deselect"]);
+  // Pour les évènements « view », « select », « deselect » et « comment », le
+  // détail consigné est l'identifiant technique de la photo — on l'affiche
+  // plutôt sous la forme lisible « Photo n° X » quand on peut la retrouver.
+  var PHOTO_ID_EVENTS = new Set(["view", "select", "deselect", "comment"]);
 
   function logRow(entry, photosById) {
     var label = EVENT_LABELS[entry.event] || entry.event;
@@ -304,9 +314,8 @@
       "</section>" +
       '<section><div class="ad-section-header">' +
       '<h3 id="ad-photos-heading">Photos (' + data.photos.length + ")</h3>" +
-      (data.photos.some(isSelected)
-        ? '<button type="button" class="ad-btn" id="ad-copy-selection">Copier la sélection (' +
-          data.photos.filter(isSelected).length + ")</button>"
+      (data.photos.some(function (p) { return isSelected(p) || hasComment(p); })
+        ? '<button type="button" class="ad-btn" id="ad-copy-notes">Copier les notes du client</button>'
         : "") +
       "</div>" +
       '<div class="ad-photos" id="ad-photos">' + data.photos.map(photoThumb).join("") + "</div>" +
@@ -325,18 +334,24 @@
     document.getElementById("ad-back").addEventListener("click", function () {
       renderList();
     });
-    var copySelectionBtn = document.getElementById("ad-copy-selection");
-    if (copySelectionBtn) {
-      copySelectionBtn.addEventListener("click", function () {
-        var picked = data.photos.filter(isSelected);
+    var copyNotesBtn = document.getElementById("ad-copy-notes");
+    if (copyNotesBtn) {
+      copyNotesBtn.addEventListener("click", function () {
+        var selectedCount = data.photos.filter(isSelected).length;
+        var noted = data.photos.filter(function (p) { return isSelected(p) || hasComment(p); });
+        var lines = noted.map(function (p) {
+          var line = "Photo n° " + (p.position + 1) + (isSelected(p) ? " (sélectionnée)" : "");
+          if (hasComment(p)) line += " — « " + p.comment.trim() + " »";
+          return line;
+        });
         var text =
-          "Sélection — " + data.gallery.title + " (" + data.gallery.slug + ")\n" +
-          picked.length + " photo(s) sur " + data.photos.length + " sélectionnée(s)\n\n" +
-          picked.map(function (p) { return "Photo n° " + (p.position + 1); }).join("\n");
+          "Notes du client — " + data.gallery.title + " (" + data.gallery.slug + ")\n" +
+          selectedCount + " photo(s) sur " + data.photos.length + " sélectionnée(s)\n\n" +
+          lines.join("\n");
         navigator.clipboard.writeText(text).then(function () {
-          toast("Sélection copiée (" + picked.length + (picked.length > 1 ? " photos)." : " photo)."));
+          toast("Notes copiées (" + noted.length + (noted.length > 1 ? " photos)." : " photo)."));
         }).catch(function () {
-          toast("Impossible de copier la sélection.", true);
+          toast("Impossible de copier les notes.", true);
         });
       });
     }

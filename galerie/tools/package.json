@@ -19,6 +19,7 @@
     "test:calibration": "node tests/calibration.mjs",
     "preview": "node preview-server.mjs",
     "admin": "node admin-server.mjs",
-    "test:selection": "node tests/selection.test.mjs"
+    "test:selection": "node tests/selection.test.mjs",
+    "test:comments": "node tests/comments.test.mjs"
   }
 }

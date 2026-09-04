@@ -231,6 +231,83 @@ h1 { font-family: var(--serif); font-weight: 500; font-size: clamp(1.9rem, 4vw, 
    tuile n'est retéléchargée au seul geste de cocher un cœur. */
 .gp-grid-filtered .gp-item:not(.gp-item-selected) { display: none; }
 
+/* ---------- Commentaire (note laissée sur une photo) ---------- */
+
+/* Pastille de la grille : coin inférieur gauche, purement informative — le
+   clic passe à travers vers .gp-open qui couvre déjà toute la vignette. */
+.gp-comment-badge {
+  position: absolute;
+  left: .5rem;
+  bottom: .5rem;
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 999px;
+  background: rgba(43, 37, 33, .55);
+  display: grid;
+  place-items: center;
+  font-size: .82rem;
+  pointer-events: none;
+  z-index: 1;
+}
+.gp-comment-badge::before { content: "\1F4AC"; } /* 💬 */
+
+.gp-comment-toggle {
+  border: 0;
+  background: rgba(253, 251, 248, .12);
+  color: rgba(247, 242, 236, .85);
+  cursor: pointer;
+  border-radius: 999px;
+  width: 2.3rem;
+  height: 2.3rem;
+  font-size: 1.05rem;
+  display: grid;
+  place-items: center;
+  transition: background .2s var(--ease), transform .12s var(--ease);
+}
+.gp-comment-toggle::before { content: "\1F4AC"; }
+.gp-comment-toggle:hover { background: rgba(253, 251, 248, .24); transform: scale(1.06); }
+.gp-comment-toggle[aria-expanded="true"] { background: rgba(253, 251, 248, .92); color: var(--ink); }
+.gp-comment-has-text { color: var(--rose); }
+.gp-comment-toggle[aria-expanded="true"].gp-comment-has-text { color: var(--rose-deep); }
+
+.gp-comment-panel {
+  position: absolute;
+  bottom: calc(clamp(.6rem, 2.5vw, 1.25rem) + 3.6rem);
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(420px, calc(100vw - 2.5rem));
+  background: rgba(253, 251, 248, .97);
+  border-radius: 12px;
+  padding: .85rem 1rem;
+  box-shadow: 0 20px 50px -20px rgba(0, 0, 0, .6);
+}
+.gp-comment-label {
+  display: block;
+  font-size: .78rem;
+  color: var(--muted);
+  margin-bottom: .4rem;
+}
+.gp-comment-input {
+  width: 100%;
+  resize: vertical;
+  min-height: 3.2rem;
+  font-family: var(--sans);
+  font-size: .92rem;
+  padding: .55rem .65rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  background: var(--ivory);
+}
+.gp-comment-input:focus { outline: none; border-color: var(--rose); box-shadow: 0 0 0 3px rgba(185, 138, 122, .16); }
+.gp-comment-status {
+  min-height: 1.1em;
+  margin-top: .35rem;
+  font-size: .78rem;
+  color: var(--muted);
+  text-align: right;
+}
+
 /* ---------- Grille ---------- */
 
 .gp-grid {

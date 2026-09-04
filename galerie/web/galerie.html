@@ -110,9 +110,17 @@
       <canvas id="gp-viewer-canvas" role="img" aria-label="Photo agrandie"></canvas>
     </div>
     <button type="button" class="gp-viewer-nav gp-viewer-next" id="gp-next" aria-label="Photo suivante">&#8250;</button>
+    <div class="gp-comment-panel" id="gp-comment-panel" hidden>
+      <label class="gp-comment-label" for="gp-comment-input">Une remarque sur cette photo ?</label>
+      <textarea id="gp-comment-input" class="gp-comment-input" rows="2" maxlength="500"
+                placeholder="« Celle-ci plutôt en noir et blanc », « peut-on la recadrer un peu ? »…"></textarea>
+      <p class="gp-comment-status" id="gp-comment-status" aria-live="polite"></p>
+    </div>
     <div class="gp-viewer-bar">
       <button type="button" class="gp-heart gp-viewer-heart" id="gp-viewer-heart"
               aria-label="Ajouter aux favoris" title="Ajouter aux favoris"></button>
+      <button type="button" class="gp-comment-toggle" id="gp-comment-toggle"
+              aria-label="Laisser une remarque" title="Laisser une remarque" aria-expanded="false"></button>
       <p class="gp-viewer-counter" id="gp-counter"></p>
     </div>
   </div>

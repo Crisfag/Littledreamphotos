@@ -72,7 +72,8 @@ async function listGalleries(env) {
   const { results } = await env.DB.prepare(
     `SELECT g.id, g.slug, g.title, g.client_name, g.expires_at, g.created_at,
             (SELECT COUNT(*) FROM photos p WHERE p.gallery_id = g.id) AS photo_count,
-            (SELECT COUNT(*) FROM photos p WHERE p.gallery_id = g.id AND p.selected = 1) AS selected_count
+            (SELECT COUNT(*) FROM photos p WHERE p.gallery_id = g.id AND p.selected = 1) AS selected_count,
+            (SELECT COUNT(*) FROM photos p WHERE p.gallery_id = g.id AND p.comment != '') AS comment_count
      FROM galleries g ORDER BY g.created_at DESC`
   ).all();
   return json({ galleries: results });
@@ -89,7 +90,7 @@ async function getGallery(env, slug) {
 
   const { results: photos } = await env.DB.prepare(
     `SELECT id, position, width, height, cols, rows, preview_width, preview_height,
-            forensic_id, selected, selected_at, created_at
+            forensic_id, selected, selected_at, comment, comment_at, created_at
      FROM photos WHERE gallery_id = ? ORDER BY position ASC, created_at ASC`
   )
     .bind(gallery.id)
