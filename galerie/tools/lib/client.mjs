@@ -3,22 +3,34 @@
 // navigateur : les identifiants et le jeton de session ne doivent circuler
 // que côté serveur.
 //
-// S'authentifie par compte photographe (e-mail + mot de passe), pas par un
-// jeton unique partagé : chaque compte ne voit et ne modifie que ses propres
-// galeries. La connexion se fait à la demande, au premier appel, et se
-// renouvelle automatiquement si la session a expiré entre-temps.
+// Deux façons de s'authentifier :
+//  - { email, password } : la CLI, qui possède le mot de passe. La connexion
+//    se fait à la demande, au premier appel, et se renouvelle automatiquement
+//    si la session a expiré entre-temps.
+//  - { token } : l'admin-server hébergé, qui a déjà obtenu ce jeton via le
+//    formulaire de connexion du visiteur et n'a jamais son mot de passe.
+//    Une session expirée remonte alors telle quelle (401) plutôt que d'être
+//    masquée par une tentative de reconnexion impossible.
 
 export class WorkerClient {
-  constructor({ api, email, password }) {
+  constructor({ api, email, password, token }) {
     if (!api) throw new Error("URL de l'API manquante (GALERIE_API)");
-    if (!email || !password) throw new Error("Identifiants manquants (GALERIE_EMAIL / GALERIE_PASSWORD)");
+    if (!token && (!email || !password)) {
+      throw new Error("Identifiants manquants : passez token, ou email + password (GALERIE_EMAIL / GALERIE_PASSWORD)");
+    }
     this.base = api.replace(/\/$/, "");
     this.email = email;
     this.password = password;
-    this.token = null;
+    this.token = token || null;
+    this.canRelogin = Boolean(email && password);
   }
 
   async login() {
+    if (!this.canRelogin) {
+      const err = new Error("Session expirée");
+      err.status = 401;
+      throw err;
+    }
     const response = await fetch(`${this.base}/api/auth/login`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -52,8 +64,9 @@ export class WorkerClient {
 
     let response = await send();
     // Session expirée en cours de route (le serveur d'admin peut tourner des
-    // heures) : on se reconnecte une fois et on rejoue la requête.
-    if (response.status === 401) {
+    // heures) : on se reconnecte une fois et on rejoue la requête — possible
+    // seulement si on a le mot de passe (mode email/password).
+    if (response.status === 401 && this.canRelogin) {
       await this.login();
       response = await send();
     }
@@ -65,6 +78,10 @@ export class WorkerClient {
       throw err;
     }
     return response.status === 204 ? null : response.json();
+  }
+
+  me() {
+    return this.request("GET", "/api/auth/me");
   }
 
   listGalleries() {
@@ -101,7 +118,7 @@ export class WorkerClient {
     let response = await fetch(`${this.base}/api/admin/tiles/${photoId}/${level}/${col}/${row}`, {
       headers: { authorization: `Bearer ${this.token}` },
     });
-    if (response.status === 401) {
+    if (response.status === 401 && this.canRelogin) {
       await this.login();
       response = await fetch(`${this.base}/api/admin/tiles/${photoId}/${level}/${col}/${row}`, {
         headers: { authorization: `Bearer ${this.token}` },

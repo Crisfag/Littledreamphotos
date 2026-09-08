@@ -10,8 +10,9 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%23b98a7a'/><text y='72' x='50' text-anchor='middle' font-size='60' font-family='Georgia'>H</text></svg>" />
 </head>
 <body>
-  <div class="ad-shell">
-    <header class="ad-topbar">
+  <!-- ============ Connexion ============ -->
+  <main class="ad-login-shell" id="ad-login" hidden>
+    <section class="ad-login-card">
       <div class="ad-brand">
         <span class="ad-brand-mark">H</span>
         <div>
@@ -19,7 +20,38 @@
           <p class="ad-brand-sub">Galeries protégées — administration</p>
         </div>
       </div>
-      <button type="button" class="ad-btn ad-btn-primary" id="ad-new-gallery">+ Nouvelle galerie</button>
+      <form id="ad-login-form" autocomplete="on">
+        <label class="ad-field">
+          <span>E-mail</span>
+          <input type="email" name="email" required autocomplete="username" />
+        </label>
+        <label class="ad-field">
+          <span>Mot de passe</span>
+          <input type="password" name="password" required autocomplete="current-password" />
+        </label>
+        <p class="ad-error" id="ad-login-error" hidden></p>
+        <button type="submit" class="ad-btn ad-btn-primary" id="ad-login-submit">Se connecter</button>
+      </form>
+      <p class="ad-hint">
+        Pas encore de compte ? Créez-en un avec <code>node signup.mjs</code>
+        (voir le README).
+      </p>
+    </section>
+  </main>
+
+  <div class="ad-shell" id="ad-app" hidden>
+    <header class="ad-topbar">
+      <div class="ad-brand">
+        <span class="ad-brand-mark">H</span>
+        <div>
+          <p class="ad-brand-name">Holypixx</p>
+          <p class="ad-brand-sub" id="ad-current-account">Galeries protégées — administration</p>
+        </div>
+      </div>
+      <div class="ad-topbar-actions">
+        <button type="button" class="ad-btn ad-btn-primary" id="ad-new-gallery">+ Nouvelle galerie</button>
+        <button type="button" class="ad-btn" id="ad-logout">Se déconnecter</button>
+      </div>
     </header>
 
     <main id="ad-view">

@@ -1,11 +1,10 @@
 // Vérification de l'interface d'administration dans un vrai navigateur,
-// contre un admin-server.mjs déjà lancé sur un Worker local.
+// contre un admin-server.mjs déjà lancé sur un Worker local. Le test crée
+// ses propres comptes photographes (via le Worker directement) et se
+// connecte depuis le formulaire, comme le ferait un vrai visiteur.
 //
 //   npx wrangler dev --local --port 8788                     (depuis worker/)
-//   node signup.mjs --api http://127.0.0.1:8788 \
-//     --email test@test.invalid --password mot-de-passe-1234 (une seule fois, depuis tools/)
-//   GALERIE_API=http://127.0.0.1:8788 GALERIE_EMAIL=test@test.invalid \
-//     GALERIE_PASSWORD=mot-de-passe-1234 GALERIE_FORENSIC_KEY=… \
+//   GALERIE_API=http://127.0.0.1:8788 GALERIE_FORENSIC_KEY=… \
 //     node admin-server.mjs                                  (depuis tools/)
 //   node tests/admin.test.mjs
 
@@ -13,8 +12,10 @@ import { chromium } from "playwright";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createTestAccount } from "./lib/testAccount.mjs";
 
 const BASE = process.env.ADMIN_BASE || "http://127.0.0.1:4000";
+const API = process.env.GALERIE_API || "http://127.0.0.1:8788";
 const EXECUTABLE = process.env.CHROMIUM_PATH || undefined;
 // tests/admin.test.mjs → tools → galerie → Littledreamphotos (racine du dépôt)
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
@@ -35,8 +36,19 @@ const page = await browser.newPage({ viewport: { width: 1200, height: 900 } });
 const exceptions = [];
 page.on("pageerror", (err) => exceptions.push(String(err)));
 
-await page.goto(BASE, { waitUntil: "networkidle" });
-check("le tableau de bord se charge", await page.isVisible("#ad-new-gallery"));
+/* ---------- Connexion depuis le formulaire ---------- */
+
+const account = await createTestAccount(API, "admin-ui");
+
+await page.goto(BASE, { waitUntil: "domcontentloaded" });
+await page.waitForSelector("#ad-login-form", { timeout: 10000 });
+check("l'écran de connexion s'affiche avant tout", await page.isVisible("#ad-login-form"));
+
+await page.fill('#ad-login-form [name="email"]', account.email);
+await page.fill('#ad-login-form [name="password"]', account.password);
+await page.click("#ad-login-submit");
+await page.waitForSelector("#ad-new-gallery", { timeout: 10000 });
+check("le tableau de bord se charge après connexion", await page.isVisible("#ad-new-gallery"));
 
 /* ---------- Création ---------- */
 
@@ -112,6 +124,26 @@ check("le compteur de photos est à jour",
 
 await page.screenshot({ path: process.env.SHOTS ? `${process.env.SHOTS}/admin-detail.png` : "admin-detail.png", fullPage: true });
 
+/* ---------- Isolation entre comptes, vue depuis l'interface elle-même ---------- */
+// Pas seulement l'API (déjà couvert par worker/tests/api.test.mjs) : un
+// second compte, connecté dans un second contexte navigateur (cookies
+// isolés, comme deux personnes différentes), ne doit jamais voir cette
+// galerie dans son propre tableau de bord.
+
+const peerAccount = await createTestAccount(API, "admin-ui-peer");
+const peerContext = await browser.newContext();
+const peerPage = await peerContext.newPage();
+await peerPage.goto(BASE, { waitUntil: "domcontentloaded" });
+await peerPage.waitForSelector("#ad-login-form", { timeout: 10000 });
+await peerPage.fill('#ad-login-form [name="email"]', peerAccount.email);
+await peerPage.fill('#ad-login-form [name="password"]', peerAccount.password);
+await peerPage.click("#ad-login-submit");
+await peerPage.waitForSelector(".ad-empty, .ad-grid", { timeout: 10000 });
+const peerSeesForeignGallery = await peerPage.locator(`.ad-card:has-text("${title}")`).count();
+check("un compte ne voit jamais les galeries d'un autre compte dans son tableau de bord",
+      peerSeesForeignGallery === 0);
+await peerContext.close();
+
 /* ---------- Le lien créé fonctionne vraiment côté client ---------- */
 
 const gallerySlug = new URL(link, "http://x").search.replace("?g=", "");
@@ -129,7 +161,8 @@ check("la photo supprimée disparaît de la grille", true);
 
 /* ---------- Le journal se recharge après un accès client ---------- */
 
-await page.reload({ waitUntil: "networkidle" });
+await page.reload({ waitUntil: "domcontentloaded" });
+await page.waitForSelector("#ad-back", { timeout: 10000 });
 const logRowsBefore = await page.locator(".ad-table tbody tr").count();
 check("le journal est affiché (vide au départ)", logRowsBefore === 0 || logRowsBefore > 0, `${logRowsBefore} ligne(s)`);
 
@@ -141,6 +174,17 @@ await page.click("#ad-confirm-ok");
 await page.waitForSelector(".ad-grid, .ad-empty", { timeout: 5000 });
 const stillThere = await page.locator(`.ad-card:has-text("${title}")`).count();
 check("la galerie supprimée disparaît de la liste", stillThere === 0);
+
+/* ---------- Déconnexion ---------- */
+
+await page.click("#ad-logout");
+await page.waitForSelector("#ad-login-form", { timeout: 5000 });
+check("la déconnexion ramène à l'écran de connexion", await page.isVisible("#ad-login-form"));
+
+await page.reload({ waitUntil: "domcontentloaded" });
+await page.waitForSelector("#ad-login-form", { timeout: 10000 });
+check("après déconnexion, recharger la page ne rouvre pas le tableau de bord",
+      await page.isVisible("#ad-login-form"));
 
 check("aucune exception JavaScript", exceptions.length === 0, exceptions.join(" | "));
 

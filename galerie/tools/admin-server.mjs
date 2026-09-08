@@ -4,11 +4,13 @@
 //   node admin-server.mjs
 //   → http://127.0.0.1:4000
 //
-// Tourne en local, sur votre machine : c'est elle qui a accès au jeton
-// d'administration et à la clé forensique — le navigateur ne les voit jamais,
-// il ne parle qu'à ce serveur sur la boucle locale (127.0.0.1). Le traitement
-// des photos (sharp) a besoin d'un vrai processus Node ; c'est pour ça que
-// cette interface tourne chez vous plutôt que d'être hébergée quelque part.
+// Tourne sur un vrai processus Node (traitement des photos avec sharp, que
+// Cloudflare Workers ne sait pas exécuter). En local, elle n'écoute que sur
+// la boucle 127.0.0.1 — seule votre machine peut la joindre. Hébergée,
+// plusieurs photographes peuvent l'utiliser : chacun se connecte avec son
+// propre compte, dans le navigateur ; le jeton de session voyage dans un
+// cookie httpOnly que le JavaScript de la page ne voit jamais, et chaque
+// requête n'agit qu'au nom du compte qui l'a envoyée.
 //
 // Réutilise exactement le code de prepare.mjs (lib/pipeline.mjs, lib/client.mjs)
 // : une galerie créée depuis le navigateur ou depuis la ligne de commande
@@ -25,41 +27,38 @@ import { WorkerClient } from "./lib/client.mjs";
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = join(ROOT, "admin");
-const HOST = "127.0.0.1"; // jamais 0.0.0.0 : ce serveur porte des secrets d'administration
+// 127.0.0.1 par défaut : c'est ce qui rend l'usage local sûr sans rien
+// configurer. Une fois hébergée derrière un vrai reverse proxy (Fly.io,
+// Railway…), GALERIE_ADMIN_HOST=0.0.0.0 rend le service joignable — la
+// protection vient alors des comptes/sessions, plus de la boucle locale.
+const HOST = process.env.GALERIE_ADMIN_HOST || "127.0.0.1";
 const PORT = Number(process.env.GALERIE_ADMIN_PORT || 4000);
 const MAX_UPLOAD_BYTES = 60 * 1024 * 1024;
+const SESSION_COOKIE = "galerie_session";
+const SESSION_MAX_AGE = 30 * 24 * 60 * 60; // aligné sur la durée du jeton côté Worker
 
 const config = {
   api: process.env.GALERIE_API || "",
-  email: process.env.GALERIE_EMAIL || "",
-  password: process.env.GALERIE_PASSWORD || "",
   forensicKey: process.env.GALERIE_FORENSIC_KEY || "",
-  brand: process.env.GALERIE_BRAND || "Little Dream Photos",
+  brand: process.env.GALERIE_BRAND || "",
   // URL publique de web/galerie.html, pour reconstituer le lien complet à
   // donner au client. Sans elle, l'interface affiche seulement « ?g=slug ».
   site: (process.env.GALERIE_SITE || "").replace(/\/$/, ""),
 };
 
-const ENV_NAMES = {
-  api: "GALERIE_API",
-  email: "GALERIE_EMAIL",
-  password: "GALERIE_PASSWORD",
-  forensicKey: "GALERIE_FORENSIC_KEY",
-};
+const ENV_NAMES = { api: "GALERIE_API", forensicKey: "GALERIE_FORENSIC_KEY" };
 const missing = Object.keys(ENV_NAMES).filter((k) => !config[k]);
 if (missing.length) {
   console.error(`Configuration manquante : ${missing.map((k) => ENV_NAMES[k]).join(", ")}`);
   console.error(
     "\nCes variables d'environnement sont requises (voir README.md « Installation ») :\n" +
     "  export GALERIE_API=https://galerie-protegee.votre-sous-domaine.workers.dev\n" +
-    "  export GALERIE_EMAIL=…       (compte créé avec « node signup.mjs »)\n" +
-    "  export GALERIE_PASSWORD=…\n" +
-    "  export GALERIE_FORENSIC_KEY=…\n"
+    "  export GALERIE_FORENSIC_KEY=…\n" +
+    "\nChaque photographe se connecte ensuite depuis le navigateur avec son\n" +
+    "propre compte (créé une fois avec « node signup.mjs »).\n"
   );
   process.exit(1);
 }
-
-const client = new WorkerClient(config);
 
 /* ---------- Utilitaires ---------- */
 
@@ -91,7 +90,7 @@ function generatePassword() {
 }
 
 // Slug demandé, ou dérivé du titre ; en cas de collision, on suffixe -2, -3…
-async function uniqueSlug(requested, title) {
+async function uniqueSlug(client, requested, title) {
   const base = slugify(requested || title || "galerie") || "galerie";
   const padded = base.length < 2 ? `${base}xx` : base;
   const { galleries } = await client.listGalleries();
@@ -147,6 +146,58 @@ async function serveStatic(req, res, pathname) {
   }
 }
 
+/* ---------- Sessions ---------- */
+// Le jeton renvoyé par le Worker EST la session : signé par le Worker,
+// vérifié par le Worker à chaque appel. Ce serveur n'a besoin d'aucun état
+// à lui — juste de le transporter dans un cookie que le JavaScript de la
+// page ne peut pas lire (HttpOnly), pour qu'une faille XSS dans l'interface
+// ne suffise pas à voler la session.
+
+function parseCookies(req) {
+  const header = req.headers.cookie || "";
+  const out = {};
+  for (const part of header.split(";")) {
+    const eq = part.indexOf("=");
+    if (eq === -1) continue;
+    const key = part.slice(0, eq).trim();
+    if (key) out[key] = decodeURIComponent(part.slice(eq + 1).trim());
+  }
+  return out;
+}
+
+function isSecureRequest(req) {
+  return req.headers["x-forwarded-proto"] === "https" || process.env.GALERIE_ADMIN_FORCE_SECURE_COOKIES === "1";
+}
+
+function setSessionCookie(req, res, token, maxAgeSeconds) {
+  const attrs = [
+    `${SESSION_COOKIE}=${encodeURIComponent(token)}`,
+    "Path=/",
+    "HttpOnly",
+    "SameSite=Lax",
+    `Max-Age=${maxAgeSeconds}`,
+  ];
+  if (isSecureRequest(req)) attrs.push("Secure");
+  res.setHeader("set-cookie", attrs.join("; "));
+}
+
+function clearSessionCookie(req, res) {
+  const attrs = [`${SESSION_COOKIE}=`, "Path=/", "HttpOnly", "SameSite=Lax", "Max-Age=0"];
+  if (isSecureRequest(req)) attrs.push("Secure");
+  res.setHeader("set-cookie", attrs.join("; "));
+}
+
+// Renvoie un WorkerClient authentifié au nom du visiteur, ou répond 401 et
+// renvoie null. Toutes les routes protégées démarrent par cet appel.
+async function requireSession(req, res) {
+  const token = parseCookies(req)[SESSION_COOKIE];
+  if (!token) {
+    json(res, 401, { error: "Non connecté" });
+    return null;
+  }
+  return new WorkerClient({ api: config.api, token });
+}
+
 /* ---------- Traduction des erreurs du Worker ---------- */
 
 function relayError(res, err, fallback) {
@@ -161,20 +212,76 @@ function relayError(res, err, fallback) {
   json(res, status, { error: message });
 }
 
-/* ---------- Routes ---------- */
+/* ---------- Authentification ---------- */
+
+async function handleAuth(req, res, parts) {
+  if (parts.length === 2 && parts[1] === "login" && req.method === "POST") {
+    let body;
+    try {
+      body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
+    } catch {
+      return json(res, 400, { error: "Requête invalide" });
+    }
+    const email = String(body.email || "").trim();
+    const password = String(body.password || "");
+    if (!email || !password) return json(res, 400, { error: "E-mail et mot de passe requis" });
+
+    let loginRes;
+    try {
+      loginRes = await fetch(`${config.api}/api/auth/login`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+    } catch {
+      return json(res, 502, { error: "Worker injoignable" });
+    }
+    const data = await loginRes.json().catch(() => ({}));
+    if (!loginRes.ok) return json(res, loginRes.status, { error: data.error || "Connexion refusée" });
+
+    setSessionCookie(req, res, data.token, Math.min(data.expiresIn || SESSION_MAX_AGE, SESSION_MAX_AGE));
+    return json(res, 200, { photographer: data.photographer });
+  }
+
+  if (parts.length === 2 && parts[1] === "logout" && req.method === "POST") {
+    clearSessionCookie(req, res);
+    return json(res, 200, { ok: true });
+  }
+
+  if (parts.length === 2 && parts[1] === "me" && req.method === "GET") {
+    const client = await requireSession(req, res);
+    if (!client) return;
+    try {
+      const { photographer } = await client.me();
+      return json(res, 200, { photographer });
+    } catch (err) {
+      clearSessionCookie(req, res);
+      return relayError(res, err, "Session invalide");
+    }
+  }
+
+  return json(res, 404, { error: "Route inconnue" });
+}
+
+/* ---------- Routes protégées ---------- */
 
 async function handleApi(req, res, url) {
   const parts = url.pathname.split("/").filter(Boolean); // local, galleries, …
 
   if (parts.length === 1 && parts[0] === "config" && req.method === "GET") {
     return json(res, 200, {
-      brand: config.brand, site: config.site, api: config.api,
+      site: config.site, api: config.api,
       previewCols: PREVIEW_COLS, previewRows: PREVIEW_ROWS,
     });
   }
 
-  // GET /local/tiles/:photoId/:level/:col/:row — relais vers le Worker, sans
-  // jamais exposer le jeton d'administration au navigateur.
+  if (parts[0] === "auth") return handleAuth(req, res, parts);
+
+  // Tout ce qui suit agit au nom d'un compte : session obligatoire.
+  const client = await requireSession(req, res);
+  if (!client) return;
+
+  // GET /local/tiles/:photoId/:level/:col/:row — relais vers le Worker.
   if (parts[0] === "tiles" && parts.length === 5 && req.method === "GET") {
     try {
       const upstream = await client.getTileResponse(parts[1], Number(parts[2]), Number(parts[3]), Number(parts[4]));
@@ -200,7 +307,7 @@ async function handleApi(req, res, url) {
       const title = String(body.title || "").trim();
       if (!title) return json(res, 400, { error: "Le titre est requis" });
 
-      const slug = await uniqueSlug(body.slug, title);
+      const slug = await uniqueSlug(client, body.slug, title);
       const password = String(body.password || "").trim() || generatePassword();
       if (password.length < 8) return json(res, 400, { error: "Mot de passe trop court (8 caractères minimum)" });
 
@@ -211,7 +318,8 @@ async function handleApi(req, res, url) {
         return json(res, 400, { error: "Date d'expiration illisible" });
       }
 
-      const watermarkText = [config.brand, String(body.clientName || "").trim()].filter(Boolean).join("  ·  ");
+      const brand = await brandFor(client);
+      const watermarkText = [brand, String(body.clientName || "").trim()].filter(Boolean).join("  ·  ");
       try {
         const created = await client.createGallery({
           slug, title, clientName: body.clientName || "", password, watermarkText, expiresAt,
@@ -273,7 +381,7 @@ async function handleApi(req, res, url) {
     const file = form.get("file");
     if (!file || typeof file.arrayBuffer !== "function") return json(res, 400, { error: "Aucun fichier reçu" });
     const position = Number(form.get("position")) || galleryInfo.photos.length;
-    const watermarkText = galleryInfo.gallery.watermark_text || config.brand;
+    const watermarkText = galleryInfo.gallery.watermark_text || (await brandFor(client));
 
     try {
       const input = Buffer.from(await file.arrayBuffer());
@@ -310,6 +418,21 @@ async function handleApi(req, res, url) {
   }
 
   return json(res, 404, { error: "Route inconnue" });
+}
+
+// Marque par défaut du filigrane : celle du studio du compte connecté, avec
+// GALERIE_BRAND comme filet de secours (utile en développement local).
+const brandCache = new Map(); // jeton -> studioName, pour ne pas rappeler /me à chaque photo
+async function brandFor(client) {
+  if (brandCache.has(client.token)) return brandCache.get(client.token) || config.brand;
+  try {
+    const { photographer } = await client.me();
+    const brand = photographer.studioName || config.brand;
+    brandCache.set(client.token, brand);
+    return brand;
+  } catch {
+    return config.brand;
+  }
 }
 
 function linkFor(slug) {

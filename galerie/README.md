@@ -102,10 +102,12 @@ autre photographe. C'est vérifié explicitement par les tests (voir *Fiabilité
 mesurée*), pas seulement supposé par construction.
 
 Aujourd'hui, la préparation des photos (traitement, filigrane, envoi) se fait
-encore depuis l'ordinateur du photographe — `admin-server.mjs` ou
-`prepare.mjs`, tous deux authentifiés par ce même compte. Le compte lui-même
-est donc déjà celui qui portera un jour un vrai tableau de bord en ligne, sans
-rien à installer (voir *Ce qu'il reste à faire*).
+encore depuis l'ordinateur du photographe : `admin-server.mjs`, où chaque
+photographe se connecte avec son propre compte depuis le navigateur (comme
+il le ferait sur un vrai site), ou `prepare.mjs` en ligne de commande, qui
+utilise ce même compte via `GALERIE_EMAIL`/`GALERIE_PASSWORD`. Le compte est
+donc déjà celui qui servira le jour où cette interface sera hébergée en
+ligne plutôt que lancée à la main (voir *Ce qu'il reste à faire*).
 
 ---
 
@@ -157,6 +159,8 @@ export GALERIE_API=https://galerie-protegee.votre-sous-domaine.workers.dev
 # Créez votre compte photographe une seule fois :
 node signup.mjs --email vous@exemple.com --password "un-mot-de-passe-solide" --studio "Mon Studio"
 
+# GALERIE_EMAIL / GALERIE_PASSWORD : uniquement pour la ligne de commande
+# (prepare.mjs, detect.mjs), qui n'a pas de navigateur pour se connecter.
 export GALERIE_EMAIL=vous@exemple.com
 export GALERIE_PASSWORD=…
 export GALERIE_FORENSIC_KEY=$(openssl rand -hex 32)
@@ -165,6 +169,10 @@ export GALERIE_FORENSIC_KEY=$(openssl rand -hex 32)
 # affiche un lien complet à donner au client plutôt qu'un simple « ?g=… ».
 export GALERIE_SITE=https://www.littledreamphotos.com/galerie.html
 ```
+
+> **`admin-server.mjs` n'a besoin ni de `GALERIE_EMAIL` ni de
+> `GALERIE_PASSWORD`** : chaque photographe se connecte depuis le
+> formulaire, dans le navigateur, avec son propre compte.
 
 > **La clé forensique se génère une fois et ne change jamais.** Sans elle,
 > aucune fuite passée n'est traçable. Conservez-la comme un mot de passe
@@ -180,6 +188,13 @@ export GALERIE_SITE=https://www.littledreamphotos.com/galerie.html
 node admin-server.mjs
 # → http://127.0.0.1:4000
 ```
+
+Contrairement aux autres réglages, aucun compte n'est à configurer ici par
+variable d'environnement : chaque photographe se connecte depuis la page,
+avec l'e-mail et le mot de passe créés via `signup.mjs`, et ne voit que ses
+propres galeries. C'est ce qui rend cette même interface utilisable telle
+quelle si elle est un jour hébergée pour plusieurs photographes — l'usage
+local sur `127.0.0.1` n'est qu'un cas particulier, pas un système à part.
 
 - **Nouvelle galerie** : titre, client, mot de passe (généré si laissé vide),
   date d'expiration. Le mot de passe n'est affiché qu'une seule fois, à la
@@ -307,10 +322,13 @@ galeries d'un même compte, authentification client, expiration, limitation
 des tentatives de mot de passe, suppression en cascade (galerie et photo
 isolée), sélection et commentaire posés et retirés, journal sans IP en clair.
 
-**Interface d'administration** — 13 vérifications dans un vrai navigateur,
-contre le vrai Worker local : création d'une galerie, glisser-déposer de
-photos avec suivi de progression, vraies vignettes affichées, suppression
-d'une photo et d'une galerie.
+**Interface d'administration** — 17 vérifications dans un vrai navigateur,
+contre le vrai Worker local : connexion depuis le formulaire (pas de session
+présupposée), création d'une galerie, glisser-déposer de photos avec suivi
+de progression, vraies vignettes affichées, suppression d'une photo et d'une
+galerie, déconnexion qui tient après un rechargement de page — et un second
+compte, connecté dans un second contexte navigateur, qui ne voit jamais les
+galeries du premier dans son propre tableau de bord.
 
 **Sélection client** — 15 vérifications dans un vrai navigateur, contre le
 vrai Worker local (galerie créée par le test lui-même, nettoyée à la fin) :
@@ -345,15 +363,14 @@ BASE=http://127.0.0.1:8788 node tests/api.test.mjs
 
 ## Ce qu'il reste à faire
 
-- **Tableau de bord en ligne** — les comptes photographes existent déjà côté
-  Worker (inscription, connexion, cloisonnement des données), mais la seule
-  interface qui les utilise aujourd'hui est locale (`admin-server.mjs`, sur
-  la machine du photographe — nécessaire pour `sharp`, que Cloudflare
-  Workers ne sait pas exécuter). L'étape suivante : un vrai site où un
-  photographe se connecte, voit toutes ses galeries, en crée de nouvelles et
-  y envoie des photos depuis son navigateur, sans rien installer. Ça demande
-  un petit service hébergé à part (conteneur, pas Cloudflare Workers) pour
-  le traitement des photos.
+- **Héberger l'admin pour de vrai** — l'interface elle-même est déjà prête
+  pour plusieurs photographes : chacun se connecte depuis le navigateur avec
+  son propre compte (cookie de session, pas de jeton partagé), et
+  `admin-server.mjs` accepte déjà `GALERIE_ADMIN_HOST=0.0.0.0` pour écouter
+  au-delà de la boucle locale. Ce qui manque : un vrai déploiement (un
+  conteneur — Fly.io, Railway… — pas Cloudflare Workers, qui ne sait pas
+  exécuter `sharp`) et une adresse publique, pour qu'un photographe puisse
+  s'en servir sans installer Node ni ouvrir un terminal.
 - **Site public + inscription en libre-service** — page de présentation,
   création de compte sans intervention manuelle.
 - **Volet légal** — conditions d'utilisation et politique de confidentialité

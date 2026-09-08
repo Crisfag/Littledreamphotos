@@ -24,7 +24,28 @@
   };
 
   var state = { view: "list", galleries: [], current: null, config: { previewCols: 2, previewRows: 2 } };
-  var el = { view: document.getElementById("ad-view"), toast: document.getElementById("ad-toast") };
+  var el = {
+    view: document.getElementById("ad-view"),
+    toast: document.getElementById("ad-toast"),
+    login: document.getElementById("ad-login"),
+    app: document.getElementById("ad-app"),
+    account: document.getElementById("ad-current-account"),
+  };
+
+  /* ---------- Session ---------- */
+
+  function showLogin() {
+    el.app.hidden = true;
+    el.login.hidden = false;
+  }
+
+  function showApp(photographer) {
+    el.login.hidden = true;
+    el.app.hidden = false;
+    if (el.account) {
+      el.account.textContent = (photographer.studioName || photographer.email) + " · Galeries protégées";
+    }
+  }
 
   /* ---------- Requêtes ---------- */
 
@@ -34,6 +55,13 @@
       headers: body ? { "content-type": "application/json" } : undefined,
       body: body ? JSON.stringify(body) : undefined,
     });
+    // La session a expiré, ou a été révoquée entre-temps : plutôt que de
+    // laisser chaque appelant deviner pourquoi sa requête échoue, on montre
+    // l'écran de connexion directement.
+    if (response.status === 401) {
+      showLogin();
+      throw new Error("Session expirée — reconnectez-vous.");
+    }
     var data = null;
     try {
       data = await response.json();
@@ -528,6 +556,46 @@
     }
   });
 
+  /* ---------- Connexion ---------- */
+
+  document.getElementById("ad-login-form").addEventListener("submit", async function (event) {
+    event.preventDefault();
+    var form = event.target;
+    var errorBox = document.getElementById("ad-login-error");
+    var submitBtn = document.getElementById("ad-login-submit");
+    errorBox.hidden = true;
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Connexion…";
+
+    try {
+      var response = await fetch("/local/auth/login", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: form.email.value.trim(), password: form.password.value }),
+      });
+      var data = await response.json().catch(function () { return {}; });
+      if (!response.ok) throw new Error(data.error || "Connexion refusée");
+      form.reset();
+      showApp(data.photographer);
+      bootstrap();
+    } catch (err) {
+      errorBox.textContent = err.message;
+      errorBox.hidden = false;
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Se connecter";
+    }
+  });
+
+  document.getElementById("ad-logout").addEventListener("click", async function () {
+    try {
+      await fetch("/local/auth/logout", { method: "POST" });
+    } catch (err) {
+      /* la déconnexion locale (écran de connexion) reste utile même si l'appel échoue */
+    }
+    showLogin();
+  });
+
   /* ---------- Démarrage et navigation ---------- */
 
   function routeFromHash() {
@@ -537,9 +605,23 @@
   }
 
   window.addEventListener("popstate", routeFromHash);
-  api("GET", "/config").then(function (cfg) {
-    state.config = cfg;
-  }).catch(function () {
-    /* la vue liste ne dépend pas de la configuration ; on continue avec les valeurs par défaut */
-  }).then(routeFromHash);
+
+  function bootstrap() {
+    return api("GET", "/config").then(function (cfg) {
+      state.config = cfg;
+    }).catch(function () {
+      /* la vue liste ne dépend pas de la configuration ; on continue avec les valeurs par défaut */
+    }).then(routeFromHash);
+  }
+
+  fetch("/local/auth/me").then(function (response) {
+    if (!response.ok) {
+      showLogin();
+      return;
+    }
+    return response.json().then(function (data) {
+      showApp(data.photographer);
+      bootstrap();
+    });
+  }).catch(showLogin);
 })();
