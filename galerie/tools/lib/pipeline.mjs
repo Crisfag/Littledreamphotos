@@ -10,6 +10,14 @@ import { embed, forensicIdFor } from "./forensic.mjs";
 import { watermarkSvg } from "./watermark.mjs";
 import { gridFor, tileRect, LEVEL_PREVIEW, LEVEL_FULL, PREVIEW_MAX, PREVIEW_COLS, PREVIEW_ROWS } from "./tiles.mjs";
 
+// Par défaut, libvips (le moteur de sharp) met en cache des résultats
+// intermédiaires et travaille sur plusieurs threads — utile sur une machine
+// de développement, coûteux en mémoire sur un petit conteneur hébergé (voir
+// GALERIE_PROCESS_CONCURRENCY dans admin-server.mjs pour l'autre moitié de
+// cette limitation, côté nombre de photos traitées en parallèle).
+sharp.cache(false);
+sharp.concurrency(1);
+
 export const DEFAULTS = {
   maxWidth: 1600,
   quality: 82,

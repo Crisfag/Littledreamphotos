@@ -39,6 +39,32 @@ const MAX_UPLOAD_BYTES = 60 * 1024 * 1024;
 const SESSION_COOKIE = "galerie_session";
 const SESSION_MAX_AGE = 30 * 24 * 60 * 60; // aligné sur la durée du jeton côté Worker
 
+// Le navigateur peut envoyer plusieurs photos en parallèle (voir
+// UPLOAD_CONCURRENCY dans admin.js), mais le traitement d'une photo (sharp)
+// est gourmand en mémoire. Sur un petit conteneur hébergé, en traiter
+// plusieurs à la fois peut faire planter le processus (constaté : échecs
+// 502 sous Render, offre gratuite). On sérialise donc le traitement lui-même
+// ici, indépendamment du nombre de requêtes reçues en même temps — 1 par
+// défaut, à monter avec GALERIE_PROCESS_CONCURRENCY si l'hébergement le permet.
+const PROCESS_CONCURRENCY = Math.max(1, Number(process.env.GALERIE_PROCESS_CONCURRENCY) || 1);
+let activeProcessing = 0;
+const processingQueue = [];
+
+function withProcessingSlot(fn) {
+  return new Promise((resolve, reject) => {
+    const run = () => {
+      activeProcessing++;
+      fn().then(resolve, reject).finally(() => {
+        activeProcessing--;
+        const next = processingQueue.shift();
+        if (next) next();
+      });
+    };
+    if (activeProcessing < PROCESS_CONCURRENCY) run();
+    else processingQueue.push(run);
+  });
+}
+
 const config = {
   api: process.env.GALERIE_API || "",
   forensicKey: process.env.GALERIE_FORENSIC_KEY || "",
@@ -387,15 +413,17 @@ async function handleApi(req, res, url) {
 
     try {
       const input = Buffer.from(await file.arrayBuffer());
-      const { photo, tiles, stats } = await processPhoto(input, {
-        galleryId: galleryInfo.gallery.id,
-        forensicKey: config.forensicKey,
-        watermarkText,
-        maxWidth: Number(form.get("maxWidth")) || DEFAULTS.maxWidth,
-        quality: Number(form.get("quality")) || DEFAULTS.quality,
-        opacity: Number(form.get("opacity")) || DEFAULTS.opacity,
-        position,
-      });
+      const { photo, tiles, stats } = await withProcessingSlot(() =>
+        processPhoto(input, {
+          galleryId: galleryInfo.gallery.id,
+          forensicKey: config.forensicKey,
+          watermarkText,
+          maxWidth: Number(form.get("maxWidth")) || DEFAULTS.maxWidth,
+          quality: Number(form.get("quality")) || DEFAULTS.quality,
+          opacity: Number(form.get("opacity")) || DEFAULTS.opacity,
+          position,
+        })
+      );
 
       await client.addPhoto(slug, photo);
       for (const tile of tiles) {
