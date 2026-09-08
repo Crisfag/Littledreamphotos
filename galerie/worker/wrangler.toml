@@ -21,5 +21,5 @@ binding = "TILES"
 bucket_name = "galerie-tuiles"
 
 # Secrets (jamais dans ce fichier) :
-#   npx wrangler secret put ADMIN_TOKEN
-#   npx wrangler secret put TOKEN_SECRET
+#   npx wrangler secret put AUTH_SECRET    (sessions de compte photographe)
+#   npx wrangler secret put TOKEN_SECRET   (sessions client d'une galerie)

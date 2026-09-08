@@ -10,11 +10,13 @@
 import sharp from "sharp";
 import { readdir, readFile } from "node:fs/promises";
 import { identify, isMatch, MATCH_MIN_SNR, MATCH_MIN_BITS } from "./lib/forensic.mjs";
+import { WorkerClient } from "./lib/client.mjs";
 
 function parseArgs(argv) {
   const options = {
     api: process.env.GALERIE_API || "",
-    adminToken: process.env.GALERIE_ADMIN_TOKEN || "",
+    email: process.env.GALERIE_EMAIL || "",
+    password: process.env.GALERIE_PASSWORD || "",
     forensicKey: process.env.GALERIE_FORENSIC_KEY || "",
     files: [],
   };
@@ -29,15 +31,13 @@ function parseArgs(argv) {
   return options;
 }
 
-// Empreintes connues : depuis le Worker si on a le jeton, sinon depuis les
-// fichiers galerie-*.json laissés par prepare.mjs.
+// Empreintes connues : depuis le Worker si on a des identifiants, sinon
+// depuis les fichiers galerie-*.json laissés par prepare.mjs. Ne remonte que
+// les empreintes de VOS galeries — c'est cloisonné par compte côté Worker.
 async function loadPrints(options) {
-  if (options.api && options.adminToken) {
-    const response = await fetch(`${options.api.replace(/\/$/, "")}/api/admin/forensic`, {
-      headers: { authorization: `Bearer ${options.adminToken}` },
-    });
-    if (!response.ok) throw new Error(`Lecture des empreintes : ${response.status}`);
-    const { prints } = await response.json();
+  if (options.api && options.email && options.password) {
+    const client = new WorkerClient(options);
+    const { prints } = await client.forensicPrints();
     return prints.map((p) => ({
       id: Number(p.forensic_id),
       slug: p.slug,
@@ -79,7 +79,8 @@ Identifier l'origine d'une photo qui a fuité.
             largeurs connues des galeries sont essayées)
 
 Variables d'environnement : GALERIE_FORENSIC_KEY (obligatoire),
-GALERIE_API et GALERIE_ADMIN_TOKEN (sinon lecture des galerie-*.json locaux).
+GALERIE_API, GALERIE_EMAIL et GALERIE_PASSWORD (sinon lecture des
+galerie-*.json locaux).
 `);
     process.exit(options.help ? 0 : 1);
   }

@@ -93,6 +93,20 @@ Et **laisser une remarque photo par photo** — « celle-ci plutôt en noir et
 blanc », « peut-on la recadrer un peu ? » — depuis la visionneuse, sauvegardée
 automatiquement pendant la frappe (pas de bouton « valider » à chercher).
 
+### Comptes photographes
+
+La plateforme est pensée pour plusieurs photographes, chacun avec son propre
+compte (e-mail + mot de passe). Chaque compte ne voit, ne modifie et ne peut
+même deviner l'existence que de ses propres galeries — jamais celles d'un
+autre photographe. C'est vérifié explicitement par les tests (voir *Fiabilité
+mesurée*), pas seulement supposé par construction.
+
+Aujourd'hui, la préparation des photos (traitement, filigrane, envoi) se fait
+encore depuis l'ordinateur du photographe — `admin-server.mjs` ou
+`prepare.mjs`, tous deux authentifiés par ce même compte. Le compte lui-même
+est donc déjà celui qui portera un jour un vrai tableau de bord en ligne, sans
+rien à installer (voir *Ce qu'il reste à faire*).
+
 ---
 
 ## Installation
@@ -108,8 +122,10 @@ npx wrangler d1 create galerie-protegee     # recopiez l'identifiant dans wrangl
 npx wrangler r2 bucket create galerie-tuiles
 npm run db:init
 
-# Jeton d'administration et clé de signature des sessions
-npx wrangler secret put ADMIN_TOKEN         # openssl rand -hex 32
+# Clés de signature des sessions : comptes photographes, et sessions client
+# d'une galerie. Deux clés distinctes, pour qu'un jeton de l'une ne puisse
+# jamais être rejoué comme jeton de l'autre.
+npx wrangler secret put AUTH_SECRET         # openssl rand -hex 32
 npx wrangler secret put TOKEN_SECRET        # openssl rand -hex 32
 
 npm run deploy
@@ -137,7 +153,12 @@ cd tools
 npm install
 
 export GALERIE_API=https://galerie-protegee.votre-sous-domaine.workers.dev
-export GALERIE_ADMIN_TOKEN=…
+
+# Créez votre compte photographe une seule fois :
+node signup.mjs --email vous@exemple.com --password "un-mot-de-passe-solide" --studio "Mon Studio"
+
+export GALERIE_EMAIL=vous@exemple.com
+export GALERIE_PASSWORD=…
 export GALERIE_FORENSIC_KEY=$(openssl rand -hex 32)
 
 # Optionnel : adresse publique de web/galerie.html, pour que l'interface
@@ -225,7 +246,11 @@ node detect.mjs capture-trouvee-sur-instagram.jpg
 ### Consulter le journal d'accès
 
 ```bash
-curl -H "Authorization: Bearer $GALERIE_ADMIN_TOKEN" \
+TOKEN=$(curl -s -X POST "$GALERIE_API/api/auth/login" \
+  -H "content-type: application/json" \
+  -d "{\"email\":\"$GALERIE_EMAIL\",\"password\":\"$GALERIE_PASSWORD\"}" | jq -r .token)
+
+curl -H "Authorization: Bearer $TOKEN" \
   "$GALERIE_API/api/admin/galleries/dupont-mai/log"
 ```
 
@@ -273,11 +298,14 @@ des tuiles, refus du mauvais mot de passe, absence de toute balise `<img>`,
 neutralisation du menu contextuel et de la copie, voile sur « Impr. écran » et
 sur perte de focus, consignation au journal.
 
-**API du Worker** — 69 vérifications contre le vrai moteur Cloudflare (D1 et R2
-émulés localement par `wrangler dev`) : création et cloisonnement des galeries,
-authentification, expiration, limitation des tentatives de mot de passe,
-suppression en cascade (galerie et photo isolée), sélection et commentaire
-posés et retirés, journal sans IP en clair.
+**API du Worker** — 86 vérifications contre le vrai moteur Cloudflare (D1 et R2
+émulés localement par `wrangler dev`) : comptes photographes (inscription,
+connexion, session), cloisonnement strict entre comptes (un photographe ne
+peut ni lister, ni lire, ni modifier, ni même deviner l'existence des
+galeries, photos et tuiles d'un autre compte), création et cloisonnement des
+galeries d'un même compte, authentification client, expiration, limitation
+des tentatives de mot de passe, suppression en cascade (galerie et photo
+isolée), sélection et commentaire posés et retirés, journal sans IP en clair.
 
 **Interface d'administration** — 13 vérifications dans un vrai navigateur,
 contre le vrai Worker local : création d'une galerie, glisser-déposer de
@@ -317,11 +345,21 @@ BASE=http://127.0.0.1:8788 node tests/api.test.mjs
 
 ## Ce qu'il reste à faire
 
-- **Hébergement de l'interface d'administration** — elle tourne aujourd'hui
-  sur la machine du photographe (nécessaire pour sharp). Packagée en
-  application de bureau, ou déportée sur un petit service qui fait tourner
-  sharp pour de vrai (un conteneur, pas Cloudflare Workers), elle deviendrait
-  utilisable par quelqu'un qui n'ouvre jamais un terminal.
+- **Tableau de bord en ligne** — les comptes photographes existent déjà côté
+  Worker (inscription, connexion, cloisonnement des données), mais la seule
+  interface qui les utilise aujourd'hui est locale (`admin-server.mjs`, sur
+  la machine du photographe — nécessaire pour `sharp`, que Cloudflare
+  Workers ne sait pas exécuter). L'étape suivante : un vrai site où un
+  photographe se connecte, voit toutes ses galeries, en crée de nouvelles et
+  y envoie des photos depuis son navigateur, sans rien installer. Ça demande
+  un petit service hébergé à part (conteneur, pas Cloudflare Workers) pour
+  le traitement des photos.
+- **Site public + inscription en libre-service** — page de présentation,
+  création de compte sans intervention manuelle.
+- **Volet légal** — conditions d'utilisation et politique de confidentialité
+  avant d'ouvrir à des photographes tiers : dès qu'on héberge les photos de
+  clients d'un autre photographe, on devient responsable de données
+  personnelles de tiers (RGPD).
 - **Application mobile** — la seule voie qui bloque réellement la capture
   d'écran (`FLAG_SECURE` sur Android, détection sur iOS). À mettre en face du
   fait qu'il faut alors convaincre le client d'installer une application.

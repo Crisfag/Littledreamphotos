@@ -5,7 +5,8 @@
   "bin": {
     "galerie-prepare": "./prepare.mjs",
     "galerie-detect": "./detect.mjs",
-    "galerie-admin": "./admin-server.mjs"
+    "galerie-admin": "./admin-server.mjs",
+    "galerie-signup": "./signup.mjs"
   },
   "dependencies": {
     "sharp": "^0.33.5"

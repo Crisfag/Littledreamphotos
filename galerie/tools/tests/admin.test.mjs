@@ -1,9 +1,12 @@
 // Vérification de l'interface d'administration dans un vrai navigateur,
 // contre un admin-server.mjs déjà lancé sur un Worker local.
 //
-//   npx wrangler dev --local --port 8788               (depuis worker/)
-//   GALERIE_API=http://127.0.0.1:8788 GALERIE_ADMIN_TOKEN=… \
-//     GALERIE_FORENSIC_KEY=… node admin-server.mjs      (depuis tools/)
+//   npx wrangler dev --local --port 8788                     (depuis worker/)
+//   node signup.mjs --api http://127.0.0.1:8788 \
+//     --email test@test.invalid --password mot-de-passe-1234 (une seule fois, depuis tools/)
+//   GALERIE_API=http://127.0.0.1:8788 GALERIE_EMAIL=test@test.invalid \
+//     GALERIE_PASSWORD=mot-de-passe-1234 GALERIE_FORENSIC_KEY=… \
+//     node admin-server.mjs                                  (depuis tools/)
 //   node tests/admin.test.mjs
 
 import { chromium } from "playwright";

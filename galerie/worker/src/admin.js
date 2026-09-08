@@ -1,10 +1,13 @@
 // API côté photographe : création de galeries, envoi des tuiles, journaux.
-// Protégée par le secret ADMIN_TOKEN (en-tête Authorization: Bearer …).
+// Protégée par une session de compte photographe (Authorization: Bearer …,
+// jeton obtenu via /api/auth/login) — jamais par un jeton partagé entre tous
+// les photographes. Chaque requête est cloisonnée : un photographe ne peut
+// lire, modifier ou lister que ses propres galeries, jamais celles d'un
+// autre compte.
 
 import { json, fail } from "./http.js";
-import { hashPassword, timingSafeEqual, randomBytes, b64url } from "./auth.js";
-
-const enc = new TextEncoder();
+import { hashPassword, randomBytes, b64url } from "./auth.js";
+import { authenticatePhotographer } from "./authPhotographer.js";
 
 function now() {
   return Math.floor(Date.now() / 1000);
@@ -14,17 +17,30 @@ function newId(prefix) {
   return `${prefix}_${b64url(randomBytes(9))}`;
 }
 
-function isAdmin(request, env) {
-  const header = request.headers.get("Authorization") || "";
-  const given = header.startsWith("Bearer ") ? header.slice(7) : "";
-  const expected = env.ADMIN_TOKEN || "";
-  if (!expected || !given) return false;
-  return timingSafeEqual(enc.encode(given), enc.encode(expected));
-}
-
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{1,60}$/;
 
-async function createGallery(request, env) {
+// Vérifie que la galerie désignée par `slug` existe et appartient bien au
+// photographe appelant. Renvoie la ligne complète, ou null.
+async function ownedGallery(env, photographerId, slug) {
+  return env.DB.prepare("SELECT * FROM galleries WHERE slug = ? AND photographer_id = ?")
+    .bind(slug, photographerId)
+    .first();
+}
+
+// Même vérification en partant d'une photo : on remonte à sa galerie pour
+// s'assurer qu'elle appartient au photographe appelant. Utilisé par les
+// routes de tuiles, qui n'ont que l'identifiant de la photo, pas le slug.
+async function ownedPhoto(env, photographerId, photoId) {
+  return env.DB.prepare(
+    `SELECT p.* FROM photos p
+     JOIN galleries g ON g.id = p.gallery_id
+     WHERE p.id = ? AND g.photographer_id = ?`
+  )
+    .bind(photoId, photographerId)
+    .first();
+}
+
+async function createGallery(request, env, photographerId) {
   let body;
   try {
     body = await request.json();
@@ -39,6 +55,8 @@ async function createGallery(request, env) {
   const password = String(body.password || "");
   if (password.length < 8) return fail(400, "Mot de passe trop court (8 caractères minimum)");
 
+  // Les slugs forment l'URL publique de la galerie : ils doivent rester
+  // uniques sur toute la plateforme, pas seulement pour ce photographe.
   const existing = await env.DB.prepare("SELECT id FROM galleries WHERE slug = ?")
     .bind(slug)
     .first();
@@ -49,11 +67,12 @@ async function createGallery(request, env) {
 
   await env.DB.prepare(
     `INSERT INTO galleries
-       (id, slug, title, client_name, password_hash, password_salt, watermark_text, expires_at, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       (id, photographer_id, slug, title, client_name, password_hash, password_salt, watermark_text, expires_at, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   )
     .bind(
       id,
+      photographerId,
       slug,
       String(body.title || slug).slice(0, 120),
       String(body.clientName || "").slice(0, 120),
@@ -68,24 +87,21 @@ async function createGallery(request, env) {
   return json({ id, slug }, { status: 201 });
 }
 
-async function listGalleries(env) {
+async function listGalleries(env, photographerId) {
   const { results } = await env.DB.prepare(
     `SELECT g.id, g.slug, g.title, g.client_name, g.expires_at, g.created_at,
             (SELECT COUNT(*) FROM photos p WHERE p.gallery_id = g.id) AS photo_count,
             (SELECT COUNT(*) FROM photos p WHERE p.gallery_id = g.id AND p.selected = 1) AS selected_count,
             (SELECT COUNT(*) FROM photos p WHERE p.gallery_id = g.id AND p.comment != '') AS comment_count
-     FROM galleries g ORDER BY g.created_at DESC`
-  ).all();
+     FROM galleries g WHERE g.photographer_id = ? ORDER BY g.created_at DESC`
+  )
+    .bind(photographerId)
+    .all();
   return json({ galleries: results });
 }
 
-async function getGallery(env, slug) {
-  const gallery = await env.DB.prepare(
-    `SELECT id, slug, title, client_name, watermark_text, expires_at, created_at
-     FROM galleries WHERE slug = ?`
-  )
-    .bind(slug)
-    .first();
+async function getGallery(env, photographerId, slug) {
+  const gallery = await ownedGallery(env, photographerId, slug);
   if (!gallery) return fail(404, "Galerie introuvable");
 
   const { results: photos } = await env.DB.prepare(
@@ -96,13 +112,22 @@ async function getGallery(env, slug) {
     .bind(gallery.id)
     .all();
 
-  return json({ gallery, photos });
+  return json({
+    gallery: {
+      id: gallery.id,
+      slug: gallery.slug,
+      title: gallery.title,
+      client_name: gallery.client_name,
+      watermark_text: gallery.watermark_text,
+      expires_at: gallery.expires_at,
+      created_at: gallery.created_at,
+    },
+    photos,
+  });
 }
 
-async function deleteGallery(env, slug) {
-  const gallery = await env.DB.prepare("SELECT id FROM galleries WHERE slug = ?")
-    .bind(slug)
-    .first();
+async function deleteGallery(env, photographerId, slug) {
+  const gallery = await ownedGallery(env, photographerId, slug);
   if (!gallery) return fail(404, "Galerie introuvable");
 
   // R2 ne supprime pas récursivement : on liste puis on efface par lots.
@@ -124,10 +149,8 @@ async function deleteGallery(env, slug) {
   return json({ ok: true });
 }
 
-async function addPhoto(request, env, slug) {
-  const gallery = await env.DB.prepare("SELECT id FROM galleries WHERE slug = ?")
-    .bind(slug)
-    .first();
+async function addPhoto(request, env, photographerId, slug) {
+  const gallery = await ownedGallery(env, photographerId, slug);
   if (!gallery) return fail(404, "Galerie introuvable");
 
   let body;
@@ -182,10 +205,8 @@ async function addPhoto(request, env, slug) {
   return json({ id, galleryId: gallery.id }, { status: 201 });
 }
 
-async function deletePhoto(env, slug, photoId) {
-  const gallery = await env.DB.prepare("SELECT id FROM galleries WHERE slug = ?")
-    .bind(slug)
-    .first();
+async function deletePhoto(env, photographerId, slug, photoId) {
+  const gallery = await ownedGallery(env, photographerId, slug);
   if (!gallery) return fail(404, "Galerie introuvable");
 
   const photo = await env.DB.prepare("SELECT id FROM photos WHERE id = ? AND gallery_id = ?")
@@ -206,8 +227,8 @@ async function deletePhoto(env, slug, photoId) {
   return json({ ok: true });
 }
 
-async function putTile(request, env, photoId, level, col, row) {
-  const photo = await env.DB.prepare("SELECT * FROM photos WHERE id = ?").bind(photoId).first();
+async function putTile(request, env, photographerId, photoId, level, col, row) {
+  const photo = await ownedPhoto(env, photographerId, photoId);
   if (!photo) return fail(404, "Photo introuvable");
   if (level !== 0 && level !== 1) return fail(400, "Niveau inconnu");
   const cols = level === 0 ? 2 : photo.cols;
@@ -224,8 +245,8 @@ async function putTile(request, env, photoId, level, col, row) {
 
 // Lecture d'une tuile côté administration : sert à afficher de vraies
 // vignettes dans l'interface d'admin, sans passer par une session client.
-async function getTile(env, photoId, level, col, row) {
-  const photo = await env.DB.prepare("SELECT * FROM photos WHERE id = ?").bind(photoId).first();
+async function getTile(env, photographerId, photoId, level, col, row) {
+  const photo = await ownedPhoto(env, photographerId, photoId);
   if (!photo) return fail(404, "Photo introuvable");
   if (level !== 0 && level !== 1) return fail(400, "Niveau inconnu");
   const cols = level === 0 ? 2 : photo.cols;
@@ -239,10 +260,8 @@ async function getTile(env, photoId, level, col, row) {
   });
 }
 
-async function galleryLog(request, env, slug) {
-  const gallery = await env.DB.prepare("SELECT id FROM galleries WHERE slug = ?")
-    .bind(slug)
-    .first();
+async function galleryLog(request, env, photographerId, slug) {
+  const gallery = await ownedGallery(env, photographerId, slug);
   if (!gallery) return fail(404, "Galerie introuvable");
 
   const limit = Math.min(Number(new URL(request.url).searchParams.get("limit")) || 200, 1000);
@@ -256,47 +275,52 @@ async function galleryLog(request, env, slug) {
 }
 
 export async function handleAdmin(request, env, ctx, path) {
-  if (!isAdmin(request, env)) return fail(401, "Jeton d'administration invalide");
+  const photographerId = await authenticatePhotographer(request, env);
+  if (!photographerId) return fail(401, "Session invalide ou expirée");
 
   const parts = path.split("/").filter(Boolean); // api, admin, …
   const section = parts[2];
 
   if (section === "galleries") {
     if (parts.length === 3) {
-      if (request.method === "POST") return createGallery(request, env);
-      if (request.method === "GET") return listGalleries(env);
+      if (request.method === "POST") return createGallery(request, env, photographerId);
+      if (request.method === "GET") return listGalleries(env, photographerId);
     }
     const slug = parts[3];
-    if (parts.length === 4 && request.method === "GET") return getGallery(env, slug);
-    if (parts.length === 4 && request.method === "DELETE") return deleteGallery(env, slug);
+    if (parts.length === 4 && request.method === "GET") return getGallery(env, photographerId, slug);
+    if (parts.length === 4 && request.method === "DELETE") return deleteGallery(env, photographerId, slug);
     if (parts.length === 5 && parts[4] === "photos" && request.method === "POST") {
-      return addPhoto(request, env, slug);
+      return addPhoto(request, env, photographerId, slug);
     }
     if (parts.length === 6 && parts[4] === "photos" && request.method === "DELETE") {
-      return deletePhoto(env, slug, parts[5]);
+      return deletePhoto(env, photographerId, slug, parts[5]);
     }
     if (parts.length === 5 && parts[4] === "log" && request.method === "GET") {
-      return galleryLog(request, env, slug);
+      return galleryLog(request, env, photographerId, slug);
     }
   }
 
   // Table des empreintes : c'est la liste des candidats que l'outil de
-  // détection corrèle avec une image suspecte.
+  // détection corrèle avec une image suspecte — cloisonnée par photographe,
+  // comme tout le reste : une empreinte identifie l'une de VOS galeries.
   if (section === "forensic" && parts.length === 3 && request.method === "GET") {
     const { results } = await env.DB.prepare(
       `SELECT p.forensic_id, p.id AS photo_id, p.position, g.slug, g.title, g.client_name
        FROM photos p JOIN galleries g ON g.id = p.gallery_id
-       WHERE p.forensic_id != '' ORDER BY g.created_at DESC, p.position ASC`
-    ).all();
+       WHERE p.forensic_id != '' AND g.photographer_id = ?
+       ORDER BY g.created_at DESC, p.position ASC`
+    )
+      .bind(photographerId)
+      .all();
     return json({ prints: results });
   }
 
   // /api/admin/tiles/<photoId>/<niveau>/<colonne>/<ligne>
   if (section === "tiles" && parts.length === 7 && request.method === "PUT") {
-    return putTile(request, env, parts[3], Number(parts[4]), Number(parts[5]), Number(parts[6]));
+    return putTile(request, env, photographerId, parts[3], Number(parts[4]), Number(parts[5]), Number(parts[6]));
   }
   if (section === "tiles" && parts.length === 7 && request.method === "GET") {
-    return getTile(env, parts[3], Number(parts[4]), Number(parts[5]), Number(parts[6]));
+    return getTile(env, photographerId, parts[3], Number(parts[4]), Number(parts[5]), Number(parts[6]));
   }
 
   return fail(404, "Route inconnue");

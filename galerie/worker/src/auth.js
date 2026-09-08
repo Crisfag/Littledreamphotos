@@ -114,3 +114,7 @@ export async function hashIp(ip, secret) {
   const digest = await crypto.subtle.digest("SHA-256", enc.encode(`${secret}:${ip || "?"}`));
   return b64(digest).slice(0, 16);
 }
+
+// Même primitive, pour toute autre valeur à pseudonymiser avant stockage
+// (ex. l'e-mail d'un photographe dans le journal des tentatives de connexion).
+export const hashValue = hashIp;

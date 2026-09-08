@@ -5,8 +5,8 @@
 //   node tests/api.test.mjs
 
 const BASE = process.env.BASE || "http://127.0.0.1:8788";
-const ADMIN = process.env.ADMIN_TOKEN || "jeton-admin-de-test";
 const SLUG = `essai-${Date.now().toString(36)}`;
+const RUN = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 
 const checks = [];
 function check(label, ok, detail) {
@@ -14,15 +14,73 @@ function check(label, ok, detail) {
   console.log(`${ok ? "✓" : "✗"} ${label}${detail !== undefined ? "  — " + detail : ""}`);
 }
 
-const admin = (method, path, body, raw = false) =>
-  fetch(BASE + path, {
-    method,
-    headers: {
-      authorization: `Bearer ${ADMIN}`,
-      ...(raw ? { "content-type": "application/octet-stream" } : body ? { "content-type": "application/json" } : {}),
-    },
-    body: raw ? body : body ? JSON.stringify(body) : undefined,
+async function signup(email, password) {
+  const response = await fetch(`${BASE}/api/auth/signup`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email, password, studioName: "Studio de test" }),
   });
+  const data = await response.json().catch(() => ({}));
+  return { response, data };
+}
+
+function adminClient(token) {
+  return (method, path, body, raw = false) =>
+    fetch(BASE + path, {
+      method,
+      headers: {
+        authorization: `Bearer ${token}`,
+        ...(raw ? { "content-type": "application/octet-stream" } : body ? { "content-type": "application/json" } : {}),
+      },
+      body: raw ? body : body ? JSON.stringify(body) : undefined,
+    });
+}
+
+/* ---------- Comptes photographes ---------- */
+
+const EMAIL = `photographe-${RUN}@test.invalid`;
+const PASSWORD = "mot-de-passe-de-test-1234";
+
+const { response: signupResponse, data: signupData } = await signup(EMAIL, PASSWORD);
+check("l'inscription crée un compte et ouvre une session",
+      signupResponse.status === 201 && Boolean(signupData.token) && signupData.photographer?.email === EMAIL);
+
+const duplicateSignup = await signup(EMAIL, PASSWORD);
+check("un e-mail déjà utilisé est refusé à l'inscription", duplicateSignup.response.status === 409);
+
+const weakPasswordSignup = await signup(`autre-${RUN}@test.invalid`, "court");
+check("un mot de passe trop court est refusé à l'inscription", weakPasswordSignup.response.status === 400);
+
+const badEmailSignup = await signup("pas-un-email", PASSWORD);
+check("un e-mail invalide est refusé à l'inscription", badEmailSignup.response.status === 400);
+
+const loginResponse = await fetch(`${BASE}/api/auth/login`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ email: EMAIL, password: PASSWORD }),
+});
+const loginData = await loginResponse.json();
+check("la connexion renvoie une session valide", loginResponse.ok && Boolean(loginData.token));
+
+const wrongPasswordLogin = await fetch(`${BASE}/api/auth/login`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ email: EMAIL, password: "mauvais-mot-de-passe" }),
+});
+check("un mauvais mot de passe est refusé à la connexion", wrongPasswordLogin.status === 401);
+
+const unknownEmailLogin = await fetch(`${BASE}/api/auth/login`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ email: `inconnu-${RUN}@test.invalid`, password: PASSWORD }),
+});
+check("un compte inconnu ne se distingue pas d'un mauvais mot de passe", unknownEmailLogin.status === 401);
+
+const meResponse = await fetch(`${BASE}/api/auth/me`, { headers: { authorization: `Bearer ${loginData.token}` } });
+const meData = await meResponse.json();
+check("la session permet de relire son profil", meResponse.ok && meData.photographer?.email === EMAIL);
+
+const admin = adminClient(signupData.token);
 
 // Un JPEG minuscule mais valide, pour que les tuiles stockées soient réalistes.
 const TILE = Buffer.from(
@@ -420,6 +478,51 @@ check("le journal ne contient aucune IP en clair",
 const prints = await (await admin("GET", "/api/admin/forensic")).json();
 check("les empreintes sont consultables",
       prints.prints.some((p) => p.forensic_id === "123456789" && p.slug === SLUG));
+
+/* ---------- Cloisonnement entre comptes photographes ---------- */
+// C'est le cœur de la promesse de sécurité : un compte ne doit jamais
+// pouvoir lire, modifier ou même deviner l'existence des galeries d'un
+// autre. On crée un second photographe et on essaie, depuis son compte,
+// chaque opération sur les galeries/photos du premier.
+
+const peerEmail = `voisin-${RUN}@test.invalid`;
+const { data: peerSignup } = await signup(peerEmail, "mot-de-passe-du-voisin-1234");
+const peerAdmin = adminClient(peerSignup.token);
+
+const foreignList = await (await peerAdmin("GET", "/api/admin/galleries")).json();
+check("un photographe ne voit aucune galerie d'un autre compte dans sa liste",
+      !foreignList.galleries.some((g) => g.slug === SLUG));
+
+const foreignDetail = await peerAdmin("GET", `/api/admin/galleries/${SLUG}`);
+check("un photographe ne peut pas lire le détail de la galerie d'un autre compte", foreignDetail.status === 404);
+
+const foreignAddPhoto = await peerAdmin("POST", `/api/admin/galleries/${SLUG}/photos`, {
+  width: 10, height: 10, cols: 1, rows: 1,
+});
+check("un photographe ne peut pas ajouter une photo dans la galerie d'un autre compte",
+      foreignAddPhoto.status === 404);
+
+const foreignTileRead = await peerAdmin("GET", `/api/admin/tiles/${photoId}/1/0/0`);
+check("un photographe ne peut pas lire les tuiles d'une photo d'un autre compte",
+      foreignTileRead.status === 404);
+
+const foreignTileWrite = await peerAdmin("PUT", `/api/admin/tiles/${photoId}/1/0/0`, TILE, true);
+check("un photographe ne peut pas écraser les tuiles d'une photo d'un autre compte",
+      foreignTileWrite.status === 404);
+
+const foreignLog = await peerAdmin("GET", `/api/admin/galleries/${SLUG}/log`);
+check("un photographe ne peut pas lire le journal d'une galerie d'un autre compte", foreignLog.status === 404);
+
+const foreignPrints = await (await peerAdmin("GET", "/api/admin/forensic")).json();
+check("les empreintes d'un photographe n'apparaissent pas chez un autre compte",
+      !foreignPrints.prints.some((p) => p.forensic_id === "123456789"));
+
+const foreignDelete = await peerAdmin("DELETE", `/api/admin/galleries/${SLUG}`);
+check("un photographe ne peut pas supprimer la galerie d'un autre compte", foreignDelete.status === 404);
+
+const stillThere = await (await admin("GET", `/api/admin/galleries/${SLUG}`)).json();
+check("la galerie existe toujours après la tentative de suppression étrangère",
+      stillThere.gallery?.slug === SLUG);
 
 /* ---------- Expiration ---------- */
 

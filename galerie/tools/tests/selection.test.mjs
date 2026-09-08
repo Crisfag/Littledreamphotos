@@ -12,9 +12,9 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { WorkerClient } from "../lib/client.mjs";
 import { processPhoto } from "../lib/pipeline.mjs";
+import { createTestAccount } from "./lib/testAccount.mjs";
 
 const API = process.env.GALERIE_API || "http://127.0.0.1:8788";
-const ADMIN_TOKEN = process.env.GALERIE_ADMIN_TOKEN || "jeton-admin-de-test";
 const EXECUTABLE = process.env.CHROMIUM_PATH || undefined;
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 const WEB_DIR = join(REPO_ROOT, "galerie", "web");
@@ -32,7 +32,8 @@ function check(label, ok, detail) {
 
 /* ---------- Galerie de test, créée pour de vrai sur le Worker local ---------- */
 
-const client = new WorkerClient({ api: API, adminToken: ADMIN_TOKEN });
+const account = await createTestAccount(API, "selection");
+const client = new WorkerClient({ api: API, ...account });
 const slug = `select-${Date.now().toString(36)}`;
 const forensicKey = "cle-de-test-selection";
 

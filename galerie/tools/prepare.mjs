@@ -20,7 +20,10 @@ import { WorkerClient } from "./lib/client.mjs";
 function parseArgs(argv) {
   const options = {
     api: process.env.GALERIE_API || "",
-    adminToken: process.env.GALERIE_ADMIN_TOKEN || "",
+    // Identifiants du COMPTE PHOTOGRAPHE (pas le mot de passe de la galerie,
+    // c'est --password / options.password plus bas — à ne pas confondre).
+    accountEmail: process.env.GALERIE_EMAIL || "",
+    accountPassword: process.env.GALERIE_PASSWORD || "",
     forensicKey: process.env.GALERIE_FORENSIC_KEY || "",
     brand: process.env.GALERIE_BRAND || "Little Dream Photos",
     maxWidth: DEFAULTS.maxWidth,
@@ -74,7 +77,9 @@ Options
 
 Variables d'environnement
   GALERIE_API           URL du Worker
-  GALERIE_ADMIN_TOKEN   jeton d'administration
+  GALERIE_EMAIL         e-mail de votre compte photographe
+  GALERIE_PASSWORD      mot de passe de votre compte photographe
+                        (créé une fois avec « node signup.mjs »)
   GALERIE_FORENSIC_KEY  clé du filigrane invisible — à conserver précieusement :
                         sans elle, plus aucune fuite n'est traçable
 
@@ -91,7 +96,9 @@ async function main() {
   if (!options.slug) throw new Error("--slug est requis");
   if (!options.dryRun) {
     if (!options.api) throw new Error("--api ou GALERIE_API est requis");
-    if (!options.adminToken) throw new Error("GALERIE_ADMIN_TOKEN est requis");
+    if (!options.accountEmail || !options.accountPassword) {
+      throw new Error("GALERIE_EMAIL et GALERIE_PASSWORD sont requis (votre compte photographe)");
+    }
     if (!options.password) throw new Error("--password est requis");
   }
   if (!options.forensicKey) {
@@ -109,7 +116,9 @@ async function main() {
   }
 
   const watermarkText = [options.brand, options.client].filter(Boolean).join("  ·  ");
-  const client = options.dryRun ? null : new WorkerClient(options);
+  const client = options.dryRun
+    ? null
+    : new WorkerClient({ api: options.api, email: options.accountEmail, password: options.accountPassword });
 
   let galleryId = "local";
   if (client) {

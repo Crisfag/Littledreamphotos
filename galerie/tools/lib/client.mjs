@@ -1,24 +1,62 @@
 // Client HTTP vers l'API d'administration du Worker. Utilisé par la CLI
 // (prepare.mjs, detect.mjs) et par le serveur d'admin local — jamais par le
-// navigateur : le jeton d'administration ne doit circuler que côté serveur.
+// navigateur : les identifiants et le jeton de session ne doivent circuler
+// que côté serveur.
+//
+// S'authentifie par compte photographe (e-mail + mot de passe), pas par un
+// jeton unique partagé : chaque compte ne voit et ne modifie que ses propres
+// galeries. La connexion se fait à la demande, au premier appel, et se
+// renouvelle automatiquement si la session a expiré entre-temps.
 
 export class WorkerClient {
-  constructor({ api, adminToken }) {
+  constructor({ api, email, password }) {
     if (!api) throw new Error("URL de l'API manquante (GALERIE_API)");
-    if (!adminToken) throw new Error("Jeton d'administration manquant (GALERIE_ADMIN_TOKEN)");
+    if (!email || !password) throw new Error("Identifiants manquants (GALERIE_EMAIL / GALERIE_PASSWORD)");
     this.base = api.replace(/\/$/, "");
-    this.adminToken = adminToken;
+    this.email = email;
+    this.password = password;
+    this.token = null;
+  }
+
+  async login() {
+    const response = await fetch(`${this.base}/api/auth/login`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email: this.email, password: this.password }),
+    });
+    if (!response.ok) {
+      const detail = await response.text().catch(() => "");
+      const err = new Error(`Connexion refusée (${response.status}) ${detail}`);
+      err.status = response.status;
+      throw err;
+    }
+    const data = await response.json();
+    this.token = data.token;
+    return this.token;
   }
 
   async request(method, path, body, raw = false) {
-    const response = await fetch(`${this.base}${path}`, {
-      method,
-      headers: {
-        authorization: `Bearer ${this.adminToken}`,
-        ...(raw ? { "content-type": "application/octet-stream" } : body ? { "content-type": "application/json" } : {}),
-      },
-      body: raw ? body : body !== undefined ? JSON.stringify(body) : undefined,
-    });
+    if (!this.token) await this.login();
+
+    const send = () =>
+      fetch(`${this.base}${path}`, {
+        method,
+        headers: {
+          authorization: `Bearer ${this.token}`,
+          ...(raw
+            ? { "content-type": "application/octet-stream" }
+            : body ? { "content-type": "application/json" } : {}),
+        },
+        body: raw ? body : body !== undefined ? JSON.stringify(body) : undefined,
+      });
+
+    let response = await send();
+    // Session expirée en cours de route (le serveur d'admin peut tourner des
+    // heures) : on se reconnecte une fois et on rejoue la requête.
+    if (response.status === 401) {
+      await this.login();
+      response = await send();
+    }
     if (!response.ok) {
       const detail = await response.text().catch(() => "");
       const err = new Error(`${method} ${path} → ${response.status} ${detail}`);
@@ -59,9 +97,16 @@ export class WorkerClient {
 
   // Renvoie la réponse brute (pas de JSON) : c'est un flux d'octets JPEG.
   async getTileResponse(photoId, level, col, row) {
-    const response = await fetch(`${this.base}/api/admin/tiles/${photoId}/${level}/${col}/${row}`, {
-      headers: { authorization: `Bearer ${this.adminToken}` },
+    if (!this.token) await this.login();
+    let response = await fetch(`${this.base}/api/admin/tiles/${photoId}/${level}/${col}/${row}`, {
+      headers: { authorization: `Bearer ${this.token}` },
     });
+    if (response.status === 401) {
+      await this.login();
+      response = await fetch(`${this.base}/api/admin/tiles/${photoId}/${level}/${col}/${row}`, {
+        headers: { authorization: `Bearer ${this.token}` },
+      });
+    }
     return response;
   }
 

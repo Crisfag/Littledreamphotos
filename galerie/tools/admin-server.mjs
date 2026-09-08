@@ -31,7 +31,8 @@ const MAX_UPLOAD_BYTES = 60 * 1024 * 1024;
 
 const config = {
   api: process.env.GALERIE_API || "",
-  adminToken: process.env.GALERIE_ADMIN_TOKEN || "",
+  email: process.env.GALERIE_EMAIL || "",
+  password: process.env.GALERIE_PASSWORD || "",
   forensicKey: process.env.GALERIE_FORENSIC_KEY || "",
   brand: process.env.GALERIE_BRAND || "Little Dream Photos",
   // URL publique de web/galerie.html, pour reconstituer le lien complet à
@@ -39,14 +40,20 @@ const config = {
   site: (process.env.GALERIE_SITE || "").replace(/\/$/, ""),
 };
 
-const ENV_NAMES = { api: "GALERIE_API", adminToken: "GALERIE_ADMIN_TOKEN", forensicKey: "GALERIE_FORENSIC_KEY" };
+const ENV_NAMES = {
+  api: "GALERIE_API",
+  email: "GALERIE_EMAIL",
+  password: "GALERIE_PASSWORD",
+  forensicKey: "GALERIE_FORENSIC_KEY",
+};
 const missing = Object.keys(ENV_NAMES).filter((k) => !config[k]);
 if (missing.length) {
   console.error(`Configuration manquante : ${missing.map((k) => ENV_NAMES[k]).join(", ")}`);
   console.error(
-    "\nCes trois variables d'environnement sont requises (voir README.md « Installation ») :\n" +
+    "\nCes variables d'environnement sont requises (voir README.md « Installation ») :\n" +
     "  export GALERIE_API=https://galerie-protegee.votre-sous-domaine.workers.dev\n" +
-    "  export GALERIE_ADMIN_TOKEN=…\n" +
+    "  export GALERIE_EMAIL=…       (compte créé avec « node signup.mjs »)\n" +
+    "  export GALERIE_PASSWORD=…\n" +
     "  export GALERIE_FORENSIC_KEY=…\n"
   );
   process.exit(1);

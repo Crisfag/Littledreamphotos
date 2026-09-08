@@ -4,13 +4,14 @@
 //   DB      → base D1
 //   TILES   → bucket R2 (tuiles d'images)
 // Secrets attendus (wrangler secret put …) :
-//   ADMIN_TOKEN   → jeton d'administration du photographe
-//   TOKEN_SECRET  → clé de signature des sessions client
+//   AUTH_SECRET   → clé de signature des sessions de compte photographe
+//   TOKEN_SECRET  → clé de signature des sessions client (une galerie)
 // Variables :
 //   ALLOWED_ORIGINS → origines autorisées, séparées par des virgules
 
 import { handleAdmin } from "./admin.js";
 import { handleViewer } from "./viewer.js";
+import { handleAuth } from "./authPhotographer.js";
 import { json, fail } from "./http.js";
 
 function corsHeaders(request, env) {
@@ -42,9 +43,9 @@ export default {
     let response;
     try {
       // Sans ces secrets, l'API accepterait des jetons signés avec une clé vide.
-      // Mieux vaut refuser franchement qu'ouvrir les galeries en silence.
-      if (!env.TOKEN_SECRET || !env.ADMIN_TOKEN) {
-        console.error("Secrets manquants : ADMIN_TOKEN et TOKEN_SECRET doivent être définis.");
+      // Mieux vaut refuser franchement qu'ouvrir les galeries ou les comptes en silence.
+      if (!env.TOKEN_SECRET || !env.AUTH_SECRET) {
+        console.error("Secrets manquants : AUTH_SECRET et TOKEN_SECRET doivent être définis.");
         return fail(503, "Service mal configuré");
       }
 
@@ -53,6 +54,8 @@ export default {
 
       if (path === "/" || path === "/health") {
         response = json({ ok: true, service: "galerie-protegee" });
+      } else if (path.startsWith("/api/auth/")) {
+        response = await handleAuth(request, env, ctx, path);
       } else if (path.startsWith("/api/admin/")) {
         response = await handleAdmin(request, env, ctx, path);
       } else if (path.startsWith("/api/gallery/")) {
