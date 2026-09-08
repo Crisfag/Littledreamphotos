@@ -1,0 +1,9 @@
+node_modules
+tests
+apercu
+*.json
+!package.json
+!package-lock.json
+galerie-*.json
+*.log
+.git

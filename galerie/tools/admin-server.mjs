@@ -32,7 +32,9 @@ const PUBLIC_DIR = join(ROOT, "admin");
 // Railway…), GALERIE_ADMIN_HOST=0.0.0.0 rend le service joignable — la
 // protection vient alors des comptes/sessions, plus de la boucle locale.
 const HOST = process.env.GALERIE_ADMIN_HOST || "127.0.0.1";
-const PORT = Number(process.env.GALERIE_ADMIN_PORT || 4000);
+// PORT : beaucoup d'hébergeurs (Render, Railway…) imposent leur propre port
+// via cette variable plutôt que de laisser le service choisir.
+const PORT = Number(process.env.GALERIE_ADMIN_PORT || process.env.PORT || 4000);
 const MAX_UPLOAD_BYTES = 60 * 1024 * 1024;
 const SESSION_COOKIE = "galerie_session";
 const SESSION_MAX_AGE = 30 * 24 * 60 * 60; // aligné sur la durée du jeton côté Worker

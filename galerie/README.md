@@ -366,11 +366,14 @@ BASE=http://127.0.0.1:8788 node tests/api.test.mjs
 - **Héberger l'admin pour de vrai** — l'interface elle-même est déjà prête
   pour plusieurs photographes : chacun se connecte depuis le navigateur avec
   son propre compte (cookie de session, pas de jeton partagé), et
-  `admin-server.mjs` accepte déjà `GALERIE_ADMIN_HOST=0.0.0.0` pour écouter
-  au-delà de la boucle locale. Ce qui manque : un vrai déploiement (un
-  conteneur — Fly.io, Railway… — pas Cloudflare Workers, qui ne sait pas
-  exécuter `sharp`) et une adresse publique, pour qu'un photographe puisse
-  s'en servir sans installer Node ni ouvrir un terminal.
+  `tools/Dockerfile` construit une image prête à déployer (voir son en-tête
+  pour `docker build`/`docker run`). Ce qui manque : un hébergeur qui fait
+  tourner ce conteneur en continu (Fly.io, Railway, Render… — pas Cloudflare
+  Workers, qui ne sait pas exécuter `sharp`) et une adresse publique, pour
+  qu'un photographe puisse s'en servir sans installer Node ni ouvrir un
+  terminal. Le Dockerfile n'a pas pu être testé en conditions réelles depuis
+  cet environnement (pas de démon Docker disponible ici) — à vérifier avec
+  un vrai `docker build` avant de déployer.
 - **Site public + inscription en libre-service** — page de présentation,
   création de compte sans intervention manuelle.
 - **Volet légal** — conditions d'utilisation et politique de confidentialité
