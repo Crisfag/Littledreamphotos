@@ -1,8 +1,8 @@
-# Galerie protégée
+# Holypixx
 
-Galeries de visionnage pour photographes : le client voit ses photos avec un
-mot de passe, sans pouvoir les télécharger — et si une image fuite malgré
-tout, on sait de quelle galerie elle vient.
+Galeries de visionnage protégées pour photographes : le client voit ses
+photos avec un mot de passe, sans pouvoir les télécharger — et si une image
+fuite malgré tout, on sait de quelle galerie elle vient.
 
 ---
 
