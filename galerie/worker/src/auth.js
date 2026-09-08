@@ -6,7 +6,10 @@
 
 const enc = new TextEncoder();
 
-const PBKDF2_ITERATIONS = 150000;
+// 100 000 est la limite dure imposée par le runtime Cloudflare Workers pour
+// PBKDF2 (WebCrypto y refuse tout ce qui dépasse) — pas un choix de sécurité,
+// un plafond technique. On s'y cale exactement.
+const PBKDF2_ITERATIONS = 100000;
 
 export function b64(bytes) {
   let s = "";
