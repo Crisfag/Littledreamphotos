@@ -1,0 +1,14 @@
+{
+  "name": "galerie-protegee-worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:init": "wrangler d1 execute galerie-protegee --remote --file=schema.sql",
+    "db:init:local": "wrangler d1 execute galerie-protegee --local --file=schema.sql"
+  },
+  "devDependencies": {
+    "wrangler": "^3.90.0"
+  }
+}

@@ -1,0 +1,762 @@
+/* =====================================================================
+   Galerie protégée — affichage client
+   ---------------------------------------------------------------------
+   Les photos ne sont jamais des éléments <img> : chacune est réassemblée
+   dans un <canvas> à partir de tuiles chargées avec un jeton de session.
+   Conséquences concrètes :
+     · « Enregistrer l'image sous » ne propose rien ;
+     · aucune URL du réseau ne renvoie une photo entière ;
+     · un aspirateur de site ne trouve aucun fichier à récupérer.
+
+   Ce que ce code ne fait PAS, et ne peut pas faire : empêcher une capture
+   d'écran. C'est le système d'exploitation qui capture l'écran, aucun
+   JavaScript n'a autorité là-dessus. Les gardes ci-dessous découragent le
+   geste réflexe et le consignent ; la vraie protection est ailleurs — basse
+   définition, filigrane en trame, et empreinte invisible qui rend chaque
+   photo traçable jusqu'à la galerie dont elle provient.
+   ===================================================================== */
+
+(function () {
+  "use strict";
+
+  var CONFIG = window.GALERIE_CONFIG || {};
+  var API = String(CONFIG.api || "").replace(/\/$/, "");
+  var CLIPBOARD_GUARD = CONFIG.clipboardGuard !== false;
+  var LEVEL_PREVIEW = 0;
+  var LEVEL_FULL = 1;
+  var PREVIEW_COLS = 2;
+  var PREVIEW_ROWS = 2;
+  var PARALLEL_TILES = 6;
+
+  var state = {
+    slug: null,
+    token: null,
+    photos: [],
+    gallery: null,
+    current: -1,
+    viewerList: null,
+    filterSelected: false,
+    drawn: {},
+  };
+
+  var el = {};
+  var heartButtons = {}; // photoId -> bouton cœur de la grille, pour une mise à jour directe
+  var commentBadges = {}; // photoId -> pastille « a un commentaire » de la grille
+  var COMMENT_DEBOUNCE_MS = 700;
+  var commentTimer = null;
+
+  /* ---------- Sélection (coup de cœur) ---------- */
+
+  function selectedCount() {
+    var count = 0;
+    for (var i = 0; i < state.photos.length; i++) if (state.photos[i].selected) count++;
+    return count;
+  }
+
+  // La liste que parcourt la visionneuse (Précédent/Suivant) : toutes les
+  // photos, ou seulement les sélectionnées si le filtre est actif.
+  function visiblePhotos() {
+    if (!state.filterSelected) return state.photos;
+    return state.photos.filter(function (p) {
+      return p.selected;
+    });
+  }
+
+  function heartLabel(selected) {
+    return selected ? "Retirer des favoris" : "Ajouter aux favoris";
+  }
+
+  function paintHeart(button, selected) {
+    button.classList.toggle("gp-heart-active", selected);
+    button.setAttribute("aria-pressed", selected ? "true" : "false");
+    button.setAttribute("aria-label", heartLabel(selected));
+    button.title = heartLabel(selected);
+  }
+
+  function updateSelectionUI() {
+    var count = selectedCount();
+    if (el.selectionCount) {
+      el.selectionCount.textContent =
+        count === 0 ? "Aucune photo sélectionnée pour l'instant"
+          : count + (count > 1 ? " photos sélectionnées" : " photo sélectionnée");
+    }
+    if (el.filterEmpty) {
+      el.filterEmpty.hidden = !(state.filterSelected && count === 0);
+    }
+    if (el.toolbar) el.toolbar.hidden = state.photos.length === 0;
+  }
+
+  /**
+   * Bascule le coup de cœur d'une photo. Mise à jour immédiate de
+   * l'affichage (les deux cœurs — grille et visionneuse — s'il y en a un
+   * ouvert), puis confirmation au Worker ; en cas d'échec, l'affichage
+   * revient en arrière plutôt que de mentir sur l'état réel.
+   */
+  function toggleSelect(photo) {
+    var next = !photo.selected;
+    photo.selected = next;
+    reflectSelection(photo);
+
+    fetch(apiUrl("/select"), {
+      method: "POST",
+      headers: Object.assign({ "content-type": "application/json" }, authHeaders()),
+      body: JSON.stringify({ photoId: photo.id, selected: next }),
+    })
+      .then(function (response) {
+        if (response.status === 401) throw new Error("session");
+        if (!response.ok) throw new Error("échec");
+      })
+      .catch(function (err) {
+        photo.selected = !next;
+        reflectSelection(photo);
+        if (err.message === "session") {
+          sessionLost("Votre session a expiré. Saisissez à nouveau le mot de passe.");
+        }
+      });
+  }
+
+  // Répercute l'état d'une photo sur tout ce qui l'affiche, sans jamais
+  // reconstruire la grille ni retélécharger de tuile : le filtre « ma
+  // sélection » masque/affiche par CSS, pas en retirant les photos du DOM.
+  function reflectSelection(photo) {
+    var heart = heartButtons[photo.id];
+    if (heart) {
+      paintHeart(heart, photo.selected);
+      heart.closest(".gp-item").classList.toggle("gp-item-selected", photo.selected);
+    }
+    if (el.viewerHeart && state.viewerList && state.viewerList[state.current] === photo) {
+      paintHeart(el.viewerHeart, photo.selected);
+    }
+    updateSelectionUI();
+  }
+
+  /* ---------- Commentaire (note laissée sur une photo) ---------- */
+
+  function hasComment(photo) {
+    return !!(photo.comment && photo.comment.trim());
+  }
+
+  // Répercute le commentaire d'une photo sur la pastille de la grille et sur
+  // le bouton de la visionneuse, sans jamais reconstruire la grille.
+  function reflectComment(photo) {
+    var badge = commentBadges[photo.id];
+    if (badge) badge.hidden = !hasComment(photo);
+    if (el.commentToggle && state.viewerList && state.viewerList[state.current] === photo) {
+      el.commentToggle.classList.toggle("gp-comment-has-text", hasComment(photo));
+    }
+  }
+
+  function setCommentStatus(text) {
+    if (el.commentStatus) el.commentStatus.textContent = text;
+  }
+
+  function saveComment(photo, value) {
+    setCommentStatus("Enregistrement…");
+    fetch(apiUrl("/comment"), {
+      method: "POST",
+      headers: Object.assign({ "content-type": "application/json" }, authHeaders()),
+      body: JSON.stringify({ photoId: photo.id, comment: value }),
+    })
+      .then(function (response) {
+        if (response.status === 401) throw new Error("session");
+        if (!response.ok) throw new Error("échec");
+        return response.json();
+      })
+      .then(function (data) {
+        // La valeur renvoyée est normalisée par le serveur (espaces retirés,
+        // longueur bornée) : c'est elle qui fait foi, pas ce qui a été tapé.
+        photo.comment = data.comment;
+        reflectComment(photo);
+        if (el.commentInput && currentViewerPhoto() === photo && el.commentInput.value !== data.comment) {
+          el.commentInput.value = data.comment;
+        }
+        setCommentStatus("Enregistré");
+        setTimeout(function () {
+          if (el.commentStatus && el.commentStatus.textContent === "Enregistré") setCommentStatus("");
+        }, 1800);
+      })
+      .catch(function (err) {
+        setCommentStatus("Échec de l'enregistrement — réessayez");
+        if (err.message === "session") {
+          sessionLost("Votre session a expiré. Saisissez à nouveau le mot de passe.");
+        }
+      });
+  }
+
+  // Sauvegarde immédiate d'une saisie encore en attente (débounce non écoulé)
+  // — appelé avant de changer de photo ou de fermer la visionneuse, pour ne
+  // jamais perdre ce qui vient d'être tapé.
+  function flushPendingComment() {
+    if (!commentTimer) return;
+    clearTimeout(commentTimer);
+    commentTimer = null;
+    var photo = currentViewerPhoto();
+    if (photo && el.commentInput && el.commentInput.value !== (photo.comment || "")) {
+      saveComment(photo, el.commentInput.value);
+    }
+  }
+
+  function wireCommentInput() {
+    if (!el.commentInput) return;
+    el.commentInput.addEventListener("input", function () {
+      clearTimeout(commentTimer);
+      var photo = currentViewerPhoto();
+      var value = el.commentInput.value;
+      commentTimer = setTimeout(function () {
+        commentTimer = null;
+        if (photo) saveComment(photo, value);
+      }, COMMENT_DEBOUNCE_MS);
+    });
+    el.commentInput.addEventListener("blur", flushPendingComment);
+    // Empêche les flèches gauche/droite de faire changer de photo pendant la
+    // frappe. Échap reste actif : il ferme la visionneuse normalement (le
+    // commentaire en cours est sauvegardé au passage par closeViewer).
+    el.commentInput.addEventListener("keydown", function (event) {
+      if (event.key === "ArrowLeft" || event.key === "ArrowRight") event.stopPropagation();
+    });
+  }
+
+  function toggleCommentPanel() {
+    if (!el.commentPanel) return;
+    var willOpen = el.commentPanel.hidden;
+    el.commentPanel.hidden = !willOpen;
+    if (el.commentToggle) el.commentToggle.setAttribute("aria-expanded", willOpen ? "true" : "false");
+    if (willOpen && el.commentInput) el.commentInput.focus();
+  }
+
+  function $(id) {
+    return document.getElementById(id);
+  }
+
+  /* ---------- Réseau ---------- */
+
+  function apiUrl(path) {
+    return API + "/api/gallery/" + encodeURIComponent(state.slug) + path;
+  }
+
+  function authHeaders() {
+    return { authorization: "Bearer " + state.token };
+  }
+
+  function logEvent(event, detail) {
+    if (!state.token) return;
+    // `keepalive` : l'évènement part même si la page se ferme juste après.
+    fetch(apiUrl("/event"), {
+      method: "POST",
+      headers: Object.assign({ "content-type": "application/json" }, authHeaders()),
+      body: JSON.stringify({ event: event, detail: detail || "" }),
+      keepalive: true,
+    }).catch(function () {});
+  }
+
+  function sessionLost(message) {
+    state.token = null;
+    state.drawn = {};
+    closeViewer();
+    show(el.login);
+    hide(el.gallery);
+    el.error.textContent = message;
+    el.error.hidden = false;
+    el.password.value = "";
+  }
+
+  /* ---------- Assemblage des tuiles ---------- */
+
+  // La même formule que côté préparation : les tuiles se rejoignent au pixel
+  // près, sans trou ni chevauchement, quelles que soient les dimensions.
+  function tileRect(width, height, cols, rows, col, row) {
+    var x = Math.floor((col * width) / cols);
+    var y = Math.floor((row * height) / rows);
+    return {
+      x: x,
+      y: y,
+      w: Math.floor(((col + 1) * width) / cols) - x,
+      h: Math.floor(((row + 1) * height) / rows) - y,
+    };
+  }
+
+  function decode(blob) {
+    if (window.createImageBitmap) return createImageBitmap(blob);
+    // Repli pour les navigateurs sans createImageBitmap.
+    return new Promise(function (resolve, reject) {
+      var url = URL.createObjectURL(blob);
+      var img = new Image();
+      img.onload = function () {
+        URL.revokeObjectURL(url);
+        resolve(img);
+      };
+      img.onerror = function () {
+        URL.revokeObjectURL(url);
+        reject(new Error("tuile illisible"));
+      };
+      img.src = url;
+    });
+  }
+
+  function fetchTile(photoId, level, col, row) {
+    return fetch(apiUrl("/tile/" + photoId + "/" + level + "/" + col + "/" + row), {
+      headers: authHeaders(),
+      cache: "no-store",
+    }).then(function (response) {
+      if (response.status === 401) throw new Error("session");
+      if (!response.ok) throw new Error("tuile " + response.status);
+      return response.blob().then(decode);
+    });
+  }
+
+  /**
+   * Peint une photo dans un canvas, tuile par tuile.
+   * Les tuiles sont chargées par petits paquets : la photo apparaît
+   * progressivement au lieu de faire attendre devant un cadre vide.
+   */
+  function paint(canvas, photo, level) {
+    var cols = level === LEVEL_PREVIEW ? PREVIEW_COLS : photo.cols;
+    var rows = level === LEVEL_PREVIEW ? PREVIEW_ROWS : photo.rows;
+    var width = level === LEVEL_PREVIEW ? photo.previewWidth || photo.width : photo.width;
+    var height = level === LEVEL_PREVIEW ? photo.previewHeight || photo.height : photo.height;
+
+    canvas.width = width;
+    canvas.height = height;
+    var ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#efe6db";
+    ctx.fillRect(0, 0, width, height);
+
+    var queue = [];
+    for (var row = 0; row < rows; row++) {
+      for (var col = 0; col < cols; col++) queue.push([col, row]);
+    }
+
+    var failed = false;
+    function next() {
+      var job = queue.shift();
+      if (!job) return Promise.resolve();
+      var col = job[0];
+      var row = job[1];
+      return fetchTile(photo.id, level, col, row)
+        .then(function (bitmap) {
+          var rect = tileRect(width, height, cols, rows, col, row);
+          ctx.drawImage(bitmap, rect.x, rect.y, rect.w, rect.h);
+          if (bitmap.close) bitmap.close();
+        })
+        .catch(function (err) {
+          if (err.message === "session") {
+            failed = true;
+            queue.length = 0;
+            sessionLost("Votre session a expiré. Saisissez à nouveau le mot de passe.");
+          }
+        })
+        .then(next);
+    }
+
+    var workers = [];
+    for (var i = 0; i < PARALLEL_TILES; i++) workers.push(next());
+    return Promise.all(workers).then(function () {
+      return !failed;
+    });
+  }
+
+  /* ---------- Grille ---------- */
+
+  function buildGrid() {
+    el.grid.innerHTML = "";
+    heartButtons = {};
+    commentBadges = {};
+    // La grille contient toujours toutes les photos ; le filtre « ma
+    // sélection » les masque par CSS (.gp-grid-filtered), pour ne jamais
+    // retélécharger de tuile au seul geste de cocher un cœur.
+    state.photos.forEach(function (photo, index) {
+      var figure = document.createElement("figure");
+      figure.className = "gp-item" + (photo.selected ? " gp-item-selected" : "");
+      var ratio = (photo.height / photo.width) * 100;
+      figure.style.setProperty("--ratio", ratio.toFixed(3) + "%");
+
+      var canvas = document.createElement("canvas");
+      canvas.className = "gp-canvas";
+      canvas.setAttribute("role", "img");
+      canvas.setAttribute("aria-label", "Photo " + (index + 1) + " sur " + state.photos.length);
+      figure.appendChild(canvas);
+
+      var button = document.createElement("button");
+      button.type = "button";
+      button.className = "gp-open";
+      button.setAttribute("aria-label", "Agrandir la photo " + (index + 1));
+      button.addEventListener("click", function () {
+        openViewer(photo);
+      });
+      figure.appendChild(button);
+
+      var heart = document.createElement("button");
+      heart.type = "button";
+      heart.className = "gp-heart";
+      paintHeart(heart, photo.selected);
+      heart.addEventListener("click", function (event) {
+        event.preventDefault();
+        event.stopPropagation();
+        toggleSelect(photo);
+      });
+      figure.appendChild(heart);
+      heartButtons[photo.id] = heart;
+
+      // Pastille non interactive : le clic passe à travers vers .gp-open,
+      // qui couvre déjà toute la vignette.
+      var commentBadge = document.createElement("span");
+      commentBadge.className = "gp-comment-badge";
+      commentBadge.setAttribute("aria-hidden", "true");
+      commentBadge.hidden = !hasComment(photo);
+      figure.appendChild(commentBadge);
+      commentBadges[photo.id] = commentBadge;
+
+      el.grid.appendChild(figure);
+      paint(canvas, photo, LEVEL_PREVIEW);
+    });
+    updateSelectionUI();
+  }
+
+  /* ---------- Visionneuse ---------- */
+
+  // Ouvre la visionneuse sur une photo précise. La liste parcourue par
+  // Précédent/Suivant est figée à cet instant (état du filtre compris) :
+  // cocher ou décocher un cœur en cours de visionnage ne fait donc pas
+  // sauter les photos suivantes sous les pieds du visiteur.
+  function openViewer(photo) {
+    state.viewerList = visiblePhotos();
+    var index = state.viewerList.indexOf(photo);
+    showViewerAt(index === -1 ? 0 : index);
+  }
+
+  function showViewerAt(index) {
+    var list = state.viewerList;
+    if (!list || index < 0 || index >= list.length) return;
+    flushPendingComment(); // sauvegarde ce qui était en cours de frappe sur la photo précédente
+    state.current = index;
+    var photo = list[index];
+
+    el.viewer.hidden = false;
+    document.body.classList.add("gp-locked");
+    el.counter.textContent = index + 1 + " / " + list.length;
+    el.prev.disabled = index === 0;
+    el.next.disabled = index === list.length - 1;
+    if (el.viewerHeart) paintHeart(el.viewerHeart, photo.selected);
+    if (el.commentInput) el.commentInput.value = photo.comment || "";
+    setCommentStatus("");
+    reflectComment(photo);
+    el.closeBtn.focus();
+
+    var canvas = el.viewerCanvas;
+    canvas.style.aspectRatio = photo.width + " / " + photo.height;
+    paint(canvas, photo, LEVEL_FULL);
+    logEvent("view", photo.id);
+  }
+
+  function closeViewer() {
+    flushPendingComment();
+    el.viewer.hidden = true;
+    document.body.classList.remove("gp-locked");
+    state.current = -1;
+    state.viewerList = null;
+    if (el.commentPanel) el.commentPanel.hidden = true;
+    if (el.commentToggle) el.commentToggle.setAttribute("aria-expanded", "false");
+  }
+
+  function step(delta) {
+    showViewerAt(state.current + delta);
+  }
+
+  function currentViewerPhoto() {
+    return state.viewerList && state.current >= 0 ? state.viewerList[state.current] : null;
+  }
+
+  /* ---------- Voile de dissuasion ---------- */
+
+  var veilTimer = null;
+
+  // Masquer les photos dès que l'attention quitte la page : la plupart des
+  // outils de capture prennent le focus, et un raccourci de capture se voit.
+  // Ce n'est pas un blocage — c'est un rappel, et une trace dans le journal.
+  function veil(reason) {
+    el.veil.hidden = false;
+    document.body.classList.add("gp-veiled");
+    if (reason) logEvent(reason === "print" ? "print" : "capture_suspected", reason);
+    clearTimeout(veilTimer);
+  }
+
+  function unveil() {
+    clearTimeout(veilTimer);
+    veilTimer = setTimeout(function () {
+      el.veil.hidden = true;
+      document.body.classList.remove("gp-veiled");
+    }, 220);
+  }
+
+  // Meilleur effort : remplacer le presse-papiers juste après une capture.
+  // Ne fonctionne pas partout, et ne touche que ce qui vient d'y être mis
+  // depuis cette page. Désactivable via GALERIE_CONFIG.clipboardGuard.
+  function poisonClipboard() {
+    if (!CLIPBOARD_GUARD || !navigator.clipboard || !window.ClipboardItem) return;
+    try {
+      var canvas = document.createElement("canvas");
+      canvas.width = 1200;
+      canvas.height = 630;
+      var ctx = canvas.getContext("2d");
+      ctx.fillStyle = "#2b2521";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = "#f7f2ec";
+      ctx.font = "600 42px Helvetica, Arial, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("Photographies protégées", canvas.width / 2, 290);
+      ctx.font = "300 28px Helvetica, Arial, sans-serif";
+      ctx.fillText("Merci de ne pas les copier.", canvas.width / 2, 350);
+      canvas.toBlob(function (blob) {
+        if (!blob) return;
+        navigator.clipboard
+          .write([new window.ClipboardItem({ "image/png": blob })])
+          .catch(function () {});
+      });
+    } catch (err) {
+      /* sans conséquence : ce garde-fou est facultatif */
+    }
+  }
+
+  function installGuards() {
+    ["contextmenu", "dragstart", "selectstart"].forEach(function (type) {
+      document.addEventListener(type, function (event) {
+        event.preventDefault();
+      });
+    });
+
+    document.addEventListener("copy", function (event) {
+      event.preventDefault();
+    });
+
+    // Sur Windows, « Impr. écran » ne déclenche souvent que keyup : on écoute
+    // les deux. Sur macOS, la capture passe par Cmd + Maj + 3/4/5.
+    function onKey(event) {
+      var key = event.key;
+      var meta = event.metaKey || event.ctrlKey;
+
+      if (key === "PrintScreen" || key === "Snapshot") {
+        veil("impr-ecran");
+        poisonClipboard();
+        return;
+      }
+      if (event.metaKey && event.shiftKey && ["3", "4", "5", "6"].indexOf(key) !== -1) {
+        veil("capture-macos");
+        return;
+      }
+      if (meta && (key === "s" || key === "S")) {
+        event.preventDefault();
+        veil("enregistrer");
+        return;
+      }
+      if (meta && (key === "p" || key === "P")) {
+        event.preventDefault();
+        veil("print");
+        return;
+      }
+      if (key === "F12" || (meta && event.shiftKey && ["I", "J", "C"].indexOf(key.toUpperCase()) !== -1)) {
+        logEvent("devtools", key);
+      }
+    }
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("keyup", onKey);
+
+    window.addEventListener("blur", function () {
+      veil("perte-focus");
+    });
+    window.addEventListener("focus", unveil);
+    document.addEventListener("visibilitychange", function () {
+      if (document.hidden) veil("onglet-masque");
+      else unveil();
+    });
+
+    // Impression : la feuille de style dédiée vide la page, on double d'un voile.
+    if (window.matchMedia) {
+      var printQuery = window.matchMedia("print");
+      if (printQuery.addEventListener) {
+        printQuery.addEventListener("change", function (event) {
+          if (event.matches) veil("print");
+        });
+      }
+    }
+
+    // Navigation clavier de la visionneuse.
+    document.addEventListener("keydown", function (event) {
+      if (el.viewer.hidden) return;
+      if (event.key === "Escape") closeViewer();
+      else if (event.key === "ArrowLeft") step(-1);
+      else if (event.key === "ArrowRight") step(1);
+    });
+
+    // Balayage tactile.
+    var startX = null;
+    el.viewer.addEventListener("touchstart", function (event) {
+      startX = event.touches[0].clientX;
+    }, { passive: true });
+    el.viewer.addEventListener("touchend", function (event) {
+      if (startX === null) return;
+      var delta = event.changedTouches[0].clientX - startX;
+      if (Math.abs(delta) > 50) step(delta < 0 ? 1 : -1);
+      startX = null;
+    }, { passive: true });
+  }
+
+  /* ---------- Ouverture de session ---------- */
+
+  function show(node) {
+    node.hidden = false;
+  }
+  function hide(node) {
+    node.hidden = true;
+  }
+
+  function login(password) {
+    el.error.hidden = true;
+    el.submit.disabled = true;
+    el.submit.textContent = "Ouverture…";
+
+    return fetch(apiUrl("/login"), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ password: password }),
+    })
+      .then(function (response) {
+        return response.json().then(function (data) {
+          return { ok: response.ok, data: data };
+        });
+      })
+      .then(function (result) {
+        if (!result.ok) throw new Error(result.data.error || "Accès refusé");
+        state.token = result.data.token;
+        state.gallery = result.data.gallery;
+        state.photos = result.data.photos;
+
+        el.title.textContent = state.gallery.title;
+        el.subtitle.textContent = state.gallery.clientName
+          ? "Galerie de " + state.gallery.clientName
+          : "";
+        if (state.gallery.expiresAt) {
+          var date = new Date(state.gallery.expiresAt * 1000);
+          el.expiry.textContent =
+            "Accès valable jusqu'au " +
+            date.toLocaleDateString("fr-BE", { day: "numeric", month: "long", year: "numeric" });
+          el.expiry.hidden = false;
+        }
+
+        hide(el.login);
+        show(el.gallery);
+        if (state.photos.length === 0) {
+          el.empty.hidden = false;
+        } else {
+          buildGrid();
+        }
+
+        // La session expire : on prévient avant que les tuiles cessent d'arriver.
+        setTimeout(function () {
+          if (state.token) sessionLost("Votre session a expiré. Saisissez à nouveau le mot de passe.");
+        }, Math.max(60, (result.data.expiresIn || 7200) - 30) * 1000);
+      })
+      .catch(function (err) {
+        el.error.textContent = err.message || "Accès refusé";
+        el.error.hidden = false;
+      })
+      .then(function () {
+        el.submit.disabled = false;
+        el.submit.textContent = "Voir mes photos";
+      });
+  }
+
+  /* ---------- Démarrage ---------- */
+
+  function readSlug() {
+    var params = new URLSearchParams(window.location.search);
+    var slug = params.get("g") || window.location.hash.replace(/^#/, "");
+    return slug ? slug.toLowerCase().replace(/[^a-z0-9-]/g, "") : "";
+  }
+
+  function init() {
+    el = {
+      login: $("gp-login"),
+      gallery: $("gp-gallery"),
+      form: $("gp-form"),
+      password: $("gp-password"),
+      submit: $("gp-submit"),
+      error: $("gp-error"),
+      title: $("gp-title"),
+      subtitle: $("gp-subtitle"),
+      expiry: $("gp-expiry"),
+      grid: $("gp-grid"),
+      empty: $("gp-empty"),
+      viewer: $("gp-viewer"),
+      viewerCanvas: $("gp-viewer-canvas"),
+      counter: $("gp-counter"),
+      prev: $("gp-prev"),
+      next: $("gp-next"),
+      closeBtn: $("gp-close"),
+      viewerHeart: $("gp-viewer-heart"),
+      veil: $("gp-veil"),
+      missing: $("gp-missing"),
+      toolbar: $("gp-toolbar"),
+      selectionCount: $("gp-selection-count"),
+      filterCheckbox: $("gp-filter-selected"),
+      filterEmpty: $("gp-filter-empty"),
+      commentToggle: $("gp-comment-toggle"),
+      commentPanel: $("gp-comment-panel"),
+      commentInput: $("gp-comment-input"),
+      commentStatus: $("gp-comment-status"),
+    };
+
+    state.slug = readSlug();
+    if (!API) {
+      el.error.textContent = "Configuration manquante : renseignez GALERIE_CONFIG.api.";
+      el.error.hidden = false;
+      el.submit.disabled = true;
+      return;
+    }
+    if (!state.slug) {
+      hide(el.login);
+      show(el.missing);
+      return;
+    }
+
+    el.form.addEventListener("submit", function (event) {
+      event.preventDefault();
+      login(el.password.value);
+    });
+    el.prev.addEventListener("click", function () {
+      step(-1);
+    });
+    el.next.addEventListener("click", function () {
+      step(1);
+    });
+    el.closeBtn.addEventListener("click", closeViewer);
+    el.viewer.addEventListener("click", function (event) {
+      if (event.target === el.viewer) closeViewer();
+    });
+    if (el.viewerHeart) {
+      el.viewerHeart.addEventListener("click", function () {
+        var photo = currentViewerPhoto();
+        if (photo) toggleSelect(photo);
+      });
+    }
+    if (el.filterCheckbox) {
+      el.filterCheckbox.addEventListener("change", function () {
+        state.filterSelected = el.filterCheckbox.checked;
+        el.grid.classList.toggle("gp-grid-filtered", state.filterSelected);
+        updateSelectionUI();
+      });
+    }
+    if (el.commentToggle) {
+      el.commentToggle.addEventListener("click", toggleCommentPanel);
+    }
+    wireCommentInput();
+
+    installGuards();
+    el.password.focus();
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+  } else {
+    init();
+  }
+})();
