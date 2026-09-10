@@ -4,7 +4,7 @@ compatibility_date = "2025-01-01"
 
 # Origines autorisées à appeler l'API (le site qui héberge la page galerie).
 [vars]
-ALLOWED_ORIGINS = "https://littledreamphotos.pages.dev,https://www.littledreamphotos.com,http://localhost:8000"
+ALLOWED_ORIGINS = "https://holypixx-web.pages.dev,https://www.littledreamphotos.com,http://localhost:8000"
 
 # Base de métadonnées : galeries, photos, journal d'accès.
 # Créer avec :  npx wrangler d1 create galerie-protegee
