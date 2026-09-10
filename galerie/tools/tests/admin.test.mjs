@@ -67,6 +67,18 @@ check("la galerie créée fournit un lien et un mot de passe",
 
 await page.click('#ad-created-modal [data-close-modal]');
 await page.waitForSelector("#ad-created-modal", { state: "hidden" });
+
+/* ---------- Régénération du mot de passe ---------- */
+
+await page.click("#ad-new-password");
+await page.waitForSelector("#ad-confirm-modal:not([hidden])");
+await page.click("#ad-confirm-ok");
+await page.waitForSelector("#ad-password-modal:not([hidden])", { timeout: 10000 });
+const regeneratedPassword = await page.inputValue("#ad-password-value");
+check("le nouveau mot de passe diffère de celui affiché à la création",
+      regeneratedPassword.length >= 8 && regeneratedPassword !== password);
+await page.click('#ad-password-modal [data-close-modal]');
+await page.waitForSelector("#ad-password-modal", { state: "hidden" });
 await page.waitForSelector(".ad-dropzone", { timeout: 10000 });
 check("après création, la vue détail s'ouvre directement", await page.isVisible(".ad-dropzone"));
 

@@ -156,6 +156,15 @@ h3 { font-size: 1.15rem; margin-bottom: .9rem; }
 }
 .ad-back:hover { color: var(--rose); }
 
+.ad-link-btn {
+  background: none; border: 0; padding: 0; margin-left: .3rem;
+  font-family: inherit; font-size: inherit;
+  color: var(--rose-deep);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.ad-link-btn:hover { color: var(--rose); }
+
 .ad-detail-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
 
 .ad-section-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: .9rem; }

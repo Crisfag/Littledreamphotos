@@ -127,6 +127,27 @@
     </div>
   </div>
 
+  <!-- ============ Modale : nouveau mot de passe généré ============ -->
+  <div class="ad-modal-backdrop" id="ad-password-modal" hidden>
+    <div class="ad-modal" role="dialog" aria-modal="true" aria-labelledby="ad-password-title">
+      <h2 id="ad-password-title">Nouveau mot de passe</h2>
+      <p class="ad-lede">
+        L'ancien ne fonctionne plus. Transmettez celui-ci à votre client — il
+        n'est affiché qu'une seule fois, ici.
+      </p>
+      <label class="ad-field">
+        <span>Mot de passe</span>
+        <div class="ad-copy-row">
+          <input type="text" id="ad-password-value" readonly />
+          <button type="button" class="ad-btn" data-copy="ad-password-value">Copier</button>
+        </div>
+      </label>
+      <div class="ad-modal-actions">
+        <button type="button" class="ad-btn ad-btn-primary" data-close-modal>C'est noté</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ============ Confirmation générique ============ -->
   <div class="ad-modal-backdrop" id="ad-confirm-modal" hidden>
     <div class="ad-modal ad-modal-narrow" role="alertdialog" aria-modal="true" aria-labelledby="ad-confirm-title">

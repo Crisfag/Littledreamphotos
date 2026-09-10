@@ -333,7 +333,8 @@
       '<input type="text" readonly value="' + esc(data.link) + '" id="ad-detail-link" />' +
       '<button type="button" class="ad-btn" data-copy="ad-detail-link">Copier</button>' +
       "</div></label>" +
-      '<p class="ad-hint">Le mot de passe n\'est plus récupérable ici : il n\'a été affiché qu\'à la création.</p>' +
+      '<p class="ad-hint">Le mot de passe n\'est plus récupérable ici : il n\'a été affiché qu\'à la création. ' +
+      '<button type="button" class="ad-link-btn" id="ad-new-password">Générer un nouveau mot de passe</button></p>' +
       "</section>" +
       '<section class="ad-dropzone" id="ad-dropzone">' +
       '<p><strong>Glissez vos photos ici</strong>, ou</p>' +
@@ -389,6 +390,17 @@
           await api("DELETE", "/galleries/" + encodeURIComponent(slug));
           toast("Galerie supprimée.");
           renderList();
+        } catch (err) {
+          toast(err.message, true);
+        }
+      });
+    });
+    document.getElementById("ad-new-password").addEventListener("click", function () {
+      confirmAction("Générer un nouveau mot de passe ? L'ancien cessera aussitôt de fonctionner.", async function () {
+        try {
+          var result = await api("POST", "/galleries/" + encodeURIComponent(slug) + "/password");
+          document.getElementById("ad-password-value").value = result.password;
+          openModal("ad-password-modal");
         } catch (err) {
           toast(err.message, true);
         }

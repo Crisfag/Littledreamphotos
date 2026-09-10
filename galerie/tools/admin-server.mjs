@@ -386,6 +386,18 @@ async function handleApi(req, res, url) {
     return json(res, 405, { error: "Méthode non autorisée" });
   }
 
+  // POST /local/galleries/:slug/password — nouveau mot de passe généré côté
+  // serveur, jamais choisi par le navigateur (même logique qu'à la création).
+  if (parts.length === 3 && parts[2] === "password" && req.method === "POST") {
+    const newPassword = generatePassword();
+    try {
+      await client.regeneratePassword(slug, newPassword);
+      return json(res, 200, { password: newPassword, link: linkFor(slug) });
+    } catch (err) {
+      return relayError(res, err, "Impossible de générer un nouveau mot de passe");
+    }
+  }
+
   // POST /local/galleries/:slug/photos  (une photo par requête, multipart)
   if (parts.length === 3 && parts[2] === "photos" && req.method === "POST") {
     let galleryInfo;

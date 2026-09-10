@@ -100,6 +100,10 @@ export class WorkerClient {
     return this.request("DELETE", `/api/admin/galleries/${encodeURIComponent(slug)}`);
   }
 
+  regeneratePassword(slug, password) {
+    return this.request("POST", `/api/admin/galleries/${encodeURIComponent(slug)}/password`, { password });
+  }
+
   addPhoto(slug, photo) {
     return this.request("POST", `/api/admin/galleries/${encodeURIComponent(slug)}/photos`, photo);
   }

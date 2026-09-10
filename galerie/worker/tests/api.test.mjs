@@ -524,6 +524,33 @@ const stillThere = await (await admin("GET", `/api/admin/galleries/${SLUG}`)).js
 check("la galerie existe toujours après la tentative de suppression étrangère",
       stillThere.gallery?.slug === SLUG);
 
+/* ---------- Régénération du mot de passe ---------- */
+
+const foreignRegen = await peerAdmin("POST", `/api/admin/galleries/${SLUG}/password`, { password: "un-autre-mot-de-passe" });
+check("un photographe ne peut pas régénérer le mot de passe d'une galerie d'un autre compte",
+      foreignRegen.status === 404);
+
+const weakRegen = await admin("POST", `/api/admin/galleries/${SLUG}/password`, { password: "court" });
+check("un mot de passe de remplacement trop court est refusé", weakRegen.status === 400);
+
+const NEW_PASSWORD = "nouveau-mot-de-passe-solide";
+const regen = await admin("POST", `/api/admin/galleries/${SLUG}/password`, { password: NEW_PASSWORD });
+check("le photographe peut régénérer le mot de passe de sa propre galerie", regen.ok);
+
+const oldPasswordLogin = await fetch(`${BASE}/api/gallery/${SLUG}/login`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ password: "mot-de-passe-solide" }),
+});
+check("l'ancien mot de passe ne fonctionne plus après régénération", oldPasswordLogin.status === 401);
+
+const newPasswordLogin = await fetch(`${BASE}/api/gallery/${SLUG}/login`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ password: NEW_PASSWORD }),
+});
+check("le nouveau mot de passe fonctionne", newPasswordLogin.ok);
+
 /* ---------- Expiration ---------- */
 
 const expired = await admin("POST", "/api/admin/galleries", {

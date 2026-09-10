@@ -126,6 +126,31 @@ async function getGallery(env, photographerId, slug) {
   });
 }
 
+// Remplace le mot de passe d'une galerie — l'ancien cesse aussitôt de
+// fonctionner. Le mot de passe n'étant jamais stocké qu'en empreinte à sens
+// unique, c'est la seule façon d'en redonner un valide au photographe s'il a
+// perdu celui affiché à la création : pas de « récupération », une rotation.
+async function regeneratePassword(request, env, photographerId, slug) {
+  const gallery = await ownedGallery(env, photographerId, slug);
+  if (!gallery) return fail(404, "Galerie introuvable");
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return fail(400, "Requête invalide");
+  }
+  const password = String(body.password || "");
+  if (password.length < 8) return fail(400, "Mot de passe trop court (8 caractères minimum)");
+
+  const { hash, salt } = await hashPassword(password);
+  await env.DB.prepare("UPDATE galleries SET password_hash = ?, password_salt = ? WHERE id = ?")
+    .bind(hash, salt, gallery.id)
+    .run();
+
+  return json({ ok: true });
+}
+
 async function deleteGallery(env, photographerId, slug) {
   const gallery = await ownedGallery(env, photographerId, slug);
   if (!gallery) return fail(404, "Galerie introuvable");
@@ -297,6 +322,9 @@ export async function handleAdmin(request, env, ctx, path) {
     }
     if (parts.length === 5 && parts[4] === "log" && request.method === "GET") {
       return galleryLog(request, env, photographerId, slug);
+    }
+    if (parts.length === 5 && parts[4] === "password" && request.method === "POST") {
+      return regeneratePassword(request, env, photographerId, slug);
     }
   }
 
