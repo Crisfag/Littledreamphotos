@@ -11,16 +11,22 @@ CREATE TABLE IF NOT EXISTS photographers (
 );
 
 CREATE TABLE IF NOT EXISTS galleries (
-  id              TEXT PRIMARY KEY,
-  photographer_id TEXT NOT NULL REFERENCES photographers(id) ON DELETE CASCADE,
-  slug            TEXT NOT NULL UNIQUE,
-  title           TEXT NOT NULL,
-  client_name     TEXT NOT NULL DEFAULT '',
-  password_hash   TEXT NOT NULL,
-  password_salt   TEXT NOT NULL,
-  watermark_text  TEXT NOT NULL DEFAULT '',
-  expires_at      INTEGER,              -- epoch secondes ; NULL = pas d'expiration
-  created_at      INTEGER NOT NULL
+  id                     TEXT PRIMARY KEY,
+  photographer_id        TEXT NOT NULL REFERENCES photographers(id) ON DELETE CASCADE,
+  slug                   TEXT NOT NULL UNIQUE,
+  title                  TEXT NOT NULL,
+  client_name            TEXT NOT NULL DEFAULT '',
+  password_hash          TEXT NOT NULL,
+  password_salt          TEXT NOT NULL,
+  watermark_text         TEXT NOT NULL DEFAULT '',
+  expires_at             INTEGER,              -- epoch secondes ; NULL = pas d'expiration
+  -- Arrière-plan de l'écran de mot de passe client : 'color' (défaut, palette
+  -- de la marque) ou 'image' (photo importée par le photographe — jamais une
+  -- des photos protégées de la galerie, pour ne rien exposer avant
+  -- authentification). L'image elle-même vit dans R2 sous backgrounds/{id}.jpg.
+  login_background_type  TEXT NOT NULL DEFAULT 'color',
+  login_background_color TEXT NOT NULL DEFAULT '',
+  created_at             INTEGER NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_galleries_photographer ON galleries(photographer_id, created_at);
@@ -73,6 +79,10 @@ CREATE TABLE IF NOT EXISTS photos (
 -- (SQLite/D1 ne sait pas ajouter une contrainte NOT NULL après coup sur une
 -- colonne existante : elle reste nullable en pratique, mais le Worker refuse
 -- déjà toute galerie sans photographer_id via les requêtes applicatives.)
+
+-- Migration vers l'arrière-plan personnalisable (bases créées avant) :
+--   ALTER TABLE galleries ADD COLUMN login_background_type TEXT NOT NULL DEFAULT 'color';
+--   ALTER TABLE galleries ADD COLUMN login_background_color TEXT NOT NULL DEFAULT '';
 
 CREATE INDEX IF NOT EXISTS idx_photos_gallery ON photos(gallery_id, position);
 

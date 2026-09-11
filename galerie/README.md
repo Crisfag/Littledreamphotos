@@ -202,6 +202,11 @@ local sur `127.0.0.1` n'est qu'un cas particulier, pas un système à part.
   d'en générer un nouveau (l'ancien cesse aussitôt de fonctionner) : il n'est
   jamais stocké autrement qu'en empreinte à sens unique, donc pas de
   « récupération » possible, seulement une rotation.
+- **Arrière-plan de l'écran de mot de passe** : une couleur parmi une
+  palette prédéfinie, une couleur personnalisée, ou une image importée par
+  le photographe. Jamais une photo de la galerie elle-même — cet écran
+  s'affiche avant que le client ait prouvé quoi que ce soit, donc rien qui y
+  apparaît ne doit être une livraison protégée.
 - **Glisser-déposer** des photos sur la page de la galerie : chacune est
   traitée (réduction, empreinte, filigrane, découpage) et envoyée avec une
   barre de progression individuelle. Plusieurs photos partent en parallèle.
@@ -316,7 +321,7 @@ des tuiles, refus du mauvais mot de passe, absence de toute balise `<img>`,
 neutralisation du menu contextuel et de la copie, voile sur « Impr. écran » et
 sur perte de focus, consignation au journal.
 
-**API du Worker** — 91 vérifications contre le vrai moteur Cloudflare (D1 et R2
+**API du Worker** — 106 vérifications contre le vrai moteur Cloudflare (D1 et R2
 émulés localement par `wrangler dev`) : comptes photographes (inscription,
 connexion, session), cloisonnement strict entre comptes (un photographe ne
 peut ni lister, ni lire, ni modifier, ni même deviner l'existence des
@@ -324,12 +329,15 @@ galeries, photos et tuiles d'un autre compte), création et cloisonnement des
 galeries d'un même compte, authentification client, expiration, limitation
 des tentatives de mot de passe, suppression en cascade (galerie et photo
 isolée), sélection et commentaire posés et retirés, régénération du mot de
-passe d'une galerie (l'ancien cesse aussitôt de fonctionner), journal sans
-IP en clair.
+passe d'une galerie (l'ancien cesse aussitôt de fonctionner), arrière-plan
+personnalisé de l'écran de connexion (couleur ou image, cloisonné par
+compte, et une galerie inconnue ne se distingue jamais d'une galerie sans
+arrière-plan personnalisé), journal sans IP en clair.
 
-**Interface d'administration** — 18 vérifications dans un vrai navigateur,
+**Interface d'administration** — 20 vérifications dans un vrai navigateur,
 contre le vrai Worker local : connexion depuis le formulaire (pas de session
 présupposée), création d'une galerie, régénération de son mot de passe,
+choix d'une couleur ou d'une image pour l'écran de connexion client,
 glisser-déposer de photos avec suivi de progression, vraies vignettes
 affichées, suppression d'une photo et d'une galerie, déconnexion qui tient
 après un rechargement de page — et un second compte, connecté dans un

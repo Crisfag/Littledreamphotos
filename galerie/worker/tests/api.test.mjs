@@ -551,6 +551,63 @@ const newPasswordLogin = await fetch(`${BASE}/api/gallery/${SLUG}/login`, {
 });
 check("le nouveau mot de passe fonctionne", newPasswordLogin.ok);
 
+/* ---------- Arrière-plan de l'écran de connexion ---------- */
+
+const unknownBackground = await (await fetch(`${BASE}/api/gallery/galerie-inexistante-xyz/background`)).json();
+check("l'arrière-plan d'une galerie inconnue ne se distingue pas d'un arrière-plan par défaut",
+      unknownBackground.type === "color" && unknownBackground.color === "", JSON.stringify(unknownBackground));
+
+const unknownBackgroundImage = await fetch(`${BASE}/api/gallery/galerie-inexistante-xyz/background-image`);
+check("l'image d'arrière-plan d'une galerie inconnue est un 404, comme pour une galerie sans image",
+      unknownBackgroundImage.status === 404);
+
+const defaultBackground = await (await fetch(`${BASE}/api/gallery/${SLUG}/background`)).json();
+check("par défaut, une galerie n'a pas d'arrière-plan personnalisé",
+      defaultBackground.type === "color" && defaultBackground.color === "", JSON.stringify(defaultBackground));
+
+const foreignColorSet = await peerAdmin("POST", `/api/admin/galleries/${SLUG}/background/color`, { color: "#112233" });
+check("un photographe ne peut pas changer l'arrière-plan d'une galerie d'un autre compte", foreignColorSet.status === 404);
+
+const badColor = await admin("POST", `/api/admin/galleries/${SLUG}/background/color`, { color: "pas-une-couleur" });
+check("une couleur mal formée est refusée", badColor.status === 400);
+
+const colorSet = await admin("POST", `/api/admin/galleries/${SLUG}/background/color`, { color: "#112233" });
+check("le photographe peut fixer une couleur d'arrière-plan", colorSet.ok);
+
+const backgroundAfterColor = await (await fetch(`${BASE}/api/gallery/${SLUG}/background`)).json();
+check("la couleur choisie est bien renvoyée au client",
+      backgroundAfterColor.type === "color" && backgroundAfterColor.color === "#112233", JSON.stringify(backgroundAfterColor));
+
+const foreignImageSet = await peerAdmin("PUT", `/api/admin/galleries/${SLUG}/background/image`, TILE, true);
+check("un photographe ne peut pas importer une image d'arrière-plan pour une galerie d'un autre compte",
+      foreignImageSet.status === 404);
+
+const imageSet = await admin("PUT", `/api/admin/galleries/${SLUG}/background/image`, TILE, true);
+check("le photographe peut importer une image d'arrière-plan", imageSet.ok);
+
+const backgroundAfterImage = await (await fetch(`${BASE}/api/gallery/${SLUG}/background`)).json();
+check("le type bascule sur « image » après import", backgroundAfterImage.type === "image", JSON.stringify(backgroundAfterImage));
+
+const backgroundImage = await fetch(`${BASE}/api/gallery/${SLUG}/background-image`);
+const backgroundImageBytes = await backgroundImage.arrayBuffer();
+check("l'image d'arrière-plan est servie publiquement, sans authentification",
+      backgroundImage.ok && backgroundImageBytes.byteLength === TILE.length &&
+      backgroundImage.headers.get("content-type") === "image/jpeg");
+
+const foreignReset = await peerAdmin("DELETE", `/api/admin/galleries/${SLUG}/background`);
+check("un photographe ne peut pas réinitialiser l'arrière-plan d'une galerie d'un autre compte",
+      foreignReset.status === 404);
+
+const backgroundReset = await admin("DELETE", `/api/admin/galleries/${SLUG}/background`);
+check("le photographe peut réinitialiser l'arrière-plan à la couleur par défaut", backgroundReset.ok);
+
+const backgroundAfterReset = await (await fetch(`${BASE}/api/gallery/${SLUG}/background`)).json();
+check("après réinitialisation, l'arrière-plan redevient la couleur par défaut",
+      backgroundAfterReset.type === "color" && backgroundAfterReset.color === "", JSON.stringify(backgroundAfterReset));
+
+const backgroundImageAfterReset = await fetch(`${BASE}/api/gallery/${SLUG}/background-image`);
+check("l'image d'arrière-plan n'est plus servie après réinitialisation", backgroundImageAfterReset.status === 404);
+
 /* ---------- Expiration ---------- */
 
 const expired = await admin("POST", "/api/admin/galleries", {

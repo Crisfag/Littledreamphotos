@@ -23,6 +23,15 @@
     devtools: "Outils de développement ouverts",
   };
 
+  var BACKGROUND_PRESETS = [
+    { color: "", label: "Défaut" },
+    { color: "#e5dbd0", label: "Sable" },
+    { color: "#b98a7a", label: "Rose" },
+    { color: "#dce3e0", label: "Sauge" },
+    { color: "#e3dce8", label: "Lavande" },
+    { color: "#3a332e", label: "Charbon" },
+  ];
+
   var state = { view: "list", galleries: [], current: null, config: { previewCols: 2, previewRows: 2 } };
   var el = {
     view: document.getElementById("ad-view"),
@@ -300,6 +309,20 @@
     );
   }
 
+  function backgroundSwatchesHtml(gallery) {
+    var activeColor = gallery.login_background_type === "color" ? (gallery.login_background_color || "") : null;
+    return BACKGROUND_PRESETS.map(function (preset) {
+      var active = activeColor !== null && activeColor === preset.color;
+      var style = preset.color ? "background:" + preset.color + ";" : "background:linear-gradient(135deg,#f7f2ec,#efe6db);";
+      return (
+        '<button type="button" class="ad-bg-swatch' + (active ? " ad-bg-swatch-active" : "") + '" ' +
+        'data-color="' + esc(preset.color) + '" title="' + esc(preset.label) + '" style="' + style + '">' +
+        '<span class="ad-bg-swatch-label">' + esc(preset.label) + "</span>" +
+        "</button>"
+      );
+    }).join("");
+  }
+
   async function renderDetail(slug, skipHash) {
     var hash = "#/g/" + encodeURIComponent(slug);
     if (!skipHash && location.hash !== hash) history.pushState(null, "", hash);
@@ -335,6 +358,20 @@
       "</div></label>" +
       '<p class="ad-hint">Le mot de passe n\'est plus récupérable ici : il n\'a été affiché qu\'à la création. ' +
       '<button type="button" class="ad-link-btn" id="ad-new-password">Générer un nouveau mot de passe</button></p>' +
+      "</section>" +
+      '<section class="ad-background">' +
+      '<div class="ad-section-header"><h3>Arrière-plan de l\'écran de connexion client</h3></div>' +
+      '<p class="ad-hint">Ce que voit le client avant même d\'entrer son mot de passe. Jamais une de ses photos — uniquement une couleur ou une image que vous importez vous-même.</p>' +
+      '<div class="ad-bg-swatches" id="ad-bg-swatches">' + backgroundSwatchesHtml(data.gallery) + "</div>" +
+      '<div class="ad-bg-custom">' +
+      '<label class="ad-bg-color-label">Couleur personnalisée<input type="color" id="ad-bg-color-picker" value="' +
+      esc(data.gallery.login_background_color || "#f7f2ec") + '" /></label>' +
+      '<label class="ad-btn">Importer une image<input type="file" id="ad-bg-file-input" accept="image/*" hidden /></label>' +
+      "</div>" +
+      (data.gallery.login_background_type === "image"
+        ? '<img class="ad-bg-preview" alt="Arrière-plan actuel" src="' +
+          esc(state.config.api) + "/api/gallery/" + esc(data.gallery.slug) + "/background-image?t=" + Date.now() + '" />'
+        : "") +
       "</section>" +
       '<section class="ad-dropzone" id="ad-dropzone">' +
       '<p><strong>Glissez vos photos ici</strong>, ou</p>' +
@@ -394,6 +431,47 @@
           toast(err.message, true);
         }
       });
+    });
+    document.getElementById("ad-bg-swatches").addEventListener("click", async function (event) {
+      var btn = event.target.closest(".ad-bg-swatch");
+      if (!btn) return;
+      var color = btn.getAttribute("data-color");
+      try {
+        if (color) await api("POST", "/galleries/" + encodeURIComponent(slug) + "/background/color", { color: color });
+        else await api("DELETE", "/galleries/" + encodeURIComponent(slug) + "/background");
+        toast("Arrière-plan mis à jour.");
+        renderDetail(slug, true);
+      } catch (err) {
+        toast(err.message, true);
+      }
+    });
+    document.getElementById("ad-bg-color-picker").addEventListener("change", async function (event) {
+      try {
+        await api("POST", "/galleries/" + encodeURIComponent(slug) + "/background/color", { color: event.target.value });
+        toast("Arrière-plan mis à jour.");
+        renderDetail(slug, true);
+      } catch (err) {
+        toast(err.message, true);
+      }
+    });
+    document.getElementById("ad-bg-file-input").addEventListener("change", async function (event) {
+      var file = event.target.files[0];
+      event.target.value = "";
+      if (!file) return;
+      var form = new FormData();
+      form.append("file", file, file.name);
+      try {
+        var response = await fetch("/local/galleries/" + encodeURIComponent(slug) + "/background/image", {
+          method: "POST",
+          body: form,
+        });
+        var result = await response.json().catch(function () { return {}; });
+        if (!response.ok) throw new Error(result.error || "Échec de l'envoi");
+        toast("Arrière-plan mis à jour.");
+        renderDetail(slug, true);
+      } catch (err) {
+        toast(err.message, true);
+      }
     });
     document.getElementById("ad-new-password").addEventListener("click", function () {
       confirmAction("Générer un nouveau mot de passe ? L'ancien cessera aussitôt de fonctionner.", async function () {

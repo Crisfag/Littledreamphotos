@@ -121,6 +121,8 @@ async function getGallery(env, photographerId, slug) {
       watermark_text: gallery.watermark_text,
       expires_at: gallery.expires_at,
       created_at: gallery.created_at,
+      login_background_type: gallery.login_background_type,
+      login_background_color: gallery.login_background_color,
     },
     photos,
   });
@@ -151,6 +153,67 @@ async function regeneratePassword(request, env, photographerId, slug) {
   return json({ ok: true });
 }
 
+const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
+
+// Couleur unie (ou remise à la couleur par défaut si `color` est vide).
+// N'affecte jamais une éventuelle image déjà stockée dans R2 — juste le
+// type actif, comme un interrupteur entre les deux façons de personnaliser.
+async function setBackgroundColor(request, env, photographerId, slug) {
+  const gallery = await ownedGallery(env, photographerId, slug);
+  if (!gallery) return fail(404, "Galerie introuvable");
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return fail(400, "Requête invalide");
+  }
+  const color = String(body.color || "");
+  if (color && !HEX_COLOR_RE.test(color)) return fail(400, "Couleur invalide (format #rrggbb)");
+
+  await env.DB.prepare(
+    "UPDATE galleries SET login_background_type = 'color', login_background_color = ? WHERE id = ?"
+  )
+    .bind(color, gallery.id)
+    .run();
+
+  return json({ ok: true });
+}
+
+// Image d'ambiance importée par le photographe — jamais une photo de la
+// galerie elle-même (voir le commentaire sur la colonne dans schema.sql) :
+// l'appelant (admin-server.mjs) est responsable de fournir une image déjà
+// redimensionnée, ce Worker se contente de la stocker.
+async function setBackgroundImage(request, env, photographerId, slug) {
+  const gallery = await ownedGallery(env, photographerId, slug);
+  if (!gallery) return fail(404, "Galerie introuvable");
+
+  await env.TILES.put(`backgrounds/${gallery.id}.jpg`, request.body, {
+    httpMetadata: { contentType: "image/jpeg" },
+  });
+  await env.DB.prepare("UPDATE galleries SET login_background_type = 'image' WHERE id = ?")
+    .bind(gallery.id)
+    .run();
+
+  return json({ ok: true });
+}
+
+// Retour à la couleur par défaut de la marque. L'éventuelle image importée
+// reste dans R2 (pas de suppression immédiate) — orpheline mais inoffensive,
+// jamais servie tant que login_background_type n'est pas « image ».
+async function resetBackground(env, photographerId, slug) {
+  const gallery = await ownedGallery(env, photographerId, slug);
+  if (!gallery) return fail(404, "Galerie introuvable");
+
+  await env.DB.prepare(
+    "UPDATE galleries SET login_background_type = 'color', login_background_color = '' WHERE id = ?"
+  )
+    .bind(gallery.id)
+    .run();
+
+  return json({ ok: true });
+}
+
 async function deleteGallery(env, photographerId, slug) {
   const gallery = await ownedGallery(env, photographerId, slug);
   if (!gallery) return fail(404, "Galerie introuvable");
@@ -164,6 +227,9 @@ async function deleteGallery(env, photographerId, slug) {
     }
     cursor = listed.truncated ? listed.cursor : undefined;
   } while (cursor);
+  // Sous un préfixe distinct des tuiles (backgrounds/, pas ${gallery.id}/) :
+  // la boucle ci-dessus ne le voit pas, il faut l'effacer explicitement.
+  await env.TILES.delete(`backgrounds/${gallery.id}.jpg`);
 
   await env.DB.batch([
     env.DB.prepare("DELETE FROM photos WHERE gallery_id = ?").bind(gallery.id),
@@ -325,6 +391,15 @@ export async function handleAdmin(request, env, ctx, path) {
     }
     if (parts.length === 5 && parts[4] === "password" && request.method === "POST") {
       return regeneratePassword(request, env, photographerId, slug);
+    }
+    if (parts.length === 6 && parts[4] === "background" && parts[5] === "color" && request.method === "POST") {
+      return setBackgroundColor(request, env, photographerId, slug);
+    }
+    if (parts.length === 6 && parts[4] === "background" && parts[5] === "image" && request.method === "PUT") {
+      return setBackgroundImage(request, env, photographerId, slug);
+    }
+    if (parts.length === 5 && parts[4] === "background" && request.method === "DELETE") {
+      return resetBackground(env, photographerId, slug);
     }
   }
 

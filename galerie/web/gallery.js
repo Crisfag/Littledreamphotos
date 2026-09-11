@@ -673,6 +673,31 @@
     return slug ? slug.toLowerCase().replace(/[^a-z0-9-]/g, "") : "";
   }
 
+  // Arrière-plan personnalisé de l'écran de mot de passe — choisi par le
+  // photographe (couleur ou image importée, jamais une photo protégée de la
+  // galerie). Échoue en silence : sans réponse, on garde l'apparence par
+  // défaut, ce n'est jamais bloquant pour accéder à la galerie.
+  function applyBackground() {
+    fetch(apiUrl("/background"))
+      .then(function (response) {
+        return response.ok ? response.json() : null;
+      })
+      .then(function (data) {
+        if (!data || !el.login) return;
+        if (data.type === "image") {
+          el.login.style.backgroundImage =
+            "linear-gradient(rgba(20, 16, 14, .4), rgba(20, 16, 14, .4)), url(" + apiUrl("/background-image") + ")";
+          el.login.style.backgroundSize = "cover";
+          el.login.style.backgroundPosition = "center";
+        } else if (data.color) {
+          el.login.style.background = data.color;
+        }
+      })
+      .catch(function () {
+        /* apparence par défaut, sans conséquence */
+      });
+  }
+
   function init() {
     el = {
       login: $("gp-login"),
@@ -717,6 +742,7 @@
       show(el.missing);
       return;
     }
+    applyBackground();
 
     el.form.addEventListener("submit", function (event) {
       event.preventDefault();

@@ -21,6 +21,7 @@ import { readFile, stat } from "node:fs/promises";
 import { randomBytes } from "node:crypto";
 import { dirname, join, normalize, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import sharp from "sharp";
 import { processPhoto, DEFAULTS } from "./lib/pipeline.mjs";
 import { PREVIEW_COLS, PREVIEW_ROWS } from "./lib/tiles.mjs";
 import { WorkerClient } from "./lib/client.mjs";
@@ -395,6 +396,63 @@ async function handleApi(req, res, url) {
       return json(res, 200, { password: newPassword, link: linkFor(slug) });
     } catch (err) {
       return relayError(res, err, "Impossible de générer un nouveau mot de passe");
+    }
+  }
+
+  // POST /local/galleries/:slug/background/color
+  if (parts.length === 4 && parts[2] === "background" && parts[3] === "color" && req.method === "POST") {
+    const body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
+    try {
+      await client.setBackgroundColor(slug, String(body.color || ""));
+      return json(res, 200, { ok: true });
+    } catch (err) {
+      return relayError(res, err, "Impossible d'enregistrer la couleur");
+    }
+  }
+
+  // POST /local/galleries/:slug/background/image — image d'ambiance
+  // importée par le photographe (jamais une photo de la galerie elle-même,
+  // pour ne rien exposer avant que le client se soit identifié). Simple
+  // redimensionnement, sans filigrane ni empreinte : ce n'est pas une
+  // livraison, juste un décor.
+  if (parts.length === 4 && parts[2] === "background" && parts[3] === "image" && req.method === "POST") {
+    const contentLength = Number(req.headers["content-length"] || 0);
+    if (contentLength > MAX_UPLOAD_BYTES) return json(res, 413, { error: "Fichier trop volumineux" });
+
+    let form;
+    try {
+      const body = await readBody(req);
+      form = await nodeRequestToWebRequest(req, body).formData();
+    } catch (err) {
+      return json(res, err.status || 400, { error: err.status ? err.message : "Fichier illisible" });
+    }
+    const file = form.get("file");
+    if (!file || typeof file.arrayBuffer !== "function") return json(res, 400, { error: "Aucun fichier reçu" });
+
+    try {
+      const input = Buffer.from(await file.arrayBuffer());
+      const resized = await withProcessingSlot(() =>
+        sharp(input)
+          .rotate()
+          .resize({ width: 1920, height: 1920, fit: "inside", withoutEnlargement: true })
+          .jpeg({ quality: 80 })
+          .toBuffer()
+      );
+      await client.setBackgroundImage(slug, resized);
+      return json(res, 200, { ok: true });
+    } catch (err) {
+      console.error("Échec du traitement de l'image d'arrière-plan :", err);
+      return relayError(res, err, "Échec du traitement de l'image");
+    }
+  }
+
+  // DELETE /local/galleries/:slug/background — retour à la couleur par défaut
+  if (parts.length === 3 && parts[2] === "background" && req.method === "DELETE") {
+    try {
+      await client.resetBackground(slug);
+      return json(res, 200, { ok: true });
+    } catch (err) {
+      return relayError(res, err, "Impossible de réinitialiser l'arrière-plan");
     }
   }
 

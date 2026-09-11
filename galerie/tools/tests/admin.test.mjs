@@ -82,6 +82,22 @@ await page.waitForSelector("#ad-password-modal", { state: "hidden" });
 await page.waitForSelector(".ad-dropzone", { timeout: 10000 });
 check("après création, la vue détail s'ouvre directement", await page.isVisible(".ad-dropzone"));
 
+/* ---------- Arrière-plan de l'écran de connexion ---------- */
+
+await page.click('.ad-bg-swatch[data-color="#b98a7a"]');
+await page.waitForFunction(
+  () => {
+    const btn = document.querySelector('.ad-bg-swatch[data-color="#b98a7a"]');
+    return btn && btn.classList.contains("ad-bg-swatch-active");
+  },
+  { timeout: 10000 }
+);
+check("une couleur prédéfinie choisie dans l'admin est bien enregistrée (confirmé après rechargement des données)", true);
+
+await page.setInputFiles("#ad-bg-file-input", PHOTOS[0]);
+await page.waitForSelector(".ad-bg-preview", { timeout: 15000 });
+check("une image importée comme arrière-plan s'affiche en aperçu", await page.isVisible(".ad-bg-preview"));
+
 /* ---------- Retour à la liste, la galerie y apparaît ---------- */
 
 await page.click("#ad-back");

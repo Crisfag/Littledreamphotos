@@ -191,6 +191,30 @@ h3 { font-size: 1.15rem; margin-bottom: .9rem; }
 }
 .ad-copy-row .ad-btn { flex-shrink: 0; }
 
+/* ---------- Arrière-plan de connexion ---------- */
+
+.ad-bg-swatches { display: flex; flex-wrap: wrap; gap: .6rem; margin: .9rem 0; }
+.ad-bg-swatch {
+  position: relative;
+  width: 4.5rem; height: 3rem;
+  border-radius: 8px;
+  border: 2px solid var(--line);
+  cursor: pointer;
+  overflow: hidden;
+  transition: border-color .15s var(--ease), transform .15s var(--ease);
+}
+.ad-bg-swatch:hover { transform: translateY(-1px); }
+.ad-bg-swatch-active { border-color: var(--rose); box-shadow: 0 0 0 2px rgba(185, 138, 122, .25); }
+.ad-bg-swatch-label {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  font-size: .62rem; text-align: center; padding: .15rem 0;
+  background: rgba(255, 255, 255, .78); color: var(--charcoal);
+}
+.ad-bg-custom { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: .8rem; }
+.ad-bg-color-label { display: flex; align-items: center; gap: .5rem; font-size: .82rem; color: var(--muted); }
+.ad-bg-color-label input[type="color"] { width: 2.2rem; height: 2.2rem; border: 1px solid var(--line); border-radius: 6px; padding: 2px; cursor: pointer; }
+.ad-bg-preview { display: block; width: 100%; max-width: 320px; border-radius: 8px; border: 1px solid var(--line); }
+
 /* ---------- Dépôt de fichiers ---------- */
 
 .ad-dropzone {

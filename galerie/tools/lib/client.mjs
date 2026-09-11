@@ -104,6 +104,18 @@ export class WorkerClient {
     return this.request("POST", `/api/admin/galleries/${encodeURIComponent(slug)}/password`, { password });
   }
 
+  setBackgroundColor(slug, color) {
+    return this.request("POST", `/api/admin/galleries/${encodeURIComponent(slug)}/background/color`, { color });
+  }
+
+  setBackgroundImage(slug, buffer) {
+    return this.request("PUT", `/api/admin/galleries/${encodeURIComponent(slug)}/background/image`, buffer, true);
+  }
+
+  resetBackground(slug) {
+    return this.request("DELETE", `/api/admin/galleries/${encodeURIComponent(slug)}/background`);
+  }
+
   addPhoto(slug, photo) {
     return this.request("POST", `/api/admin/galleries/${encodeURIComponent(slug)}/photos`, photo);
   }

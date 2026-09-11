@@ -276,6 +276,33 @@ async function handleEvent(request, env, slug) {
   return json({ ok: true });
 }
 
+// Arrière-plan de l'écran de mot de passe : public, avant toute
+// authentification. Doit donc rester muet sur l'existence de la galerie —
+// une galerie inconnue ou expirée renvoie la même réponse par défaut qu'une
+// galerie qui n'a simplement pas personnalisé son arrière-plan.
+async function handleBackground(env, slug) {
+  const gallery = await getGallery(env, slug);
+  if (!gallery || isExpired(gallery)) {
+    return json({ type: "color", color: "" });
+  }
+  return json({ type: gallery.login_background_type, color: gallery.login_background_color });
+}
+
+// Non trouvée dans les mêmes conditions que ci-dessus (galerie inconnue,
+// expirée, ou qui n'a simplement pas choisi d'image) : toujours un 404 sans
+// distinction, pour ne rien révéler.
+async function handleBackgroundImage(env, slug) {
+  const gallery = await getGallery(env, slug);
+  if (!gallery || isExpired(gallery) || gallery.login_background_type !== "image") {
+    return fail(404, "Aucune image");
+  }
+  const object = await env.TILES.get(`backgrounds/${gallery.id}.jpg`);
+  if (!object) return fail(404, "Aucune image");
+  return new Response(object.body, {
+    headers: { "content-type": "image/jpeg", "cache-control": "public, max-age=3600" },
+  });
+}
+
 export async function handleViewer(request, env, ctx, path) {
   // /api/gallery/<slug>/<action>[/...]
   const parts = path.split("/").filter(Boolean); // api, gallery, slug, action, …
@@ -285,6 +312,12 @@ export async function handleViewer(request, env, ctx, path) {
 
   if (action === "login" && request.method === "POST") {
     return handleLogin(request, env, slug);
+  }
+  if (action === "background" && request.method === "GET" && parts.length === 4) {
+    return handleBackground(env, slug);
+  }
+  if (action === "background-image" && request.method === "GET" && parts.length === 4) {
+    return handleBackgroundImage(env, slug);
   }
   // /api/gallery/<slug>/tile/<photoId>/<niveau>/<colonne>/<ligne>
   if (action === "tile" && request.method === "GET" && parts.length === 8) {
