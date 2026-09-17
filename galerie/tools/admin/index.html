@@ -33,8 +33,38 @@
         <button type="submit" class="ad-btn ad-btn-primary" id="ad-login-submit">Se connecter</button>
       </form>
       <p class="ad-hint">
-        Pas encore de compte ? Créez-en un avec <code>node signup.mjs</code>
-        (voir le README).
+        Pas encore de compte ?
+        <button type="button" class="ad-link-btn" id="ad-show-signup">Créer un compte</button>
+      </p>
+    </section>
+
+    <section class="ad-login-card" id="ad-signup-card" hidden>
+      <div class="ad-brand">
+        <span class="ad-brand-mark">H</span>
+        <div>
+          <p class="ad-brand-name">Holypixx</p>
+          <p class="ad-brand-sub">Créer un compte photographe</p>
+        </div>
+      </div>
+      <form id="ad-signup-form" autocomplete="on">
+        <label class="ad-field">
+          <span>Nom de votre studio</span>
+          <input type="text" name="studioName" autocomplete="organization" placeholder="Mon Studio" />
+        </label>
+        <label class="ad-field">
+          <span>E-mail</span>
+          <input type="email" name="email" required autocomplete="username" />
+        </label>
+        <label class="ad-field">
+          <span>Mot de passe <em>(10 caractères minimum)</em></span>
+          <input type="password" name="password" required minlength="10" autocomplete="new-password" />
+        </label>
+        <p class="ad-error" id="ad-signup-error" hidden></p>
+        <button type="submit" class="ad-btn ad-btn-primary" id="ad-signup-submit">Créer mon compte</button>
+      </form>
+      <p class="ad-hint">
+        Déjà un compte ?
+        <button type="button" class="ad-link-btn" id="ad-show-login">Se connecter</button>
       </p>
     </section>
   </main>

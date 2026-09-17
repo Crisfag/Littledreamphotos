@@ -1,7 +1,9 @@
 // Vérification de l'interface d'administration dans un vrai navigateur,
-// contre un admin-server.mjs déjà lancé sur un Worker local. Le test crée
-// ses propres comptes photographes (via le Worker directement) et se
-// connecte depuis le formulaire, comme le ferait un vrai visiteur.
+// contre un admin-server.mjs déjà lancé sur un Worker local. Le compte
+// principal est créé depuis le formulaire d'inscription lui-même (comme le
+// ferait un vrai visiteur) ; le compte « voisin » utilisé pour vérifier le
+// cloisonnement est créé directement via le Worker, pour ne pas retester
+// l'inscription une seconde fois.
 //
 //   npx wrangler dev --local --port 8788                     (depuis worker/)
 //   GALERIE_API=http://127.0.0.1:8788 GALERIE_FORENSIC_KEY=… \
@@ -36,19 +38,27 @@ const page = await browser.newPage({ viewport: { width: 1200, height: 900 } });
 const exceptions = [];
 page.on("pageerror", (err) => exceptions.push(String(err)));
 
-/* ---------- Connexion depuis le formulaire ---------- */
+/* ---------- Création de compte et connexion, depuis le formulaire ---------- */
 
-const account = await createTestAccount(API, "admin-ui");
+const RUN = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+const email = `admin-ui-${RUN}@test.invalid`;
+const password = "mot-de-passe-de-test-1234";
 
 await page.goto(BASE, { waitUntil: "domcontentloaded" });
 await page.waitForSelector("#ad-login-form", { timeout: 10000 });
 check("l'écran de connexion s'affiche avant tout", await page.isVisible("#ad-login-form"));
 
-await page.fill('#ad-login-form [name="email"]', account.email);
-await page.fill('#ad-login-form [name="password"]', account.password);
-await page.click("#ad-login-submit");
+await page.click("#ad-show-signup");
+await page.waitForSelector("#ad-signup-card", { state: "visible", timeout: 5000 });
+await page.fill('#ad-signup-form [name="studioName"]', "Studio de test");
+await page.fill('#ad-signup-form [name="email"]', email);
+await page.fill('#ad-signup-form [name="password"]', password);
+await page.click("#ad-signup-submit");
 await page.waitForSelector("#ad-new-gallery", { timeout: 10000 });
-check("le tableau de bord se charge après connexion", await page.isVisible("#ad-new-gallery"));
+check("créer un compte depuis le formulaire connecte automatiquement au tableau de bord",
+      await page.isVisible("#ad-new-gallery"));
+check("le nom du studio renseigné à l'inscription apparaît dans la barre supérieure",
+      (await page.textContent("#ad-current-account")).indexOf("Studio de test") === 0);
 
 /* ---------- Création ---------- */
 
@@ -61,9 +71,9 @@ await page.click("#ad-create-submit");
 
 await page.waitForSelector("#ad-created-modal:not([hidden])", { timeout: 10000 });
 const link = await page.inputValue("#ad-created-link");
-const password = await page.inputValue("#ad-created-password");
+const galleryPassword = await page.inputValue("#ad-created-password");
 check("la galerie créée fournit un lien et un mot de passe",
-      link.includes("?g=") && password.length >= 8, `${link} / ${password}`);
+      link.includes("?g=") && galleryPassword.length >= 8, `${link} / ${galleryPassword}`);
 
 await page.click('#ad-created-modal [data-close-modal]');
 await page.waitForSelector("#ad-created-modal", { state: "hidden" });
@@ -76,7 +86,7 @@ await page.click("#ad-confirm-ok");
 await page.waitForSelector("#ad-password-modal:not([hidden])", { timeout: 10000 });
 const regeneratedPassword = await page.inputValue("#ad-password-value");
 check("le nouveau mot de passe diffère de celui affiché à la création",
-      regeneratedPassword.length >= 8 && regeneratedPassword !== password);
+      regeneratedPassword.length >= 8 && regeneratedPassword !== galleryPassword);
 await page.click('#ad-password-modal [data-close-modal]');
 await page.waitForSelector("#ad-password-modal", { state: "hidden" });
 await page.waitForSelector(".ad-dropzone", { timeout: 10000 });
@@ -213,6 +223,15 @@ await page.reload({ waitUntil: "domcontentloaded" });
 await page.waitForSelector("#ad-login-form", { timeout: 10000 });
 check("après déconnexion, recharger la page ne rouvre pas le tableau de bord",
       await page.isVisible("#ad-login-form"));
+
+/* ---------- Le compte créé plus haut se reconnecte normalement ---------- */
+
+await page.fill('#ad-login-form [name="email"]', email);
+await page.fill('#ad-login-form [name="password"]', password);
+await page.click("#ad-login-submit");
+await page.waitForSelector("#ad-new-gallery", { timeout: 10000 });
+check("le compte créé depuis le formulaire d'inscription se reconnecte ensuite normalement",
+      await page.isVisible("#ad-new-gallery"));
 
 check("aucune exception JavaScript", exceptions.length === 0, exceptions.join(" | "));
 

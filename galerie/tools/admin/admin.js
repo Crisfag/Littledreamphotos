@@ -46,6 +46,8 @@
   function showLogin() {
     el.app.hidden = true;
     el.login.hidden = false;
+    el.login.querySelector(".ad-login-card").hidden = false;
+    document.getElementById("ad-signup-card").hidden = true;
   }
 
   function showApp(photographer) {
@@ -647,6 +649,48 @@
   });
 
   /* ---------- Connexion ---------- */
+
+  document.getElementById("ad-show-signup").addEventListener("click", function () {
+    document.getElementById("ad-login").querySelector(".ad-login-card").hidden = true;
+    document.getElementById("ad-signup-card").hidden = false;
+  });
+  document.getElementById("ad-show-login").addEventListener("click", function () {
+    document.getElementById("ad-signup-card").hidden = true;
+    document.getElementById("ad-login").querySelector(".ad-login-card").hidden = false;
+  });
+
+  document.getElementById("ad-signup-form").addEventListener("submit", async function (event) {
+    event.preventDefault();
+    var form = event.target;
+    var errorBox = document.getElementById("ad-signup-error");
+    var submitBtn = document.getElementById("ad-signup-submit");
+    errorBox.hidden = true;
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Création…";
+
+    try {
+      var response = await fetch("/local/auth/signup", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          email: form.email.value.trim(),
+          password: form.password.value,
+          studioName: form.studioName.value.trim(),
+        }),
+      });
+      var data = await response.json().catch(function () { return {}; });
+      if (!response.ok) throw new Error(data.error || "Inscription refusée");
+      form.reset();
+      showApp(data.photographer);
+      bootstrap();
+    } catch (err) {
+      errorBox.textContent = err.message;
+      errorBox.hidden = false;
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Créer mon compte";
+    }
+  });
 
   document.getElementById("ad-login-form").addEventListener("submit", async function (event) {
     event.preventDefault();

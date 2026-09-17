@@ -272,6 +272,37 @@ async function handleAuth(req, res, parts) {
     return json(res, 200, { photographer: data.photographer });
   }
 
+  if (parts.length === 2 && parts[1] === "signup" && req.method === "POST") {
+    let body;
+    try {
+      body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
+    } catch {
+      return json(res, 400, { error: "Requête invalide" });
+    }
+    const email = String(body.email || "").trim();
+    const password = String(body.password || "");
+    const studioName = String(body.studioName || "").trim();
+    if (!email || !password) return json(res, 400, { error: "E-mail et mot de passe requis" });
+
+    let signupRes;
+    try {
+      signupRes = await fetch(`${config.api}/api/auth/signup`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email, password, studioName }),
+      });
+    } catch {
+      return json(res, 502, { error: "Worker injoignable" });
+    }
+    const data = await signupRes.json().catch(() => ({}));
+    if (!signupRes.ok) return json(res, signupRes.status, { error: data.error || "Inscription refusée" });
+
+    // Connexion automatique : pas de raison de faire retaper les mêmes
+    // identifiants juste après les avoir choisis.
+    setSessionCookie(req, res, data.token, Math.min(data.expiresIn || SESSION_MAX_AGE, SESSION_MAX_AGE));
+    return json(res, 201, { photographer: data.photographer });
+  }
+
   if (parts.length === 2 && parts[1] === "logout" && req.method === "POST") {
     clearSessionCookie(req, res);
     return json(res, 200, { ok: true });

@@ -101,6 +101,11 @@ même deviner l'existence que de ses propres galeries — jamais celles d'un
 autre photographe. C'est vérifié explicitement par les tests (voir *Fiabilité
 mesurée*), pas seulement supposé par construction.
 
+Un compte se crée en libre-service, directement depuis l'écran de connexion
+de l'interface web (« Créer un compte ») — pas besoin de terminal ni de
+script pour commencer. `signup.mjs` reste utile pour scripter une création
+de compte (mise en place automatisée, tests), mais n'est plus la seule voie.
+
 Aujourd'hui, la préparation des photos (traitement, filigrane, envoi) se fait
 encore depuis l'ordinateur du photographe : `admin-server.mjs`, où chaque
 photographe se connecte avec son propre compte depuis le navigateur (comme
@@ -334,9 +339,10 @@ personnalisé de l'écran de connexion (couleur ou image, cloisonné par
 compte, et une galerie inconnue ne se distingue jamais d'une galerie sans
 arrière-plan personnalisé), journal sans IP en clair.
 
-**Interface d'administration** — 20 vérifications dans un vrai navigateur,
-contre le vrai Worker local : connexion depuis le formulaire (pas de session
-présupposée), création d'une galerie, régénération de son mot de passe,
+**Interface d'administration** — 22 vérifications dans un vrai navigateur,
+contre le vrai Worker local : création de compte et connexion depuis le
+formulaire (pas de session présupposée), création d'une galerie,
+régénération de son mot de passe,
 choix d'une couleur ou d'une image pour l'écran de connexion client,
 glisser-déposer de photos avec suivi de progression, vraies vignettes
 affichées, suppression d'une photo et d'une galerie, déconnexion qui tient
