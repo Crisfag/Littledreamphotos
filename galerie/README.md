@@ -153,6 +153,22 @@ window.GALERIE_CONFIG = {
 };
 ```
 
+`web/index.html` (+ `web/home.css`) est la page d'accueil marketing du
+produit : présentation du concept, fonctionnement en quatre étapes, liste des
+fonctionnalités et section sécurité, avec dans le menu les liens Connexion /
+Créer un compte vers l'interface d'administration. Renseignez l'adresse de
+cette interface dans `index.html` :
+
+```js
+window.HOME_CONFIG = {
+  adminUrl: "https://votre-interface-admin.example.com/",
+};
+```
+
+C'est une page statique sans dépendance au Worker : elle se déploie avec les
+mêmes outils que `galerie.html` (Cloudflare Pages, ou tout hébergement
+statique).
+
 ### 3. Les outils
 
 ```bash

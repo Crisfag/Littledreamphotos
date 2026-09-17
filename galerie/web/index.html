@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Holypixx — Galeries protégées pour photographes</title>
+  <meta name="description" content="Envoyez vos galeries clients avec mot de passe, filigrane invisible traçable et zéro téléchargement possible. Le client consulte, sélectionne et commente ; vous gardez la main." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Jost:wght@300;400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="home.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%23b98a7a'/><text y='72' x='50' text-anchor='middle' font-size='60' font-family='Georgia'>H</text></svg>" />
+
+  <script>
+    // Adresse de l'interface d'administration (connexion / création de compte).
+    window.HOME_CONFIG = {
+      adminUrl: "https://holypixx-admin.onrender.com/",
+    };
+  </script>
+</head>
+<body>
+
+  <nav class="hm-nav">
+    <div class="hm-nav-row">
+      <a class="hm-brand" href="#top">
+        <span class="hm-brand-mark">H</span>
+        <span class="hm-brand-name">Holypixx</span>
+      </a>
+      <div class="hm-nav-links">
+        <a href="#fonctionnalites">Fonctionnalités</a>
+        <a href="#comment-ca-marche">Comment ça marche</a>
+        <a href="#securite">Sécurité</a>
+      </div>
+      <div class="hm-nav-actions">
+        <a class="hm-nav-login" id="nav-login" href="#">Connexion</a>
+        <a class="hm-btn hm-btn-primary" id="nav-signup" href="#">Créer un compte</a>
+      </div>
+    </div>
+  </nav>
+
+  <header class="hm-hero" id="top">
+    <div class="hm-hero-grid">
+      <div>
+        <p class="hm-eyebrow">Galeries protégées pour photographes</p>
+        <h1>Livrez vos galeries sans jamais perdre la main sur vos photos</h1>
+        <p class="hm-hero-lede">
+          Mot de passe, filigrane invisible traçable jusqu'à la galerie
+          d'origine, aucune image jamais téléchargeable. Votre client
+          consulte, sélectionne ses coups de cœur et laisse ses remarques —
+          vous retrouvez tout dans un tableau de bord pensé pour vous.
+        </p>
+        <div class="hm-hero-actions">
+          <a class="hm-btn hm-btn-primary hm-btn-lg" id="hero-signup" href="#">Créer un compte</a>
+          <a class="hm-btn hm-btn-lg" href="#comment-ca-marche">Voir comment ça marche</a>
+        </div>
+        <p class="hm-hero-note">Aucune carte bancaire, aucune installation — tout se passe dans le navigateur.</p>
+      </div>
+      <div class="hm-mock" aria-hidden="true">
+        <div class="hm-mock-frame">
+          <div class="hm-mock-dots"><span></span><span></span><span></span></div>
+          <div class="hm-mock-card">
+            <div class="hm-mock-lock">🔒</div>
+            <h4>Votre galerie privée</h4>
+            <p>Saisissez le mot de passe transmis par votre photographe.</p>
+            <div class="hm-mock-input"></div>
+            <div class="hm-mock-btn"></div>
+          </div>
+          <div class="hm-mock-grid">
+            <span></span><span></span><span></span><span></span>
+            <span></span><span></span><span></span><span></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <section class="hm-section">
+    <div class="hm-why">
+      <h2>Le problème que peu d'outils affrontent honnêtement</h2>
+      <p>
+        Un lien de galerie classique, c'est un lien qu'on peut capturer,
+        partager, retélécharger. <strong>Aucun outil au monde ne peut
+        empêcher une capture d'écran</strong> — pas même les plus gros
+        services de streaming, où c'est le système d'exploitation qui a le
+        dernier mot, jamais le navigateur.
+      </p>
+      <p>
+        Ce qu'on peut faire, en revanche : rendre une fuite <strong>inutile</strong>
+        (qualité réduite, filigrane visible dense) et, si elle survient
+        malgré tout, savoir <strong>immédiatement</strong> de quelle galerie
+        elle vient grâce à une empreinte invisible propre à chaque envoi.
+      </p>
+    </div>
+  </section>
+
+  <section class="hm-section hm-section-alt" id="comment-ca-marche">
+    <div class="hm-section-head">
+      <h2>Comment ça marche</h2>
+      <p>Quatre étapes, aucune n'exige de compétence technique.</p>
+    </div>
+    <div class="hm-steps">
+      <div class="hm-step">
+        <div class="hm-step-num">1</div>
+        <h3>Vous envoyez vos photos</h3>
+        <p>Glissez-les dans votre tableau de bord, où que vous soyez.</p>
+      </div>
+      <div class="hm-step">
+        <div class="hm-step-num">2</div>
+        <h3>Elles sont protégées automatiquement</h3>
+        <p>Filigrane, empreinte invisible, découpage en tuiles — sans rien configurer.</p>
+      </div>
+      <div class="hm-step">
+        <div class="hm-step-num">3</div>
+        <h3>Votre client reçoit un lien</h3>
+        <p>Un lien et un mot de passe, rien d'autre — aucune inscription pour lui.</p>
+      </div>
+      <div class="hm-step">
+        <div class="hm-step-num">4</div>
+        <h3>Il consulte, choisit, commente</h3>
+        <p>Vous retrouvez ses coups de cœur et ses remarques dans votre tableau de bord.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="hm-section" id="fonctionnalites">
+    <div class="hm-section-head">
+      <h2>Tout ce qu'il faut, rien de superflu</h2>
+      <p>Chaque fonctionnalité répond à un vrai moment du métier de photographe.</p>
+    </div>
+    <div class="hm-features">
+      <div class="hm-feature">
+        <div class="hm-feature-icon">🔒</div>
+        <h3>Aucun téléchargement possible</h3>
+        <p>Les photos sont découpées en tuiles et recomposées à l'écran : jamais un fichier entier à portée de clic droit.</p>
+      </div>
+      <div class="hm-feature">
+        <div class="hm-feature-icon">🕵️</div>
+        <h3>Empreinte invisible traçable</h3>
+        <p>Chaque galerie porte une empreinte propre, lisible même après capture d'écran, recadrage ou noir et blanc.</p>
+      </div>
+      <div class="hm-feature">
+        <div class="hm-feature-icon">🏷️</div>
+        <h3>Filigrane visible dissuasif</h3>
+        <p>Une trame dense qui traverse toute l'image, coûteuse à retirer proprement, même à l'IA.</p>
+      </div>
+      <div class="hm-feature">
+        <div class="hm-feature-icon">❤️</div>
+        <h3>Sélection du client</h3>
+        <p>Il marque ses photos préférées d'un cœur ; vous les retrouvez triées, sans échange d'e-mails.</p>
+      </div>
+      <div class="hm-feature">
+        <div class="hm-feature-icon">💬</div>
+        <h3>Remarques par photo</h3>
+        <p>Une note laissée directement sur la photo concernée — plus clair qu'un e-mail à rallonge.</p>
+      </div>
+      <div class="hm-feature">
+        <div class="hm-feature-icon">🔑</div>
+        <h3>Mot de passe régénérable</h3>
+        <p>Perdu, ou galerie à reverrouiller ? Un nouveau mot de passe en un clic, l'ancien cesse aussitôt de fonctionner.</p>
+      </div>
+      <div class="hm-feature">
+        <div class="hm-feature-icon">🎨</div>
+        <h3>Arrière-plan personnalisable</h3>
+        <p>Une couleur ou une image à votre goût sur l'écran d'accueil de vos clients.</p>
+      </div>
+      <div class="hm-feature">
+        <div class="hm-feature-icon">⏳</div>
+        <h3>Expiration automatique</h3>
+        <p>Fixez une date : la galerie se ferme d'elle-même, sans intervention.</p>
+      </div>
+      <div class="hm-feature">
+        <div class="hm-feature-icon">📋</div>
+        <h3>Journal d'accès</h3>
+        <p>Connexions, tentatives, sélections, remarques : tout est consigné et consultable.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="hm-section hm-security" id="securite">
+    <div class="hm-section-head">
+      <h2>Une sécurité honnête, pas des promesses en l'air</h2>
+    </div>
+    <div class="hm-security-body">
+      <p>
+        Personne ne peut empêcher une capture d'écran. Ce que Holypixx fait
+        vraiment : rendre une fuite inutile, et si elle survient malgré tout,
+        savoir immédiatement d'où elle vient. C'est la différence entre une
+        vraie protection et une case cochée sur une brochure.
+      </p>
+    </div>
+    <ul class="hm-security-list">
+      <li><strong>Mots de passe jamais en clair</strong> Ni ceux des galeries, ni ceux des comptes photographes — seulement des empreintes à sens unique.</li>
+      <li><strong>Comptes strictement cloisonnés</strong> Un photographe ne peut ni voir, ni deviner l'existence des galeries d'un autre compte — vérifié par nos tests, pas seulement promis.</li>
+      <li><strong>Rien à révéler avant le mot de passe</strong> Un lien de galerie ne confirme jamais son existence à qui n'a pas le bon mot de passe.</li>
+    </ul>
+  </section>
+
+  <section class="hm-cta">
+    <h2>Prêt·e à protéger vos prochaines galeries ?</h2>
+    <p>La création de compte se fait en moins d'une minute, depuis votre navigateur.</p>
+    <a class="hm-btn hm-btn-lg hm-btn-on-rose" id="cta-signup" href="#">Créer un compte</a>
+  </section>
+
+  <footer class="hm-footer">
+    <div class="hm-footer-row">
+      <div class="hm-brand">
+        <span class="hm-brand-mark">H</span>
+        <span class="hm-brand-name">Holypixx</span>
+      </div>
+      <p class="hm-footer-tagline">La plateforme de galeries protégées pensée pour les photographes.</p>
+      <p class="hm-footer-copy">© <span id="year"></span> Holypixx</p>
+    </div>
+  </footer>
+
+  <script>
+    (function () {
+      "use strict";
+      var admin = (window.HOME_CONFIG || {}).adminUrl || "#";
+      ["nav-signup", "hero-signup", "cta-signup"].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) el.href = admin;
+      });
+      var login = document.getElementById("nav-login");
+      if (login) login.href = admin;
+      var year = document.getElementById("year");
+      if (year) year.textContent = new Date().getFullYear();
+    })();
+  </script>
+</body>
+</html>
