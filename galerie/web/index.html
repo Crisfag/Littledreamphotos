@@ -7,9 +7,10 @@
   <meta name="description" content="Envoyez vos galeries clients avec mot de passe, filigrane invisible traçable et zéro téléchargement possible. Le client consulte, sélectionne et commente ; vous gardez la main." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Jost:wght@300;400;500&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Jost:wght@300;400;500;600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="home.css" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%23b98a7a'/><text y='72' x='50' text-anchor='middle' font-size='60' font-family='Georgia'>H</text></svg>" />
+  <noscript><style>.reveal { opacity: 1 !important; transform: none !important; }</style></noscript>
 
   <script>
     // Adresse de l'interface d'administration (connexion / création de compte).
@@ -40,9 +41,9 @@
 
   <header class="hm-hero" id="top">
     <div class="hm-hero-grid">
-      <div>
+      <div class="hm-hero-copy">
         <p class="hm-eyebrow">Galeries protégées pour photographes</p>
-        <h1>Livrez vos galeries sans jamais perdre la main sur vos photos</h1>
+        <h1>Livrez vos galeries sans jamais <span class="hm-accent">perdre la main</span> sur vos photos</h1>
         <p class="hm-hero-lede">
           Mot de passe, filigrane invisible traçable jusqu'à la galerie
           d'origine, aucune image jamais téléchargeable. Votre client
@@ -53,7 +54,10 @@
           <a class="hm-btn hm-btn-primary hm-btn-lg" id="hero-signup" href="#">Créer un compte</a>
           <a class="hm-btn hm-btn-lg" href="#comment-ca-marche">Voir comment ça marche</a>
         </div>
-        <p class="hm-hero-note">Aucune carte bancaire, aucune installation — tout se passe dans le navigateur.</p>
+        <div class="hm-hero-checks">
+          <span class="hm-hero-check">Aucune carte bancaire</span>
+          <span class="hm-hero-check">Tout se passe dans le navigateur</span>
+        </div>
       </div>
       <div class="hm-mock" aria-hidden="true">
         <div class="hm-mock-frame">
@@ -70,11 +74,13 @@
             <span></span><span></span><span></span><span></span>
           </div>
         </div>
+        <span class="hm-mock-chip hm-mock-chip--top">🕵️ Empreinte invisible</span>
+        <span class="hm-mock-chip hm-mock-chip--bottom">🔑 Mot de passe régénérable</span>
       </div>
     </div>
   </header>
 
-  <section class="hm-section">
+  <section class="hm-section reveal">
     <div class="hm-why">
       <h2>Le problème que peu d'outils affrontent honnêtement</h2>
       <p>
@@ -93,7 +99,7 @@
     </div>
   </section>
 
-  <section class="hm-section hm-section-alt" id="comment-ca-marche">
+  <section class="hm-section hm-section-alt reveal" id="comment-ca-marche">
     <div class="hm-section-head">
       <h2>Comment ça marche</h2>
       <p>Quatre étapes, aucune n'exige de compétence technique.</p>
@@ -122,7 +128,7 @@
     </div>
   </section>
 
-  <section class="hm-section" id="fonctionnalites">
+  <section class="hm-section reveal" id="fonctionnalites">
     <div class="hm-section-head">
       <h2>Tout ce qu'il faut, rien de superflu</h2>
       <p>Chaque fonctionnalité répond à un vrai moment du métier de photographe.</p>
@@ -176,7 +182,7 @@
     </div>
   </section>
 
-  <section class="hm-section hm-security" id="securite">
+  <section class="hm-section hm-security reveal" id="securite">
     <div class="hm-section-head">
       <h2>Une sécurité honnête, pas des promesses en l'air</h2>
     </div>
@@ -189,13 +195,13 @@
       </p>
     </div>
     <ul class="hm-security-list">
-      <li><strong>Mots de passe jamais en clair</strong> Ni ceux des galeries, ni ceux des comptes photographes — seulement des empreintes à sens unique.</li>
-      <li><strong>Comptes strictement cloisonnés</strong> Un photographe ne peut ni voir, ni deviner l'existence des galeries d'un autre compte — vérifié par nos tests, pas seulement promis.</li>
-      <li><strong>Rien à révéler avant le mot de passe</strong> Un lien de galerie ne confirme jamais son existence à qui n'a pas le bon mot de passe.</li>
+      <li><span class="hm-security-icon">🔐</span><strong>Mots de passe jamais en clair</strong> Ni ceux des galeries, ni ceux des comptes photographes — seulement des empreintes à sens unique.</li>
+      <li><span class="hm-security-icon">🧱</span><strong>Comptes strictement cloisonnés</strong> Un photographe ne peut ni voir, ni deviner l'existence des galeries d'un autre compte — vérifié par nos tests, pas seulement promis.</li>
+      <li><span class="hm-security-icon">🚪</span><strong>Rien à révéler avant le mot de passe</strong> Un lien de galerie ne confirme jamais son existence à qui n'a pas le bon mot de passe.</li>
     </ul>
   </section>
 
-  <section class="hm-cta">
+  <section class="hm-cta reveal">
     <h2>Prêt·e à protéger vos prochaines galeries ?</h2>
     <p>La création de compte se fait en moins d'une minute, depuis votre navigateur.</p>
     <a class="hm-btn hm-btn-lg hm-btn-on-rose" id="cta-signup" href="#">Créer un compte</a>
@@ -224,6 +230,27 @@
       if (login) login.href = admin;
       var year = document.getElementById("year");
       if (year) year.textContent = new Date().getFullYear();
+
+      // Fait apparaître les sections en douceur au défilement.
+      var reveals = document.querySelectorAll(".reveal");
+      var reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      if (!reveals.length) return;
+      if (reduceMotion || !("IntersectionObserver" in window)) {
+        reveals.forEach(function (el) { el.classList.add("is-visible"); });
+        return;
+      }
+      var observer = new IntersectionObserver(
+        function (entries) {
+          entries.forEach(function (entry) {
+            if (entry.isIntersecting) {
+              entry.target.classList.add("is-visible");
+              observer.unobserve(entry.target);
+            }
+          });
+        },
+        { threshold: 0.15 }
+      );
+      reveals.forEach(function (el) { observer.observe(el); });
     })();
   </script>
 </body>
