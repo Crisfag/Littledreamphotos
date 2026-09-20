@@ -453,6 +453,21 @@ await fetch(`${BASE}/api/gallery/${SLUG}/event`, {
   headers: { ...bearer, "content-type": "application/json" },
   body: JSON.stringify({ event: "capture_suspected", detail: "impr-ecran" }),
 });
+
+// La photo affichée au moment d'une capture est référencée, pour que le
+// photographe sache laquelle est concernée — pas seulement qu'une capture
+// a eu lieu quelque part dans la galerie.
+await fetch(`${BASE}/api/gallery/${SLUG}/event`, {
+  method: "POST",
+  headers: { ...bearer, "content-type": "application/json" },
+  body: JSON.stringify({ event: "capture_suspected", detail: "capture-macos", photoId }),
+});
+await fetch(`${BASE}/api/gallery/${SLUG}/event`, {
+  method: "POST",
+  headers: { ...bearer, "content-type": "application/json" },
+  body: JSON.stringify({ event: "capture_suspected", detail: "perte-focus", photoId: "pho_NExistePas000" }),
+});
+
 const bogusEvent = await fetch(`${BASE}/api/gallery/${SLUG}/event`, {
   method: "POST",
   headers: { ...bearer, "content-type": "application/json" },
@@ -470,6 +485,10 @@ check("le journal consigne connexion, échec, capture, sélection et commentaire
       log.some((e) => e.event === "deselect" && e.detail === photoId) &&
       log.some((e) => e.event === "comment" && e.detail === photoId),
       log.map((e) => e.event).join(", "));
+check("une capture avec une photo réellement ouverte référence cette photo",
+      log.some((e) => e.event === "capture_suspected" && e.detail === "capture-macos" && e.photo_id === photoId));
+check("un identifiant de photo inconnu n'est jamais enregistré comme référence",
+      log.some((e) => e.event === "capture_suspected" && e.detail === "perte-focus" && e.photo_id === ""));
 check("le journal ne contient aucune IP en clair",
       log.every((e) => !/^\d+\.\d+\.\d+\.\d+$/.test(e.ip_hash || "")));
 

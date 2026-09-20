@@ -357,7 +357,7 @@ async function galleryLog(request, env, photographerId, slug) {
 
   const limit = Math.min(Number(new URL(request.url).searchParams.get("limit")) || 200, 1000);
   const { results } = await env.DB.prepare(
-    `SELECT event, viewer_id, detail, ip_hash, user_agent, ts FROM access_log
+    `SELECT event, viewer_id, detail, photo_id, ip_hash, user_agent, ts FROM access_log
      WHERE gallery_id = ? ORDER BY ts DESC LIMIT ?`
   )
     .bind(gallery.id, limit)

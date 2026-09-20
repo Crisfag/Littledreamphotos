@@ -3,6 +3,7 @@
 
 import { json, fail } from "./http.js";
 import { verifyPassword, signToken, verifyToken, hashIp, randomBytes, b64url } from "./auth.js";
+import { sendCaptureAlert } from "./notify.js";
 
 const SESSION_TTL_SECONDS = 2 * 60 * 60; // 2 h
 const MAX_FAILED_LOGINS = 10;
@@ -11,20 +12,28 @@ const MAX_COMMENT_LENGTH = 500;
 
 const EVENTS_ALLOWED = new Set(["view", "capture_suspected", "blur", "print", "devtools"]);
 
+// Parmi les raisons journalisées sous "capture_suspected", seules celles-ci
+// sont des raccourcis de capture d'écran sans ambiguïté (pas une simple
+// perte de focus ou un changement d'onglet) : ce sont les seules qui
+// déclenchent une alerte par e-mail au photographe.
+const EMAIL_ALERT_REASONS = new Set(["impr-ecran", "capture-macos"]);
+const ALERT_COOLDOWN_SECONDS = 120;
+
 function now() {
   return Math.floor(Date.now() / 1000);
 }
 
 async function logAccess(env, entry) {
   await env.DB.prepare(
-    `INSERT INTO access_log (gallery_id, viewer_id, event, detail, ip_hash, user_agent, ts)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO access_log (gallery_id, viewer_id, event, detail, photo_id, ip_hash, user_agent, ts)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
   )
     .bind(
       entry.galleryId,
       entry.viewerId || "",
       entry.event,
       (entry.detail || "").slice(0, 200),
+      entry.photoId || "",
       entry.ipHash || "",
       (entry.userAgent || "").slice(0, 200),
       now()
@@ -251,7 +260,29 @@ async function handleComment(request, env, slug) {
   return json({ ok: true, comment });
 }
 
-async function handleEvent(request, env, slug) {
+// Le photographe n'est prévenu que si on n'en a pas déjà avisé un pour
+// cette galerie dans les dernières minutes : un client qui reste appuyé
+// sur une touche ou déclenche plusieurs raccourcis coup sur coup ne doit
+// pas déclencher une rafale d'e-mails.
+async function recentAlertAlreadySent(env, galleryId) {
+  const row = await env.DB.prepare(
+    `SELECT COUNT(*) AS n FROM access_log
+     WHERE gallery_id = ? AND event = 'capture_suspected' AND detail IN ('impr-ecran', 'capture-macos')
+       AND ts > ?`
+  )
+    .bind(galleryId, now() - ALERT_COOLDOWN_SECONDS)
+    .first();
+  // > 1 : l'évènement qu'on vient d'insérer compte déjà pour 1.
+  return (row?.n || 0) > 1;
+}
+
+async function photographerOf(env, photographerId) {
+  return env.DB.prepare("SELECT email, studio_name FROM photographers WHERE id = ?")
+    .bind(photographerId)
+    .first();
+}
+
+async function handleEvent(request, env, ctx, slug) {
   const auth = await authorize(request, env, slug);
   if (auth.error) return auth.error;
 
@@ -263,15 +294,49 @@ async function handleEvent(request, env, slug) {
   }
   const event = typeof body?.event === "string" ? body.event : "";
   if (!EVENTS_ALLOWED.has(event)) return fail(400, "Évènement inconnu");
+  const detail = typeof body.detail === "string" ? body.detail : "";
+
+  // La photo référencée doit vraiment appartenir à cette galerie : sinon on
+  // l'ignore plutôt que de consigner une référence trompeuse ou de laisser
+  // fuiter l'existence d'une photo d'une autre galerie via ce canal.
+  let photoId = "";
+  let photo = null;
+  if (typeof body.photoId === "string" && body.photoId) {
+    photo = await env.DB.prepare("SELECT position FROM photos WHERE id = ? AND gallery_id = ?")
+      .bind(body.photoId, auth.gallery.id)
+      .first();
+    if (photo) photoId = body.photoId;
+  }
 
   await logAccess(env, {
     galleryId: auth.gallery.id,
     viewerId: auth.viewerId,
     event,
-    detail: typeof body.detail === "string" ? body.detail : "",
+    detail,
+    photoId,
     ipHash: await hashIp(request.headers.get("CF-Connecting-IP") || "", env.TOKEN_SECRET),
     userAgent: request.headers.get("User-Agent") || "",
   });
+
+  if (event === "capture_suspected" && EMAIL_ALERT_REASONS.has(detail)) {
+    ctx.waitUntil(
+      (async () => {
+        if (await recentAlertAlreadySent(env, auth.gallery.id)) return;
+        const photographer = await photographerOf(env, auth.gallery.photographer_id);
+        if (!photographer?.email) return;
+        await sendCaptureAlert(env, {
+          to: photographer.email,
+          studioName: photographer.studio_name,
+          galleryTitle: auth.gallery.title,
+          clientName: auth.gallery.client_name,
+          photoLabel: photo ? `Photo n° ${photo.position + 1}` : "",
+          reason: detail,
+          ts: now(),
+          adminUrl: env.ADMIN_URL || "",
+        });
+      })()
+    );
+  }
 
   return json({ ok: true });
 }
@@ -333,7 +398,7 @@ export async function handleViewer(request, env, ctx, path) {
     return handleComment(request, env, slug);
   }
   if (action === "event" && request.method === "POST") {
-    return handleEvent(request, env, slug);
+    return handleEvent(request, env, ctx, slug);
   }
   return fail(404, "Route inconnue");
 }

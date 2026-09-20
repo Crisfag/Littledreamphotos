@@ -295,12 +295,35 @@
   // plutôt sous la forme lisible « Photo n° X » quand on peut la retrouver.
   var PHOTO_ID_EVENTS = new Set(["view", "select", "deselect", "comment"]);
 
+  // Pour « capture_suspected », « print » et « devtools », le détail est la
+  // raison technique du déclenchement, et la photo (si une était ouverte)
+  // est référencée séparément par photo_id.
+  var CAPTURE_EVENTS = new Set(["capture_suspected", "print", "devtools"]);
+  var CAPTURE_REASON_LABELS = {
+    "impr-ecran": "Touche Impr. écran",
+    "capture-macos": "Raccourci de capture (macOS)",
+    "enregistrer": "Tentative d'enregistrement",
+    "perte-focus": "Changement de fenêtre",
+    "onglet-masque": "Onglet mis en arrière-plan",
+  };
+  // Ces deux raisons précises sont celles qui déclenchent une alerte par
+  // e-mail au photographe (voir worker/src/viewer.js) : on le signale ici.
+  var EMAIL_ALERT_REASONS = new Set(["impr-ecran", "capture-macos"]);
+
   function logRow(entry, photosById) {
     var label = EVENT_LABELS[entry.event] || entry.event;
+    if (entry.event === "capture_suspected" && EMAIL_ALERT_REASONS.has(entry.detail)) {
+      label = "🔔 " + label + " (e-mail envoyé)";
+    }
     var cls = /failed|expired|capture/.test(entry.event) ? "ad-log-warn" : "";
     var detail = entry.detail || "";
     if (PHOTO_ID_EVENTS.has(entry.event) && photosById[detail]) {
       detail = "Photo n° " + (photosById[detail].position + 1);
+    } else if (CAPTURE_EVENTS.has(entry.event)) {
+      detail = CAPTURE_REASON_LABELS[detail] || detail;
+      if (entry.photo_id && photosById[entry.photo_id]) {
+        detail += (detail ? " — " : "") + "Photo n° " + (photosById[entry.photo_id].position + 1);
+      }
     }
     return (
       '<tr class="' + cls + '">' +

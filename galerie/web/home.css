@@ -301,7 +301,9 @@ img, svg { max-width: 100%; }
 
 .hm-features {
   max-width: 1120px; margin: 0 auto;
-  display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.4rem;
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  grid-auto-flow: dense;
+  gap: 1.4rem;
 }
 .hm-feature {
   position: relative;
@@ -331,6 +333,40 @@ img, svg { max-width: 100%; }
 }
 .hm-feature h3 { margin-bottom: .5rem; }
 .hm-feature p { font-size: .88rem; color: var(--muted); }
+
+/* Tuile vedette : l'alerte e-mail de capture, mise en avant dans la grille */
+.hm-feature-spotlight {
+  grid-column: span 2;
+  background: linear-gradient(150deg, var(--charcoal) 0%, #241e1a 100%);
+  border-color: transparent;
+  color: var(--cream);
+}
+.hm-feature-spotlight h3 { color: #fff; }
+.hm-feature-spotlight p { color: rgba(247, 242, 236, .78); }
+.hm-feature-icon-spotlight { background: rgba(255, 255, 255, .12); }
+.hm-feature-badge {
+  position: absolute; top: 1.3rem; right: 1.3rem;
+  background: linear-gradient(135deg, var(--rose), var(--rose-deep));
+  color: #fff; font-size: .66rem; font-weight: 600;
+  letter-spacing: .07em; text-transform: uppercase;
+  padding: .3rem .65rem; border-radius: 999px;
+}
+.hm-feature-flow {
+  display: flex; flex-wrap: wrap; align-items: center; gap: .5rem;
+  margin-top: 1.2rem;
+}
+.hm-feature-flow span:not(.hm-feature-flow-arrow) {
+  background: rgba(255, 255, 255, .08);
+  border: 1px solid rgba(255, 255, 255, .16);
+  border-radius: 999px;
+  padding: .4rem .8rem;
+  font-size: .78rem;
+  white-space: nowrap;
+}
+.hm-feature-flow-arrow { color: rgba(247, 242, 236, .5); font-size: .9rem; }
+@media (max-width: 640px) {
+  .hm-feature-spotlight { grid-column: span 1; }
+}
 
 /* ---------- Sécurité ---------- */
 
@@ -406,7 +442,6 @@ img, svg { max-width: 100%; }
   .hm-hero-grid { grid-template-columns: 1fr; }
   .hm-mock { order: -1; }
   .hm-steps { grid-template-columns: repeat(2, 1fr); }
-  .hm-features { grid-template-columns: repeat(2, 1fr); }
   .hm-security-list { grid-template-columns: 1fr; }
 }
 
@@ -414,6 +449,5 @@ img, svg { max-width: 100%; }
   .hm-nav-links { display: none; }
   .hm-nav-login { display: none; }
   .hm-steps { grid-template-columns: 1fr; }
-  .hm-features { grid-template-columns: 1fr; }
   .hm-hero-checks { flex-direction: column; gap: .6rem; }
 }

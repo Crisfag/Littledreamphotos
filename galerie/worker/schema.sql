@@ -92,12 +92,21 @@ CREATE TABLE IF NOT EXISTS access_log (
   viewer_id  TEXT NOT NULL DEFAULT '',
   event      TEXT NOT NULL,   -- login, login_failed, view, select, deselect, comment, capture_suspected, blur, print
   detail     TEXT NOT NULL DEFAULT '',
+  -- Photo affichée au moment de l'évènement (capture_suspected, print,
+  -- devtools) : permet d'alerter le photographe sur LA photo concernée,
+  -- pas seulement « une capture a eu lieu ». Vide si aucune photo n'était
+  -- ouverte en plein écran (ex. capture depuis la grille de vignettes).
+  photo_id   TEXT NOT NULL DEFAULT '',
   ip_hash    TEXT NOT NULL DEFAULT '',
   user_agent TEXT NOT NULL DEFAULT '',
   ts         INTEGER NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_log_gallery ON access_log(gallery_id, ts);
+
+-- Migration vers la référence de photo sur les évènements de capture
+-- (bases créées avant cette fonctionnalité) :
+--   ALTER TABLE access_log ADD COLUMN photo_id TEXT NOT NULL DEFAULT '';
 
 -- Tentatives de connexion aux comptes photographes (distinct de access_log,
 -- qui journalise les visites des galeries clients). email_hash et ip_hash

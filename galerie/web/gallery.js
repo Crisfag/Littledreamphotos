@@ -238,13 +238,13 @@
     return { authorization: "Bearer " + state.token };
   }
 
-  function logEvent(event, detail) {
+  function logEvent(event, detail, photoId) {
     if (!state.token) return;
     // `keepalive` : l'évènement part même si la page se ferme juste après.
     fetch(apiUrl("/event"), {
       method: "POST",
       headers: Object.assign({ "content-type": "application/json" }, authHeaders()),
-      body: JSON.stringify({ event: event, detail: detail || "" }),
+      body: JSON.stringify({ event: event, detail: detail || "", photoId: photoId || "" }),
       keepalive: true,
     }).catch(function () {});
   }
@@ -476,7 +476,13 @@
   function veil(reason) {
     el.veil.hidden = false;
     document.body.classList.add("gp-veiled");
-    if (reason) logEvent(reason === "print" ? "print" : "capture_suspected", reason);
+    if (reason) {
+      // Si une photo est ouverte en plein écran au moment du signal, on la
+      // référence : c'est ce qui permet au photographe d'être averti de LA
+      // photo concernée, pas juste « une capture a eu lieu ».
+      var photo = currentViewerPhoto();
+      logEvent(reason === "print" ? "print" : "capture_suspected", reason, photo ? photo.id : "");
+    }
     clearTimeout(veilTimer);
   }
 

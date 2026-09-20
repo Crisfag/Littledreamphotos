@@ -22,7 +22,7 @@ Ce projet vise donc autre chose : **rendre le vol peu rentable et traçable.**
 | | Résultat |
 |---|---|
 | Télécharger le fichier | **Empêché.** Les photos sont découpées en tuiles réassemblées dans un canvas : aucune URL ne renvoie une image entière, « enregistrer l'image sous » ne propose rien, un aspirateur de site ne trouve rien. |
-| Capture d'écran | **Non empêchée** — impossible. Découragée (voile au moindre changement de focus, presse-papiers remplacé) et consignée au journal. |
+| Capture d'écran | **Non empêchée** — impossible. Découragée (voile au moindre changement de focus, presse-papiers remplacé) et consignée au journal. Pour les raccourcis de capture sans ambiguïté (Impr. écran, capture clavier macOS), le photographe reçoit en plus un **e-mail immédiat avec la référence de la photo affichée**. |
 | Qualité du butin | **Inexploitable.** 1600 px de large, filigranés : bon pour un écran, sans valeur pour un tirage. |
 | Filigrane retiré par IA | **Coûteux.** Trame dense traversant tout le sujet, visages compris : l'IA doit reconstruire ce qu'elle ne voit pas, et ça se remarque. |
 | Retrouver l'origine d'une fuite | **Oui.** Empreinte invisible propre à chaque galerie, lisible après capture d'écran, recadrage, redimensionnement, noir et blanc ou ré-encodage JPEG. |
@@ -298,10 +298,34 @@ curl -H "Authorization: Bearer $TOKEN" \
   "$GALERIE_API/api/admin/galleries/dupont-mai/log"
 ```
 
-Connexions, tentatives ratées, photos ouvertes, captures suspectées. Les
-adresses IP ne sont jamais stockées en clair, seulement une empreinte salée.
-La même chose est visible directement sur la fiche de la galerie dans
-l'interface web.
+Connexions, tentatives ratées, photos ouvertes, captures suspectées — avec,
+quand une photo était ouverte en plein écran au moment de la capture, sa
+référence (« Photo n° 7 »). Les adresses IP ne sont jamais stockées en
+clair, seulement une empreinte salée. La même chose est visible directement
+sur la fiche de la galerie dans l'interface web.
+
+### Alerte e-mail sur capture d'écran
+
+Quand un client déclenche un raccourci de capture sans ambiguïté (touche
+« Impr. écran » sous Windows, `Cmd+Maj+3/4/5` sous macOS), le Worker envoie
+un e-mail au photographe via [Resend](https://resend.com), avec le titre de
+la galerie et la référence de la photo affichée à ce moment. Un simple
+changement de fenêtre ou d'onglet ne déclenche jamais cet e-mail — seuls ces
+deux raccourcis, sans ambiguïté, le font — et pas plus d'un e-mail toutes les
+deux minutes par galerie, pour éviter une rafale.
+
+C'est entièrement optionnel : sans les secrets ci-dessous, tout continue de
+fonctionner normalement, la capture reste simplement consignée dans le
+journal sans e-mail.
+
+```bash
+cd worker
+npx wrangler secret put RESEND_API_KEY   # clé API Resend
+npx wrangler secret put RESEND_FROM      # adresse d'expédition vérifiée sur Resend, ex. "Holypixx <alertes@votredomaine.com>"
+```
+
+`ADMIN_URL` (dans `wrangler.toml`, pas un secret) est l'adresse de
+l'interface d'administration, insérée en lien dans l'e-mail.
 
 ---
 
@@ -342,7 +366,7 @@ des tuiles, refus du mauvais mot de passe, absence de toute balise `<img>`,
 neutralisation du menu contextuel et de la copie, voile sur « Impr. écran » et
 sur perte de focus, consignation au journal.
 
-**API du Worker** — 106 vérifications contre le vrai moteur Cloudflare (D1 et R2
+**API du Worker** — 108 vérifications contre le vrai moteur Cloudflare (D1 et R2
 émulés localement par `wrangler dev`) : comptes photographes (inscription,
 connexion, session), cloisonnement strict entre comptes (un photographe ne
 peut ni lister, ni lire, ni modifier, ni même deviner l'existence des
@@ -353,7 +377,16 @@ isolée), sélection et commentaire posés et retirés, régénération du mot d
 passe d'une galerie (l'ancien cesse aussitôt de fonctionner), arrière-plan
 personnalisé de l'écran de connexion (couleur ou image, cloisonné par
 compte, et une galerie inconnue ne se distingue jamais d'une galerie sans
-arrière-plan personnalisé), journal sans IP en clair.
+arrière-plan personnalisé), référence de photo sur un évènement de capture
+(un identifiant inconnu n'est jamais enregistré), journal sans IP en clair.
+
+**Alerte e-mail de capture** — 10 vérifications sans réseau ni `wrangler dev`
+(`buildCaptureAlertEmail` est une fonction pure) : sujet et corps référençant
+la bonne galerie et la bonne photo, message générique quand aucune photo
+n'est identifiée, raisons connues traduites en texte lisible, et surtout
+échappement HTML du nom de studio, du titre de galerie et du nom de client —
+autant de champs saisis par le photographe, jamais dignes de confiance tels
+quels dans un e-mail.
 
 **Interface d'administration** — 22 vérifications dans un vrai navigateur,
 contre le vrai Worker local : création de compte et connexion depuis le
@@ -391,6 +424,7 @@ node tests/selection.test.mjs         # sélection client, autonome (crée sa pr
 node tests/comments.test.mjs          # commentaires client, autonome (crée sa propre galerie)
 
 cd ../worker
+node tests/notify.test.mjs            # e-mail d'alerte de capture, sans réseau
 npx wrangler dev --local --port 8788  # dans un autre terminal
 BASE=http://127.0.0.1:8788 node tests/api.test.mjs
 ```
