@@ -12,11 +12,13 @@ const MAX_COMMENT_LENGTH = 500;
 
 const EVENTS_ALLOWED = new Set(["view", "capture_suspected", "blur", "print", "devtools"]);
 
-// Parmi les raisons journalisées sous "capture_suspected", seules celles-ci
-// sont des raccourcis de capture d'écran sans ambiguïté (pas une simple
-// perte de focus ou un changement d'onglet) : ce sont les seules qui
-// déclenchent une alerte par e-mail au photographe.
-const EMAIL_ALERT_REASONS = new Set(["impr-ecran", "capture-macos"]);
+// "impr-ecran" et "capture-macos" sont des raccourcis de capture sans
+// ambiguïté. "absence-breve" est un signal plus indirect mais nécessaire
+// sur macOS, où le système intercepte Cmd+Maj+3/4/5 avant que le navigateur
+// ne puisse voir passer le raccourci lui-même : le client n'a alors journalisé
+// qu'un changement de fenêtre ou d'onglet très bref (voir gallery.js), plus
+// probablement l'éclair d'une capture qu'un vrai changement d'application.
+const EMAIL_ALERT_REASONS = new Set(["impr-ecran", "capture-macos", "absence-breve"]);
 const ALERT_COOLDOWN_SECONDS = 120;
 
 function now() {

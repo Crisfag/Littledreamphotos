@@ -519,6 +519,15 @@ await fetch(`${BASE}/api/gallery/${SLUG}/event`, {
   headers: { ...bearer, "content-type": "application/json" },
   body: JSON.stringify({ event: "capture_suspected", detail: "perte-focus", photoId: "pho_NExistePas000" }),
 });
+// Sur macOS, le raccourci de capture est intercepté par le système avant
+// d'atteindre le navigateur : "absence-breve" (changement de fenêtre très
+// bref, mesuré côté client) est le signal de repli qui déclenche quand même
+// une alerte — voir gallery.js et viewer.js pour le détail.
+await fetch(`${BASE}/api/gallery/${SLUG}/event`, {
+  method: "POST",
+  headers: { ...bearer, "content-type": "application/json" },
+  body: JSON.stringify({ event: "capture_suspected", detail: "absence-breve", photoId }),
+});
 
 const bogusEvent = await fetch(`${BASE}/api/gallery/${SLUG}/event`, {
   method: "POST",
@@ -539,6 +548,8 @@ check("le journal consigne connexion, échec, capture, sélection et commentaire
       log.map((e) => e.event).join(", "));
 check("une capture avec une photo réellement ouverte référence cette photo",
       log.some((e) => e.event === "capture_suspected" && e.detail === "capture-macos" && e.photo_id === photoId));
+check("le signal de repli macOS (absence très brève) est accepté et référence la photo",
+      log.some((e) => e.event === "capture_suspected" && e.detail === "absence-breve" && e.photo_id === photoId));
 check("un identifiant de photo inconnu n'est jamais enregistré comme référence",
       log.some((e) => e.event === "capture_suspected" && e.detail === "perte-focus" && e.photo_id === ""));
 check("le journal ne contient aucune IP en clair",

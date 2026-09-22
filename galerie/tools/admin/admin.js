@@ -312,10 +312,11 @@
     "enregistrer": "Tentative d'enregistrement",
     "perte-focus": "Changement de fenêtre",
     "onglet-masque": "Onglet mis en arrière-plan",
+    "absence-breve": "Absence très brève (capture probable)",
   };
-  // Ces deux raisons précises sont celles qui déclenchent une alerte par
-  // e-mail au photographe (voir worker/src/viewer.js) : on le signale ici.
-  var EMAIL_ALERT_REASONS = new Set(["impr-ecran", "capture-macos"]);
+  // Ces raisons précises sont celles qui déclenchent une alerte par e-mail
+  // au photographe (voir worker/src/viewer.js) : on le signale ici.
+  var EMAIL_ALERT_REASONS = new Set(["impr-ecran", "capture-macos", "absence-breve"]);
 
   function logRow(entry, photosById) {
     var label = EVENT_LABELS[entry.event] || entry.event;

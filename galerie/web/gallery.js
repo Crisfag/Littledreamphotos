@@ -469,6 +469,14 @@
   /* ---------- Voile de dissuasion ---------- */
 
   var veilTimer = null;
+  var blurStartedAt = 0;
+  var blurReason = "";
+  // Sur macOS, le raccourci de capture (Cmd+Maj+3/4/5) est intercepté par le
+  // système avant même d'atteindre le navigateur — impossible à voir passer
+  // comme un raccourci clavier. Ce qu'on voit, en revanche : l'éclair très
+  // bref d'un changement de fenêtre ou d'onglet au moment de la capture,
+  // bien plus court qu'un vrai passage à une autre application.
+  var BRIEF_ABSENCE_MS = 1500;
 
   // Masquer les photos dès que l'attention quitte la page : la plupart des
   // outils de capture prennent le focus, et un raccourci de capture se voit.
@@ -476,6 +484,15 @@
   function veil(reason) {
     el.veil.hidden = false;
     document.body.classList.add("gp-veiled");
+    clearTimeout(veilTimer);
+    if (reason === "perte-focus" || reason === "onglet-masque") {
+      // On ne sait pas encore si c'est un vrai changement d'application ou
+      // l'éclair d'une capture : on tranche au retour du focus, selon la
+      // durée de l'absence (voir unveil ci-dessous).
+      blurStartedAt = Date.now();
+      blurReason = reason;
+      return;
+    }
     if (reason) {
       // Si une photo est ouverte en plein écran au moment du signal, on la
       // référence : c'est ce qui permet au photographe d'être averti de LA
@@ -483,11 +500,17 @@
       var photo = currentViewerPhoto();
       logEvent(reason === "print" ? "print" : "capture_suspected", reason, photo ? photo.id : "");
     }
-    clearTimeout(veilTimer);
   }
 
   function unveil() {
     clearTimeout(veilTimer);
+    if (blurReason) {
+      var elapsed = Date.now() - blurStartedAt;
+      var finalReason = elapsed < BRIEF_ABSENCE_MS ? "absence-breve" : blurReason;
+      var photo = currentViewerPhoto();
+      logEvent("capture_suspected", finalReason, photo ? photo.id : "");
+      blurReason = "";
+    }
     veilTimer = setTimeout(function () {
       el.veil.hidden = true;
       document.body.classList.remove("gp-veiled");

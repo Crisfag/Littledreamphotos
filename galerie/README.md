@@ -314,13 +314,24 @@ sur la fiche de la galerie dans l'interface web.
 
 ### Alerte e-mail sur capture d'écran
 
-Quand un client déclenche un raccourci de capture sans ambiguïté (touche
-« Impr. écran » sous Windows, `Cmd+Maj+3/4/5` sous macOS), le Worker envoie
-un e-mail au photographe via [Resend](https://resend.com), avec le titre de
-la galerie et la référence de la photo affichée à ce moment. Un simple
-changement de fenêtre ou d'onglet ne déclenche jamais cet e-mail — seuls ces
-deux raccourcis, sans ambiguïté, le font — et pas plus d'un e-mail toutes les
-deux minutes par galerie, pour éviter une rafale.
+Quand un client déclenche un signal de capture, le Worker envoie un e-mail
+au photographe via [Resend](https://resend.com), avec le titre de la
+galerie et la référence de la photo affichée à ce moment. Trois signaux
+déclenchent cet e-mail :
+
+- la touche « Impr. écran » sous Windows ;
+- `Cmd+Maj+3/4/5` sous macOS — sauf que ce raccourci est intercepté par le
+  système *avant* d'atteindre le navigateur (comme `Cmd+Espace`) : le
+  navigateur ne le voit jamais passer comme un raccourci clavier ;
+- c'est pourquoi, sur macOS, le vrai signal utilisé est indirect : une
+  **absence très brève** (moins de 1,5 s) de la fenêtre ou de l'onglet —
+  l'éclair d'une capture ressemble à ça, un vrai changement d'application
+  dure plus longtemps. Un changement de fenêtre plus long, lui, ne
+  déclenche jamais l'e-mail (juste une trace dans le journal) : ce serait
+  trop de faux positifs pour un simple coup d'œil à un autre onglet.
+
+Pas plus d'un e-mail toutes les deux minutes par galerie, pour éviter une
+rafale si plusieurs signaux se déclenchent d'affilée.
 
 C'est entièrement optionnel : sans les secrets ci-dessous, tout continue de
 fonctionner normalement, la capture reste simplement consignée dans le
@@ -374,7 +385,7 @@ des tuiles, refus du mauvais mot de passe, absence de toute balise `<img>`,
 neutralisation du menu contextuel et de la copie, voile sur « Impr. écran » et
 sur perte de focus, consignation au journal.
 
-**API du Worker** — 114 vérifications contre le vrai moteur Cloudflare (D1 et R2
+**API du Worker** — 115 vérifications contre le vrai moteur Cloudflare (D1 et R2
 émulés localement par `wrangler dev`) : comptes photographes (inscription,
 connexion, session, mot de passe oublié — même réponse générique qu'un
 compte existe ou non), cloisonnement strict entre comptes (un photographe ne
@@ -394,7 +405,7 @@ unique) est vérifié manuellement plutôt qu'automatiquement : le jeton ne
 transite jamais par l'API, seulement par l'e-mail, et l'y exposer pour les
 tests reviendrait à affaiblir la sécurité qu'il apporte.
 
-**Alertes e-mail** — 15 vérifications sans réseau ni `wrangler dev`
+**Alertes e-mail** — 16 vérifications sans réseau ni `wrangler dev`
 (`buildCaptureAlertEmail` et `buildPasswordResetEmail` sont des fonctions
 pures) : sujet et corps référençant la bonne galerie et la bonne photo,
 message générique quand aucune photo n'est identifiée, raisons connues

@@ -7,6 +7,7 @@
 const REASON_LABELS = {
   "impr-ecran": "la touche Impr. écran",
   "capture-macos": "un raccourci de capture macOS",
+  "absence-breve": "un signal fort de capture d'écran (changement de fenêtre très bref)",
 };
 
 function escapeHtml(value) {
