@@ -80,6 +80,58 @@ const meResponse = await fetch(`${BASE}/api/auth/me`, { headers: { authorization
 const meData = await meResponse.json();
 check("la session permet de relire son profil", meResponse.ok && meData.photographer?.email === EMAIL);
 
+/* ---------- Mot de passe oublié ---------- */
+// Le jeton de réinitialisation ne transite jamais par l'API — seulement par
+// l'e-mail envoyé au photographe — donc le trajet complet « je reçois le
+// lien, je choisis un nouveau mot de passe » ne peut pas être automatisé
+// sans affaiblir la sécurité (ça reviendrait à exposer le jeton ailleurs
+// que dans la boîte mail). Ce qui EST vérifiable depuis l'API, en revanche,
+// c'est que rien ne fuite sur l'existence d'un compte, et que les entrées
+// invalides sont refusées.
+
+async function forgotPassword(email) {
+  const response = await fetch(`${BASE}/api/auth/forgot-password`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+  return { response, data: await response.json().catch(() => ({})) };
+}
+
+const forgotKnown = await forgotPassword(EMAIL);
+const forgotUnknown = await forgotPassword(`inconnu-${RUN}@test.invalid`);
+const forgotMalformed = await forgotPassword("pas-un-email");
+check("demander un lien pour un compte existant renvoie un succès générique",
+      forgotKnown.response.status === 200 && forgotKnown.data.ok === true);
+check("un compte inconnu reçoit exactement la même réponse qu'un compte existant",
+      forgotUnknown.response.status === forgotKnown.response.status &&
+      JSON.stringify(forgotUnknown.data) === JSON.stringify(forgotKnown.data));
+check("une adresse mal formée reçoit aussi la même réponse générique",
+      forgotMalformed.response.status === forgotKnown.response.status &&
+      JSON.stringify(forgotMalformed.data) === JSON.stringify(forgotKnown.data));
+
+const resetMissingToken = await fetch(`${BASE}/api/auth/reset-password`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ password: "un-nouveau-mot-de-passe" }),
+});
+check("réinitialiser sans jeton est refusé", resetMissingToken.status === 400);
+
+const resetBogusToken = await fetch(`${BASE}/api/auth/reset-password`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ token: "ce-jeton-n-existe-pas", password: "un-nouveau-mot-de-passe" }),
+});
+check("un jeton de réinitialisation inconnu est refusé", resetBogusToken.status === 400);
+
+const resetWeakPassword = await fetch(`${BASE}/api/auth/reset-password`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ token: "peu-importe", password: "court" }),
+});
+check("un nouveau mot de passe trop court est refusé avant même de vérifier le jeton",
+      resetWeakPassword.status === 400);
+
 const admin = adminClient(signupData.token);
 
 // Un JPEG minuscule mais valide, pour que les tuiles stockées soient réalistes.

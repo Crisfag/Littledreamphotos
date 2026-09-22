@@ -48,6 +48,24 @@ await page.goto(BASE, { waitUntil: "domcontentloaded" });
 await page.waitForSelector("#ad-login-form", { timeout: 10000 });
 check("l'écran de connexion s'affiche avant tout", await page.isVisible("#ad-login-form"));
 
+/* ---------- Mot de passe de compte oublié ---------- */
+// Le trajet complet (jeton reçu par e-mail → nouveau mot de passe) n'est
+// pas automatisable ici : le jeton ne transite jamais par l'API, seulement
+// par l'e-mail — l'exposer aux tests reviendrait à affaiblir la sécurité
+// qu'il apporte (voir worker/tests/api.test.mjs pour ce qui EST vérifié).
+
+await page.click("#ad-show-forgot");
+await page.waitForSelector("#ad-forgot-card", { state: "visible", timeout: 5000 });
+await page.fill('#ad-forgot-form [name="email"]', email);
+await page.click("#ad-forgot-submit");
+await page.waitForSelector("#ad-forgot-message:not([hidden])", { timeout: 10000 });
+check("demander un lien de réinitialisation affiche un message générique",
+      (await page.textContent("#ad-forgot-message")).indexOf("vient d'être envoyé") !== -1);
+
+await page.click("#ad-forgot-back");
+await page.waitForSelector("#ad-login-card", { state: "visible", timeout: 5000 });
+check("le lien « retour » ramène bien au formulaire de connexion", await page.isVisible("#ad-login-form"));
+
 await page.click("#ad-show-signup");
 await page.waitForSelector("#ad-signup-card", { state: "visible", timeout: 5000 });
 await page.fill('#ad-signup-form [name="studioName"]', "Studio de test");

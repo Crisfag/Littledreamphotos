@@ -3,7 +3,7 @@
 //
 //   node tests/notify.test.mjs
 
-import { buildCaptureAlertEmail } from "../src/notify.js";
+import { buildCaptureAlertEmail, buildPasswordResetEmail } from "../src/notify.js";
 
 const checks = [];
 function check(label, ok, detail) {
@@ -51,6 +51,26 @@ const hostile = buildCaptureAlertEmail({
 check("le nom du studio est échappé dans le HTML", !hostile.html.includes("<img"));
 check("le titre de la galerie est échappé dans le HTML", !hostile.html.includes("<script>"));
 check("le nom du client est échappé dans le HTML", !hostile.html.includes("<b>injecté</b>"));
+
+/* ---------- Réinitialisation de mot de passe ---------- */
+
+const resetEmail = buildPasswordResetEmail({
+  studioName: "Studio Test",
+  resetUrl: "https://holypixx-admin.onrender.com/?reset=abc123",
+  ts: 1_700_000_000,
+});
+check("le sujet évoque la réinitialisation", resetEmail.subject.toLowerCase().includes("réinitialisation"));
+check("le lien de réinitialisation est inclus dans le HTML", resetEmail.html.includes("?reset=abc123"));
+check("le lien de réinitialisation est inclus dans le texte", resetEmail.text.includes("?reset=abc123"));
+check("le message précise que le lien est à usage unique et limité dans le temps",
+      resetEmail.html.includes("une demi-heure") && resetEmail.html.includes("qu'une seule"));
+
+const hostileReset = buildPasswordResetEmail({
+  studioName: '<img src=x onerror=alert(1)>',
+  resetUrl: "https://holypixx-admin.onrender.com/?reset=abc123",
+  ts: 1_700_000_000,
+});
+check("le nom du studio est échappé dans l'e-mail de réinitialisation", !hostileReset.html.includes("<img"));
 
 const failed = checks.filter((c) => !c.ok);
 console.log(failed.length ? `\n${failed.length} vérification(s) en échec.` : `\n${checks.length} vérifications, toutes passent.`);

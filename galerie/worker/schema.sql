@@ -120,3 +120,31 @@ CREATE TABLE IF NOT EXISTS auth_log (
 );
 
 CREATE INDEX IF NOT EXISTS idx_auth_log ON auth_log(email_hash, ts);
+
+-- Réinitialisation du mot de passe d'un compte photographe (celui de
+-- connexion à l'interface, pas celui d'une galerie — qui se régénère déjà
+-- directement depuis le tableau de bord). token_hash est une empreinte, la
+-- valeur brute part uniquement dans le lien envoyé par e-mail.
+CREATE TABLE IF NOT EXISTS password_resets (
+  id              TEXT PRIMARY KEY,
+  photographer_id TEXT NOT NULL REFERENCES photographers(id) ON DELETE CASCADE,
+  token_hash      TEXT NOT NULL UNIQUE,
+  expires_at      INTEGER NOT NULL,
+  used_at         INTEGER,
+  created_at      INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_password_resets_token ON password_resets(token_hash);
+CREATE INDEX IF NOT EXISTS idx_password_resets_photographer ON password_resets(photographer_id, created_at);
+
+-- Migration (bases créées avant cette fonctionnalité) :
+--   CREATE TABLE IF NOT EXISTS password_resets (
+--     id              TEXT PRIMARY KEY,
+--     photographer_id TEXT NOT NULL REFERENCES photographers(id) ON DELETE CASCADE,
+--     token_hash      TEXT NOT NULL UNIQUE,
+--     expires_at      INTEGER NOT NULL,
+--     used_at         INTEGER,
+--     created_at      INTEGER NOT NULL
+--   );
+--   CREATE INDEX IF NOT EXISTS idx_password_resets_token ON password_resets(token_hash);
+--   CREATE INDEX IF NOT EXISTS idx_password_resets_photographer ON password_resets(photographer_id, created_at);

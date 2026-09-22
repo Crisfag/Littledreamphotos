@@ -55,9 +55,38 @@ export function buildCaptureAlertEmail({ studioName, galleryTitle, clientName, p
   return { subject, html, text };
 }
 
-export async function sendCaptureAlert(env, params) {
-  if (!env.RESEND_API_KEY || !params.to) return;
-  const { subject, html, text } = buildCaptureAlertEmail(params);
+// Fonction pure : facile à tester unitairement, sans accès réseau.
+export function buildPasswordResetEmail({ studioName, resetUrl, ts }) {
+  const subject = "Réinitialisation de votre mot de passe Holypixx";
+  const html = `
+    <div style="font-family:Georgia,serif;color:#2b2521;max-width:480px;margin:0 auto;">
+      <p>Bonjour${studioName ? " " + escapeHtml(studioName) : ""},</p>
+      <p>
+        Une réinitialisation de mot de passe a été demandée pour votre compte
+        Holypixx le ${escapeHtml(formatWhen(ts))}.
+      </p>
+      <p>
+        <a href="${escapeHtml(resetUrl)}" style="color:#9c6f61;">Choisir un nouveau mot de passe</a>
+      </p>
+      <p style="color:#7c716a;font-size:.9em;">
+        Ce lien n'est valable qu'une demi-heure et ne fonctionne qu'une seule
+        fois. Si vous n'êtes pas à l'origine de cette demande, ignorez
+        simplement cet e-mail : votre mot de passe actuel reste inchangé.
+      </p>
+    </div>
+  `.trim();
+
+  const text =
+    `Une réinitialisation de mot de passe a été demandée pour votre compte Holypixx le ${formatWhen(ts)}. ` +
+    `Choisissez un nouveau mot de passe : ${resetUrl} ` +
+    `Ce lien n'est valable qu'une demi-heure et ne fonctionne qu'une seule fois. ` +
+    "Si vous n'êtes pas à l'origine de cette demande, ignorez simplement cet e-mail.";
+
+  return { subject, html, text };
+}
+
+async function sendEmail(env, { to, subject, html, text }) {
+  if (!env.RESEND_API_KEY || !to) return;
   try {
     await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -67,15 +96,24 @@ export async function sendCaptureAlert(env, params) {
       },
       body: JSON.stringify({
         from: env.RESEND_FROM || "Holypixx <alertes@holypixx.com>",
-        to: params.to,
+        to,
         subject,
         html,
         text,
       }),
     });
   } catch (err) {
-    // Un incident chez Resend ne doit jamais remonter au visiteur de la
-    // galerie : la capture reste consignée dans le journal quoi qu'il arrive.
-    console.error("Échec de l'alerte de capture :", err && err.message ? err.message : err);
+    // Un incident chez Resend ne doit jamais remonter à l'appelant : celui-ci
+    // continue son cours normal (capture consignée, ou lien de
+    // réinitialisation simplement pas reçu — l'utilisateur peut réessayer).
+    console.error("Échec de l'envoi d'e-mail :", err && err.message ? err.message : err);
   }
+}
+
+export async function sendCaptureAlert(env, params) {
+  await sendEmail(env, { to: params.to, ...buildCaptureAlertEmail(params) });
+}
+
+export async function sendPasswordResetEmail(env, params) {
+  await sendEmail(env, { to: params.to, ...buildPasswordResetEmail(params) });
 }

@@ -43,11 +43,18 @@
 
   /* ---------- Session ---------- */
 
-  function showLogin() {
+  var LOGIN_CARD_IDS = ["ad-login-card", "ad-signup-card", "ad-forgot-card", "ad-reset-card"];
+
+  function showLoginCard(visibleId) {
     el.app.hidden = true;
     el.login.hidden = false;
-    el.login.querySelector(".ad-login-card").hidden = false;
-    document.getElementById("ad-signup-card").hidden = true;
+    LOGIN_CARD_IDS.forEach(function (id) {
+      document.getElementById(id).hidden = id !== visibleId;
+    });
+  }
+
+  function showLogin() {
+    showLoginCard("ad-login-card");
   }
 
   function showApp(photographer) {
@@ -674,12 +681,16 @@
   /* ---------- Connexion ---------- */
 
   document.getElementById("ad-show-signup").addEventListener("click", function () {
-    document.getElementById("ad-login").querySelector(".ad-login-card").hidden = true;
-    document.getElementById("ad-signup-card").hidden = false;
+    showLoginCard("ad-signup-card");
   });
   document.getElementById("ad-show-login").addEventListener("click", function () {
-    document.getElementById("ad-signup-card").hidden = true;
-    document.getElementById("ad-login").querySelector(".ad-login-card").hidden = false;
+    showLoginCard("ad-login-card");
+  });
+  document.getElementById("ad-show-forgot").addEventListener("click", function () {
+    showLoginCard("ad-forgot-card");
+  });
+  document.getElementById("ad-forgot-back").addEventListener("click", function () {
+    showLoginCard("ad-login-card");
   });
 
   document.getElementById("ad-signup-form").addEventListener("submit", async function (event) {
@@ -744,6 +755,69 @@
     }
   });
 
+  document.getElementById("ad-forgot-form").addEventListener("submit", async function (event) {
+    event.preventDefault();
+    var form = event.target;
+    var messageBox = document.getElementById("ad-forgot-message");
+    var submitBtn = document.getElementById("ad-forgot-submit");
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Envoi…";
+
+    try {
+      var response = await fetch("/local/auth/forgot-password", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: form.email.value.trim() }),
+      });
+      var data = await response.json().catch(function () { return {}; });
+      // Toujours le même message, que le compte existe ou non — c'est le
+      // Worker qui applique cette règle, l'interface ne fait que la refléter.
+      messageBox.textContent = data.message || "Si un compte existe avec cette adresse, un lien vient d'être envoyé.";
+      messageBox.hidden = false;
+      form.reset();
+    } catch (err) {
+      messageBox.textContent = "Connexion au serveur d'administration perdue.";
+      messageBox.hidden = false;
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Recevoir un lien";
+    }
+  });
+
+  var resetToken = new URLSearchParams(location.search).get("reset");
+
+  document.getElementById("ad-reset-form").addEventListener("submit", async function (event) {
+    event.preventDefault();
+    var form = event.target;
+    var errorBox = document.getElementById("ad-reset-error");
+    var submitBtn = document.getElementById("ad-reset-submit");
+    errorBox.hidden = true;
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Validation…";
+
+    try {
+      var response = await fetch("/local/auth/reset-password", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ token: resetToken, password: form.password.value }),
+      });
+      var data = await response.json().catch(function () { return {}; });
+      if (!response.ok) throw new Error(data.error || "Réinitialisation refusée");
+      form.reset();
+      // Le lien ne doit plus jamais réapparaître dans l'URL (partagée,
+      // mise en favori, historique du navigateur…) une fois utilisé.
+      history.replaceState(null, "", location.pathname + location.hash);
+      showApp(data.photographer);
+      bootstrap();
+    } catch (err) {
+      errorBox.textContent = err.message;
+      errorBox.hidden = false;
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Valider le nouveau mot de passe";
+    }
+  });
+
   document.getElementById("ad-logout").addEventListener("click", async function () {
     try {
       await fetch("/local/auth/logout", { method: "POST" });
@@ -771,14 +845,20 @@
     }).then(routeFromHash);
   }
 
-  fetch("/local/auth/me").then(function (response) {
-    if (!response.ok) {
-      showLogin();
-      return;
-    }
-    return response.json().then(function (data) {
-      showApp(data.photographer);
-      bootstrap();
-    });
-  }).catch(showLogin);
+  if (resetToken) {
+    // Un lien de réinitialisation prime sur une éventuelle session déjà
+    // ouverte dans ce navigateur : cliquer ce lien est une intention claire.
+    showLoginCard("ad-reset-card");
+  } else {
+    fetch("/local/auth/me").then(function (response) {
+      if (!response.ok) {
+        showLogin();
+        return;
+      }
+      return response.json().then(function (data) {
+        showApp(data.photographer);
+        bootstrap();
+      });
+    }).catch(showLogin);
+  }
 })();

@@ -303,6 +303,57 @@ async function handleAuth(req, res, parts) {
     return json(res, 201, { photographer: data.photographer });
   }
 
+  if (parts.length === 2 && parts[1] === "forgot-password" && req.method === "POST") {
+    let body;
+    try {
+      body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
+    } catch {
+      return json(res, 400, { error: "Requête invalide" });
+    }
+    const email = String(body.email || "").trim();
+
+    let forgotRes;
+    try {
+      forgotRes = await fetch(`${config.api}/api/auth/forgot-password`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+    } catch {
+      return json(res, 502, { error: "Worker injoignable" });
+    }
+    const data = await forgotRes.json().catch(() => ({}));
+    return json(res, forgotRes.status, data);
+  }
+
+  if (parts.length === 2 && parts[1] === "reset-password" && req.method === "POST") {
+    let body;
+    try {
+      body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
+    } catch {
+      return json(res, 400, { error: "Requête invalide" });
+    }
+    const token = String(body.token || "");
+    const password = String(body.password || "");
+    if (!token || !password) return json(res, 400, { error: "Lien et mot de passe requis" });
+
+    let resetRes;
+    try {
+      resetRes = await fetch(`${config.api}/api/auth/reset-password`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ token, password }),
+      });
+    } catch {
+      return json(res, 502, { error: "Worker injoignable" });
+    }
+    const data = await resetRes.json().catch(() => ({}));
+    if (!resetRes.ok) return json(res, resetRes.status, { error: data.error || "Réinitialisation refusée" });
+
+    setSessionCookie(req, res, data.token, Math.min(data.expiresIn || SESSION_MAX_AGE, SESSION_MAX_AGE));
+    return json(res, 200, { photographer: data.photographer });
+  }
+
   if (parts.length === 2 && parts[1] === "logout" && req.method === "POST") {
     clearSessionCookie(req, res);
     return json(res, 200, { ok: true });

@@ -106,6 +106,14 @@ de l'interface web (« Créer un compte ») — pas besoin de terminal ni de
 script pour commencer. `signup.mjs` reste utile pour scripter une création
 de compte (mise en place automatisée, tests), mais n'est plus la seule voie.
 
+Mot de passe de compte oublié ? Le lien « Mot de passe oublié ? » de l'écran
+de connexion envoie un e-mail (via Resend) avec un lien de réinitialisation
+valable trente minutes, à usage unique. Comme pour la connexion, la même
+réponse générique est renvoyée que le compte existe ou non — impossible de
+confirmer l'existence d'un compte par ce biais. (Ceci concerne le compte du
+photographe ; le mot de passe d'une galerie, lui, se régénère directement
+depuis son tableau de bord, voir plus loin.)
+
 Aujourd'hui, la préparation des photos (traitement, filigrane, envoi) se fait
 encore depuis l'ordinateur du photographe : `admin-server.mjs`, où chaque
 photographe se connecte avec son propre compte depuis le navigateur (comme
@@ -366,9 +374,10 @@ des tuiles, refus du mauvais mot de passe, absence de toute balise `<img>`,
 neutralisation du menu contextuel et de la copie, voile sur « Impr. écran » et
 sur perte de focus, consignation au journal.
 
-**API du Worker** — 108 vérifications contre le vrai moteur Cloudflare (D1 et R2
+**API du Worker** — 114 vérifications contre le vrai moteur Cloudflare (D1 et R2
 émulés localement par `wrangler dev`) : comptes photographes (inscription,
-connexion, session), cloisonnement strict entre comptes (un photographe ne
+connexion, session, mot de passe oublié — même réponse générique qu'un
+compte existe ou non), cloisonnement strict entre comptes (un photographe ne
 peut ni lister, ni lire, ni modifier, ni même deviner l'existence des
 galeries, photos et tuiles d'un autre compte), création et cloisonnement des
 galeries d'un même compte, authentification client, expiration, limitation
@@ -379,18 +388,25 @@ personnalisé de l'écran de connexion (couleur ou image, cloisonné par
 compte, et une galerie inconnue ne se distingue jamais d'une galerie sans
 arrière-plan personnalisé), référence de photo sur un évènement de capture
 (un identifiant inconnu n'est jamais enregistré), journal sans IP en clair.
+Le trajet complet de réinitialisation de mot de passe (jeton reçu par
+e-mail → nouveau mot de passe → ancien mot de passe rejeté → lien à usage
+unique) est vérifié manuellement plutôt qu'automatiquement : le jeton ne
+transite jamais par l'API, seulement par l'e-mail, et l'y exposer pour les
+tests reviendrait à affaiblir la sécurité qu'il apporte.
 
-**Alerte e-mail de capture** — 10 vérifications sans réseau ni `wrangler dev`
-(`buildCaptureAlertEmail` est une fonction pure) : sujet et corps référençant
-la bonne galerie et la bonne photo, message générique quand aucune photo
-n'est identifiée, raisons connues traduites en texte lisible, et surtout
-échappement HTML du nom de studio, du titre de galerie et du nom de client —
-autant de champs saisis par le photographe, jamais dignes de confiance tels
-quels dans un e-mail.
+**Alertes e-mail** — 15 vérifications sans réseau ni `wrangler dev`
+(`buildCaptureAlertEmail` et `buildPasswordResetEmail` sont des fonctions
+pures) : sujet et corps référençant la bonne galerie et la bonne photo,
+message générique quand aucune photo n'est identifiée, raisons connues
+traduites en texte lisible, lien et durée de validité présents dans l'e-mail
+de réinitialisation, et surtout échappement HTML du nom de studio, du titre
+de galerie et du nom de client — autant de champs saisis par le
+photographe, jamais dignes de confiance tels quels dans un e-mail.
 
-**Interface d'administration** — 22 vérifications dans un vrai navigateur,
-contre le vrai Worker local : création de compte et connexion depuis le
-formulaire (pas de session présupposée), création d'une galerie,
+**Interface d'administration** — 24 vérifications dans un vrai navigateur,
+contre le vrai Worker local : demande de lien de réinitialisation de mot de
+passe (message générique affiché), création de compte et connexion depuis
+le formulaire (pas de session présupposée), création d'une galerie,
 régénération de son mot de passe,
 choix d'une couleur ou d'une image pour l'écran de connexion client,
 glisser-déposer de photos avec suivi de progression, vraies vignettes

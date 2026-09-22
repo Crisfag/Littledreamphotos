@@ -12,7 +12,7 @@
 <body>
   <!-- ============ Connexion ============ -->
   <main class="ad-login-shell" id="ad-login" hidden>
-    <section class="ad-login-card">
+    <section class="ad-login-card" id="ad-login-card">
       <div class="ad-brand">
         <span class="ad-brand-mark">H</span>
         <div>
@@ -33,9 +33,51 @@
         <button type="submit" class="ad-btn ad-btn-primary" id="ad-login-submit">Se connecter</button>
       </form>
       <p class="ad-hint">
+        <button type="button" class="ad-link-btn" id="ad-show-forgot">Mot de passe oublié ?</button>
+      </p>
+      <p class="ad-hint">
         Pas encore de compte ?
         <button type="button" class="ad-link-btn" id="ad-show-signup">Créer un compte</button>
       </p>
+    </section>
+
+    <section class="ad-login-card" id="ad-forgot-card" hidden>
+      <div class="ad-brand">
+        <span class="ad-brand-mark">H</span>
+        <div>
+          <p class="ad-brand-name">Holypixx</p>
+          <p class="ad-brand-sub">Réinitialiser votre mot de passe</p>
+        </div>
+      </div>
+      <form id="ad-forgot-form" autocomplete="on">
+        <label class="ad-field">
+          <span>E-mail de votre compte</span>
+          <input type="email" name="email" required autocomplete="username" />
+        </label>
+        <p class="ad-hint" id="ad-forgot-message" hidden></p>
+        <button type="submit" class="ad-btn ad-btn-primary" id="ad-forgot-submit">Recevoir un lien</button>
+      </form>
+      <p class="ad-hint">
+        <button type="button" class="ad-link-btn" id="ad-forgot-back">&larr; Retour à la connexion</button>
+      </p>
+    </section>
+
+    <section class="ad-login-card" id="ad-reset-card" hidden>
+      <div class="ad-brand">
+        <span class="ad-brand-mark">H</span>
+        <div>
+          <p class="ad-brand-name">Holypixx</p>
+          <p class="ad-brand-sub">Choisir un nouveau mot de passe</p>
+        </div>
+      </div>
+      <form id="ad-reset-form" autocomplete="on">
+        <label class="ad-field">
+          <span>Nouveau mot de passe <em>(10 caractères minimum)</em></span>
+          <input type="password" name="password" required minlength="10" autocomplete="new-password" />
+        </label>
+        <p class="ad-error" id="ad-reset-error" hidden></p>
+        <button type="submit" class="ad-btn ad-btn-primary" id="ad-reset-submit">Valider le nouveau mot de passe</button>
+      </form>
     </section>
 
     <section class="ad-login-card" id="ad-signup-card" hidden>
