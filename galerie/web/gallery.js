@@ -475,8 +475,12 @@
   // système avant même d'atteindre le navigateur — impossible à voir passer
   // comme un raccourci clavier. Ce qu'on voit, en revanche : l'éclair très
   // bref d'un changement de fenêtre ou d'onglet au moment de la capture,
-  // bien plus court qu'un vrai passage à une autre application.
-  var BRIEF_ABSENCE_MS = 1500;
+  // bien plus court qu'un vrai passage à une autre application. Compte le
+  // temps de sélectionner une zone (Cmd+Maj+4) et de voir la miniature de
+  // confirmation s'afficher : mesuré en usage réel autour de 2-3 s, donc une
+  // marge confortable pour ne pas rater le signal tout en excluant un vrai
+  // départ vers une autre application (souvent bien plus long).
+  var BRIEF_ABSENCE_MS = 4000;
 
   // Masquer les photos dès que l'attention quitte la page : la plupart des
   // outils de capture prennent le focus, et un raccourci de capture se voit.
