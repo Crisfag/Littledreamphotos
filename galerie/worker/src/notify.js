@@ -89,7 +89,7 @@ export function buildPasswordResetEmail({ studioName, resetUrl, ts }) {
 async function sendEmail(env, { to, subject, html, text }) {
   if (!env.RESEND_API_KEY || !to) return;
   try {
-    await fetch("https://api.resend.com/emails", {
+    const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
         authorization: `Bearer ${env.RESEND_API_KEY}`,
@@ -103,6 +103,16 @@ async function sendEmail(env, { to, subject, html, text }) {
         text,
       }),
     });
+    // `fetch` ne lève une exception qu'en cas de panne réseau — un refus de
+    // Resend (mauvaise clé, domaine d'expédition non vérifié, adresse
+    // invalide…) revient comme une réponse HTTP normale, juste pas 2xx.
+    // Sans cette vérification, un refus passait totalement inaperçu.
+    if (!response.ok) {
+      const body = await response.text().catch(() => "");
+      console.error(`Resend a refusé l'e-mail (HTTP ${response.status}) : ${body.slice(0, 300)}`);
+    } else {
+      console.log(`E-mail envoyé via Resend à ${to} : « ${subject} »`);
+    }
   } catch (err) {
     // Un incident chez Resend ne doit jamais remonter à l'appelant : celui-ci
     // continue son cours normal (capture consignée, ou lien de

@@ -269,7 +269,7 @@ async function handleComment(request, env, slug) {
 async function recentAlertAlreadySent(env, galleryId) {
   const row = await env.DB.prepare(
     `SELECT COUNT(*) AS n FROM access_log
-     WHERE gallery_id = ? AND event = 'capture_suspected' AND detail IN ('impr-ecran', 'capture-macos')
+     WHERE gallery_id = ? AND event = 'capture_suspected' AND detail IN ('impr-ecran', 'capture-macos', 'absence-breve')
        AND ts > ?`
   )
     .bind(galleryId, now() - ALERT_COOLDOWN_SECONDS)
@@ -323,9 +323,20 @@ async function handleEvent(request, env, ctx, slug) {
   if (event === "capture_suspected" && EMAIL_ALERT_REASONS.has(detail)) {
     ctx.waitUntil(
       (async () => {
-        if (await recentAlertAlreadySent(env, auth.gallery.id)) return;
+        if (await recentAlertAlreadySent(env, auth.gallery.id)) {
+          console.log(`Alerte de capture ignorée (déjà une alerte récente) — galerie ${auth.gallery.id}`);
+          return;
+        }
         const photographer = await photographerOf(env, auth.gallery.photographer_id);
-        if (!photographer?.email) return;
+        if (!photographer?.email) {
+          console.log(`Alerte de capture ignorée (photographe introuvable ou sans e-mail) — galerie ${auth.gallery.id}, photographe ${auth.gallery.photographer_id}`);
+          return;
+        }
+        if (!env.RESEND_API_KEY) {
+          console.log("Alerte de capture ignorée : RESEND_API_KEY n'est pas configurée sur ce Worker.");
+          return;
+        }
+        console.log(`Envoi d'une alerte de capture à ${photographer.email} (galerie ${auth.gallery.id}, raison ${detail})`);
         await sendCaptureAlert(env, {
           to: photographer.email,
           studioName: photographer.studio_name,
