@@ -4,7 +4,7 @@ compatibility_date = "2025-01-01"
 
 # Origines autorisées à appeler l'API (le site qui héberge la page galerie).
 [vars]
-ALLOWED_ORIGINS = "https://holypixx-web.pages.dev,https://www.littledreamphotos.com,http://localhost:8000"
+ALLOWED_ORIGINS = "https://www.holypixx.com,https://holypixx.com,https://holypixx-web.pages.dev,https://www.littledreamphotos.com,http://localhost:8000"
 # Lien inséré dans l'e-mail d'alerte de capture, vers l'interface d'administration.
 ADMIN_URL = "https://holypixx-admin.onrender.com"
 
