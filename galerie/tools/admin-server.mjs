@@ -612,6 +612,17 @@ async function handleApi(req, res, url) {
     }
   }
 
+  // POST /local/galleries/:slug/layout — mise en page proposée au client
+  if (parts.length === 3 && parts[2] === "layout" && req.method === "POST") {
+    const body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
+    try {
+      await client.setLayout(slug, String(body.layout || ""));
+      return json(res, 200, { ok: true });
+    } catch (err) {
+      return relayError(res, err, "Impossible d'enregistrer la mise en page");
+    }
+  }
+
   // POST /local/galleries/:slug/photos  (une photo par requête, multipart)
   if (parts.length === 3 && parts[2] === "photos" && req.method === "POST") {
     let galleryInfo;

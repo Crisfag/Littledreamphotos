@@ -116,6 +116,10 @@ export class WorkerClient {
     return this.request("DELETE", `/api/admin/galleries/${encodeURIComponent(slug)}/background`);
   }
 
+  setLayout(slug, layout) {
+    return this.request("POST", `/api/admin/galleries/${encodeURIComponent(slug)}/layout`, { layout });
+  }
+
   addPhoto(slug, photo) {
     return this.request("POST", `/api/admin/galleries/${encodeURIComponent(slug)}/photos`, photo);
   }

@@ -27,6 +27,7 @@
   var PREVIEW_COLS = 2;
   var PREVIEW_ROWS = 2;
   var PARALLEL_TILES = 6;
+  var LAYOUTS = { grille: 1, mosaique: 1, defilement: 1 };
 
   var state = {
     slug: null,
@@ -667,6 +668,7 @@
         el.subtitle.textContent = state.gallery.clientName
           ? "Galerie de " + state.gallery.clientName
           : "";
+        el.grid.setAttribute("data-layout", LAYOUTS[state.gallery.layout] ? state.gallery.layout : "grille");
         if (state.gallery.expiresAt) {
           var date = new Date(state.gallery.expiresAt * 1000);
           el.expiry.textContent =

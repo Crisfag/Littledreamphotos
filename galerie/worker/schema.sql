@@ -26,6 +26,11 @@ CREATE TABLE IF NOT EXISTS galleries (
   -- authentification). L'image elle-même vit dans R2 sous backgrounds/{id}.jpg.
   login_background_type  TEXT NOT NULL DEFAULT 'color',
   login_background_color TEXT NOT NULL DEFAULT '',
+  -- Mise en page proposée au client : 'grille' (vignettes régulières, défaut),
+  -- 'mosaique' (colonnes façon presse, chaque photo garde son format) ou
+  -- 'defilement' (une photo à la fois, en grand). Purement visuel — ne change
+  -- rien au niveau de tuile chargé ni à la protection des images.
+  layout                 TEXT NOT NULL DEFAULT 'grille',
   created_at             INTEGER NOT NULL
 );
 
@@ -83,6 +88,9 @@ CREATE TABLE IF NOT EXISTS photos (
 -- Migration vers l'arrière-plan personnalisable (bases créées avant) :
 --   ALTER TABLE galleries ADD COLUMN login_background_type TEXT NOT NULL DEFAULT 'color';
 --   ALTER TABLE galleries ADD COLUMN login_background_color TEXT NOT NULL DEFAULT '';
+
+-- Migration vers la mise en page personnalisable (bases créées avant) :
+--   ALTER TABLE galleries ADD COLUMN layout TEXT NOT NULL DEFAULT 'grille';
 
 CREATE INDEX IF NOT EXISTS idx_photos_gallery ON photos(gallery_id, position);
 

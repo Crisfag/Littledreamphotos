@@ -32,6 +32,12 @@
     { color: "#3a332e", label: "Charbon" },
   ];
 
+  var LAYOUT_OPTIONS = [
+    { value: "grille", label: "Grille", hint: "Vignettes régulières — pour parcourir beaucoup de photos rapidement." },
+    { value: "mosaique", label: "Mosaïque", hint: "Colonnes façon presse, chaque photo garde son format — portraits et paysages mélangés." },
+    { value: "defilement", label: "Défilement", hint: "Une photo à la fois, en grand — effet éditorial, pour une séance à raconter." },
+  ];
+
   var state = { view: "list", galleries: [], current: null, config: { previewCols: 2, previewRows: 2 } };
   var el = {
     view: document.getElementById("ad-view"),
@@ -452,6 +458,20 @@
     }).join("");
   }
 
+  function layoutOptionsHtml(gallery) {
+    var active = gallery.layout || "grille";
+    return LAYOUT_OPTIONS.map(function (opt) {
+      var isActive = opt.value === active;
+      return (
+        '<button type="button" class="ad-layout-option' + (isActive ? " ad-layout-option-active" : "") + '" ' +
+        'data-layout="' + esc(opt.value) + '">' +
+        '<span class="ad-layout-name">' + esc(opt.label) + "</span>" +
+        '<span class="ad-layout-hint">' + esc(opt.hint) + "</span>" +
+        "</button>"
+      );
+    }).join("");
+  }
+
   async function renderDetail(slug, skipHash) {
     var hash = "#/g/" + encodeURIComponent(slug);
     if (!skipHash && location.hash !== hash) history.pushState(null, "", hash);
@@ -501,6 +521,11 @@
         ? '<img class="ad-bg-preview" alt="Arrière-plan actuel" src="' +
           esc(state.config.api) + "/api/gallery/" + esc(data.gallery.slug) + "/background-image?t=" + Date.now() + '" />'
         : "") +
+      "</section>" +
+      '<section class="ad-layout">' +
+      '<div class="ad-section-header"><h3>Mise en page de la galerie</h3></div>' +
+      '<p class="ad-hint">Comment les photos s\'affichent chez le client — à choisir selon le type de séance.</p>' +
+      '<div class="ad-layout-options" id="ad-layout-options">' + layoutOptionsHtml(data.gallery) + "</div>" +
       "</section>" +
       '<section class="ad-dropzone" id="ad-dropzone">' +
       '<p><strong>Glissez vos photos ici</strong>, ou</p>' +
@@ -597,6 +622,18 @@
         var result = await response.json().catch(function () { return {}; });
         if (!response.ok) throw new Error(result.error || "Échec de l'envoi");
         toast("Arrière-plan mis à jour.");
+        renderDetail(slug, true);
+      } catch (err) {
+        toast(err.message, true);
+      }
+    });
+    document.getElementById("ad-layout-options").addEventListener("click", async function (event) {
+      var btn = event.target.closest(".ad-layout-option");
+      if (!btn || btn.classList.contains("ad-layout-option-active")) return;
+      var layout = btn.getAttribute("data-layout");
+      try {
+        await api("POST", "/galleries/" + encodeURIComponent(slug) + "/layout", { layout: layout });
+        toast("Mise en page mise à jour.");
         renderDetail(slug, true);
       } catch (err) {
         toast(err.message, true);

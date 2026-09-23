@@ -690,6 +690,36 @@ check("après réinitialisation, l'arrière-plan redevient la couleur par défau
 const backgroundImageAfterReset = await fetch(`${BASE}/api/gallery/${SLUG}/background-image`);
 check("l'image d'arrière-plan n'est plus servie après réinitialisation", backgroundImageAfterReset.status === 404);
 
+/* ---------- Mise en page de la galerie ---------- */
+
+const galleryBeforeLayout = await (await admin("GET", `/api/admin/galleries/${SLUG}`)).json();
+check("par défaut, une galerie s'affiche en grille",
+      galleryBeforeLayout.gallery?.layout === "grille", JSON.stringify(galleryBeforeLayout.gallery?.layout));
+
+const foreignLayoutSet = await peerAdmin("POST", `/api/admin/galleries/${SLUG}/layout`, { layout: "mosaique" });
+check("un photographe ne peut pas changer la mise en page d'une galerie d'un autre compte", foreignLayoutSet.status === 404);
+
+const badLayout = await admin("POST", `/api/admin/galleries/${SLUG}/layout`, { layout: "n-importe-quoi" });
+check("une mise en page inconnue est refusée", badLayout.status === 400);
+
+const layoutSet = await admin("POST", `/api/admin/galleries/${SLUG}/layout`, { layout: "mosaique" });
+check("le photographe peut choisir la mosaïque", layoutSet.ok);
+
+const galleryAfterLayout = await (await admin("GET", `/api/admin/galleries/${SLUG}`)).json();
+check("la mise en page choisie est bien renvoyée au tableau de bord",
+      galleryAfterLayout.gallery?.layout === "mosaique", JSON.stringify(galleryAfterLayout.gallery?.layout));
+
+const clientLoginAfterLayout = await (await fetch(`${BASE}/api/gallery/${SLUG}/login`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ password: NEW_PASSWORD }),
+})).json();
+check("la mise en page choisie est bien transmise au client",
+      clientLoginAfterLayout.gallery?.layout === "mosaique", JSON.stringify(clientLoginAfterLayout.gallery?.layout));
+
+const layoutBackToGrille = await admin("POST", `/api/admin/galleries/${SLUG}/layout`, { layout: "defilement" });
+check("le photographe peut basculer vers le défilement", layoutBackToGrille.ok);
+
 /* ---------- Expiration ---------- */
 
 const expired = await admin("POST", "/api/admin/galleries", {

@@ -236,6 +236,14 @@ local sur `127.0.0.1` n'est qu'un cas particulier, pas un système à part.
   le photographe. Jamais une photo de la galerie elle-même — cet écran
   s'affiche avant que le client ait prouvé quoi que ce soit, donc rien qui y
   apparaît ne doit être une livraison protégée.
+- **Mise en page de la galerie**, à choisir selon le type de séance : une
+  section dédiée sur la fiche de chaque galerie propose *Grille* (vignettes
+  régulières, le réglage historique — idéal pour parcourir beaucoup de
+  photos), *Mosaïque* (colonnes façon presse, chaque photo garde son propre
+  format — pratique quand portraits et paysages se mélangent) ou
+  *Défilement* (une photo à la fois, en grand — rendu éditorial, pour
+  raconter une séance plutôt que la survoler). Purement visuel : les trois
+  rendus s'appuient sur les mêmes tuiles, protégées de la même façon.
 - **Glisser-déposer** des photos sur la page de la galerie : chacune est
   traitée (réduction, empreinte, filigrane, découpage) et envoyée avec une
   barre de progression individuelle. Plusieurs photos partent en parallèle.
@@ -393,7 +401,7 @@ des tuiles, refus du mauvais mot de passe, absence de toute balise `<img>`,
 neutralisation du menu contextuel et de la copie, voile sur « Impr. écran » et
 sur perte de focus, consignation au journal.
 
-**API du Worker** — 115 vérifications contre le vrai moteur Cloudflare (D1 et R2
+**API du Worker** — 122 vérifications contre le vrai moteur Cloudflare (D1 et R2
 émulés localement par `wrangler dev`) : comptes photographes (inscription,
 connexion, session, mot de passe oublié — même réponse générique qu'un
 compte existe ou non), cloisonnement strict entre comptes (un photographe ne
@@ -405,7 +413,9 @@ isolée), sélection et commentaire posés et retirés, régénération du mot d
 passe d'une galerie (l'ancien cesse aussitôt de fonctionner), arrière-plan
 personnalisé de l'écran de connexion (couleur ou image, cloisonné par
 compte, et une galerie inconnue ne se distingue jamais d'une galerie sans
-arrière-plan personnalisé), référence de photo sur un évènement de capture
+arrière-plan personnalisé), mise en page de la galerie (grille par défaut,
+cloisonnée par compte, valeur inconnue refusée, transmise telle quelle au
+client à la connexion), référence de photo sur un évènement de capture
 (un identifiant inconnu n'est jamais enregistré), journal sans IP en clair.
 Le trajet complet de réinitialisation de mot de passe (jeton reçu par
 e-mail → nouveau mot de passe → ancien mot de passe rejeté → lien à usage
@@ -422,12 +432,13 @@ de réinitialisation, et surtout échappement HTML du nom de studio, du titre
 de galerie et du nom de client — autant de champs saisis par le
 photographe, jamais dignes de confiance tels quels dans un e-mail.
 
-**Interface d'administration** — 26 vérifications dans un vrai navigateur,
+**Interface d'administration** — 28 vérifications dans un vrai navigateur,
 contre le vrai Worker local : demande de lien de réinitialisation de mot de
 passe (message générique affiché), création de compte et connexion depuis
 le formulaire (pas de session présupposée), création d'une galerie,
 régénération de son mot de passe,
-choix d'une couleur ou d'une image pour l'écran de connexion client,
+choix d'une couleur ou d'une image pour l'écran de connexion client, choix
+d'une mise en page pour la galerie,
 glisser-déposer de photos avec suivi de progression, vraies vignettes
 affichées, suppression d'une photo et d'une galerie, navigation vers l'écran
 « Vérifier une photo » et retour à la liste, déconnexion qui tient après un

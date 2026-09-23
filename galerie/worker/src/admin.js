@@ -123,6 +123,7 @@ async function getGallery(env, photographerId, slug) {
       created_at: gallery.created_at,
       login_background_type: gallery.login_background_type,
       login_background_color: gallery.login_background_color,
+      layout: gallery.layout,
     },
     photos,
   });
@@ -154,6 +155,7 @@ async function regeneratePassword(request, env, photographerId, slug) {
 }
 
 const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
+const ALLOWED_LAYOUTS = new Set(["grille", "mosaique", "defilement"]);
 
 // Couleur unie (ou remise à la couleur par défaut si `color` est vide).
 // N'affecte jamais une éventuelle image déjà stockée dans R2 — juste le
@@ -209,6 +211,28 @@ async function resetBackground(env, photographerId, slug) {
     "UPDATE galleries SET login_background_type = 'color', login_background_color = '' WHERE id = ?"
   )
     .bind(gallery.id)
+    .run();
+
+  return json({ ok: true });
+}
+
+// Mise en page proposée au client — purement visuel (voir schema.sql) :
+// n'affecte ni les tuiles servies, ni leur niveau de définition.
+async function setLayout(request, env, photographerId, slug) {
+  const gallery = await ownedGallery(env, photographerId, slug);
+  if (!gallery) return fail(404, "Galerie introuvable");
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return fail(400, "Requête invalide");
+  }
+  const layout = String(body.layout || "");
+  if (!ALLOWED_LAYOUTS.has(layout)) return fail(400, "Mise en page inconnue");
+
+  await env.DB.prepare("UPDATE galleries SET layout = ? WHERE id = ?")
+    .bind(layout, gallery.id)
     .run();
 
   return json({ ok: true });
@@ -400,6 +424,9 @@ export async function handleAdmin(request, env, ctx, path) {
     }
     if (parts.length === 5 && parts[4] === "background" && request.method === "DELETE") {
       return resetBackground(env, photographerId, slug);
+    }
+    if (parts.length === 5 && parts[4] === "layout" && request.method === "POST") {
+      return setLayout(request, env, photographerId, slug);
     }
   }
 

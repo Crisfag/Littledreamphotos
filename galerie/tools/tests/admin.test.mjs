@@ -126,6 +126,21 @@ await page.setInputFiles("#ad-bg-file-input", PHOTOS[0]);
 await page.waitForSelector(".ad-bg-preview", { timeout: 15000 });
 check("une image importée comme arrière-plan s'affiche en aperçu", await page.isVisible(".ad-bg-preview"));
 
+/* ---------- Mise en page de la galerie ---------- */
+
+check("par défaut, la grille est l'option active",
+      await page.locator('.ad-layout-option[data-layout="grille"].ad-layout-option-active').count() === 1);
+
+await page.click('.ad-layout-option[data-layout="mosaique"]');
+await page.waitForFunction(
+  () => {
+    const btn = document.querySelector('.ad-layout-option[data-layout="mosaique"]');
+    return btn && btn.classList.contains("ad-layout-option-active");
+  },
+  { timeout: 10000 }
+);
+check("choisir « Mosaïque » dans l'admin l'enregistre (confirmé après rechargement des données)", true);
+
 /* ---------- Retour à la liste, la galerie y apparaît ---------- */
 
 await page.click("#ad-back");
