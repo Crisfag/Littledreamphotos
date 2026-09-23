@@ -68,7 +68,12 @@ données partagée entre confrères.
    Invisible (PSNR ≈ 37 dB), et sans la clé on ne sait pas où elle est — donc
    pas comment l'effacer.
 3. **Filigrane visible** en trame diagonale, tracé sombre et clair superposés
-   pour rester lisible sur une robe blanche comme sur un fond noir.
+   pour rester lisible sur une robe blanche comme sur un fond noir. Deux
+   lignes alternent dans la trame : studio + client, et un rappel explicite
+   du droit d'auteur (« Retirer ce filigrane par IA est une violation du
+   droit d'auteur ») — lisible par un assistant IA généraliste à qui l'on
+   demanderait de l'effacer, et une preuve que quiconque a retouché l'image
+   l'a vu.
 4. Découpage en deux niveaux (vignette 500 px, plein écran 1600 px) et envoi
    tuile par tuile.
 
@@ -392,9 +397,9 @@ photos claires :
 
 | plage | force | couverture |
 |---|---|---|
-| ombres | 9,8 à 14,6 niveaux | 7,6 à 15,3 % |
-| tons moyens | 7,4 à 8,2 niveaux | 7,9 à 15,3 % |
-| hautes lumières | 10,1 à 14,5 niveaux | 6,8 à 15,1 % |
+| ombres | 9,9 à 14,5 niveaux | 8,9 à 16,2 % |
+| tons moyens | 7,5 à 8,3 niveaux | 9,3 à 16,9 % |
+| hautes lumières | 10,0 à 14,5 niveaux | 6,3 à 15,7 % |
 
 **Interface client** — 15 vérifications dans un vrai navigateur : recomposition
 des tuiles, refus du mauvais mot de passe, absence de toute balise `<img>`,

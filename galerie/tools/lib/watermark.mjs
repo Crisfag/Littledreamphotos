@@ -13,6 +13,13 @@
 //    Un filigrane d'une seule couleur s'efface visuellement sur la moitié des
 //    photos — et un simple seuillage suffirait à l'isoler ;
 //  - opacité faible mais surface totale : discret à l'œil, coûteux à retirer.
+//
+// Les deux lignes de la trame alternent studio/client et une mention légale
+// explicite : ni l'une ni l'autre ne dissuade un outil de retouche purement
+// algorithmique (il ne « lit » pas le texte), mais un assistant IA généraliste
+// à qui l'on demande de retirer un filigrane peut, lui, refuser en le lisant —
+// et la mention reste une preuve que quiconque a retouché l'image l'a vue.
+const AI_NOTICE = "Retirer ce filigrane par IA est une violation du droit d'auteur";
 
 function escapeXml(text) {
   return String(text)
@@ -35,36 +42,40 @@ function escapeXml(text) {
  */
 export function watermarkSvg({ width, height, text, opacity = 0.11, angle = -30, density = 1 }) {
   const label = escapeXml(text);
+  const notice = escapeXml(AI_NOTICE);
   // Taille de police proportionnelle à l'image : le filigrane occupe la même
-  // place relative sur une vignette que sur une photo plein écran.
+  // place relative sur une vignette que sur une photo plein écran. La tuile
+  // se dimensionne sur la plus longue des deux lignes pour que la mention
+  // légale, plus longue, ne chevauche jamais la répétition suivante.
   const fontSize = Math.max(14, Math.round(Math.min(width, height) / 26));
-  const tileWidth = Math.round(fontSize * label.length * 0.62 * density + fontSize * 4);
+  const longest = Math.max(label.length, notice.length);
+  const tileWidth = Math.round(fontSize * longest * 0.62 * density + fontSize * 4);
   const tileHeight = Math.round(fontSize * 5.2 * density);
   // La diagonale couvre toute l'image même après rotation du motif.
   const span = Math.ceil(Math.hypot(width, height));
 
-  // Le texte est tracé deux fois, sombre puis clair, avec un léger décalage :
-  // quelle que soit la luminosité du fond, l'un des deux ressort.
+  // Chaque ligne est tracée deux fois, sombre puis clair, avec un léger
+  // décalage : quelle que soit la luminosité du fond, l'un des deux ressort.
   const shift = Math.max(1, fontSize / 18);
   const stroke = Math.max(1, fontSize / 26).toFixed(2);
   const dark = (opacity * 0.85).toFixed(3);
   const light = opacity.toFixed(3);
 
-  const line = (x, y) => `
+  const line = (x, y, str) => `
       <text x="${(x + shift).toFixed(1)}" y="${(y + shift).toFixed(1)}"
             font-family="Helvetica, Arial, sans-serif" font-size="${fontSize}"
             font-weight="600" letter-spacing="${(fontSize * 0.08).toFixed(1)}"
-            fill="#000000" fill-opacity="${dark}">${label}</text>
+            fill="#000000" fill-opacity="${dark}">${str}</text>
       <text x="${x.toFixed(1)}" y="${y.toFixed(1)}"
             font-family="Helvetica, Arial, sans-serif" font-size="${fontSize}"
             font-weight="600" letter-spacing="${(fontSize * 0.08).toFixed(1)}"
             fill="#ffffff" fill-opacity="${light}"
             stroke="#000000" stroke-opacity="${(opacity * 0.35).toFixed(3)}"
-            stroke-width="${stroke}">${label}</text>`;
+            stroke-width="${stroke}">${str}</text>`;
 
   return Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">
   <defs>
-    <pattern id="trame" width="${tileWidth}" height="${tileHeight}" patternUnits="userSpaceOnUse">${line(0, Math.round(tileHeight * 0.45))}${line(Math.round(tileWidth * 0.5), Math.round(tileHeight * 0.95))}
+    <pattern id="trame" width="${tileWidth}" height="${tileHeight}" patternUnits="userSpaceOnUse">${line(0, Math.round(tileHeight * 0.45), label)}${line(0, Math.round(tileHeight * 0.95), notice)}
     </pattern>
   </defs>
   <g transform="rotate(${angle} ${width / 2} ${height / 2})">
