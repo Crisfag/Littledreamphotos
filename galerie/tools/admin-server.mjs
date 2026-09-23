@@ -25,6 +25,7 @@ import sharp from "sharp";
 import { processPhoto, DEFAULTS } from "./lib/pipeline.mjs";
 import { PREVIEW_COLS, PREVIEW_ROWS } from "./lib/tiles.mjs";
 import { WorkerClient } from "./lib/client.mjs";
+import { identify, isMatch, MATCH_MIN_SNR, MATCH_MIN_BITS } from "./lib/forensic.mjs";
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = join(ROOT, "admin");
@@ -402,6 +403,79 @@ async function handleApi(req, res, url) {
       return res.end(buffer);
     } catch (err) {
       return json(res, 502, { error: "Worker injoignable" });
+    }
+  }
+
+  // POST /local/detect — identifie l'origine d'une photo suspecte (retrouvée
+  // ailleurs sur internet) en comparant son empreinte invisible à celles de
+  // VOS galeries. Même moteur que detect.mjs, accessible depuis le tableau de
+  // bord — sans savoir à l'avance de quelle galerie elle pourrait venir.
+  if (parts.length === 1 && parts[0] === "detect" && req.method === "POST") {
+    if (!config.forensicKey) return json(res, 503, { error: "Clé forensique non configurée sur ce serveur" });
+
+    const contentLength = Number(req.headers["content-length"] || 0);
+    if (contentLength > MAX_UPLOAD_BYTES) return json(res, 413, { error: "Fichier trop volumineux" });
+
+    let form;
+    try {
+      const body = await readBody(req);
+      form = await nodeRequestToWebRequest(req, body).formData();
+    } catch (err) {
+      return json(res, err.status || 400, { error: err.status ? err.message : "Fichier illisible" });
+    }
+    const file = form.get("file");
+    if (!file || typeof file.arrayBuffer !== "function") return json(res, 400, { error: "Aucun fichier reçu" });
+
+    try {
+      const { prints } = await client.forensicPrints();
+      if (!prints.length) return json(res, 200, { status: "no-prints" });
+
+      const byId = new Map(prints.map((p) => [Number(p.forensic_id), p]));
+      const candidates = [...byId.keys()];
+      const input = Buffer.from(await file.arrayBuffer());
+
+      // Une capture d'écran est presque toujours redimensionnée : on essaie
+      // la taille reçue telle quelle, et la largeur de livraison standard
+      // (1600 px) — les deux cas couverts par detect.mjs en ligne de commande.
+      const best = await withProcessingSlot(async () => {
+        let found = null;
+        for (const width of [0, 1600]) {
+          const pipeline = sharp(input).removeAlpha().toColourspace("srgb");
+          const { data, info } = await (width ? pipeline.resize({ width }) : pipeline)
+            .raw()
+            .toBuffer({ resolveWithObject: true });
+          const result = identify(
+            { data, width: info.width, height: info.height, channels: info.channels },
+            config.forensicKey,
+            candidates
+          );
+          if (result && (!found || result.snr > found.snr)) found = result;
+        }
+        return found;
+      });
+
+      if (!best) return json(res, 200, { status: "too-small" });
+
+      if (isMatch(best)) {
+        const origin = byId.get(best.id);
+        return json(res, 200, {
+          status: "match",
+          gallery: { slug: origin.slug, title: origin.title, clientName: origin.client_name || "" },
+          photo: { id: origin.photo_id, position: origin.position },
+          snr: best.snr,
+          matchingBits: best.matchingBits,
+        });
+      }
+
+      return json(res, 200, {
+        status: "no-match",
+        snr: best.snr,
+        matchingBits: best.matchingBits,
+        thresholds: { snr: MATCH_MIN_SNR, bits: MATCH_MIN_BITS },
+      });
+    } catch (err) {
+      console.error("Échec de la détection :", err);
+      return relayError(res, err, "Échec de l'analyse de l'image");
     }
   }
 

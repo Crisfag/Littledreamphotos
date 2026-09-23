@@ -258,6 +258,102 @@
     });
   }
 
+  /* ---------- Vue : vérifier une photo suspecte ---------- */
+  // Compare une image retrouvée ailleurs (réseaux sociaux, un site…) aux
+  // empreintes invisibles de toutes les galeries du compte, sans savoir à
+  // l'avance de laquelle elle pourrait venir. Même moteur que detect.mjs en
+  // ligne de commande (POST /local/detect), simplement accessible d'un clic.
+
+  function detectResultHtml(data) {
+    if (data.status === "match") {
+      return (
+        '<div class="ad-detect-result ad-detect-match">' +
+        '<p class="ad-detect-badge ad-detect-badge-ok">✓ Origine identifiée</p>' +
+        "<h3>" + esc(data.gallery.title) + "</h3>" +
+        (data.gallery.clientName ? "<p>" + esc(data.gallery.clientName) + "</p>" : "") +
+        '<p class="ad-hint">Photo n° ' + (data.photo.position + 1) +
+        " · fiabilité : signal/bruit " + data.snr.toFixed(2) + ", " + data.matchingBits + "/32 bits concordants</p>" +
+        "</div>"
+      );
+    }
+    if (data.status === "no-match") {
+      return (
+        '<div class="ad-detect-result">' +
+        '<p class="ad-detect-badge">Aucune correspondance fiable</p>' +
+        '<p class="ad-hint">Cette image ne semble pas venir de vos galeries, ou a été trop dégradée pour l\'affirmer avec certitude ' +
+        "(signal/bruit " + data.snr.toFixed(2) + ", " + data.matchingBits + "/32 bits — seuils : " +
+        data.thresholds.snr + " et " + data.thresholds.bits + "/32).</p>" +
+        "</div>"
+      );
+    }
+    if (data.status === "too-small") {
+      return (
+        '<div class="ad-detect-result"><p class="ad-detect-badge">Image trop petite</p>' +
+        '<p class="ad-hint">Elle ne peut pas porter une empreinte lisible.</p></div>'
+      );
+    }
+    if (data.status === "no-prints") {
+      return '<div class="ad-detect-result"><p class="ad-hint">Aucune de vos photos n’a encore d’empreinte enregistrée.</p></div>';
+    }
+    return '<div class="ad-detect-result"><p class="ad-hint">Résultat inattendu.</p></div>';
+  }
+
+  function renderDetect(skipHash) {
+    if (!skipHash && location.hash !== "#/detect") history.pushState(null, "", "#/detect");
+    el.view.innerHTML =
+      '<button type="button" class="ad-back" id="ad-detect-back">&larr; Toutes les galeries</button>' +
+      '<header class="ad-detail-header"><div><h2>Vérifier une photo</h2>' +
+      '<p class="ad-hint">Une image retrouvée ailleurs (réseaux sociaux, un site…) vous semble provenir de l’une de vos ' +
+      "galeries ? Déposez-la ici : elle est comparée aux empreintes invisibles de toutes vos photos, sans jamais quitter " +
+      "votre ordinateur.</p></div></header>" +
+      '<section class="ad-dropzone" id="ad-detect-dropzone">' +
+      "<p><strong>Glissez une photo ici</strong>, ou</p>" +
+      '<label class="ad-btn ad-btn-primary">Choisir un fichier<input type="file" id="ad-detect-file-input" accept="image/*" hidden /></label>' +
+      "</section>" +
+      '<div id="ad-detect-result"></div>';
+
+    document.getElementById("ad-detect-back").addEventListener("click", function () {
+      renderList();
+    });
+
+    var resultBox = document.getElementById("ad-detect-result");
+    var dropzone = document.getElementById("ad-detect-dropzone");
+
+    async function analyze(file) {
+      resultBox.innerHTML = '<p class="ad-loading">Analyse en cours…</p>';
+      var form = new FormData();
+      form.append("file", file, file.name);
+      try {
+        var response = await fetch("/local/detect", { method: "POST", body: form });
+        var data = await response.json().catch(function () { return {}; });
+        if (!response.ok) throw new Error(data.error || "Échec de l'analyse");
+        resultBox.innerHTML = detectResultHtml(data);
+      } catch (err) {
+        resultBox.innerHTML = '<div class="ad-error-panel"><h2>Analyse impossible</h2><p>' + esc(err.message) + "</p></div>";
+      }
+    }
+
+    document.getElementById("ad-detect-file-input").addEventListener("change", function (event) {
+      var file = event.target.files[0];
+      event.target.value = "";
+      if (file) analyze(file);
+    });
+
+    dropzone.addEventListener("dragover", function (event) {
+      event.preventDefault();
+      dropzone.classList.add("ad-dropzone-active");
+    });
+    dropzone.addEventListener("dragleave", function () {
+      dropzone.classList.remove("ad-dropzone-active");
+    });
+    dropzone.addEventListener("drop", function (event) {
+      event.preventDefault();
+      dropzone.classList.remove("ad-dropzone-active");
+      var file = event.dataTransfer.files && event.dataTransfer.files[0];
+      if (file) analyze(file);
+    });
+  }
+
   /* ---------- Vue : détail d'une galerie ---------- */
 
   // La vignette est reconstituée à partir des tuiles de niveau « aperçu »
@@ -637,6 +733,10 @@
     });
   }
 
+  document.getElementById("ad-check-photo").addEventListener("click", function () {
+    renderDetect();
+  });
+
   /* ---------- Création de galerie ---------- */
 
   document.getElementById("ad-new-gallery").addEventListener("click", function () {
@@ -833,6 +933,7 @@
   function routeFromHash() {
     var match = /^#\/g\/(.+)$/.exec(location.hash);
     if (match) renderDetail(decodeURIComponent(match[1]), true);
+    else if (location.hash === "#/detect") renderDetect(true);
     else renderList(true);
   }
 

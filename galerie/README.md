@@ -282,6 +282,8 @@ et protection. C'est le seul arbitrage esthétique du projet.
 
 ### Retrouver l'origine d'une fuite
 
+En ligne de commande :
+
 ```bash
 node detect.mjs capture-trouvee-sur-instagram.jpg
 ```
@@ -294,6 +296,12 @@ node detect.mjs capture-trouvee-sur-instagram.jpg
    photo     : pho_5FFKZm-mXjzI (n° 1)
    fiabilité : signal/bruit 5.63, 32/32 bits concordants
 ```
+
+Ou directement depuis l'interface web : bouton **« 🔍 Vérifier une photo »**
+dans la barre du tableau de bord (pas besoin de savoir à l'avance de quelle
+galerie l'image pourrait venir). Le fichier est analysé localement par
+`admin-server.mjs` — comparé aux empreintes de vos propres galeries
+uniquement, jamais envoyé ni conservé au-delà de cette vérification.
 
 ### Consulter le journal d'accès
 
@@ -414,17 +422,26 @@ de réinitialisation, et surtout échappement HTML du nom de studio, du titre
 de galerie et du nom de client — autant de champs saisis par le
 photographe, jamais dignes de confiance tels quels dans un e-mail.
 
-**Interface d'administration** — 24 vérifications dans un vrai navigateur,
+**Interface d'administration** — 26 vérifications dans un vrai navigateur,
 contre le vrai Worker local : demande de lien de réinitialisation de mot de
 passe (message générique affiché), création de compte et connexion depuis
 le formulaire (pas de session présupposée), création d'une galerie,
 régénération de son mot de passe,
 choix d'une couleur ou d'une image pour l'écran de connexion client,
 glisser-déposer de photos avec suivi de progression, vraies vignettes
-affichées, suppression d'une photo et d'une galerie, déconnexion qui tient
-après un rechargement de page — et un second compte, connecté dans un
-second contexte navigateur, qui ne voit jamais les galeries du premier dans
-son propre tableau de bord.
+affichées, suppression d'une photo et d'une galerie, navigation vers l'écran
+« Vérifier une photo » et retour à la liste, déconnexion qui tient après un
+rechargement de page — et un second compte, connecté dans un second
+contexte navigateur, qui ne voit jamais les galeries du premier dans son
+propre tableau de bord.
+
+**Vérifier une photo (empreinte invisible)** — 8 vérifications contre le vrai
+Worker local : une image reconstituée tuile par tuile — exactement comme le
+client la voit, pas le fichier d'origine — est reconnue, avec la bonne
+galerie et la bonne photo ; une image jamais envoyée n'est jamais présentée
+comme une correspondance ; un second compte ne peut jamais identifier une
+photo d'un autre (l'outil ne corrèle qu'avec les empreintes du compte
+connecté) ; refusé sans session.
 
 **Sélection client** — 15 vérifications dans un vrai navigateur, contre le
 vrai Worker local (galerie créée par le test lui-même, nettoyée à la fin) :
@@ -447,6 +464,7 @@ node tests/watermark.test.mjs         # lisibilité du filigrane visible
 node tests/calibration.mjs            # seuils de détection (≈ 6 min)
 node tests/viewer.test.mjs            # interface cliente, serveur d'aperçu lancé
 node tests/admin.test.mjs             # interface d'administration, admin-server.mjs lancé
+node tests/detect.test.mjs            # vérifier une photo, autonome (crée ses propres comptes)
 node tests/selection.test.mjs         # sélection client, autonome (crée sa propre galerie)
 node tests/comments.test.mjs          # commentaires client, autonome (crée sa propre galerie)
 

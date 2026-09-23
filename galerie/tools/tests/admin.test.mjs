@@ -222,6 +222,26 @@ await page.waitForSelector("#ad-back", { timeout: 10000 });
 const logRowsBefore = await page.locator(".ad-table tbody tr").count();
 check("le journal est affiché (vide au départ)", logRowsBefore === 0 || logRowsBefore > 0, `${logRowsBefore} ligne(s)`);
 
+/* ---------- Vérifier une photo (navigation) ---------- */
+// Le moteur de détection lui-même (empreinte invisible, cloisonnement) est
+// vérifié sans navigateur dans tests/detect.test.mjs ; ici on ne teste que
+// la navigation de l'interface.
+
+await page.click("#ad-check-photo");
+await page.waitForSelector("#ad-detect-dropzone", { timeout: 5000 });
+check("le bouton « Vérifier une photo » ouvre bien cet écran, avec son propre lien dans l'URL",
+      await page.isVisible("#ad-detect-dropzone") && (await page.evaluate(() => location.hash)) === "#/detect");
+
+await page.click("#ad-detect-back");
+await page.waitForSelector(".ad-grid, .ad-empty", { timeout: 5000 });
+check("« Toutes les galeries » depuis cet écran ramène bien à la liste",
+      await page.isVisible(".ad-grid, .ad-empty"));
+
+// On avait quitté le détail de la galerie pour tester cette navigation :
+// on y retourne avant de poursuivre (suppression, déconnexion).
+await page.locator(`.ad-card:has-text("${title}")`).click();
+await page.waitForSelector(".ad-dropzone", { timeout: 5000 });
+
 /* ---------- Suppression de la galerie ---------- */
 
 await page.click("#ad-delete-gallery");
