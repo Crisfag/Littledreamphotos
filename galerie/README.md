@@ -264,10 +264,13 @@ local sur `127.0.0.1` n'est qu'un cas particulier, pas un système à part.
   aperçu généré à part.
 - **Sélection et remarques du client** visibles sur chaque vignette (cœur et
   pastille 💬, survolable pour lire la remarque) et sur le tableau de bord
-  (badges ♥ N et 💬 N sur la carte de la galerie). Un bouton « Copier les
-  notes du client » colle dans le presse-papiers la liste des photos
-  choisies et commentées, par numéro (voir *Retrouver l'origine d'une fuite*
-  pour la même convention).
+  (badges ♥ N et 💬 N sur la carte de la galerie). Une case « Afficher
+  uniquement la sélection du client (N) » filtre la grille de la fiche
+  galerie pour ne garder que les photos choisies — pratique dès que la
+  séance compte beaucoup de photos. Un bouton « Copier les notes du
+  client » colle dans le presse-papiers la liste des photos choisies et
+  commentées, par numéro (voir *Retrouver l'origine d'une fuite* pour la
+  même convention).
 - **Journal d'accès** intégré à la fiche de chaque galerie, coups de cœur et
   remarques compris.
 - **Suppression** d'une photo isolée ou de la galerie entière, avec
@@ -448,14 +451,15 @@ de réinitialisation, et surtout échappement HTML du nom de studio, du titre
 de galerie et du nom de client — autant de champs saisis par le
 photographe, jamais dignes de confiance tels quels dans un e-mail.
 
-**Interface d'administration** — 30 vérifications dans un vrai navigateur,
+**Interface d'administration** — 33 vérifications dans un vrai navigateur,
 contre le vrai Worker local : demande de lien de réinitialisation de mot de
 passe (message générique affiché), création de compte et connexion depuis
 le formulaire (pas de session présupposée), création d'une galerie,
 régénération de son mot de passe,
 choix d'une couleur ou d'une image pour l'écran de connexion client, choix
 d'une mise en page pour la galerie, réglage d'un forfait de photos incluses,
-glisser-déposer de photos avec suivi de progression, vraies vignettes
+sélection du client retrouvée sur sa vignette (cœur) et filtrable en un
+clic, glisser-déposer de photos avec suivi de progression, vraies vignettes
 affichées, suppression d'une photo et d'une galerie, navigation vers l'écran
 « Vérifier une photo » et retour à la liste, déconnexion qui tient après un
 rechargement de page — et un second compte, connecté dans un second

@@ -573,9 +573,15 @@
       "</section>" +
       '<section><div class="ad-section-header">' +
       '<h3 id="ad-photos-heading">Photos (' + data.photos.length + ")</h3>" +
+      '<div class="ad-photos-actions">' +
+      (data.photos.some(isSelected)
+        ? '<label class="ad-photos-filter"><input type="checkbox" id="ad-filter-selected" />' +
+          '<span>Afficher uniquement la sélection du client (' + data.photos.filter(isSelected).length + ")</span></label>"
+        : "") +
       (data.photos.some(function (p) { return isSelected(p) || hasComment(p); })
         ? '<button type="button" class="ad-btn" id="ad-copy-notes">Copier les notes du client</button>'
         : "") +
+      "</div>" +
       "</div>" +
       '<div class="ad-photos" id="ad-photos">' + data.photos.map(photoThumb).join("") + "</div>" +
       "</section>" +
@@ -593,6 +599,12 @@
     document.getElementById("ad-back").addEventListener("click", function () {
       renderList();
     });
+    var filterSelected = document.getElementById("ad-filter-selected");
+    if (filterSelected) {
+      filterSelected.addEventListener("change", function () {
+        document.getElementById("ad-photos").classList.toggle("ad-photos-filtered", filterSelected.checked);
+      });
+    }
     var copyNotesBtn = document.getElementById("ad-copy-notes");
     if (copyNotesBtn) {
       copyNotesBtn.addEventListener("click", function () {

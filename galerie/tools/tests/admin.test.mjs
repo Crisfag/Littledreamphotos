@@ -236,6 +236,40 @@ await peerContext.close();
 const gallerySlug = new URL(link, "http://x").search.replace("?g=", "");
 check("le slug est extrait du lien", gallerySlug.length > 0, gallerySlug);
 
+/* ---------- Retrouver la sélection du client ---------- */
+// Le client choisit une photo directement via l'API (comme le ferait sa
+// propre page) ; on vérifie que le tableau de bord la retrouve, avec de quoi
+// n'afficher que celle-ci.
+
+const clientLogin = await fetch(`${API}/api/gallery/${gallerySlug}/login`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ password: regeneratedPassword }),
+});
+const clientSession = await clientLogin.json();
+const firstPhotoId = clientSession.photos?.[0]?.id;
+await fetch(`${API}/api/gallery/${gallerySlug}/select`, {
+  method: "POST",
+  headers: { authorization: `Bearer ${clientSession.token}`, "content-type": "application/json" },
+  body: JSON.stringify({ photoId: firstPhotoId, selected: true }),
+});
+
+await page.reload({ waitUntil: "domcontentloaded" });
+await page.waitForSelector("#ad-photos .ad-photo", { timeout: 10000 });
+check("la photo choisie par le client porte bien le cœur sur sa vignette",
+      await page.locator(`.ad-photo[data-photo-id="${firstPhotoId}"].ad-photo-selected`).count() === 1);
+check("la case « afficher uniquement la sélection » propose le bon décompte",
+      (await page.textContent("#ad-filter-selected + span")).indexOf("(1)") !== -1,
+      await page.textContent("#ad-filter-selected + span"));
+
+await page.click("#ad-filter-selected");
+const visiblePhotosWhileFiltered = await page.locator("#ad-photos .ad-photo").evaluateAll(
+  (nodes) => nodes.filter((n) => getComputedStyle(n).display !== "none").length
+);
+check("filtrer sur la sélection ne laisse apparaître que la photo choisie",
+      visiblePhotosWhileFiltered === 1, `${visiblePhotosWhileFiltered} vignette(s) visible(s)`);
+await page.click("#ad-filter-selected"); // on désactive : la suite du test veut voir toutes les photos
+
 /* ---------- Suppression d'une photo ---------- */
 
 const firstPhoto = page.locator("#ad-photos .ad-photo").first();

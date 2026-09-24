@@ -293,11 +293,29 @@ h3 { font-size: 1.15rem; margin-bottom: .9rem; }
 
 /* ---------- Vignettes ---------- */
 
+.ad-photos-actions { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.ad-photos-filter {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  font-size: .84rem;
+  color: var(--charcoal);
+  cursor: pointer;
+  -webkit-user-select: none; user-select: none;
+}
+.ad-photos-filter input {
+  width: 1.1rem;
+  height: 1.1rem;
+  accent-color: var(--rose);
+  cursor: pointer;
+}
+
 .ad-photos {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
   gap: .6rem;
 }
+.ad-photos-filtered .ad-photo:not(.ad-photo-selected) { display: none; }
 .ad-photo { position: relative; }
 .ad-photo-frame {
   position: relative;
