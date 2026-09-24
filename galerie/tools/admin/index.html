@@ -159,6 +159,16 @@
             <input type="date" name="expires" />
           </label>
         </div>
+        <div class="ad-field-row">
+          <label class="ad-field">
+            <span>Photos incluses dans le forfait <em>(optionnel)</em></span>
+            <input type="number" name="includedPhotos" min="0" step="1" placeholder="ex. 20" />
+          </label>
+          <label class="ad-field">
+            <span>Prix du supplément <em>(par photo, en €)</em></span>
+            <input type="number" name="extraPhotoPrice" min="0" step="0.01" placeholder="ex. 15" />
+          </label>
+        </div>
         <p class="ad-error" id="ad-create-error" hidden></p>
         <div class="ad-modal-actions">
           <button type="button" class="ad-btn" data-close-modal>Annuler</button>

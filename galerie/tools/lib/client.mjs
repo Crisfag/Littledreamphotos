@@ -120,6 +120,10 @@ export class WorkerClient {
     return this.request("POST", `/api/admin/galleries/${encodeURIComponent(slug)}/layout`, { layout });
   }
 
+  setQuota(slug, includedPhotos, extraPhotoPrice) {
+    return this.request("POST", `/api/admin/galleries/${encodeURIComponent(slug)}/quota`, { includedPhotos, extraPhotoPrice });
+  }
+
   addPhoto(slug, photo) {
     return this.request("POST", `/api/admin/galleries/${encodeURIComponent(slug)}/photos`, photo);
   }

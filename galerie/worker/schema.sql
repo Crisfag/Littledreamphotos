@@ -31,6 +31,15 @@ CREATE TABLE IF NOT EXISTS galleries (
   -- 'defilement' (une photo à la fois, en grand). Purement visuel — ne change
   -- rien au niveau de tuile chargé ni à la protection des images.
   layout                 TEXT NOT NULL DEFAULT 'grille',
+  -- Forfait : nombre de photos incluses dans ce que le client a déjà payé.
+  -- NULL = pas de forfait défini (comportement d'avant cette fonctionnalité :
+  -- aucun supplément calculé, quel que soit le nombre de coups de cœur).
+  included_photos        INTEGER,
+  -- Prix d'une photo au-delà du forfait, en centimes (évite les erreurs
+  -- d'arrondi d'un flottant, et c'est l'unité qu'utilisera le paiement en
+  -- ligne le jour où il sera branché). 0 tant que le photographe n'a rien
+  -- réglé.
+  extra_photo_price_cents INTEGER NOT NULL DEFAULT 0,
   created_at             INTEGER NOT NULL
 );
 
@@ -91,6 +100,10 @@ CREATE TABLE IF NOT EXISTS photos (
 
 -- Migration vers la mise en page personnalisable (bases créées avant) :
 --   ALTER TABLE galleries ADD COLUMN layout TEXT NOT NULL DEFAULT 'grille';
+
+-- Migration vers le forfait et les suppléments (bases créées avant) :
+--   ALTER TABLE galleries ADD COLUMN included_photos INTEGER;
+--   ALTER TABLE galleries ADD COLUMN extra_photo_price_cents INTEGER NOT NULL DEFAULT 0;
 
 CREATE INDEX IF NOT EXISTS idx_photos_gallery ON photos(gallery_id, position);
 

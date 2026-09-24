@@ -74,6 +74,33 @@
     button.title = heartLabel(selected);
   }
 
+  function formatEuros(cents) {
+    return ((cents || 0) / 100).toLocaleString("fr-BE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
+  }
+
+  // Forfait : nombre de photos déjà payées par le client, au-delà duquel un
+  // supplément se calcule automatiquement à partir de ses coups de cœur.
+  // Absent (includedPhotos null) sur les galeries sans forfait défini —
+  // comportement d'avant cette fonctionnalité, rien ne s'affiche alors.
+  function updateQuotaUI(count) {
+    if (!el.toolbarQuota) return;
+    var included = state.gallery && state.gallery.includedPhotos;
+    if (included === null || included === undefined) {
+      el.toolbarQuota.hidden = true;
+      return;
+    }
+    var extra = Math.max(0, count - included);
+    var text = count + " / " + included + " photo" + (included > 1 ? "s" : "") + " incluse" + (included > 1 ? "s" : "");
+    if (extra > 0) {
+      text +=
+        " — +" + extra + " supplément" + (extra > 1 ? "s" : "") +
+        " (" + formatEuros(extra * (state.gallery.extraPhotoPriceCents || 0)) + ")";
+    }
+    el.toolbarQuota.textContent = text;
+    el.toolbarQuota.classList.toggle("gp-toolbar-quota-due", extra > 0);
+    el.toolbarQuota.hidden = false;
+  }
+
   function updateSelectionUI() {
     var count = selectedCount();
     if (el.selectionCount) {
@@ -81,6 +108,7 @@
         count === 0 ? "Aucune photo sélectionnée pour l'instant"
           : count + (count > 1 ? " photos sélectionnées" : " photo sélectionnée");
     }
+    updateQuotaUI(count);
     if (el.filterEmpty) {
       el.filterEmpty.hidden = !(state.filterSelected && count === 0);
     }
@@ -757,6 +785,7 @@
       missing: $("gp-missing"),
       toolbar: $("gp-toolbar"),
       selectionCount: $("gp-selection-count"),
+      toolbarQuota: $("gp-toolbar-quota"),
       filterCheckbox: $("gp-filter-selected"),
       filterEmpty: $("gp-filter-empty"),
       commentToggle: $("gp-comment-toggle"),

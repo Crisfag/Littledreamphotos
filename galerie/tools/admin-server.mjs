@@ -508,6 +508,7 @@ async function handleApi(req, res, url) {
       try {
         const created = await client.createGallery({
           slug, title, clientName: body.clientName || "", password, watermarkText, expiresAt,
+          includedPhotos: body.includedPhotos, extraPhotoPrice: body.extraPhotoPrice,
         });
         return json(res, 201, { id: created.id, slug, password, link: linkFor(slug) });
       } catch (err) {
@@ -620,6 +621,17 @@ async function handleApi(req, res, url) {
       return json(res, 200, { ok: true });
     } catch (err) {
       return relayError(res, err, "Impossible d'enregistrer la mise en page");
+    }
+  }
+
+  // POST /local/galleries/:slug/quota — forfait et prix du supplément
+  if (parts.length === 3 && parts[2] === "quota" && req.method === "POST") {
+    const body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
+    try {
+      await client.setQuota(slug, body.includedPhotos, body.extraPhotoPrice);
+      return json(res, 200, { ok: true });
+    } catch (err) {
+      return relayError(res, err, "Impossible d'enregistrer le forfait");
     }
   }
 

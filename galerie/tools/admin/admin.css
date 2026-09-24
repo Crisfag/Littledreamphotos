@@ -132,7 +132,7 @@ h3 { font-size: 1.15rem; margin-bottom: .9rem; }
 }
 .ad-card h3 { font-size: 1.15rem; margin-bottom: .2rem; }
 .ad-card-sub { font-size: .82rem; color: var(--muted); margin-bottom: .8rem; }
-.ad-card-meta { display: flex; align-items: center; justify-content: space-between; font-size: .8rem; color: var(--muted); }
+.ad-card-meta { display: flex; align-items: center; flex-wrap: wrap; gap: .4rem; justify-content: space-between; font-size: .8rem; color: var(--muted); }
 
 .ad-badge {
   font-size: .72rem;
@@ -146,6 +146,7 @@ h3 { font-size: 1.15rem; margin-bottom: .9rem; }
 .ad-badge-expired { background: var(--danger-bg); color: var(--danger); }
 .ad-badge-selected { background: #fbe8e6; color: #b3564a; }
 .ad-badge-comment { background: var(--sand); color: var(--charcoal); }
+.ad-badge-due { background: #fdecd2; color: #96591a; font-weight: 600; }
 
 /* ---------- Vue détail ---------- */
 
@@ -233,6 +234,21 @@ h3 { font-size: 1.15rem; margin-bottom: .9rem; }
 .ad-layout-option-active { border-color: var(--rose); box-shadow: 0 0 0 2px rgba(185, 138, 122, .25); cursor: default; }
 .ad-layout-name { display: block; font-weight: 600; color: var(--ink); margin-bottom: .3rem; }
 .ad-layout-hint { display: block; font-size: .8rem; color: var(--muted); line-height: 1.4; }
+
+/* ---------- Forfait et suppléments ---------- */
+
+.ad-quota .ad-field-row { align-items: end; margin-bottom: .9rem; }
+#ad-quota-summary { margin-top: .3rem; }
+.ad-quota-count { font-size: .88rem; color: var(--muted); }
+.ad-quota-due {
+  margin-top: .4rem;
+  font-size: .92rem;
+  color: #96591a;
+  background: #fdecd2;
+  border-radius: 8px;
+  padding: .6rem .8rem;
+  display: inline-block;
+}
 
 /* ---------- Dépôt de fichiers ---------- */
 

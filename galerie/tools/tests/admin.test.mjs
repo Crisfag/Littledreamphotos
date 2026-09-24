@@ -141,6 +141,22 @@ await page.waitForFunction(
 );
 check("choisir « Mosaïque » dans l'admin l'enregistre (confirmé après rechargement des données)", true);
 
+/* ---------- Forfait et suppléments ---------- */
+
+check("aucun forfait n'est défini par défaut",
+      (await page.textContent("#ad-quota-summary")).indexOf("Aucun forfait défini") !== -1);
+
+await page.fill('#ad-quota-form [name="includedPhotos"]', "5");
+await page.fill('#ad-quota-form [name="extraPhotoPrice"]', "12.50");
+await page.click("#ad-quota-save");
+await page.waitForFunction(
+  () => (document.querySelector("#ad-quota-summary")?.textContent || "").indexOf("/ 5 photo") !== -1,
+  { timeout: 10000 }
+);
+check("le forfait enregistré apparaît dans le résumé (confirmé après rechargement des données)",
+      (await page.textContent("#ad-quota-summary")).indexOf("0 / 5 photos incluses") !== -1,
+      await page.textContent("#ad-quota-summary"));
+
 /* ---------- Retour à la liste, la galerie y apparaît ---------- */
 
 await page.click("#ad-back");

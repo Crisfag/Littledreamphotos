@@ -249,6 +249,14 @@ local sur `127.0.0.1` n'est qu'un cas particulier, pas un système à part.
   *Défilement* (une photo à la fois, en grand — rendu éditorial, pour
   raconter une séance plutôt que la survoler). Purement visuel : les trois
   rendus s'appuient sur les mêmes tuiles, protégées de la même façon.
+- **Forfait et suppléments** : le nombre de photos déjà payées par le
+  client (optionnel — sans forfait défini, aucun supplément n'est jamais
+  calculé) et le prix de chaque photo au-delà. Le supplément se calcule
+  automatiquement à partir des coups de cœur du client, visible aussi bien
+  sur sa page (« 3 / 2 photos incluses — +1 supplément (15,00 €) ») que sur
+  la fiche de la galerie et la liste (badge 💶). Pas encore de paiement en
+  ligne ni de facturation à ce stade — le photographe règle ça de son côté ;
+  c'est la première étape avant de brancher un prestataire de paiement.
 - **Glisser-déposer** des photos sur la page de la galerie : chacune est
   traitée (réduction, empreinte, filigrane, découpage) et envoyée avec une
   barre de progression individuelle. Plusieurs photos partent en parallèle.
@@ -406,7 +414,7 @@ des tuiles, refus du mauvais mot de passe, absence de toute balise `<img>`,
 neutralisation du menu contextuel et de la copie, voile sur « Impr. écran » et
 sur perte de focus, consignation au journal.
 
-**API du Worker** — 122 vérifications contre le vrai moteur Cloudflare (D1 et R2
+**API du Worker** — 139 vérifications contre le vrai moteur Cloudflare (D1 et R2
 émulés localement par `wrangler dev`) : comptes photographes (inscription,
 connexion, session, mot de passe oublié — même réponse générique qu'un
 compte existe ou non), cloisonnement strict entre comptes (un photographe ne
@@ -420,7 +428,10 @@ personnalisé de l'écran de connexion (couleur ou image, cloisonné par
 compte, et une galerie inconnue ne se distingue jamais d'une galerie sans
 arrière-plan personnalisé), mise en page de la galerie (grille par défaut,
 cloisonnée par compte, valeur inconnue refusée, transmise telle quelle au
-client à la connexion), référence de photo sur un évènement de capture
+client à la connexion), forfait et suppléments (aucun forfait par défaut,
+supplément calculé à partir des coups de cœur du client et recalculé après
+modification, cloisonné par compte, valeurs invalides refusées), référence
+de photo sur un évènement de capture
 (un identifiant inconnu n'est jamais enregistré), journal sans IP en clair.
 Le trajet complet de réinitialisation de mot de passe (jeton reçu par
 e-mail → nouveau mot de passe → ancien mot de passe rejeté → lien à usage
@@ -437,13 +448,13 @@ de réinitialisation, et surtout échappement HTML du nom de studio, du titre
 de galerie et du nom de client — autant de champs saisis par le
 photographe, jamais dignes de confiance tels quels dans un e-mail.
 
-**Interface d'administration** — 28 vérifications dans un vrai navigateur,
+**Interface d'administration** — 30 vérifications dans un vrai navigateur,
 contre le vrai Worker local : demande de lien de réinitialisation de mot de
 passe (message générique affiché), création de compte et connexion depuis
 le formulaire (pas de session présupposée), création d'une galerie,
 régénération de son mot de passe,
 choix d'une couleur ou d'une image pour l'écran de connexion client, choix
-d'une mise en page pour la galerie,
+d'une mise en page pour la galerie, réglage d'un forfait de photos incluses,
 glisser-déposer de photos avec suivi de progression, vraies vignettes
 affichées, suppression d'une photo et d'une galerie, navigation vers l'écran
 « Vérifier une photo » et retour à la liste, déconnexion qui tient après un

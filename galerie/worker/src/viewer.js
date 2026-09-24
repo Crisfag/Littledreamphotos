@@ -125,6 +125,8 @@ async function handleLogin(request, env, slug) {
       watermark: gallery.watermark_text,
       expiresAt: gallery.expires_at,
       layout: gallery.layout || "grille",
+      includedPhotos: gallery.included_photos,
+      extraPhotoPriceCents: gallery.extra_photo_price_cents || 0,
     },
     photos: photos.map((p) => ({
       id: p.id,

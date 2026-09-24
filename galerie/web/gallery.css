@@ -173,6 +173,8 @@ h1 { font-family: var(--serif); font-weight: 500; font-size: clamp(1.9rem, 4vw, 
   flex-wrap: wrap;
 }
 .gp-toolbar-count { font-size: .88rem; color: var(--muted); }
+.gp-toolbar-quota { font-size: .82rem; color: var(--muted); margin-top: .2rem; }
+.gp-toolbar-quota-due { color: var(--rose-deep); font-weight: 500; }
 .gp-toolbar-filter {
   display: flex;
   align-items: center;

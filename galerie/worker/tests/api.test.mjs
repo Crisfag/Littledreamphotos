@@ -720,6 +720,97 @@ check("la mise en page choisie est bien transmise au client",
 const layoutBackToGrille = await admin("POST", `/api/admin/galleries/${SLUG}/layout`, { layout: "defilement" });
 check("le photographe peut basculer vers le défilement", layoutBackToGrille.ok);
 
+/* ---------- Forfait et suppléments ---------- */
+
+check("par défaut, une galerie n'a pas de forfait défini",
+      galleryBeforeLayout.gallery?.included_photos === null &&
+      galleryBeforeLayout.gallery?.extra_count === 0 &&
+      galleryBeforeLayout.gallery?.extra_total_cents === 0,
+      JSON.stringify(galleryBeforeLayout.gallery));
+
+const quotaSlug = `${SLUG}-quota`;
+const quotaCreated = await admin("POST", "/api/admin/galleries", {
+  slug: quotaSlug, title: "Séance forfait", password: "mot-de-passe-solide",
+  includedPhotos: 2, extraPhotoPrice: "15",
+});
+const quotaGallery = await quotaCreated.json();
+check("une galerie peut être créée avec un forfait", quotaCreated.status === 201);
+
+const badIncluded = await admin("POST", "/api/admin/galleries", {
+  slug: `${quotaSlug}-b`, password: "mot-de-passe-solide", includedPhotos: -1,
+});
+check("un nombre de photos incluses négatif est refusé à la création", badIncluded.status === 400);
+
+const badPrice = await admin("POST", "/api/admin/galleries", {
+  slug: `${quotaSlug}-c`, password: "mot-de-passe-solide", extraPhotoPrice: "pas-un-prix",
+});
+check("un prix de supplément invalide est refusé à la création", badPrice.status === 400);
+
+const quotaPhotoIds = [];
+for (let i = 0; i < 4; i++) {
+  const id = `pho_QuotaTest0${i}`;
+  const added = await admin("POST", `/api/admin/galleries/${quotaSlug}/photos`, {
+    id, position: i, width: 100, height: 100, cols: 1, rows: 1,
+  });
+  check(`la photo de test forfait n° ${i} est enregistrée`, added.status === 201);
+  quotaPhotoIds.push(id);
+}
+
+const quotaLogin = await fetch(`${BASE}/api/gallery/${quotaSlug}/login`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ password: "mot-de-passe-solide" }),
+});
+const quotaSession = await quotaLogin.json();
+check("le forfait est transmis au client dès la connexion",
+      quotaSession.gallery?.includedPhotos === 2 && quotaSession.gallery?.extraPhotoPriceCents === 1500,
+      JSON.stringify(quotaSession.gallery));
+const quotaBearer = { authorization: `Bearer ${quotaSession.token}` };
+
+// Le client sélectionne ses 4 photos : 2 incluses dans le forfait, 2 en supplément.
+for (const id of quotaPhotoIds) {
+  await fetch(`${BASE}/api/gallery/${quotaSlug}/select`, {
+    method: "POST",
+    headers: { ...quotaBearer, "content-type": "application/json" },
+    body: JSON.stringify({ photoId: id, selected: true }),
+  });
+}
+
+const quotaDetail = await (await admin("GET", `/api/admin/galleries/${quotaSlug}`)).json();
+check("le nombre de suppléments est calculé à partir des coups de cœur du client",
+      quotaDetail.gallery?.selected_count === 4 &&
+      quotaDetail.gallery?.extra_count === 2 &&
+      quotaDetail.gallery?.extra_total_cents === 3000,
+      JSON.stringify(quotaDetail.gallery));
+
+const quotaList = await (await admin("GET", "/api/admin/galleries")).json();
+const quotaListRow = quotaList.galleries.find((g) => g.slug === quotaSlug);
+check("le supplément apparaît aussi dans la liste des galeries",
+      quotaListRow?.extra_count === 2 && quotaListRow?.extra_total_cents === 3000,
+      JSON.stringify(quotaListRow));
+
+const foreignQuotaSet = await peerAdmin("POST", `/api/admin/galleries/${quotaSlug}/quota`, { includedPhotos: 0, extraPhotoPrice: "1" });
+check("un photographe ne peut pas modifier le forfait d'une galerie d'un autre compte", foreignQuotaSet.status === 404);
+
+const badQuotaUpdate = await admin("POST", `/api/admin/galleries/${quotaSlug}/quota`, { includedPhotos: "beaucoup" });
+check("une valeur de forfait non entière est refusée", badQuotaUpdate.status === 400);
+
+const quotaUpdated = await admin("POST", `/api/admin/galleries/${quotaSlug}/quota`, { includedPhotos: 10, extraPhotoPrice: "20" });
+check("le photographe peut modifier le forfait après coup", quotaUpdated.ok);
+
+const quotaAfterUpdate = await (await admin("GET", `/api/admin/galleries/${quotaSlug}`)).json();
+check("aucun supplément n'est dû une fois le forfait relevé au-dessus du nombre sélectionné",
+      quotaAfterUpdate.gallery?.included_photos === 10 && quotaAfterUpdate.gallery?.extra_count === 0,
+      JSON.stringify(quotaAfterUpdate.gallery));
+
+const quotaCleared = await admin("POST", `/api/admin/galleries/${quotaSlug}/quota`, {});
+check("le forfait peut être retiré (retour à « aucun forfait défini »)", quotaCleared.ok);
+
+const quotaAfterClear = await (await admin("GET", `/api/admin/galleries/${quotaSlug}`)).json();
+check("après retrait, plus aucun supplément n'est jamais calculé",
+      quotaAfterClear.gallery?.included_photos === null && quotaAfterClear.gallery?.extra_count === 0,
+      JSON.stringify(quotaAfterClear.gallery));
+
 /* ---------- Expiration ---------- */
 
 const expired = await admin("POST", "/api/admin/galleries", {

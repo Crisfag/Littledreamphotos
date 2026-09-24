@@ -19,6 +19,28 @@ function newId(prefix) {
 
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{1,60}$/;
 
+// Prix saisi par le photographe en euros (ex. "15", "15.5") converti en
+// centimes — l'unité stockée, qui évite les erreurs d'arrondi d'un flottant.
+// Vide/absent = 0 (pas de supplément facturé) ; une valeur invalide ou
+// négative est signalée à l'appelant plutôt que silencieusement ramenée à 0.
+function priceToCents(value) {
+  if (value === undefined || value === null || value === "") return 0;
+  const num = Number(value);
+  if (!Number.isFinite(num) || num < 0) return null;
+  return Math.round(num * 100);
+}
+
+// Photos au-delà du forfait et montant correspondant. `includedPhotos` à
+// null signifie qu'aucun forfait n'a été défini pour cette galerie : jamais
+// de supplément calculé, quel que soit le nombre de coups de cœur.
+function supplementFor(includedPhotos, extraPhotoPriceCents, selectedCount) {
+  if (includedPhotos === null || includedPhotos === undefined) {
+    return { extraCount: 0, extraTotalCents: 0 };
+  }
+  const extraCount = Math.max(0, selectedCount - includedPhotos);
+  return { extraCount, extraTotalCents: extraCount * extraPhotoPriceCents };
+}
+
 // Vérifie que la galerie désignée par `slug` existe et appartient bien au
 // photographe appelant. Renvoie la ligne complète, ou null.
 async function ownedGallery(env, photographerId, slug) {
@@ -55,6 +77,18 @@ async function createGallery(request, env, photographerId) {
   const password = String(body.password || "");
   if (password.length < 8) return fail(400, "Mot de passe trop court (8 caractères minimum)");
 
+  // Forfait facultatif : nombre de photos déjà payées par le client. Non
+  // renseigné = pas de forfait (aucun supplément jamais calculé).
+  let includedPhotos = null;
+  if (body.includedPhotos !== undefined && body.includedPhotos !== null && body.includedPhotos !== "") {
+    includedPhotos = Number(body.includedPhotos);
+    if (!Number.isInteger(includedPhotos) || includedPhotos < 0) {
+      return fail(400, "Nombre de photos incluses invalide");
+    }
+  }
+  const extraPhotoPriceCents = priceToCents(body.extraPhotoPrice);
+  if (extraPhotoPriceCents === null) return fail(400, "Prix du supplément invalide");
+
   // Les slugs forment l'URL publique de la galerie : ils doivent rester
   // uniques sur toute la plateforme, pas seulement pour ce photographe.
   const existing = await env.DB.prepare("SELECT id FROM galleries WHERE slug = ?")
@@ -67,8 +101,9 @@ async function createGallery(request, env, photographerId) {
 
   await env.DB.prepare(
     `INSERT INTO galleries
-       (id, photographer_id, slug, title, client_name, password_hash, password_salt, watermark_text, expires_at, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       (id, photographer_id, slug, title, client_name, password_hash, password_salt, watermark_text, expires_at,
+        included_photos, extra_photo_price_cents, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   )
     .bind(
       id,
@@ -80,6 +115,8 @@ async function createGallery(request, env, photographerId) {
       salt,
       String(body.watermarkText || "").slice(0, 120),
       body.expiresAt ? Number(body.expiresAt) : null,
+      includedPhotos,
+      extraPhotoPriceCents,
       now()
     )
     .run();
@@ -90,6 +127,7 @@ async function createGallery(request, env, photographerId) {
 async function listGalleries(env, photographerId) {
   const { results } = await env.DB.prepare(
     `SELECT g.id, g.slug, g.title, g.client_name, g.expires_at, g.created_at,
+            g.included_photos, g.extra_photo_price_cents,
             (SELECT COUNT(*) FROM photos p WHERE p.gallery_id = g.id) AS photo_count,
             (SELECT COUNT(*) FROM photos p WHERE p.gallery_id = g.id AND p.selected = 1) AS selected_count,
             (SELECT COUNT(*) FROM photos p WHERE p.gallery_id = g.id AND p.comment != '') AS comment_count
@@ -97,7 +135,12 @@ async function listGalleries(env, photographerId) {
   )
     .bind(photographerId)
     .all();
-  return json({ galleries: results });
+
+  const galleries = results.map((g) => {
+    const { extraCount, extraTotalCents } = supplementFor(g.included_photos, g.extra_photo_price_cents, g.selected_count);
+    return { ...g, extra_count: extraCount, extra_total_cents: extraTotalCents };
+  });
+  return json({ galleries });
 }
 
 async function getGallery(env, photographerId, slug) {
@@ -112,6 +155,9 @@ async function getGallery(env, photographerId, slug) {
     .bind(gallery.id)
     .all();
 
+  const selectedCount = photos.filter((p) => p.selected).length;
+  const { extraCount, extraTotalCents } = supplementFor(gallery.included_photos, gallery.extra_photo_price_cents, selectedCount);
+
   return json({
     gallery: {
       id: gallery.id,
@@ -124,6 +170,11 @@ async function getGallery(env, photographerId, slug) {
       login_background_type: gallery.login_background_type,
       login_background_color: gallery.login_background_color,
       layout: gallery.layout,
+      included_photos: gallery.included_photos,
+      extra_photo_price_cents: gallery.extra_photo_price_cents,
+      selected_count: selectedCount,
+      extra_count: extraCount,
+      extra_total_cents: extraTotalCents,
     },
     photos,
   });
@@ -233,6 +284,36 @@ async function setLayout(request, env, photographerId, slug) {
 
   await env.DB.prepare("UPDATE galleries SET layout = ? WHERE id = ?")
     .bind(layout, gallery.id)
+    .run();
+
+  return json({ ok: true });
+}
+
+// Forfait et prix du supplément — modifiables après coup : le photographe ne
+// connaît pas toujours ces chiffres dès la création de la galerie.
+async function setQuota(request, env, photographerId, slug) {
+  const gallery = await ownedGallery(env, photographerId, slug);
+  if (!gallery) return fail(404, "Galerie introuvable");
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return fail(400, "Requête invalide");
+  }
+
+  let includedPhotos = null;
+  if (body.includedPhotos !== undefined && body.includedPhotos !== null && body.includedPhotos !== "") {
+    includedPhotos = Number(body.includedPhotos);
+    if (!Number.isInteger(includedPhotos) || includedPhotos < 0) {
+      return fail(400, "Nombre de photos incluses invalide");
+    }
+  }
+  const extraPhotoPriceCents = priceToCents(body.extraPhotoPrice);
+  if (extraPhotoPriceCents === null) return fail(400, "Prix du supplément invalide");
+
+  await env.DB.prepare("UPDATE galleries SET included_photos = ?, extra_photo_price_cents = ? WHERE id = ?")
+    .bind(includedPhotos, extraPhotoPriceCents, gallery.id)
     .run();
 
   return json({ ok: true });
@@ -427,6 +508,9 @@ export async function handleAdmin(request, env, ctx, path) {
     }
     if (parts.length === 5 && parts[4] === "layout" && request.method === "POST") {
       return setLayout(request, env, photographerId, slug);
+    }
+    if (parts.length === 5 && parts[4] === "quota" && request.method === "POST") {
+      return setQuota(request, env, photographerId, slug);
     }
   }
 

@@ -243,6 +243,9 @@
         (g.comment_count > 0
           ? '<span class="ad-badge ad-badge-comment">💬 ' + g.comment_count + "</span>"
           : "") +
+        (g.extra_count > 0
+          ? '<span class="ad-badge ad-badge-due">💶 ' + formatEuros(g.extra_total_cents) + "</span>"
+          : "") +
         (status.label ? '<span class="ad-badge ' + status.cls + '">' + esc(status.label) + "</span>" : "") +
         "</div>" +
         "</article>"
@@ -458,6 +461,28 @@
     }).join("");
   }
 
+  function formatEuros(cents) {
+    return ((cents || 0) / 100).toLocaleString("fr-BE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
+  }
+
+  function quotaSummaryHtml(gallery) {
+    if (gallery.included_photos === null || gallery.included_photos === undefined) {
+      return '<p class="ad-hint">Aucun forfait défini pour l\'instant — les coups de cœur du client ne déclenchent aucun supplément.</p>';
+    }
+    var selected = gallery.selected_count || 0;
+    var included = gallery.included_photos;
+    var extra = gallery.extra_count || 0;
+    var withinQuota = '<p class="ad-quota-count">' + selected + ' / ' + included + ' photo' + (included > 1 ? "s" : "") + ' incluse' + (included > 1 ? "s" : "") + '</p>';
+    if (extra <= 0) return withinQuota;
+    return (
+      withinQuota +
+      '<p class="ad-quota-due">' +
+      "+" + extra + " supplément" + (extra > 1 ? "s" : "") + " × " + formatEuros(gallery.extra_photo_price_cents) +
+      " = <strong>" + formatEuros(gallery.extra_total_cents) + " à régler</strong>" +
+      "</p>"
+    );
+  }
+
   function layoutOptionsHtml(gallery) {
     var active = gallery.layout || "grille";
     return LAYOUT_OPTIONS.map(function (opt) {
@@ -507,6 +532,20 @@
       "</div></label>" +
       '<p class="ad-hint">Le mot de passe n\'est plus récupérable ici : il n\'a été affiché qu\'à la création. ' +
       '<button type="button" class="ad-link-btn" id="ad-new-password">Générer un nouveau mot de passe</button></p>' +
+      "</section>" +
+      '<section class="ad-quota">' +
+      '<div class="ad-section-header"><h3>Forfait et suppléments</h3></div>' +
+      '<p class="ad-hint">Le nombre de photos déjà payées par le client, et le prix de chaque photo au-delà. Calculé automatiquement à partir de ses coups de cœur — aucun paiement en ligne pour l\'instant, à régler de votre côté.</p>' +
+      '<form class="ad-field-row" id="ad-quota-form">' +
+      '<label class="ad-field"><span>Photos incluses</span>' +
+      '<input type="number" name="includedPhotos" min="0" step="1" placeholder="aucun forfait" value="' +
+      (data.gallery.included_photos === null || data.gallery.included_photos === undefined ? "" : data.gallery.included_photos) + '" /></label>' +
+      '<label class="ad-field"><span>Prix du supplément (par photo, en €)</span>' +
+      '<input type="number" name="extraPhotoPrice" min="0" step="0.01" value="' +
+      ((data.gallery.extra_photo_price_cents || 0) / 100) + '" /></label>' +
+      '<button type="submit" class="ad-btn ad-btn-primary" id="ad-quota-save">Enregistrer</button>' +
+      "</form>" +
+      '<div id="ad-quota-summary">' + quotaSummaryHtml(data.gallery) + "</div>" +
       "</section>" +
       '<section class="ad-background">' +
       '<div class="ad-section-header"><h3>Arrière-plan de l\'écran de connexion client</h3></div>' +
@@ -625,6 +664,24 @@
         renderDetail(slug, true);
       } catch (err) {
         toast(err.message, true);
+      }
+    });
+    document.getElementById("ad-quota-form").addEventListener("submit", async function (event) {
+      event.preventDefault();
+      var form = event.target;
+      var saveBtn = document.getElementById("ad-quota-save");
+      saveBtn.disabled = true;
+      try {
+        await api("POST", "/galleries/" + encodeURIComponent(slug) + "/quota", {
+          includedPhotos: form.includedPhotos.value.trim() || undefined,
+          extraPhotoPrice: form.extraPhotoPrice.value.trim() || undefined,
+        });
+        toast("Forfait mis à jour.");
+        renderDetail(slug, true);
+      } catch (err) {
+        toast(err.message, true);
+      } finally {
+        saveBtn.disabled = false;
       }
     });
     document.getElementById("ad-layout-options").addEventListener("click", async function (event) {
@@ -797,6 +854,8 @@
       slug: form.slug.value.trim(),
       password: form.password.value.trim(),
       expires: form.expires.value || undefined,
+      includedPhotos: form.includedPhotos.value.trim() || undefined,
+      extraPhotoPrice: form.extraPhotoPrice.value.trim() || undefined,
     };
 
     try {
