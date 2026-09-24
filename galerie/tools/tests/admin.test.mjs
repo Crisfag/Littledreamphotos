@@ -302,7 +302,34 @@ await page.waitForSelector(".ad-grid, .ad-empty", { timeout: 5000 });
 check("« Toutes les galeries » depuis cet écran ramène bien à la liste",
       await page.isVisible(".ad-grid, .ad-empty"));
 
-// On avait quitté le détail de la galerie pour tester cette navigation :
+/* ---------- Facturation (Stripe Connect + coordonnées) ---------- */
+// La connexion Stripe elle-même n'est pas exercée ici (il faudrait un vrai
+// compte plateforme) — seuls le câblage de l'écran et la persistance des
+// coordonnées le sont ; le reste est couvert côté API dans api.test.mjs.
+
+await page.click("#ad-billing");
+await page.waitForSelector("#ad-billing-form", { timeout: 10000 });
+check("le bouton « Facturation » ouvre bien cet écran, avec son propre lien dans l'URL",
+      await page.isVisible("#ad-billing-form") && (await page.evaluate(() => location.hash)) === "#/facturation");
+check("sans compte Stripe connecté, le bouton de connexion est proposé",
+      await page.isVisible("#ad-stripe-connect"));
+
+await page.fill('#ad-billing-form [name="companyName"]', "Little Dream Photos SRL");
+await page.fill('#ad-billing-form [name="address"]', "Rue de la Paix 1, 1000 Bruxelles, Belgique");
+await page.fill('#ad-billing-form [name="vatNumber"]', "BE0123456789");
+await page.click("#ad-billing-save");
+await page.waitForSelector(".ad-toast", { timeout: 10000 });
+
+await page.reload({ waitUntil: "domcontentloaded" });
+await page.waitForSelector("#ad-billing-form", { timeout: 10000 });
+check("les coordonnées de facturation enregistrées sont bien relues après rechargement",
+      await page.inputValue('#ad-billing-form [name="companyName"]') === "Little Dream Photos SRL" &&
+      await page.inputValue('#ad-billing-form [name="vatNumber"]') === "BE0123456789");
+
+await page.click("#ad-billing-back");
+await page.waitForSelector(".ad-grid, .ad-empty", { timeout: 5000 });
+
+// On avait quitté le détail de la galerie pour tester ces navigations :
 // on y retourne avant de poursuivre (suppression, déconnexion).
 await page.locator(`.ad-card:has-text("${title}")`).click();
 await page.waitForSelector(".ad-dropzone", { timeout: 5000 });

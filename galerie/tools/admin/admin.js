@@ -267,6 +267,128 @@
     });
   }
 
+  /* ---------- Vue : facturation (Stripe Connect + coordonnées) ---------- */
+  // Propre au compte, pas à une galerie : paiement en ligne des suppléments
+  // (chaque photographe connecte son propre compte Stripe, l'argent lui
+  // arrive directement) et coordonnées à faire figurer sur les factures.
+
+  function stripeStatusHtml(photographer) {
+    if (photographer.stripeChargesEnabled) {
+      return (
+        '<p class="ad-stripe-badge ad-stripe-badge-ok">✓ Compte Stripe actif</p>' +
+        '<p class="ad-hint">Les suppléments payés par vos clients (carte, Apple Pay, PayPal) arrivent directement sur votre compte — jamais via un compte intermédiaire.</p>'
+      );
+    }
+    if (photographer.stripeConnected) {
+      return (
+        '<p class="ad-stripe-badge">Configuration Stripe incomplète</p>' +
+        '<p class="ad-hint">Le compte a été créé, mais Stripe attend encore quelques informations (identité, coordonnées bancaires) avant d\'activer les paiements.</p>' +
+        '<div class="ad-stripe-actions">' +
+        '<button type="button" class="ad-btn ad-btn-primary" id="ad-stripe-connect">Continuer la configuration</button>' +
+        '<button type="button" class="ad-btn" id="ad-stripe-refresh">Vérifier le statut</button>' +
+        "</div>"
+      );
+    }
+    return (
+      '<p class="ad-hint">Connectez un compte Stripe pour que vos clients puissent régler leurs suppléments en ligne (carte, Apple Pay, PayPal) — l\'argent arrive directement chez vous.</p>' +
+      '<button type="button" class="ad-btn ad-btn-primary" id="ad-stripe-connect">Connecter Stripe</button>'
+    );
+  }
+
+  async function renderBilling(skipHash) {
+    var cameFromStripe = location.hash.indexOf("stripe=retour") !== -1 || location.hash.indexOf("stripe=repriser") !== -1;
+    if (!skipHash && location.hash.indexOf("#/facturation") !== 0) history.pushState(null, "", "#/facturation");
+    if (cameFromStripe) history.replaceState(null, "", "#/facturation");
+
+    el.view.innerHTML = '<p class="ad-loading">Chargement…</p>';
+    if (cameFromStripe) {
+      // Le webhook Stripe peut arriver après nous : on relit explicitement
+      // plutôt que d'afficher un statut qui n'est peut-être déjà plus à jour.
+      try { await api("POST", "/stripe/refresh"); } catch (err) { /* la relecture manuelle reste possible depuis l'écran */ }
+    }
+
+    var data;
+    try {
+      data = await api("GET", "/auth/me");
+    } catch (err) {
+      toast(err.message, true);
+      return renderList();
+    }
+    var photographer = data.photographer;
+
+    el.view.innerHTML =
+      '<button type="button" class="ad-back" id="ad-billing-back">&larr; Toutes les galeries</button>' +
+      '<header class="ad-detail-header"><div><h2>Facturation</h2>' +
+      '<p class="ad-hint">Paiement en ligne des suppléments, et informations à faire figurer sur vos factures.</p>' +
+      "</div></header>" +
+      '<section class="ad-stripe"><div class="ad-section-header"><h3>Paiement en ligne</h3></div>' +
+      stripeStatusHtml(photographer) +
+      "</section>" +
+      '<section class="ad-billing-profile"><div class="ad-section-header"><h3>Coordonnées de facturation</h3></div>' +
+      '<p class="ad-hint">Ces informations apparaîtront sur les factures émises pour vos clients.</p>' +
+      '<form id="ad-billing-form">' +
+      '<label class="ad-field"><span>Raison sociale</span>' +
+      '<input type="text" name="companyName" value="' + esc(photographer.billingCompanyName) + '" placeholder="Little Dream Photos" /></label>' +
+      '<label class="ad-field"><span>Adresse</span>' +
+      '<textarea name="address" rows="3" placeholder="Rue…, code postal, ville, pays">' + esc(photographer.billingAddress) + "</textarea></label>" +
+      '<label class="ad-field"><span>Numéro de TVA</span>' +
+      '<input type="text" name="vatNumber" value="' + esc(photographer.billingVatNumber) + '" placeholder="BE0123456789" /></label>' +
+      '<button type="submit" class="ad-btn ad-btn-primary" id="ad-billing-save">Enregistrer</button>' +
+      "</form></section>";
+
+    document.getElementById("ad-billing-back").addEventListener("click", function () {
+      renderList();
+    });
+
+    var connectBtn = document.getElementById("ad-stripe-connect");
+    if (connectBtn) {
+      connectBtn.addEventListener("click", async function () {
+        connectBtn.disabled = true;
+        connectBtn.textContent = "Connexion…";
+        try {
+          var result = await api("POST", "/stripe/connect");
+          window.location.href = result.url;
+        } catch (err) {
+          toast(err.message, true);
+          connectBtn.disabled = false;
+          connectBtn.textContent = "Connecter Stripe";
+        }
+      });
+    }
+    var refreshBtn = document.getElementById("ad-stripe-refresh");
+    if (refreshBtn) {
+      refreshBtn.addEventListener("click", async function () {
+        refreshBtn.disabled = true;
+        try {
+          await api("POST", "/stripe/refresh");
+          renderBilling(true);
+        } catch (err) {
+          toast(err.message, true);
+          refreshBtn.disabled = false;
+        }
+      });
+    }
+
+    document.getElementById("ad-billing-form").addEventListener("submit", async function (event) {
+      event.preventDefault();
+      var form = event.target;
+      var saveBtn = document.getElementById("ad-billing-save");
+      saveBtn.disabled = true;
+      try {
+        await api("POST", "/billing", {
+          companyName: form.companyName.value.trim(),
+          address: form.address.value.trim(),
+          vatNumber: form.vatNumber.value.trim(),
+        });
+        toast("Coordonnées de facturation enregistrées.");
+      } catch (err) {
+        toast(err.message, true);
+      } finally {
+        saveBtn.disabled = false;
+      }
+    });
+  }
+
   /* ---------- Vue : vérifier une photo suspecte ---------- */
   // Compare une image retrouvée ailleurs (réseaux sociaux, un site…) aux
   // empreintes invisibles de toutes les galeries du compte, sans savoir à
@@ -843,6 +965,10 @@
     renderDetect();
   });
 
+  document.getElementById("ad-billing").addEventListener("click", function () {
+    renderBilling();
+  });
+
   /* ---------- Création de galerie ---------- */
 
   document.getElementById("ad-new-gallery").addEventListener("click", function () {
@@ -1042,6 +1168,7 @@
     var match = /^#\/g\/(.+)$/.exec(location.hash);
     if (match) renderDetail(decodeURIComponent(match[1]), true);
     else if (location.hash === "#/detect") renderDetect(true);
+    else if (location.hash.indexOf("#/facturation") === 0) renderBilling(true);
     else renderList(true);
   }
 

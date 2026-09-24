@@ -66,7 +66,16 @@ function issueSession(env, photographer) {
 }
 
 function profileOf(photographer) {
-  return { id: photographer.id, email: photographer.email, studioName: photographer.studio_name || "" };
+  return {
+    id: photographer.id,
+    email: photographer.email,
+    studioName: photographer.studio_name || "",
+    stripeConnected: Boolean(photographer.stripe_account_id),
+    stripeChargesEnabled: Boolean(photographer.stripe_charges_enabled),
+    billingCompanyName: photographer.billing_company_name || "",
+    billingAddress: photographer.billing_address || "",
+    billingVatNumber: photographer.billing_vat_number || "",
+  };
 }
 
 async function signup(request, env) {
@@ -251,9 +260,11 @@ async function resetPassword(request, env) {
     .bind(now(), reset.reset_id)
     .run();
 
-  const photographer = { id: reset.id, email: reset.email, studio_name: reset.studio_name };
-  const sessionToken = await issueSession(env, photographer);
-  return json({ token: sessionToken, expiresIn: SESSION_TTL_SECONDS, photographer: profileOf(photographer) });
+  // `reset` porte déjà toutes les colonnes de la ligne photographe (jointure
+  // `p.*`) : pas besoin d'un objet à part, et ça reste correct sans y penser
+  // à chaque nouvelle colonne ajoutée à la table.
+  const sessionToken = await issueSession(env, reset);
+  return json({ token: sessionToken, expiresIn: SESSION_TTL_SECONDS, photographer: profileOf(reset) });
 }
 
 export async function handleAuth(request, env, ctx, path) {

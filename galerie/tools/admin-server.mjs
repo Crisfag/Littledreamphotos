@@ -479,6 +479,43 @@ async function handleApi(req, res, url) {
     }
   }
 
+  // POST /local/stripe/connect — crée (au besoin) le compte Stripe Connect du
+  // photographe et renvoie un lien d'onboarding hébergé par Stripe. Les URL
+  // de retour pointent vers ce même tableau de bord, jamais ailleurs.
+  if (parts.length === 2 && parts[0] === "stripe" && parts[1] === "connect" && req.method === "POST") {
+    const base = `${isSecureRequest(req) ? "https" : "http"}://${req.headers.host}`;
+    try {
+      const result = await client.connectStripe(`${base}/#/facturation?stripe=retour`, `${base}/#/facturation?stripe=repriser`);
+      return json(res, 200, result);
+    } catch (err) {
+      return relayError(res, err, "Impossible de démarrer la connexion à Stripe");
+    }
+  }
+
+  // POST /local/stripe/refresh — relit l'état réel du compte côté Stripe
+  // (utile juste après l'onboarding : le webhook peut arriver après le retour).
+  if (parts.length === 2 && parts[0] === "stripe" && parts[1] === "refresh" && req.method === "POST") {
+    try {
+      const result = await client.refreshStripeStatus();
+      return json(res, 200, result);
+    } catch (err) {
+      return relayError(res, err, "Impossible de relire le statut Stripe");
+    }
+  }
+
+  // POST /local/billing — coordonnées de facturation (raison sociale, adresse, TVA).
+  if (parts.length === 1 && parts[0] === "billing" && req.method === "POST") {
+    const body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
+    try {
+      await client.setBillingProfile({
+        companyName: body.companyName, address: body.address, vatNumber: body.vatNumber,
+      });
+      return json(res, 200, { ok: true });
+    } catch (err) {
+      return relayError(res, err, "Impossible d'enregistrer le profil de facturation");
+    }
+  }
+
   if (parts[0] !== "galleries") return json(res, 404, { error: "Route inconnue" });
 
   // GET/POST /local/galleries

@@ -84,6 +84,18 @@ export class WorkerClient {
     return this.request("GET", "/api/auth/me");
   }
 
+  connectStripe(returnUrl, refreshUrl) {
+    return this.request("POST", "/api/admin/stripe/connect", { returnUrl, refreshUrl });
+  }
+
+  refreshStripeStatus() {
+    return this.request("POST", "/api/admin/stripe/refresh");
+  }
+
+  setBillingProfile(data) {
+    return this.request("POST", "/api/admin/billing", data);
+  }
+
   listGalleries() {
     return this.request("GET", "/api/admin/galleries");
   }

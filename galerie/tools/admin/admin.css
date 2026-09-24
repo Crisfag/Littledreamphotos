@@ -250,6 +250,22 @@ h3 { font-size: 1.15rem; margin-bottom: .9rem; }
   display: inline-block;
 }
 
+/* ---------- Facturation (Stripe Connect + coordonnées) ---------- */
+
+.ad-stripe-badge {
+  display: inline-block;
+  font-size: .82rem;
+  font-weight: 600;
+  padding: .35rem .75rem;
+  border-radius: 999px;
+  background: #fdecd2;
+  color: #96591a;
+  margin-bottom: .6rem;
+}
+.ad-stripe-badge-ok { background: #dcf0e4; color: #1f7a4d; }
+.ad-stripe-actions { display: flex; gap: .7rem; flex-wrap: wrap; margin-top: .8rem; }
+.ad-billing-profile { margin-top: 1.5rem; }
+
 /* ---------- Dépôt de fichiers ---------- */
 
 .ad-dropzone {
@@ -402,7 +418,7 @@ h3 { font-size: 1.15rem; margin-bottom: .9rem; }
 .ad-field { display: block; margin-bottom: 1rem; }
 .ad-field span { display: block; font-size: .8rem; color: var(--muted); margin-bottom: .35rem; }
 .ad-field em { font-style: normal; opacity: .75; }
-.ad-field input {
+.ad-field input, .ad-field textarea {
   width: 100%;
   font-family: var(--sans);
   font-size: .95rem;
@@ -412,7 +428,8 @@ h3 { font-size: 1.15rem; margin-bottom: .9rem; }
   background: var(--ivory);
   color: var(--ink);
 }
-.ad-field input:focus { outline: none; border-color: var(--rose); box-shadow: 0 0 0 3px rgba(185, 138, 122, .16); }
+.ad-field textarea { resize: vertical; }
+.ad-field input:focus, .ad-field textarea:focus { outline: none; border-color: var(--rose); box-shadow: 0 0 0 3px rgba(185, 138, 122, .16); }
 .ad-field-row { display: grid; grid-template-columns: 1fr 1fr; gap: .9rem; }
 
 .ad-error {

@@ -748,7 +748,7 @@ check("un prix de supplément invalide est refusé à la création", badPrice.st
 
 const quotaPhotoIds = [];
 for (let i = 0; i < 4; i++) {
-  const id = `pho_QuotaTest0${i}`;
+  const id = `pho_Quota${RUN}${i}`;
   const added = await admin("POST", `/api/admin/galleries/${quotaSlug}/photos`, {
     id, position: i, width: 100, height: 100, cols: 1, rows: 1,
   });
@@ -857,6 +857,55 @@ check("les tuiles de la galerie supprimée ont disparu", orphanTile.status === 4
 
 await admin("DELETE", `/api/admin/galleries/${SLUG}-voisine`);
 await admin("DELETE", `/api/admin/galleries/${SLUG}-expiree`);
+
+/* ---------- Paiement en ligne (Stripe Connect) et facturation ---------- */
+// Sans STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET configurées en local (comme
+// en environnement de test ici), les appels à l'API Stripe elle-même ne
+// peuvent pas être exercés de bout en bout — seul leur câblage l'est : refus
+// propre plutôt que plantage, cloisonnement, persistance du profil.
+
+const meBeforeBilling = await (await admin("GET", "/api/auth/me")).json();
+check("par défaut, aucun compte Stripe n'est connecté",
+      meBeforeBilling.photographer?.stripeConnected === false &&
+      meBeforeBilling.photographer?.stripeChargesEnabled === false &&
+      meBeforeBilling.photographer?.billingCompanyName === "",
+      JSON.stringify(meBeforeBilling.photographer));
+
+const connectNoStripe = await admin("POST", "/api/admin/stripe/connect", {
+  returnUrl: "https://example.test/retour", refreshUrl: "https://example.test/reprise",
+});
+check("la connexion Stripe échoue proprement quand la plateforme n'est pas configurée",
+      connectNoStripe.status === 503, `HTTP ${connectNoStripe.status}`);
+
+const connectNoReturnUrl = await admin("POST", "/api/admin/stripe/connect", {});
+check("la connexion Stripe exige les URL de retour", connectNoReturnUrl.status === 400);
+
+const refreshNotConnected = await (await admin("POST", "/api/admin/stripe/refresh")).json();
+check("relire le statut sans compte connecté ne contacte jamais Stripe",
+      refreshNotConnected.connected === false && refreshNotConnected.chargesEnabled === false,
+      JSON.stringify(refreshNotConnected));
+
+const billingSet = await admin("POST", "/api/admin/billing", {
+  companyName: "Little Dream Photos SRL", address: "Rue de la Paix 1, 1000 Bruxelles, Belgique", vatNumber: "BE0123456789",
+});
+check("le profil de facturation peut être enregistré", billingSet.ok);
+
+const meAfterBilling = await (await admin("GET", "/api/auth/me")).json();
+check("le profil de facturation enregistré est bien relu",
+      meAfterBilling.photographer?.billingCompanyName === "Little Dream Photos SRL" &&
+      meAfterBilling.photographer?.billingAddress === "Rue de la Paix 1, 1000 Bruxelles, Belgique" &&
+      meAfterBilling.photographer?.billingVatNumber === "BE0123456789",
+      JSON.stringify(meAfterBilling.photographer));
+
+const peerMeAfterBilling = await (await peerAdmin("GET", "/api/auth/me")).json();
+check("le profil de facturation d'un compte n'apparaît jamais chez un autre",
+      peerMeAfterBilling.photographer?.billingCompanyName === "", JSON.stringify(peerMeAfterBilling.photographer));
+
+const webhookNoSecret = await fetch(`${BASE}/api/stripe/webhook`, {
+  method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ type: "account.updated" }),
+});
+check("le webhook Stripe refuse proprement quand il n'est pas configuré",
+      webhookNoSecret.status === 503, `HTTP ${webhookNoSecret.status}`);
 
 const failed = checks.filter((c) => !c.ok);
 console.log(failed.length ? `\n${failed.length} vérification(s) en échec.` : `\n${checks.length} vérifications, toutes passent.`);

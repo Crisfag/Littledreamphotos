@@ -7,6 +7,19 @@ CREATE TABLE IF NOT EXISTS photographers (
   password_hash  TEXT NOT NULL,
   password_salt  TEXT NOT NULL,
   studio_name    TEXT NOT NULL DEFAULT '',
+  -- Paiement en ligne des suppléments (Stripe Connect, comptes « Express ») :
+  -- chaque photographe connecte son propre compte, l'argent lui arrive
+  -- directement, jamais via un compte pivot. stripe_charges_enabled reflète
+  -- l'état réel côté Stripe (mis à jour par le webhook account.updated, ou
+  -- relu manuellement) : un identifiant seul ne veut pas dire que
+  -- l'inscription est terminée.
+  stripe_account_id       TEXT NOT NULL DEFAULT '',
+  stripe_charges_enabled  INTEGER NOT NULL DEFAULT 0,
+  -- Mentions à faire figurer sur les factures — jamais déduites d'ailleurs
+  -- (le nom de studio sert à l'affichage, pas à la facturation).
+  billing_company_name    TEXT NOT NULL DEFAULT '',
+  billing_address         TEXT NOT NULL DEFAULT '',
+  billing_vat_number      TEXT NOT NULL DEFAULT '',
   created_at     INTEGER NOT NULL
 );
 
@@ -104,6 +117,13 @@ CREATE TABLE IF NOT EXISTS photos (
 -- Migration vers le forfait et les suppléments (bases créées avant) :
 --   ALTER TABLE galleries ADD COLUMN included_photos INTEGER;
 --   ALTER TABLE galleries ADD COLUMN extra_photo_price_cents INTEGER NOT NULL DEFAULT 0;
+
+-- Migration vers Stripe Connect et le profil de facturation (bases créées avant) :
+--   ALTER TABLE photographers ADD COLUMN stripe_account_id TEXT NOT NULL DEFAULT '';
+--   ALTER TABLE photographers ADD COLUMN stripe_charges_enabled INTEGER NOT NULL DEFAULT 0;
+--   ALTER TABLE photographers ADD COLUMN billing_company_name TEXT NOT NULL DEFAULT '';
+--   ALTER TABLE photographers ADD COLUMN billing_address TEXT NOT NULL DEFAULT '';
+--   ALTER TABLE photographers ADD COLUMN billing_vat_number TEXT NOT NULL DEFAULT '';
 
 CREATE INDEX IF NOT EXISTS idx_photos_gallery ON photos(gallery_id, position);
 

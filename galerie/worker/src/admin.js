@@ -8,6 +8,7 @@
 import { json, fail } from "./http.js";
 import { hashPassword, randomBytes, b64url } from "./auth.js";
 import { authenticatePhotographer } from "./authPhotographer.js";
+import { connectStripe, refreshStripeStatus, setBillingProfile } from "./billing.js";
 
 function now() {
   return Math.floor(Date.now() / 1000);
@@ -535,6 +536,24 @@ export async function handleAdmin(request, env, ctx, path) {
   }
   if (section === "tiles" && parts.length === 7 && request.method === "GET") {
     return getTile(env, photographerId, parts[3], Number(parts[4]), Number(parts[5]), Number(parts[6]));
+  }
+
+  // Paiement en ligne (Stripe Connect) et profil de facturation : propres au
+  // compte, pas à une galerie en particulier.
+  if (section === "stripe" && parts[3] === "connect" && parts.length === 4 && request.method === "POST") {
+    const photographer = await env.DB.prepare("SELECT * FROM photographers WHERE id = ?").bind(photographerId).first();
+    if (!photographer) return fail(401, "Session invalide");
+    return connectStripe(request, env, photographer);
+  }
+  if (section === "stripe" && parts[3] === "refresh" && parts.length === 4 && request.method === "POST") {
+    const photographer = await env.DB.prepare("SELECT * FROM photographers WHERE id = ?").bind(photographerId).first();
+    if (!photographer) return fail(401, "Session invalide");
+    return refreshStripeStatus(request, env, photographer);
+  }
+  if (section === "billing" && parts.length === 3 && request.method === "POST") {
+    const photographer = await env.DB.prepare("SELECT * FROM photographers WHERE id = ?").bind(photographerId).first();
+    if (!photographer) return fail(401, "Session invalide");
+    return setBillingProfile(request, env, photographer);
   }
 
   return fail(404, "Route inconnue");
