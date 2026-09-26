@@ -12,6 +12,7 @@
 
 import { chromium } from "playwright";
 import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createTestAccount } from "./lib/testAccount.mjs";
@@ -21,6 +22,7 @@ const API = process.env.GALERIE_API || "http://127.0.0.1:8788";
 const EXECUTABLE = process.env.CHROMIUM_PATH || undefined;
 // tests/admin.test.mjs → tools → galerie → Littledreamphotos (racine du dépôt)
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
+const WORKER_DIR = join(REPO_ROOT, "galerie", "worker");
 const PHOTOS = [
   join(REPO_ROOT, "images", "famille", "famille-01.jpeg"),
   join(REPO_ROOT, "images", "famille", "famille-02.jpeg"),
@@ -269,6 +271,48 @@ const visiblePhotosWhileFiltered = await page.locator("#ad-photos .ad-photo").ev
 check("filtrer sur la sélection ne laisse apparaître que la photo choisie",
       visiblePhotosWhileFiltered === 1, `${visiblePhotosWhileFiltered} vignette(s) visible(s)`);
 await page.click("#ad-filter-selected"); // on désactive : la suite du test veut voir toutes les photos
+
+/* ---------- Historique des paiements ---------- */
+// Un vrai règlement Stripe ne peut pas être rejoué ici (pas de compte Stripe
+// réel en local — voir stripe.test.mjs pour le câblage de la session de
+// paiement, sans réseau). Ce qui EST vérifiable ici, c'est l'affichage de
+// l'historique une fois qu'un paiement existe : on insère directement la
+// ligne dans la base D1 locale (comme le ferait le webhook), pour tester le
+// rendu réel de l'admin plutôt qu'une reconstitution en mémoire.
+
+const adminLogin = await fetch(`${API}/api/auth/login`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ email, password }),
+});
+const adminLoginData = await adminLogin.json();
+const galleryForPayments = await (await fetch(`${API}/api/admin/galleries/${gallerySlug}`, {
+  headers: { authorization: `Bearer ${adminLoginData.token}` },
+})).json();
+const galleryIdForPayments = galleryForPayments.gallery.id;
+
+const paidAt = Math.floor(Date.now() / 1000);
+execFileSync(
+  "npx",
+  [
+    "wrangler", "d1", "execute", "galerie-protegee", "--local", "--command",
+    `INSERT INTO payments (id, gallery_id, stripe_checkout_session_id, extra_count, amount_cents, status, created_at, paid_at) ` +
+      `VALUES ('pay_admin_ui_test', '${galleryIdForPayments}', 'cs_admin_ui_test', 2, 2500, 'paid', ${paidAt}, ${paidAt})`,
+  ],
+  { cwd: WORKER_DIR, stdio: "pipe" }
+);
+
+await page.reload({ waitUntil: "domcontentloaded" });
+await page.waitForSelector(".ad-payments-heading", { timeout: 10000 });
+check("l'historique des paiements apparaît après un règlement confirmé",
+      await page.isVisible(".ad-payments-heading"));
+
+const paymentsRowText = await page.textContent(".ad-payments-heading + .ad-table-wrap");
+check("la ligne du paiement affiche le nombre de suppléments, le montant et le statut « Réglé »",
+      paymentsRowText.indexOf("2 photos") !== -1 &&
+      paymentsRowText.indexOf("25,00") !== -1 &&
+      paymentsRowText.indexOf("Réglé") !== -1,
+      paymentsRowText);
 
 /* ---------- Suppression d'une photo ---------- */
 

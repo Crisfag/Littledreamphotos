@@ -249,6 +249,16 @@ h3 { font-size: 1.15rem; margin-bottom: .9rem; }
   padding: .6rem .8rem;
   display: inline-block;
 }
+.ad-quota-paid {
+  margin-top: .4rem;
+  font-size: .88rem;
+  color: #1f7a4d;
+  background: #dcf0e4;
+  border-radius: 8px;
+  padding: .5rem .8rem;
+  display: inline-block;
+}
+.ad-payments-heading { margin-top: 1.3rem; margin-bottom: .6rem; }
 
 /* ---------- Facturation (Stripe Connect + coordonnées) ---------- */
 

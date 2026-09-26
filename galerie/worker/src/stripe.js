@@ -9,12 +9,19 @@ const API_BASE = "https://api.stripe.com/v1";
 const API_VERSION = "2024-06-20";
 
 // Stripe attend un corps `application/x-www-form-urlencoded`, avec les
-// objets imbriqués à plat façon `capabilities[card_payments][requested]`.
+// objets imbriqués à plat façon `capabilities[card_payments][requested]`,
+// et les tableaux indexés façon `line_items[0][quantity]`.
 function flatten(params, prefix, out) {
   for (const [key, value] of Object.entries(params)) {
     if (value === undefined) continue;
     const name = prefix ? `${prefix}[${key}]` : key;
-    if (value && typeof value === "object" && !Array.isArray(value)) {
+    if (Array.isArray(value)) {
+      value.forEach((item, i) => {
+        const indexed = `${name}[${i}]`;
+        if (item && typeof item === "object") flatten(item, indexed, out);
+        else out.push(`${encodeURIComponent(indexed)}=${encodeURIComponent(String(item))}`);
+      });
+    } else if (value && typeof value === "object") {
       flatten(value, name, out);
     } else {
       out.push(`${encodeURIComponent(name)}=${encodeURIComponent(String(value))}`);
@@ -23,7 +30,12 @@ function flatten(params, prefix, out) {
   return out;
 }
 
-async function stripeRequest(env, method, path, params) {
+// `connectedAccountId`, quand fourni, ajoute l'en-tête Stripe-Account : la
+// requête agit alors DIRECTEMENT sur le compte Connect du photographe (une
+// « charge directe ») plutôt que sur la plateforme — c'est ce qui fait que
+// l'argent d'un paiement lui arrive sans jamais transiter par un compte
+// intermédiaire, sans code de transfert séparé à écrire.
+async function stripeRequest(env, method, path, params, connectedAccountId) {
   if (!env.STRIPE_SECRET_KEY) {
     const err = new Error("STRIPE_SECRET_KEY n'est pas configurée");
     err.stripeNotConfigured = true;
@@ -36,6 +48,7 @@ async function stripeRequest(env, method, path, params) {
       authorization: `Bearer ${env.STRIPE_SECRET_KEY}`,
       "content-type": "application/x-www-form-urlencoded",
       "Stripe-Version": API_VERSION,
+      ...(connectedAccountId ? { "Stripe-Account": connectedAccountId } : {}),
     },
     body,
   });
@@ -82,6 +95,37 @@ export function createAccountLink(env, accountId, { returnUrl, refreshUrl }) {
 
 export function retrieveAccount(env, accountId) {
   return stripeRequest(env, "GET", `/accounts/${encodeURIComponent(accountId)}`);
+}
+
+// Page de paiement hébergée par Stripe, pour UNE fois (mode "payment", pas
+// un abonnement). Charge directe sur le compte Connect du photographe (voir
+// `stripeRequest`) : l'argent lui arrive sans détour. `automatic_payment_methods`
+// laisse Stripe proposer ce qui est réellement disponible pour ce compte et
+// cette devise (carte et portefeuilles comme Apple Pay toujours ; PayPal dès
+// que le photographe l'aura activé côté Stripe) plutôt que d'imposer une
+// liste figée qui échouerait si un moyen n'est pas encore activé.
+export function createCheckoutSession(env, connectedAccountId, { label, unitAmountCents, quantity, successUrl, cancelUrl, metadata }) {
+  return stripeRequest(env, "POST", "/checkout/sessions", {
+    mode: "payment",
+    line_items: [{
+      price_data: {
+        currency: "eur",
+        unit_amount: unitAmountCents,
+        product_data: { name: label },
+      },
+      quantity,
+    }],
+    automatic_payment_methods: { enabled: true },
+    success_url: successUrl,
+    cancel_url: cancelUrl,
+    metadata,
+  }, connectedAccountId);
+}
+
+// Relit une session — utilisée pour vérifier son statut si jamais le webhook
+// tardait, jamais comme seule source de vérité (voir schema.sql).
+export function retrieveCheckoutSession(env, connectedAccountId, sessionId) {
+  return stripeRequest(env, "GET", `/checkout/sessions/${encodeURIComponent(sessionId)}`, undefined, connectedAccountId);
 }
 
 function toHex(buffer) {

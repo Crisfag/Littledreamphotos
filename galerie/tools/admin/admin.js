@@ -243,8 +243,8 @@
         (g.comment_count > 0
           ? '<span class="ad-badge ad-badge-comment">💬 ' + g.comment_count + "</span>"
           : "") +
-        (g.extra_count > 0
-          ? '<span class="ad-badge ad-badge-due">💶 ' + formatEuros(g.extra_total_cents) + "</span>"
+        (g.due_extra_count > 0
+          ? '<span class="ad-badge ad-badge-due">💶 ' + formatEuros(g.due_total_cents) + "</span>"
           : "") +
         (status.label ? '<span class="ad-badge ' + status.cls + '">' + esc(status.label) + "</span>" : "") +
         "</div>" +
@@ -594,14 +594,45 @@
     var selected = gallery.selected_count || 0;
     var included = gallery.included_photos;
     var extra = gallery.extra_count || 0;
+    var due = gallery.due_extra_count || 0;
+    var paid = gallery.paid_extra_count || 0;
     var withinQuota = '<p class="ad-quota-count">' + selected + ' / ' + included + ' photo' + (included > 1 ? "s" : "") + ' incluse' + (included > 1 ? "s" : "") + '</p>';
     if (extra <= 0) return withinQuota;
+
+    var html = withinQuota;
+    if (due > 0) {
+      html +=
+        '<p class="ad-quota-due">' +
+        "+" + due + " supplément" + (due > 1 ? "s" : "") + " × " + formatEuros(gallery.extra_photo_price_cents) +
+        " = <strong>" + formatEuros(gallery.due_total_cents) + " à régler</strong>" +
+        "</p>";
+    }
+    if (paid > 0) {
+      html +=
+        '<p class="ad-quota-paid">✓ ' + paid + " supplément" + (paid > 1 ? "s" : "") +
+        " déjà réglé" + (paid > 1 ? "s" : "") + " en ligne</p>";
+    }
+    return html;
+  }
+
+  function paymentsHistoryHtml(payments) {
+    if (!payments || !payments.length) return "";
+    var rows = payments.map(function (p) {
+      var statusLabel = p.status === "paid" ? "Réglé" : "En attente";
+      var statusCls = p.status === "paid" ? "ad-badge-selected" : "";
+      return (
+        "<tr>" +
+        "<td>" + esc(formatDateTime(p.paid_at || p.created_at)) + "</td>" +
+        "<td>" + p.extra_count + " photo" + (p.extra_count > 1 ? "s" : "") + "</td>" +
+        "<td>" + formatEuros(p.amount_cents) + "</td>" +
+        "<td><span class=\"ad-badge " + statusCls + "\">" + statusLabel + "</span></td>" +
+        "</tr>"
+      );
+    });
     return (
-      withinQuota +
-      '<p class="ad-quota-due">' +
-      "+" + extra + " supplément" + (extra > 1 ? "s" : "") + " × " + formatEuros(gallery.extra_photo_price_cents) +
-      " = <strong>" + formatEuros(gallery.extra_total_cents) + " à régler</strong>" +
-      "</p>"
+      '<div class="ad-table-wrap"><table class="ad-table"><thead><tr>' +
+      "<th>Quand</th><th>Suppléments</th><th>Montant</th><th>Statut</th>" +
+      "</tr></thead><tbody>" + rows.join("") + "</tbody></table></div>"
     );
   }
 
@@ -657,7 +688,7 @@
       "</section>" +
       '<section class="ad-quota">' +
       '<div class="ad-section-header"><h3>Forfait et suppléments</h3></div>' +
-      '<p class="ad-hint">Le nombre de photos déjà payées par le client, et le prix de chaque photo au-delà. Calculé automatiquement à partir de ses coups de cœur — aucun paiement en ligne pour l\'instant, à régler de votre côté.</p>' +
+      '<p class="ad-hint">Le nombre de photos déjà payées par le client, et le prix de chaque photo au-delà. Calculé automatiquement à partir de ses coups de cœur — réglable en ligne par le client une fois votre compte Stripe actif (écran Facturation).</p>' +
       '<form class="ad-field-row" id="ad-quota-form">' +
       '<label class="ad-field"><span>Photos incluses</span>' +
       '<input type="number" name="includedPhotos" min="0" step="1" placeholder="aucun forfait" value="' +
@@ -668,6 +699,9 @@
       '<button type="submit" class="ad-btn ad-btn-primary" id="ad-quota-save">Enregistrer</button>' +
       "</form>" +
       '<div id="ad-quota-summary">' + quotaSummaryHtml(data.gallery) + "</div>" +
+      (data.payments && data.payments.length
+        ? '<h4 class="ad-payments-heading">Historique des paiements</h4>' + paymentsHistoryHtml(data.payments)
+        : "") +
       "</section>" +
       '<section class="ad-background">' +
       '<div class="ad-section-header"><h3>Arrière-plan de l\'écran de connexion client</h3></div>' +

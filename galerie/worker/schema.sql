@@ -189,3 +189,41 @@ CREATE INDEX IF NOT EXISTS idx_password_resets_photographer ON password_resets(p
 --   );
 --   CREATE INDEX IF NOT EXISTS idx_password_resets_token ON password_resets(token_hash);
 --   CREATE INDEX IF NOT EXISTS idx_password_resets_photographer ON password_resets(photographer_id, created_at);
+
+-- Règlement en ligne des suppléments (Stripe Checkout, paiement direct sur le
+-- compte Connect du photographe). Une ligne par session de paiement créée —
+-- « pending » tant que le client n'a pas terminé, « paid » une fois confirmé
+-- par le webhook Stripe (jamais par le simple retour du navigateur, qui peut
+-- mentir ou ne jamais arriver). extra_count fige le nombre de suppléments
+-- couverts par CE règlement : la somme des lignes « paid » d'une galerie dit
+-- combien ont déjà été payés, pour ne jamais faire payer deux fois la même
+-- photo si le client en sélectionne encore plus ensuite.
+CREATE TABLE IF NOT EXISTS payments (
+  id                          TEXT PRIMARY KEY,
+  gallery_id                  TEXT NOT NULL REFERENCES galleries(id) ON DELETE CASCADE,
+  stripe_checkout_session_id  TEXT NOT NULL UNIQUE,
+  stripe_payment_intent_id    TEXT NOT NULL DEFAULT '',
+  extra_count                 INTEGER NOT NULL,
+  amount_cents                INTEGER NOT NULL,
+  status                      TEXT NOT NULL DEFAULT 'pending', -- pending, paid
+  created_at                  INTEGER NOT NULL,
+  paid_at                     INTEGER
+);
+
+CREATE INDEX IF NOT EXISTS idx_payments_gallery ON payments(gallery_id, status);
+CREATE INDEX IF NOT EXISTS idx_payments_session ON payments(stripe_checkout_session_id);
+
+-- Migration vers le règlement en ligne des suppléments (bases créées avant) :
+--   CREATE TABLE IF NOT EXISTS payments (
+--     id                          TEXT PRIMARY KEY,
+--     gallery_id                  TEXT NOT NULL REFERENCES galleries(id) ON DELETE CASCADE,
+--     stripe_checkout_session_id  TEXT NOT NULL UNIQUE,
+--     stripe_payment_intent_id    TEXT NOT NULL DEFAULT '',
+--     extra_count                 INTEGER NOT NULL,
+--     amount_cents                INTEGER NOT NULL,
+--     status                      TEXT NOT NULL DEFAULT 'pending',
+--     created_at                  INTEGER NOT NULL,
+--     paid_at                     INTEGER
+--   );
+--   CREATE INDEX IF NOT EXISTS idx_payments_gallery ON payments(gallery_id, status);
+--   CREATE INDEX IF NOT EXISTS idx_payments_session ON payments(stripe_checkout_session_id);

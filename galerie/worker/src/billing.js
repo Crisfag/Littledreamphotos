@@ -87,9 +87,10 @@ export async function setBillingProfile(request, env, photographer) {
 
 // Webhook Stripe : pas de session, l'authenticité vient de la signature
 // (Stripe-Signature, vérifiée sur le corps brut — jamais reparsé avant).
-// account.updated est le seul évènement traité pour l'instant (étape 1 :
-// suivre l'état de l'inscription Connect) ; les évènements de paiement
-// viendront avec la fonctionnalité de règlement des suppléments.
+// Deux évènements traités : account.updated (état de l'inscription Connect)
+// et checkout.session.completed (règlement d'un supplément) — les deux
+// délivrés côté « Comptes connectés », puisqu'ils concernent les comptes
+// Stripe des photographes, jamais celui de la plateforme.
 export async function handleStripeWebhook(request, env) {
   if (request.method !== "POST") return fail(405, "Méthode non autorisée");
   if (!env.STRIPE_WEBHOOK_SECRET) return fail(503, "Webhook Stripe non configuré");
@@ -111,6 +112,22 @@ export async function handleStripeWebhook(request, env) {
     if (account && account.id) {
       await env.DB.prepare("UPDATE photographers SET stripe_charges_enabled = ? WHERE stripe_account_id = ?")
         .bind(account.charges_enabled ? 1 : 0, account.id)
+        .run();
+    }
+  }
+
+  if (event.type === "checkout.session.completed") {
+    const session = event.data && event.data.object;
+    // "paid" est le seul statut qui compte comme réglé : certains moyens de
+    // paiement restent "unpaid" un instant après ce même évènement (virement
+    // notamment) — mieux vaut attendre leur propre confirmation que de
+    // libérer un supplément pas vraiment encaissé.
+    if (session && session.id && session.payment_status === "paid") {
+      await env.DB.prepare(
+        `UPDATE payments SET status = 'paid', paid_at = ?, stripe_payment_intent_id = ?
+         WHERE stripe_checkout_session_id = ? AND status != 'paid'`
+      )
+        .bind(Math.floor(Date.now() / 1000), session.payment_intent || "", session.id)
         .run();
     }
   }

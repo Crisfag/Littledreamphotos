@@ -82,23 +82,78 @@
   // supplément se calcule automatiquement à partir de ses coups de cœur.
   // Absent (includedPhotos null) sur les galeries sans forfait défini —
   // comportement d'avant cette fonctionnalité, rien ne s'affiche alors.
+  // `paidExtraCount` (déjà réglé en ligne, confirmé par Stripe) est toujours
+  // déduit du brut : ce qui s'affiche ici est ce qui reste réellement dû.
   function updateQuotaUI(count) {
     if (!el.toolbarQuota) return;
     var included = state.gallery && state.gallery.includedPhotos;
     if (included === null || included === undefined) {
       el.toolbarQuota.hidden = true;
+      if (el.payButton) el.payButton.hidden = true;
       return;
     }
     var extra = Math.max(0, count - included);
+    var paid = (state.gallery && state.gallery.paidExtraCount) || 0;
+    var due = Math.max(0, extra - paid);
     var text = count + " / " + included + " photo" + (included > 1 ? "s" : "") + " incluse" + (included > 1 ? "s" : "");
-    if (extra > 0) {
+    if (due > 0) {
       text +=
-        " — +" + extra + " supplément" + (extra > 1 ? "s" : "") +
-        " (" + formatEuros(extra * (state.gallery.extraPhotoPriceCents || 0)) + ")";
+        " — +" + due + " supplément" + (due > 1 ? "s" : "") +
+        " (" + formatEuros(due * (state.gallery.extraPhotoPriceCents || 0)) + ")";
+    } else if (extra > 0) {
+      text += " — supplément réglé ✓";
     }
     el.toolbarQuota.textContent = text;
-    el.toolbarQuota.classList.toggle("gp-toolbar-quota-due", extra > 0);
+    el.toolbarQuota.classList.toggle("gp-toolbar-quota-due", due > 0);
     el.toolbarQuota.hidden = false;
+
+    if (el.payButton) {
+      el.payButton.hidden = !(due > 0 && state.gallery.canPayOnline);
+    }
+  }
+
+  // Ouvre la page de paiement hébergée par Stripe pour le supplément dû.
+  // Le montant réel est recalculé côté serveur au moment de la requête — ce
+  // qui s'affiche ici n'est qu'un affichage, jamais la source de vérité.
+  function payForSupplement() {
+    if (!el.payButton) return;
+    el.payButton.disabled = true;
+    el.payButton.textContent = "Redirection…";
+    if (el.payError) el.payError.hidden = true;
+
+    var here = window.location.href;
+    var returnUrl = here + (here.indexOf("?") === -1 ? "?" : "&");
+
+    fetch(apiUrl("/checkout"), {
+      method: "POST",
+      headers: Object.assign({ "content-type": "application/json" }, authHeaders()),
+      body: JSON.stringify({
+        successUrl: returnUrl + "paiement=succes",
+        cancelUrl: returnUrl + "paiement=annule",
+      }),
+    })
+      .then(function (response) {
+        if (response.status === 401) throw new Error("session");
+        return response.json().then(function (data) {
+          if (!response.ok) throw new Error(data.error || "Le paiement n'a pas pu démarrer.");
+          return data;
+        });
+      })
+      .then(function (data) {
+        window.location.href = data.url;
+      })
+      .catch(function (err) {
+        if (err.message === "session") {
+          sessionLost("Votre session a expiré. Saisissez à nouveau le mot de passe.");
+          return;
+        }
+        el.payButton.disabled = false;
+        el.payButton.textContent = "Régler le supplément";
+        if (el.payError) {
+          el.payError.textContent = err.message || "Le paiement n'a pas pu démarrer. Réessayez dans un instant.";
+          el.payError.hidden = false;
+        }
+      });
   }
 
   function updateSelectionUI() {
@@ -786,6 +841,8 @@
       toolbar: $("gp-toolbar"),
       selectionCount: $("gp-selection-count"),
       toolbarQuota: $("gp-toolbar-quota"),
+      payButton: $("gp-pay-supplement"),
+      payError: $("gp-pay-error"),
       filterCheckbox: $("gp-filter-selected"),
       filterEmpty: $("gp-filter-empty"),
       commentToggle: $("gp-comment-toggle"),
@@ -834,6 +891,9 @@
         el.grid.classList.toggle("gp-grid-filtered", state.filterSelected);
         updateSelectionUI();
       });
+    }
+    if (el.payButton) {
+      el.payButton.addEventListener("click", payForSupplement);
     }
     if (el.commentToggle) {
       el.commentToggle.addEventListener("click", toggleCommentPanel);

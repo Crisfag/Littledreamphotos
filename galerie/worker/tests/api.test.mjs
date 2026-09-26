@@ -907,6 +907,49 @@ const webhookNoSecret = await fetch(`${BASE}/api/stripe/webhook`, {
 check("le webhook Stripe refuse proprement quand il n'est pas configuré",
       webhookNoSecret.status === 503, `HTTP ${webhookNoSecret.status}`);
 
+/* ---------- Règlement d'un supplément (/checkout) ---------- */
+// Toujours sans compte Stripe réel en local : seules les vérifications qui
+// précèdent l'appel Stripe lui-même sont exerçables ici (authentification,
+// forfait absent, plateforme non activée) — la création effective d'une
+// session est couverte séparément dans stripe.test.mjs, sans réseau.
+
+// Le forfait de cette galerie a été retiré plus haut (voir "après retrait,
+// plus aucun supplément..." ci-dessus) — on le remet pour que le refus testé
+// ici soit bien celui de Stripe, pas celui de l'absence de forfait.
+await admin("POST", `/api/admin/galleries/${quotaSlug}/quota`, { includedPhotos: 10, extraPhotoPrice: "20" });
+
+const checkoutNoAuth = await fetch(`${BASE}/api/gallery/${quotaSlug}/checkout`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ successUrl: "https://example.test/succes", cancelUrl: "https://example.test/annule" }),
+});
+check("régler un supplément sans jeton est refusé", checkoutNoAuth.status === 401);
+
+const checkoutNoStripe = await fetch(`${BASE}/api/gallery/${quotaSlug}/checkout`, {
+  method: "POST",
+  headers: { ...quotaBearer, "content-type": "application/json" },
+  body: JSON.stringify({ successUrl: "https://example.test/succes", cancelUrl: "https://example.test/annule" }),
+});
+check("régler un supplément échoue proprement quand le photographe n'a pas activé Stripe",
+      checkoutNoStripe.status === 503, `HTTP ${checkoutNoStripe.status}`);
+
+const noQuotaSlug = `${SLUG}-sans-forfait`;
+await admin("POST", "/api/admin/galleries", { slug: noQuotaSlug, password: "mot-de-passe-solide" });
+const noQuotaLogin = await (await fetch(`${BASE}/api/gallery/${noQuotaSlug}/login`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ password: "mot-de-passe-solide" }),
+})).json();
+const noQuotaBearer = { authorization: `Bearer ${noQuotaLogin.token}` };
+const checkoutNoQuota = await fetch(`${BASE}/api/gallery/${noQuotaSlug}/checkout`, {
+  method: "POST",
+  headers: { ...noQuotaBearer, "content-type": "application/json" },
+  body: JSON.stringify({ successUrl: "https://example.test/succes", cancelUrl: "https://example.test/annule" }),
+});
+check("régler un supplément est refusé quand la galerie n'a aucun forfait défini",
+      checkoutNoQuota.status === 400, `HTTP ${checkoutNoQuota.status}`);
+await admin("DELETE", `/api/admin/galleries/${noQuotaSlug}`);
+
 const failed = checks.filter((c) => !c.ok);
 console.log(failed.length ? `\n${failed.length} vérification(s) en échec.` : `\n${checks.length} vérifications, toutes passent.`);
 process.exit(failed.length ? 1 : 0);

@@ -4,6 +4,7 @@
 import { json, fail } from "./http.js";
 import { verifyPassword, signToken, verifyToken, hashIp, randomBytes, b64url } from "./auth.js";
 import { sendCaptureAlert } from "./notify.js";
+import { createCheckoutSession } from "./stripe.js";
 
 const SESSION_TTL_SECONDS = 2 * 60 * 60; // 2 h
 const MAX_FAILED_LOGINS = 10;
@@ -49,6 +50,18 @@ async function getGallery(env, slug) {
 
 function isExpired(gallery) {
   return gallery.expires_at != null && gallery.expires_at < now();
+}
+
+// Somme des suppléments déjà couverts par un paiement confirmé — jamais un
+// paiement "pending" (créé mais jamais terminé, ou en cours) : seul le
+// webhook Stripe fait passer une ligne à "paid" (voir schema.sql).
+async function paidExtraCount(env, galleryId) {
+  const row = await env.DB.prepare(
+    `SELECT COALESCE(SUM(extra_count), 0) AS n FROM payments WHERE gallery_id = ? AND status = 'paid'`
+  )
+    .bind(galleryId)
+    .first();
+  return row?.n || 0;
 }
 
 async function tooManyFailures(env, ipHash) {
@@ -116,6 +129,12 @@ async function handleLogin(request, env, slug) {
     .bind(gallery.id)
     .all();
 
+  const photographer = await env.DB.prepare(
+    "SELECT stripe_account_id, stripe_charges_enabled FROM photographers WHERE id = ?"
+  )
+    .bind(gallery.photographer_id)
+    .first();
+
   return json({
     token,
     expiresIn: SESSION_TTL_SECONDS,
@@ -127,6 +146,8 @@ async function handleLogin(request, env, slug) {
       layout: gallery.layout || "grille",
       includedPhotos: gallery.included_photos,
       extraPhotoPriceCents: gallery.extra_photo_price_cents || 0,
+      paidExtraCount: await paidExtraCount(env, gallery.id),
+      canPayOnline: Boolean(photographer?.stripe_account_id) && Boolean(photographer?.stripe_charges_enabled),
     },
     photos: photos.map((p) => ({
       id: p.id,
@@ -263,6 +284,80 @@ async function handleComment(request, env, slug) {
   });
 
   return json({ ok: true, comment });
+}
+
+function newPaymentId() {
+  return `pay_${b64url(randomBytes(9))}`;
+}
+
+// Ouvre une page de paiement Stripe pour le supplément RÉELLEMENT dû à cet
+// instant — jamais pour le total brut : un règlement déjà confirmé (webhook)
+// est toujours déduit, pour ne jamais faire payer deux fois la même photo si
+// le client en sélectionne encore d'autres ensuite.
+async function handleCheckout(request, env, slug) {
+  const auth = await authorize(request, env, slug);
+  if (auth.error) return auth.error;
+  const gallery = auth.gallery;
+
+  if (gallery.included_photos === null || gallery.included_photos === undefined) {
+    return fail(400, "Aucun forfait n'est défini pour cette galerie");
+  }
+
+  const photographer = await env.DB.prepare(
+    "SELECT * FROM photographers WHERE id = ?"
+  )
+    .bind(gallery.photographer_id)
+    .first();
+  if (!photographer?.stripe_account_id || !photographer.stripe_charges_enabled) {
+    return fail(503, "Le paiement en ligne n'est pas encore activé pour cette galerie");
+  }
+
+  const selectedRow = await env.DB.prepare(
+    "SELECT COUNT(*) AS n FROM photos WHERE gallery_id = ? AND selected = 1"
+  )
+    .bind(gallery.id)
+    .first();
+  const grossExtraCount = Math.max(0, (selectedRow?.n || 0) - gallery.included_photos);
+  const alreadyPaid = await paidExtraCount(env, gallery.id);
+  const outstanding = Math.max(0, grossExtraCount - alreadyPaid);
+  if (outstanding <= 0) return fail(400, "Rien à régler pour le moment");
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return fail(400, "Requête invalide");
+  }
+  const successUrl = String(body?.successUrl || "");
+  const cancelUrl = String(body?.cancelUrl || "");
+  if (!successUrl || !cancelUrl) return fail(400, "URL de retour manquante");
+
+  const paymentId = newPaymentId();
+  const amountCents = outstanding * (gallery.extra_photo_price_cents || 0);
+
+  let session;
+  try {
+    session = await createCheckoutSession(env, photographer.stripe_account_id, {
+      label: `${outstanding} photo${outstanding > 1 ? "s" : ""} supplémentaire${outstanding > 1 ? "s" : ""} — ${gallery.title}`,
+      unitAmountCents: gallery.extra_photo_price_cents || 0,
+      quantity: outstanding,
+      successUrl,
+      cancelUrl,
+      metadata: { gallery_id: gallery.id, gallery_slug: slug, payment_id: paymentId },
+    });
+  } catch (err) {
+    console.error("Échec de la création de la session Stripe :", err);
+    return fail(502, "Stripe a refusé la demande de paiement");
+  }
+
+  await env.DB.prepare(
+    `INSERT INTO payments (id, gallery_id, stripe_checkout_session_id, extra_count, amount_cents, status, created_at)
+     VALUES (?, ?, ?, ?, ?, 'pending', ?)`
+  )
+    .bind(paymentId, gallery.id, session.id, outstanding, amountCents, now())
+    .run();
+
+  return json({ url: session.url });
 }
 
 // Le photographe n'est prévenu que si on n'en a pas déjà avisé un pour
@@ -415,6 +510,9 @@ export async function handleViewer(request, env, ctx, path) {
   }
   if (action === "event" && request.method === "POST") {
     return handleEvent(request, env, ctx, slug);
+  }
+  if (action === "checkout" && request.method === "POST") {
+    return handleCheckout(request, env, slug);
   }
   return fail(404, "Route inconnue");
 }

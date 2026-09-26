@@ -254,16 +254,16 @@ local sur `127.0.0.1` n'est qu'un cas particulier, pas un système à part.
   calculé) et le prix de chaque photo au-delà. Le supplément se calcule
   automatiquement à partir des coups de cœur du client, visible aussi bien
   sur sa page (« 3 / 2 photos incluses — +1 supplément (15,00 €) ») que sur
-  la fiche de la galerie et la liste (badge 💶). Pas encore de paiement en
-  ligne ni de facturation à ce stade — le photographe règle ça de son côté ;
-  c'est la première étape avant de brancher un prestataire de paiement.
+  la fiche de la galerie et la liste (badge 💶). Une fois le compte Stripe du
+  photographe actif, le client peut régler ce supplément en ligne directement
+  depuis sa galerie ; sinon le photographe règle ça de son côté.
 - **Facturation** (écran « 💳 Facturation », propre au compte, pas à une
   galerie) : connexion d'un compte Stripe (Stripe Connect, comptes
   « Express ») pour recevoir directement le règlement des suppléments, et
   coordonnées à faire figurer sur les factures (raison sociale, adresse,
   n° de TVA). Voir *Paiement en ligne des suppléments* plus bas pour la
-  configuration côté Stripe — le règlement effectif et l'émission des
-  factures ne sont pas encore construits.
+  configuration côté Stripe et le fonctionnement du règlement — seule
+  l'émission automatique des factures n'est pas encore construite.
 - **Glisser-déposer** des photos sur la page de la galerie : chacune est
   traitée (réduction, empreinte, filigrane, découpage) et envoyée avec une
   barre de progression individuelle. Plusieurs photos partent en parallèle.
@@ -387,16 +387,23 @@ l'interface d'administration, insérée en lien dans l'e-mail.
 
 ### Paiement en ligne des suppléments (Stripe Connect)
 
-**Étape 1 seulement pour l'instant** : chaque photographe peut connecter son
-propre compte [Stripe](https://stripe.com) (comptes « Express »,
-[Stripe Connect](https://stripe.com/connect)) depuis l'écran « 💳
-Facturation » du tableau de bord, et renseigner ses coordonnées de
-facturation (raison sociale, adresse, n° de TVA). L'argent d'un compte
+Chaque photographe connecte son propre compte [Stripe](https://stripe.com)
+(comptes « Express », [Stripe Connect](https://stripe.com/connect)) depuis
+l'écran « 💳 Facturation » du tableau de bord, et renseigne ses coordonnées
+de facturation (raison sociale, adresse, n° de TVA). L'argent d'un compte
 connecté arrive directement chez le photographe concerné — jamais via un
-compte intermédiaire. Le règlement effectif d'un supplément par le client
-(carte, Apple Pay, PayPal — tous proposés par une même page Stripe hébergée,
-sans intégration séparée) et l'émission automatique de la facture sont les
-étapes suivantes, pas encore construites.
+compte intermédiaire (charge directe, sans commission de plateforme).
+
+Une fois le compte Stripe actif, le client voit un bouton « Régler le
+supplément » dans sa galerie dès qu'il a sélectionné plus de photos que son
+forfait n'en inclut. Il est redirigé vers une page de paiement Stripe
+hébergée (carte, Apple Pay, PayPal — tous proposés par une même intégration,
+sans configuration séparée), puis ramené à sa galerie. Le montant réglé est
+toujours celui **réellement dû à cet instant** : un supplément déjà payé
+n'est jamais recompté si le client sélectionne encore d'autres photos par la
+suite. Le tableau de bord affiche l'historique des paiements de chaque
+galerie (date, nombre de suppléments, montant, statut). L'émission
+automatique de la facture est l'étape suivante, pas encore construite.
 
 Préalable côté Stripe, avant de configurer quoi que ce soit ici :
 **Connect doit être activé** sur le compte Stripe qui servira de plateforme
@@ -411,11 +418,18 @@ npx wrangler secret put STRIPE_WEBHOOK_SECRET  # signature du point de terminais
 Le webhook se crée depuis Dashboard Stripe → Développeurs → Webhooks →
 Ajouter un point de terminaison, avec :
 - URL : `https://<votre-worker>.workers.dev/api/stripe/webhook`
-- Évènement à écouter : `account.updated`
+- Périmètre de destination des évènements : **Comptes connectés** (ce sont
+  les comptes Stripe des photographes qui déclenchent ces évènements, jamais
+  celui de la plateforme)
+- Évènements à écouter : `account.updated` **et** `checkout.session.completed`
+  (attention à ne pas confondre avec les évènements « Accounts v2 »
+  regroupés sous `v2.core.account.updated` — chercher dans l'onglet « Tous
+  les évènements »)
 
 C'est cette souscription qui donne `STRIPE_WEBHOOK_SECRET` ci-dessus. Sans
-ces deux secrets, l'écran « Facturation » affiche un message clair plutôt
-que d'échouer silencieusement — rien d'autre n'est affecté.
+ces deux secrets, l'écran « Facturation » et le bouton de règlement
+affichent un message clair plutôt que d'échouer silencieusement — rien
+d'autre n'est affecté.
 
 ---
 
@@ -456,7 +470,7 @@ des tuiles, refus du mauvais mot de passe, absence de toute balise `<img>`,
 neutralisation du menu contextuel et de la copie, voile sur « Impr. écran » et
 sur perte de focus, consignation au journal.
 
-**API du Worker** — 147 vérifications contre le vrai moteur Cloudflare (D1 et R2
+**API du Worker** — 150 vérifications contre le vrai moteur Cloudflare (D1 et R2
 émulés localement par `wrangler dev`) : comptes photographes (inscription,
 connexion, session, mot de passe oublié — même réponse générique qu'un
 compte existe ou non), cloisonnement strict entre comptes (un photographe ne
@@ -476,8 +490,10 @@ modification, cloisonné par compte, valeurs invalides refusées), Stripe
 Connect et facturation (aucun compte connecté par défaut, connexion refusée
 proprement quand la plateforme n'est pas configurée, statut jamais recontacté
 Stripe sans compte connecté, coordonnées de facturation cloisonnées par
-compte, webhook refusé sans configuration), référence de photo sur un
-évènement de capture
+compte, webhook refusé sans configuration), règlement en ligne d'un
+supplément (refusé sans session, refusé proprement quand le photographe n'a
+pas encore activé Stripe, refusé quand la galerie n'a aucun forfait défini),
+référence de photo sur un évènement de capture
 (un identifiant inconnu n'est jamais enregistré), journal sans IP en clair.
 Le trajet complet de réinitialisation de mot de passe (jeton reçu par
 e-mail → nouveau mot de passe → ancien mot de passe rejeté → lien à usage
@@ -494,12 +510,18 @@ de réinitialisation, et surtout échappement HTML du nom de studio, du titre
 de galerie et du nom de client — autant de champs saisis par le
 photographe, jamais dignes de confiance tels quels dans un e-mail.
 
-**Signature de webhook Stripe** — 7 vérifications sans réseau
-(`verifyStripeSignature` est une fonction pure) : signature valide acceptée,
+**Signature de webhook Stripe et sessions de paiement** — 13 vérifications
+sans réseau (fetch intercepté, jamais appelé pour de vrai) :
+`verifyStripeSignature` est une fonction pure — signature valide acceptée,
 mauvais secret refusé, corps modifié après signature refusé, évènement trop
-ancien (rejeu) refusé, en-tête absent ou malformé refusé sans exception.
+ancien (rejeu) refusé, en-tête absent ou malformé refusé sans exception ;
+et l'encodage exact des appels Stripe — la session de paiement d'un
+supplément est bien créée sur le compte du photographe (charge directe), le
+tableau `line_items` et les métadonnées imbriquées sont correctement
+indexés, les moyens de paiement s'adaptent automatiquement, et la création
+d'un compte Connect ne porte jamais l'en-tête de charge directe.
 
-**Interface d'administration** — 36 vérifications dans un vrai navigateur,
+**Interface d'administration** — 38 vérifications dans un vrai navigateur,
 contre le vrai Worker local : demande de lien de réinitialisation de mot de
 passe (message générique affiché), création de compte et connexion depuis
 le formulaire (pas de session présupposée), création d'une galerie,
@@ -509,6 +531,8 @@ d'une mise en page pour la galerie, réglage d'un forfait de photos incluses,
 sélection du client retrouvée sur sa vignette (cœur) et filtrable en un
 clic, écran « Facturation » (bouton de connexion Stripe proposé,
 coordonnées de facturation enregistrées et relues après rechargement),
+historique des paiements affiché sur la fiche galerie une fois un
+règlement confirmé (date, nombre de suppléments, montant, statut « Réglé »),
 glisser-déposer de photos avec suivi de progression, vraies vignettes
 affichées, suppression d'une photo et d'une galerie, navigation vers l'écran
 « Vérifier une photo » et retour à la liste, déconnexion qui tient après un
@@ -551,7 +575,7 @@ node tests/comments.test.mjs          # commentaires client, autonome (crée sa 
 
 cd ../worker
 node tests/notify.test.mjs            # e-mail d'alerte de capture, sans réseau
-node tests/stripe.test.mjs            # signature de webhook Stripe, sans réseau
+node tests/stripe.test.mjs            # signature de webhook + encodage des sessions Stripe, sans réseau
 npx wrangler dev --local --port 8788  # dans un autre terminal
 BASE=http://127.0.0.1:8788 node tests/api.test.mjs
 ```

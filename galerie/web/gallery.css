@@ -175,6 +175,23 @@ h1 { font-family: var(--serif); font-weight: 500; font-size: clamp(1.9rem, 4vw, 
 .gp-toolbar-count { font-size: .88rem; color: var(--muted); }
 .gp-toolbar-quota { font-size: .82rem; color: var(--muted); margin-top: .2rem; }
 .gp-toolbar-quota-due { color: var(--rose-deep); font-weight: 500; }
+.gp-pay-btn {
+  margin-top: .55rem;
+  font-family: var(--sans);
+  font-size: .8rem;
+  font-weight: 500;
+  letter-spacing: .07em;
+  color: #fff;
+  background: var(--rose);
+  border: 0;
+  border-radius: 999px;
+  padding: .5rem 1.1rem;
+  cursor: pointer;
+  transition: background .2s var(--ease), transform .2s var(--ease);
+}
+.gp-pay-btn:hover:not(:disabled) { background: var(--rose-deep); transform: translateY(-1px); }
+.gp-pay-btn:disabled { opacity: .6; cursor: default; }
+.gp-pay-error { margin-top: .4rem; font-size: .8rem; color: #a4423a; }
 .gp-toolbar-filter {
   display: flex;
   align-items: center;

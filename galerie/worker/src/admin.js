@@ -31,15 +31,27 @@ function priceToCents(value) {
   return Math.round(num * 100);
 }
 
-// Photos au-delà du forfait et montant correspondant. `includedPhotos` à
+// Photos au-delà du forfait et montants correspondants. `includedPhotos` à
 // null signifie qu'aucun forfait n'a été défini pour cette galerie : jamais
 // de supplément calculé, quel que soit le nombre de coups de cœur.
-function supplementFor(includedPhotos, extraPhotoPriceCents, selectedCount) {
+// `paidExtraCount` (somme des règlements confirmés par le webhook Stripe,
+// voir schema.sql) est toujours déduit du brut : c'est ce qui distingue ce
+// qui est dû aujourd'hui de ce que le client a déjà réglé, si jamais il
+// sélectionne encore plus de photos après un premier paiement.
+function supplementFor(includedPhotos, extraPhotoPriceCents, selectedCount, paidExtraCount) {
   if (includedPhotos === null || includedPhotos === undefined) {
-    return { extraCount: 0, extraTotalCents: 0 };
+    return { extraCount: 0, extraTotalCents: 0, paidExtraCount: 0, dueExtraCount: 0, dueTotalCents: 0 };
   }
   const extraCount = Math.max(0, selectedCount - includedPhotos);
-  return { extraCount, extraTotalCents: extraCount * extraPhotoPriceCents };
+  const paid = Math.min(extraCount, paidExtraCount || 0);
+  const due = Math.max(0, extraCount - paid);
+  return {
+    extraCount,
+    extraTotalCents: extraCount * extraPhotoPriceCents,
+    paidExtraCount: paid,
+    dueExtraCount: due,
+    dueTotalCents: due * extraPhotoPriceCents,
+  };
 }
 
 // Vérifie que la galerie désignée par `slug` existe et appartient bien au
@@ -131,15 +143,22 @@ async function listGalleries(env, photographerId) {
             g.included_photos, g.extra_photo_price_cents,
             (SELECT COUNT(*) FROM photos p WHERE p.gallery_id = g.id) AS photo_count,
             (SELECT COUNT(*) FROM photos p WHERE p.gallery_id = g.id AND p.selected = 1) AS selected_count,
-            (SELECT COUNT(*) FROM photos p WHERE p.gallery_id = g.id AND p.comment != '') AS comment_count
+            (SELECT COUNT(*) FROM photos p WHERE p.gallery_id = g.id AND p.comment != '') AS comment_count,
+            (SELECT COALESCE(SUM(extra_count), 0) FROM payments WHERE payments.gallery_id = g.id AND payments.status = 'paid') AS paid_extra_count
      FROM galleries g WHERE g.photographer_id = ? ORDER BY g.created_at DESC`
   )
     .bind(photographerId)
     .all();
 
   const galleries = results.map((g) => {
-    const { extraCount, extraTotalCents } = supplementFor(g.included_photos, g.extra_photo_price_cents, g.selected_count);
-    return { ...g, extra_count: extraCount, extra_total_cents: extraTotalCents };
+    const supplement = supplementFor(g.included_photos, g.extra_photo_price_cents, g.selected_count, g.paid_extra_count);
+    return {
+      ...g,
+      extra_count: supplement.extraCount,
+      extra_total_cents: supplement.extraTotalCents,
+      due_extra_count: supplement.dueExtraCount,
+      due_total_cents: supplement.dueTotalCents,
+    };
   });
   return json({ galleries });
 }
@@ -157,7 +176,18 @@ async function getGallery(env, photographerId, slug) {
     .all();
 
   const selectedCount = photos.filter((p) => p.selected).length;
-  const { extraCount, extraTotalCents } = supplementFor(gallery.included_photos, gallery.extra_photo_price_cents, selectedCount);
+
+  const { results: payments } = await env.DB.prepare(
+    `SELECT id, extra_count, amount_cents, status, created_at, paid_at
+     FROM payments WHERE gallery_id = ? ORDER BY created_at DESC`
+  )
+    .bind(gallery.id)
+    .all();
+  const paidExtraCountTotal = payments
+    .filter((p) => p.status === "paid")
+    .reduce((sum, p) => sum + p.extra_count, 0);
+
+  const supplement = supplementFor(gallery.included_photos, gallery.extra_photo_price_cents, selectedCount, paidExtraCountTotal);
 
   return json({
     gallery: {
@@ -174,10 +204,14 @@ async function getGallery(env, photographerId, slug) {
       included_photos: gallery.included_photos,
       extra_photo_price_cents: gallery.extra_photo_price_cents,
       selected_count: selectedCount,
-      extra_count: extraCount,
-      extra_total_cents: extraTotalCents,
+      extra_count: supplement.extraCount,
+      extra_total_cents: supplement.extraTotalCents,
+      paid_extra_count: supplement.paidExtraCount,
+      due_extra_count: supplement.dueExtraCount,
+      due_total_cents: supplement.dueTotalCents,
     },
     photos,
+    payments,
   });
 }
 
