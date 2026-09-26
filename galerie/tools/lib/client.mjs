@@ -84,6 +84,18 @@ export class WorkerClient {
     return this.request("GET", "/api/auth/me");
   }
 
+  connectStripe(returnUrl, refreshUrl) {
+    return this.request("POST", "/api/admin/stripe/connect", { returnUrl, refreshUrl });
+  }
+
+  refreshStripeStatus() {
+    return this.request("POST", "/api/admin/stripe/refresh");
+  }
+
+  setBillingProfile(data) {
+    return this.request("POST", "/api/admin/billing", data);
+  }
+
   listGalleries() {
     return this.request("GET", "/api/admin/galleries");
   }
@@ -102,6 +114,26 @@ export class WorkerClient {
 
   regeneratePassword(slug, password) {
     return this.request("POST", `/api/admin/galleries/${encodeURIComponent(slug)}/password`, { password });
+  }
+
+  setBackgroundColor(slug, color) {
+    return this.request("POST", `/api/admin/galleries/${encodeURIComponent(slug)}/background/color`, { color });
+  }
+
+  setBackgroundImage(slug, buffer) {
+    return this.request("PUT", `/api/admin/galleries/${encodeURIComponent(slug)}/background/image`, buffer, true);
+  }
+
+  resetBackground(slug) {
+    return this.request("DELETE", `/api/admin/galleries/${encodeURIComponent(slug)}/background`);
+  }
+
+  setLayout(slug, layout) {
+    return this.request("POST", `/api/admin/galleries/${encodeURIComponent(slug)}/layout`, { layout });
+  }
+
+  setQuota(slug, includedPhotos, extraPhotoPrice) {
+    return this.request("POST", `/api/admin/galleries/${encodeURIComponent(slug)}/quota`, { includedPhotos, extraPhotoPrice });
   }
 
   addPhoto(slug, photo) {

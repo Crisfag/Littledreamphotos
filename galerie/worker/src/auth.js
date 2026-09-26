@@ -121,3 +121,12 @@ export async function hashIp(ip, secret) {
 // Même primitive, pour toute autre valeur à pseudonymiser avant stockage
 // (ex. l'e-mail d'un photographe dans le journal des tentatives de connexion).
 export const hashValue = hashIp;
+
+// Jeton à usage unique (réinitialisation de mot de passe) : on ne stocke
+// jamais sa valeur brute, seulement cette empreinte — non tronquée,
+// contrairement à hashIp/hashValue, puisqu'elle sert de clé de recherche
+// exacte plutôt que de simple pseudonymisation.
+export async function hashToken(token, secret) {
+  const digest = await crypto.subtle.digest("SHA-256", enc.encode(`${secret}:${token}`));
+  return b64(digest);
+}

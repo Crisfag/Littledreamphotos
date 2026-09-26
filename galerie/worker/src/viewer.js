@@ -3,6 +3,8 @@
 
 import { json, fail } from "./http.js";
 import { verifyPassword, signToken, verifyToken, hashIp, randomBytes, b64url } from "./auth.js";
+import { sendCaptureAlert } from "./notify.js";
+import { createCheckoutSession } from "./stripe.js";
 
 const SESSION_TTL_SECONDS = 2 * 60 * 60; // 2 h
 const MAX_FAILED_LOGINS = 10;
@@ -11,20 +13,30 @@ const MAX_COMMENT_LENGTH = 500;
 
 const EVENTS_ALLOWED = new Set(["view", "capture_suspected", "blur", "print", "devtools"]);
 
+// "impr-ecran" et "capture-macos" sont des raccourcis de capture sans
+// ambiguïté. "absence-breve" est un signal plus indirect mais nécessaire
+// sur macOS, où le système intercepte Cmd+Maj+3/4/5 avant que le navigateur
+// ne puisse voir passer le raccourci lui-même : le client n'a alors journalisé
+// qu'un changement de fenêtre ou d'onglet très bref (voir gallery.js), plus
+// probablement l'éclair d'une capture qu'un vrai changement d'application.
+const EMAIL_ALERT_REASONS = new Set(["impr-ecran", "capture-macos", "absence-breve"]);
+const ALERT_COOLDOWN_SECONDS = 120;
+
 function now() {
   return Math.floor(Date.now() / 1000);
 }
 
 async function logAccess(env, entry) {
   await env.DB.prepare(
-    `INSERT INTO access_log (gallery_id, viewer_id, event, detail, ip_hash, user_agent, ts)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO access_log (gallery_id, viewer_id, event, detail, photo_id, ip_hash, user_agent, ts)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
   )
     .bind(
       entry.galleryId,
       entry.viewerId || "",
       entry.event,
       (entry.detail || "").slice(0, 200),
+      entry.photoId || "",
       entry.ipHash || "",
       (entry.userAgent || "").slice(0, 200),
       now()
@@ -38,6 +50,18 @@ async function getGallery(env, slug) {
 
 function isExpired(gallery) {
   return gallery.expires_at != null && gallery.expires_at < now();
+}
+
+// Somme des suppléments déjà couverts par un paiement confirmé — jamais un
+// paiement "pending" (créé mais jamais terminé, ou en cours) : seul le
+// webhook Stripe fait passer une ligne à "paid" (voir schema.sql).
+async function paidExtraCount(env, galleryId) {
+  const row = await env.DB.prepare(
+    `SELECT COALESCE(SUM(extra_count), 0) AS n FROM payments WHERE gallery_id = ? AND status = 'paid'`
+  )
+    .bind(galleryId)
+    .first();
+  return row?.n || 0;
 }
 
 async function tooManyFailures(env, ipHash) {
@@ -105,6 +129,12 @@ async function handleLogin(request, env, slug) {
     .bind(gallery.id)
     .all();
 
+  const photographer = await env.DB.prepare(
+    "SELECT stripe_account_id, stripe_charges_enabled FROM photographers WHERE id = ?"
+  )
+    .bind(gallery.photographer_id)
+    .first();
+
   return json({
     token,
     expiresIn: SESSION_TTL_SECONDS,
@@ -113,6 +143,11 @@ async function handleLogin(request, env, slug) {
       clientName: gallery.client_name,
       watermark: gallery.watermark_text,
       expiresAt: gallery.expires_at,
+      layout: gallery.layout || "grille",
+      includedPhotos: gallery.included_photos,
+      extraPhotoPriceCents: gallery.extra_photo_price_cents || 0,
+      paidExtraCount: await paidExtraCount(env, gallery.id),
+      canPayOnline: Boolean(photographer?.stripe_account_id) && Boolean(photographer?.stripe_charges_enabled),
     },
     photos: photos.map((p) => ({
       id: p.id,
@@ -251,7 +286,103 @@ async function handleComment(request, env, slug) {
   return json({ ok: true, comment });
 }
 
-async function handleEvent(request, env, slug) {
+function newPaymentId() {
+  return `pay_${b64url(randomBytes(9))}`;
+}
+
+// Ouvre une page de paiement Stripe pour le supplément RÉELLEMENT dû à cet
+// instant — jamais pour le total brut : un règlement déjà confirmé (webhook)
+// est toujours déduit, pour ne jamais faire payer deux fois la même photo si
+// le client en sélectionne encore d'autres ensuite.
+async function handleCheckout(request, env, slug) {
+  const auth = await authorize(request, env, slug);
+  if (auth.error) return auth.error;
+  const gallery = auth.gallery;
+
+  if (gallery.included_photos === null || gallery.included_photos === undefined) {
+    return fail(400, "Aucun forfait n'est défini pour cette galerie");
+  }
+
+  const photographer = await env.DB.prepare(
+    "SELECT * FROM photographers WHERE id = ?"
+  )
+    .bind(gallery.photographer_id)
+    .first();
+  if (!photographer?.stripe_account_id || !photographer.stripe_charges_enabled) {
+    return fail(503, "Le paiement en ligne n'est pas encore activé pour cette galerie");
+  }
+
+  const selectedRow = await env.DB.prepare(
+    "SELECT COUNT(*) AS n FROM photos WHERE gallery_id = ? AND selected = 1"
+  )
+    .bind(gallery.id)
+    .first();
+  const grossExtraCount = Math.max(0, (selectedRow?.n || 0) - gallery.included_photos);
+  const alreadyPaid = await paidExtraCount(env, gallery.id);
+  const outstanding = Math.max(0, grossExtraCount - alreadyPaid);
+  if (outstanding <= 0) return fail(400, "Rien à régler pour le moment");
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return fail(400, "Requête invalide");
+  }
+  const successUrl = String(body?.successUrl || "");
+  const cancelUrl = String(body?.cancelUrl || "");
+  if (!successUrl || !cancelUrl) return fail(400, "URL de retour manquante");
+
+  const paymentId = newPaymentId();
+  const amountCents = outstanding * (gallery.extra_photo_price_cents || 0);
+
+  let session;
+  try {
+    session = await createCheckoutSession(env, photographer.stripe_account_id, {
+      label: `${outstanding} photo${outstanding > 1 ? "s" : ""} supplémentaire${outstanding > 1 ? "s" : ""} — ${gallery.title}`,
+      unitAmountCents: gallery.extra_photo_price_cents || 0,
+      quantity: outstanding,
+      successUrl,
+      cancelUrl,
+      metadata: { gallery_id: gallery.id, gallery_slug: slug, payment_id: paymentId },
+    });
+  } catch (err) {
+    console.error("Échec de la création de la session Stripe :", err);
+    return fail(502, "Stripe a refusé la demande de paiement");
+  }
+
+  await env.DB.prepare(
+    `INSERT INTO payments (id, gallery_id, stripe_checkout_session_id, extra_count, amount_cents, status, created_at)
+     VALUES (?, ?, ?, ?, ?, 'pending', ?)`
+  )
+    .bind(paymentId, gallery.id, session.id, outstanding, amountCents, now())
+    .run();
+
+  return json({ url: session.url });
+}
+
+// Le photographe n'est prévenu que si on n'en a pas déjà avisé un pour
+// cette galerie dans les dernières minutes : un client qui reste appuyé
+// sur une touche ou déclenche plusieurs raccourcis coup sur coup ne doit
+// pas déclencher une rafale d'e-mails.
+async function recentAlertAlreadySent(env, galleryId) {
+  const row = await env.DB.prepare(
+    `SELECT COUNT(*) AS n FROM access_log
+     WHERE gallery_id = ? AND event = 'capture_suspected' AND detail IN ('impr-ecran', 'capture-macos', 'absence-breve')
+       AND ts > ?`
+  )
+    .bind(galleryId, now() - ALERT_COOLDOWN_SECONDS)
+    .first();
+  // > 1 : l'évènement qu'on vient d'insérer compte déjà pour 1.
+  return (row?.n || 0) > 1;
+}
+
+async function photographerOf(env, photographerId) {
+  return env.DB.prepare("SELECT email, studio_name FROM photographers WHERE id = ?")
+    .bind(photographerId)
+    .first();
+}
+
+async function handleEvent(request, env, ctx, slug) {
   const auth = await authorize(request, env, slug);
   if (auth.error) return auth.error;
 
@@ -263,17 +394,89 @@ async function handleEvent(request, env, slug) {
   }
   const event = typeof body?.event === "string" ? body.event : "";
   if (!EVENTS_ALLOWED.has(event)) return fail(400, "Évènement inconnu");
+  const detail = typeof body.detail === "string" ? body.detail : "";
+
+  // La photo référencée doit vraiment appartenir à cette galerie : sinon on
+  // l'ignore plutôt que de consigner une référence trompeuse ou de laisser
+  // fuiter l'existence d'une photo d'une autre galerie via ce canal.
+  let photoId = "";
+  let photo = null;
+  if (typeof body.photoId === "string" && body.photoId) {
+    photo = await env.DB.prepare("SELECT position FROM photos WHERE id = ? AND gallery_id = ?")
+      .bind(body.photoId, auth.gallery.id)
+      .first();
+    if (photo) photoId = body.photoId;
+  }
 
   await logAccess(env, {
     galleryId: auth.gallery.id,
     viewerId: auth.viewerId,
     event,
-    detail: typeof body.detail === "string" ? body.detail : "",
+    detail,
+    photoId,
     ipHash: await hashIp(request.headers.get("CF-Connecting-IP") || "", env.TOKEN_SECRET),
     userAgent: request.headers.get("User-Agent") || "",
   });
 
+  if (event === "capture_suspected" && EMAIL_ALERT_REASONS.has(detail)) {
+    ctx.waitUntil(
+      (async () => {
+        if (await recentAlertAlreadySent(env, auth.gallery.id)) {
+          console.log(`Alerte de capture ignorée (déjà une alerte récente) — galerie ${auth.gallery.id}`);
+          return;
+        }
+        const photographer = await photographerOf(env, auth.gallery.photographer_id);
+        if (!photographer?.email) {
+          console.log(`Alerte de capture ignorée (photographe introuvable ou sans e-mail) — galerie ${auth.gallery.id}, photographe ${auth.gallery.photographer_id}`);
+          return;
+        }
+        if (!env.RESEND_API_KEY) {
+          console.log("Alerte de capture ignorée : RESEND_API_KEY n'est pas configurée sur ce Worker.");
+          return;
+        }
+        console.log(`Envoi d'une alerte de capture à ${photographer.email} (galerie ${auth.gallery.id}, raison ${detail})`);
+        await sendCaptureAlert(env, {
+          to: photographer.email,
+          studioName: photographer.studio_name,
+          galleryTitle: auth.gallery.title,
+          clientName: auth.gallery.client_name,
+          photoLabel: photo ? `Photo n° ${photo.position + 1}` : "",
+          reason: detail,
+          ts: now(),
+          adminUrl: env.ADMIN_URL || "",
+        });
+      })()
+    );
+  }
+
   return json({ ok: true });
+}
+
+// Arrière-plan de l'écran de mot de passe : public, avant toute
+// authentification. Doit donc rester muet sur l'existence de la galerie —
+// une galerie inconnue ou expirée renvoie la même réponse par défaut qu'une
+// galerie qui n'a simplement pas personnalisé son arrière-plan.
+async function handleBackground(env, slug) {
+  const gallery = await getGallery(env, slug);
+  if (!gallery || isExpired(gallery)) {
+    return json({ type: "color", color: "" });
+  }
+  return json({ type: gallery.login_background_type, color: gallery.login_background_color });
+}
+
+// Non trouvée dans les mêmes conditions que ci-dessus (galerie inconnue,
+// expirée, ou qui n'a simplement pas choisi d'image) : toujours un 404 sans
+// distinction, pour ne rien révéler.
+async function handleBackgroundImage(env, slug) {
+  const gallery = await getGallery(env, slug);
+  if (!gallery || isExpired(gallery) || gallery.login_background_type !== "image") {
+    return fail(404, "Aucune image");
+  }
+  const object = await env.TILES.get(`backgrounds/${gallery.id}.jpg`);
+  if (!object) return fail(404, "Aucune image");
+  return new Response(object.body, {
+    headers: { "content-type": "image/jpeg", "cache-control": "public, max-age=3600" },
+  });
 }
 
 export async function handleViewer(request, env, ctx, path) {
@@ -285,6 +488,12 @@ export async function handleViewer(request, env, ctx, path) {
 
   if (action === "login" && request.method === "POST") {
     return handleLogin(request, env, slug);
+  }
+  if (action === "background" && request.method === "GET" && parts.length === 4) {
+    return handleBackground(env, slug);
+  }
+  if (action === "background-image" && request.method === "GET" && parts.length === 4) {
+    return handleBackgroundImage(env, slug);
   }
   // /api/gallery/<slug>/tile/<photoId>/<niveau>/<colonne>/<ligne>
   if (action === "tile" && request.method === "GET" && parts.length === 8) {
@@ -300,7 +509,10 @@ export async function handleViewer(request, env, ctx, path) {
     return handleComment(request, env, slug);
   }
   if (action === "event" && request.method === "POST") {
-    return handleEvent(request, env, slug);
+    return handleEvent(request, env, ctx, slug);
+  }
+  if (action === "checkout" && request.method === "POST") {
+    return handleCheckout(request, env, slug);
   }
   return fail(404, "Route inconnue");
 }

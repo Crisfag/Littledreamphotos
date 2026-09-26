@@ -80,6 +80,58 @@ const meResponse = await fetch(`${BASE}/api/auth/me`, { headers: { authorization
 const meData = await meResponse.json();
 check("la session permet de relire son profil", meResponse.ok && meData.photographer?.email === EMAIL);
 
+/* ---------- Mot de passe oublié ---------- */
+// Le jeton de réinitialisation ne transite jamais par l'API — seulement par
+// l'e-mail envoyé au photographe — donc le trajet complet « je reçois le
+// lien, je choisis un nouveau mot de passe » ne peut pas être automatisé
+// sans affaiblir la sécurité (ça reviendrait à exposer le jeton ailleurs
+// que dans la boîte mail). Ce qui EST vérifiable depuis l'API, en revanche,
+// c'est que rien ne fuite sur l'existence d'un compte, et que les entrées
+// invalides sont refusées.
+
+async function forgotPassword(email) {
+  const response = await fetch(`${BASE}/api/auth/forgot-password`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+  return { response, data: await response.json().catch(() => ({})) };
+}
+
+const forgotKnown = await forgotPassword(EMAIL);
+const forgotUnknown = await forgotPassword(`inconnu-${RUN}@test.invalid`);
+const forgotMalformed = await forgotPassword("pas-un-email");
+check("demander un lien pour un compte existant renvoie un succès générique",
+      forgotKnown.response.status === 200 && forgotKnown.data.ok === true);
+check("un compte inconnu reçoit exactement la même réponse qu'un compte existant",
+      forgotUnknown.response.status === forgotKnown.response.status &&
+      JSON.stringify(forgotUnknown.data) === JSON.stringify(forgotKnown.data));
+check("une adresse mal formée reçoit aussi la même réponse générique",
+      forgotMalformed.response.status === forgotKnown.response.status &&
+      JSON.stringify(forgotMalformed.data) === JSON.stringify(forgotKnown.data));
+
+const resetMissingToken = await fetch(`${BASE}/api/auth/reset-password`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ password: "un-nouveau-mot-de-passe" }),
+});
+check("réinitialiser sans jeton est refusé", resetMissingToken.status === 400);
+
+const resetBogusToken = await fetch(`${BASE}/api/auth/reset-password`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ token: "ce-jeton-n-existe-pas", password: "un-nouveau-mot-de-passe" }),
+});
+check("un jeton de réinitialisation inconnu est refusé", resetBogusToken.status === 400);
+
+const resetWeakPassword = await fetch(`${BASE}/api/auth/reset-password`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ token: "peu-importe", password: "court" }),
+});
+check("un nouveau mot de passe trop court est refusé avant même de vérifier le jeton",
+      resetWeakPassword.status === 400);
+
 const admin = adminClient(signupData.token);
 
 // Un JPEG minuscule mais valide, pour que les tuiles stockées soient réalistes.
@@ -453,6 +505,30 @@ await fetch(`${BASE}/api/gallery/${SLUG}/event`, {
   headers: { ...bearer, "content-type": "application/json" },
   body: JSON.stringify({ event: "capture_suspected", detail: "impr-ecran" }),
 });
+
+// La photo affichée au moment d'une capture est référencée, pour que le
+// photographe sache laquelle est concernée — pas seulement qu'une capture
+// a eu lieu quelque part dans la galerie.
+await fetch(`${BASE}/api/gallery/${SLUG}/event`, {
+  method: "POST",
+  headers: { ...bearer, "content-type": "application/json" },
+  body: JSON.stringify({ event: "capture_suspected", detail: "capture-macos", photoId }),
+});
+await fetch(`${BASE}/api/gallery/${SLUG}/event`, {
+  method: "POST",
+  headers: { ...bearer, "content-type": "application/json" },
+  body: JSON.stringify({ event: "capture_suspected", detail: "perte-focus", photoId: "pho_NExistePas000" }),
+});
+// Sur macOS, le raccourci de capture est intercepté par le système avant
+// d'atteindre le navigateur : "absence-breve" (changement de fenêtre très
+// bref, mesuré côté client) est le signal de repli qui déclenche quand même
+// une alerte — voir gallery.js et viewer.js pour le détail.
+await fetch(`${BASE}/api/gallery/${SLUG}/event`, {
+  method: "POST",
+  headers: { ...bearer, "content-type": "application/json" },
+  body: JSON.stringify({ event: "capture_suspected", detail: "absence-breve", photoId }),
+});
+
 const bogusEvent = await fetch(`${BASE}/api/gallery/${SLUG}/event`, {
   method: "POST",
   headers: { ...bearer, "content-type": "application/json" },
@@ -470,6 +546,12 @@ check("le journal consigne connexion, échec, capture, sélection et commentaire
       log.some((e) => e.event === "deselect" && e.detail === photoId) &&
       log.some((e) => e.event === "comment" && e.detail === photoId),
       log.map((e) => e.event).join(", "));
+check("une capture avec une photo réellement ouverte référence cette photo",
+      log.some((e) => e.event === "capture_suspected" && e.detail === "capture-macos" && e.photo_id === photoId));
+check("le signal de repli macOS (absence très brève) est accepté et référence la photo",
+      log.some((e) => e.event === "capture_suspected" && e.detail === "absence-breve" && e.photo_id === photoId));
+check("un identifiant de photo inconnu n'est jamais enregistré comme référence",
+      log.some((e) => e.event === "capture_suspected" && e.detail === "perte-focus" && e.photo_id === ""));
 check("le journal ne contient aucune IP en clair",
       log.every((e) => !/^\d+\.\d+\.\d+\.\d+$/.test(e.ip_hash || "")));
 
@@ -551,6 +633,184 @@ const newPasswordLogin = await fetch(`${BASE}/api/gallery/${SLUG}/login`, {
 });
 check("le nouveau mot de passe fonctionne", newPasswordLogin.ok);
 
+/* ---------- Arrière-plan de l'écran de connexion ---------- */
+
+const unknownBackground = await (await fetch(`${BASE}/api/gallery/galerie-inexistante-xyz/background`)).json();
+check("l'arrière-plan d'une galerie inconnue ne se distingue pas d'un arrière-plan par défaut",
+      unknownBackground.type === "color" && unknownBackground.color === "", JSON.stringify(unknownBackground));
+
+const unknownBackgroundImage = await fetch(`${BASE}/api/gallery/galerie-inexistante-xyz/background-image`);
+check("l'image d'arrière-plan d'une galerie inconnue est un 404, comme pour une galerie sans image",
+      unknownBackgroundImage.status === 404);
+
+const defaultBackground = await (await fetch(`${BASE}/api/gallery/${SLUG}/background`)).json();
+check("par défaut, une galerie n'a pas d'arrière-plan personnalisé",
+      defaultBackground.type === "color" && defaultBackground.color === "", JSON.stringify(defaultBackground));
+
+const foreignColorSet = await peerAdmin("POST", `/api/admin/galleries/${SLUG}/background/color`, { color: "#112233" });
+check("un photographe ne peut pas changer l'arrière-plan d'une galerie d'un autre compte", foreignColorSet.status === 404);
+
+const badColor = await admin("POST", `/api/admin/galleries/${SLUG}/background/color`, { color: "pas-une-couleur" });
+check("une couleur mal formée est refusée", badColor.status === 400);
+
+const colorSet = await admin("POST", `/api/admin/galleries/${SLUG}/background/color`, { color: "#112233" });
+check("le photographe peut fixer une couleur d'arrière-plan", colorSet.ok);
+
+const backgroundAfterColor = await (await fetch(`${BASE}/api/gallery/${SLUG}/background`)).json();
+check("la couleur choisie est bien renvoyée au client",
+      backgroundAfterColor.type === "color" && backgroundAfterColor.color === "#112233", JSON.stringify(backgroundAfterColor));
+
+const foreignImageSet = await peerAdmin("PUT", `/api/admin/galleries/${SLUG}/background/image`, TILE, true);
+check("un photographe ne peut pas importer une image d'arrière-plan pour une galerie d'un autre compte",
+      foreignImageSet.status === 404);
+
+const imageSet = await admin("PUT", `/api/admin/galleries/${SLUG}/background/image`, TILE, true);
+check("le photographe peut importer une image d'arrière-plan", imageSet.ok);
+
+const backgroundAfterImage = await (await fetch(`${BASE}/api/gallery/${SLUG}/background`)).json();
+check("le type bascule sur « image » après import", backgroundAfterImage.type === "image", JSON.stringify(backgroundAfterImage));
+
+const backgroundImage = await fetch(`${BASE}/api/gallery/${SLUG}/background-image`);
+const backgroundImageBytes = await backgroundImage.arrayBuffer();
+check("l'image d'arrière-plan est servie publiquement, sans authentification",
+      backgroundImage.ok && backgroundImageBytes.byteLength === TILE.length &&
+      backgroundImage.headers.get("content-type") === "image/jpeg");
+
+const foreignReset = await peerAdmin("DELETE", `/api/admin/galleries/${SLUG}/background`);
+check("un photographe ne peut pas réinitialiser l'arrière-plan d'une galerie d'un autre compte",
+      foreignReset.status === 404);
+
+const backgroundReset = await admin("DELETE", `/api/admin/galleries/${SLUG}/background`);
+check("le photographe peut réinitialiser l'arrière-plan à la couleur par défaut", backgroundReset.ok);
+
+const backgroundAfterReset = await (await fetch(`${BASE}/api/gallery/${SLUG}/background`)).json();
+check("après réinitialisation, l'arrière-plan redevient la couleur par défaut",
+      backgroundAfterReset.type === "color" && backgroundAfterReset.color === "", JSON.stringify(backgroundAfterReset));
+
+const backgroundImageAfterReset = await fetch(`${BASE}/api/gallery/${SLUG}/background-image`);
+check("l'image d'arrière-plan n'est plus servie après réinitialisation", backgroundImageAfterReset.status === 404);
+
+/* ---------- Mise en page de la galerie ---------- */
+
+const galleryBeforeLayout = await (await admin("GET", `/api/admin/galleries/${SLUG}`)).json();
+check("par défaut, une galerie s'affiche en grille",
+      galleryBeforeLayout.gallery?.layout === "grille", JSON.stringify(galleryBeforeLayout.gallery?.layout));
+
+const foreignLayoutSet = await peerAdmin("POST", `/api/admin/galleries/${SLUG}/layout`, { layout: "mosaique" });
+check("un photographe ne peut pas changer la mise en page d'une galerie d'un autre compte", foreignLayoutSet.status === 404);
+
+const badLayout = await admin("POST", `/api/admin/galleries/${SLUG}/layout`, { layout: "n-importe-quoi" });
+check("une mise en page inconnue est refusée", badLayout.status === 400);
+
+const layoutSet = await admin("POST", `/api/admin/galleries/${SLUG}/layout`, { layout: "mosaique" });
+check("le photographe peut choisir la mosaïque", layoutSet.ok);
+
+const galleryAfterLayout = await (await admin("GET", `/api/admin/galleries/${SLUG}`)).json();
+check("la mise en page choisie est bien renvoyée au tableau de bord",
+      galleryAfterLayout.gallery?.layout === "mosaique", JSON.stringify(galleryAfterLayout.gallery?.layout));
+
+const clientLoginAfterLayout = await (await fetch(`${BASE}/api/gallery/${SLUG}/login`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ password: NEW_PASSWORD }),
+})).json();
+check("la mise en page choisie est bien transmise au client",
+      clientLoginAfterLayout.gallery?.layout === "mosaique", JSON.stringify(clientLoginAfterLayout.gallery?.layout));
+
+const layoutBackToGrille = await admin("POST", `/api/admin/galleries/${SLUG}/layout`, { layout: "defilement" });
+check("le photographe peut basculer vers le défilement", layoutBackToGrille.ok);
+
+/* ---------- Forfait et suppléments ---------- */
+
+check("par défaut, une galerie n'a pas de forfait défini",
+      galleryBeforeLayout.gallery?.included_photos === null &&
+      galleryBeforeLayout.gallery?.extra_count === 0 &&
+      galleryBeforeLayout.gallery?.extra_total_cents === 0,
+      JSON.stringify(galleryBeforeLayout.gallery));
+
+const quotaSlug = `${SLUG}-quota`;
+const quotaCreated = await admin("POST", "/api/admin/galleries", {
+  slug: quotaSlug, title: "Séance forfait", password: "mot-de-passe-solide",
+  includedPhotos: 2, extraPhotoPrice: "15",
+});
+const quotaGallery = await quotaCreated.json();
+check("une galerie peut être créée avec un forfait", quotaCreated.status === 201);
+
+const badIncluded = await admin("POST", "/api/admin/galleries", {
+  slug: `${quotaSlug}-b`, password: "mot-de-passe-solide", includedPhotos: -1,
+});
+check("un nombre de photos incluses négatif est refusé à la création", badIncluded.status === 400);
+
+const badPrice = await admin("POST", "/api/admin/galleries", {
+  slug: `${quotaSlug}-c`, password: "mot-de-passe-solide", extraPhotoPrice: "pas-un-prix",
+});
+check("un prix de supplément invalide est refusé à la création", badPrice.status === 400);
+
+const quotaPhotoIds = [];
+for (let i = 0; i < 4; i++) {
+  const id = `pho_Quota${RUN}${i}`;
+  const added = await admin("POST", `/api/admin/galleries/${quotaSlug}/photos`, {
+    id, position: i, width: 100, height: 100, cols: 1, rows: 1,
+  });
+  check(`la photo de test forfait n° ${i} est enregistrée`, added.status === 201);
+  quotaPhotoIds.push(id);
+}
+
+const quotaLogin = await fetch(`${BASE}/api/gallery/${quotaSlug}/login`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ password: "mot-de-passe-solide" }),
+});
+const quotaSession = await quotaLogin.json();
+check("le forfait est transmis au client dès la connexion",
+      quotaSession.gallery?.includedPhotos === 2 && quotaSession.gallery?.extraPhotoPriceCents === 1500,
+      JSON.stringify(quotaSession.gallery));
+const quotaBearer = { authorization: `Bearer ${quotaSession.token}` };
+
+// Le client sélectionne ses 4 photos : 2 incluses dans le forfait, 2 en supplément.
+for (const id of quotaPhotoIds) {
+  await fetch(`${BASE}/api/gallery/${quotaSlug}/select`, {
+    method: "POST",
+    headers: { ...quotaBearer, "content-type": "application/json" },
+    body: JSON.stringify({ photoId: id, selected: true }),
+  });
+}
+
+const quotaDetail = await (await admin("GET", `/api/admin/galleries/${quotaSlug}`)).json();
+check("le nombre de suppléments est calculé à partir des coups de cœur du client",
+      quotaDetail.gallery?.selected_count === 4 &&
+      quotaDetail.gallery?.extra_count === 2 &&
+      quotaDetail.gallery?.extra_total_cents === 3000,
+      JSON.stringify(quotaDetail.gallery));
+
+const quotaList = await (await admin("GET", "/api/admin/galleries")).json();
+const quotaListRow = quotaList.galleries.find((g) => g.slug === quotaSlug);
+check("le supplément apparaît aussi dans la liste des galeries",
+      quotaListRow?.extra_count === 2 && quotaListRow?.extra_total_cents === 3000,
+      JSON.stringify(quotaListRow));
+
+const foreignQuotaSet = await peerAdmin("POST", `/api/admin/galleries/${quotaSlug}/quota`, { includedPhotos: 0, extraPhotoPrice: "1" });
+check("un photographe ne peut pas modifier le forfait d'une galerie d'un autre compte", foreignQuotaSet.status === 404);
+
+const badQuotaUpdate = await admin("POST", `/api/admin/galleries/${quotaSlug}/quota`, { includedPhotos: "beaucoup" });
+check("une valeur de forfait non entière est refusée", badQuotaUpdate.status === 400);
+
+const quotaUpdated = await admin("POST", `/api/admin/galleries/${quotaSlug}/quota`, { includedPhotos: 10, extraPhotoPrice: "20" });
+check("le photographe peut modifier le forfait après coup", quotaUpdated.ok);
+
+const quotaAfterUpdate = await (await admin("GET", `/api/admin/galleries/${quotaSlug}`)).json();
+check("aucun supplément n'est dû une fois le forfait relevé au-dessus du nombre sélectionné",
+      quotaAfterUpdate.gallery?.included_photos === 10 && quotaAfterUpdate.gallery?.extra_count === 0,
+      JSON.stringify(quotaAfterUpdate.gallery));
+
+const quotaCleared = await admin("POST", `/api/admin/galleries/${quotaSlug}/quota`, {});
+check("le forfait peut être retiré (retour à « aucun forfait défini »)", quotaCleared.ok);
+
+const quotaAfterClear = await (await admin("GET", `/api/admin/galleries/${quotaSlug}`)).json();
+check("après retrait, plus aucun supplément n'est jamais calculé",
+      quotaAfterClear.gallery?.included_photos === null && quotaAfterClear.gallery?.extra_count === 0,
+      JSON.stringify(quotaAfterClear.gallery));
+
 /* ---------- Expiration ---------- */
 
 const expired = await admin("POST", "/api/admin/galleries", {
@@ -597,6 +857,98 @@ check("les tuiles de la galerie supprimée ont disparu", orphanTile.status === 4
 
 await admin("DELETE", `/api/admin/galleries/${SLUG}-voisine`);
 await admin("DELETE", `/api/admin/galleries/${SLUG}-expiree`);
+
+/* ---------- Paiement en ligne (Stripe Connect) et facturation ---------- */
+// Sans STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET configurées en local (comme
+// en environnement de test ici), les appels à l'API Stripe elle-même ne
+// peuvent pas être exercés de bout en bout — seul leur câblage l'est : refus
+// propre plutôt que plantage, cloisonnement, persistance du profil.
+
+const meBeforeBilling = await (await admin("GET", "/api/auth/me")).json();
+check("par défaut, aucun compte Stripe n'est connecté",
+      meBeforeBilling.photographer?.stripeConnected === false &&
+      meBeforeBilling.photographer?.stripeChargesEnabled === false &&
+      meBeforeBilling.photographer?.billingCompanyName === "",
+      JSON.stringify(meBeforeBilling.photographer));
+
+const connectNoStripe = await admin("POST", "/api/admin/stripe/connect", {
+  returnUrl: "https://example.test/retour", refreshUrl: "https://example.test/reprise",
+});
+check("la connexion Stripe échoue proprement quand la plateforme n'est pas configurée",
+      connectNoStripe.status === 503, `HTTP ${connectNoStripe.status}`);
+
+const connectNoReturnUrl = await admin("POST", "/api/admin/stripe/connect", {});
+check("la connexion Stripe exige les URL de retour", connectNoReturnUrl.status === 400);
+
+const refreshNotConnected = await (await admin("POST", "/api/admin/stripe/refresh")).json();
+check("relire le statut sans compte connecté ne contacte jamais Stripe",
+      refreshNotConnected.connected === false && refreshNotConnected.chargesEnabled === false,
+      JSON.stringify(refreshNotConnected));
+
+const billingSet = await admin("POST", "/api/admin/billing", {
+  companyName: "Little Dream Photos SRL", address: "Rue de la Paix 1, 1000 Bruxelles, Belgique", vatNumber: "BE0123456789",
+});
+check("le profil de facturation peut être enregistré", billingSet.ok);
+
+const meAfterBilling = await (await admin("GET", "/api/auth/me")).json();
+check("le profil de facturation enregistré est bien relu",
+      meAfterBilling.photographer?.billingCompanyName === "Little Dream Photos SRL" &&
+      meAfterBilling.photographer?.billingAddress === "Rue de la Paix 1, 1000 Bruxelles, Belgique" &&
+      meAfterBilling.photographer?.billingVatNumber === "BE0123456789",
+      JSON.stringify(meAfterBilling.photographer));
+
+const peerMeAfterBilling = await (await peerAdmin("GET", "/api/auth/me")).json();
+check("le profil de facturation d'un compte n'apparaît jamais chez un autre",
+      peerMeAfterBilling.photographer?.billingCompanyName === "", JSON.stringify(peerMeAfterBilling.photographer));
+
+const webhookNoSecret = await fetch(`${BASE}/api/stripe/webhook`, {
+  method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ type: "account.updated" }),
+});
+check("le webhook Stripe refuse proprement quand il n'est pas configuré",
+      webhookNoSecret.status === 503, `HTTP ${webhookNoSecret.status}`);
+
+/* ---------- Règlement d'un supplément (/checkout) ---------- */
+// Toujours sans compte Stripe réel en local : seules les vérifications qui
+// précèdent l'appel Stripe lui-même sont exerçables ici (authentification,
+// forfait absent, plateforme non activée) — la création effective d'une
+// session est couverte séparément dans stripe.test.mjs, sans réseau.
+
+// Le forfait de cette galerie a été retiré plus haut (voir "après retrait,
+// plus aucun supplément..." ci-dessus) — on le remet pour que le refus testé
+// ici soit bien celui de Stripe, pas celui de l'absence de forfait.
+await admin("POST", `/api/admin/galleries/${quotaSlug}/quota`, { includedPhotos: 10, extraPhotoPrice: "20" });
+
+const checkoutNoAuth = await fetch(`${BASE}/api/gallery/${quotaSlug}/checkout`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ successUrl: "https://example.test/succes", cancelUrl: "https://example.test/annule" }),
+});
+check("régler un supplément sans jeton est refusé", checkoutNoAuth.status === 401);
+
+const checkoutNoStripe = await fetch(`${BASE}/api/gallery/${quotaSlug}/checkout`, {
+  method: "POST",
+  headers: { ...quotaBearer, "content-type": "application/json" },
+  body: JSON.stringify({ successUrl: "https://example.test/succes", cancelUrl: "https://example.test/annule" }),
+});
+check("régler un supplément échoue proprement quand le photographe n'a pas activé Stripe",
+      checkoutNoStripe.status === 503, `HTTP ${checkoutNoStripe.status}`);
+
+const noQuotaSlug = `${SLUG}-sans-forfait`;
+await admin("POST", "/api/admin/galleries", { slug: noQuotaSlug, password: "mot-de-passe-solide" });
+const noQuotaLogin = await (await fetch(`${BASE}/api/gallery/${noQuotaSlug}/login`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ password: "mot-de-passe-solide" }),
+})).json();
+const noQuotaBearer = { authorization: `Bearer ${noQuotaLogin.token}` };
+const checkoutNoQuota = await fetch(`${BASE}/api/gallery/${noQuotaSlug}/checkout`, {
+  method: "POST",
+  headers: { ...noQuotaBearer, "content-type": "application/json" },
+  body: JSON.stringify({ successUrl: "https://example.test/succes", cancelUrl: "https://example.test/annule" }),
+});
+check("régler un supplément est refusé quand la galerie n'a aucun forfait défini",
+      checkoutNoQuota.status === 400, `HTTP ${checkoutNoQuota.status}`);
+await admin("DELETE", `/api/admin/galleries/${noQuotaSlug}`);
 
 const failed = checks.filter((c) => !c.ok);
 console.log(failed.length ? `\n${failed.length} vérification(s) en échec.` : `\n${checks.length} vérifications, toutes passent.`);

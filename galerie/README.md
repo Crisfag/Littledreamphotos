@@ -22,7 +22,7 @@ Ce projet vise donc autre chose : **rendre le vol peu rentable et traçable.**
 | | Résultat |
 |---|---|
 | Télécharger le fichier | **Empêché.** Les photos sont découpées en tuiles réassemblées dans un canvas : aucune URL ne renvoie une image entière, « enregistrer l'image sous » ne propose rien, un aspirateur de site ne trouve rien. |
-| Capture d'écran | **Non empêchée** — impossible. Découragée (voile au moindre changement de focus, presse-papiers remplacé) et consignée au journal. |
+| Capture d'écran | **Non empêchée** — impossible. Découragée (voile au moindre changement de focus, presse-papiers remplacé) et consignée au journal. Pour les raccourcis de capture sans ambiguïté (Impr. écran, capture clavier macOS), le photographe reçoit en plus un **e-mail immédiat avec la référence de la photo affichée**. |
 | Qualité du butin | **Inexploitable.** 1600 px de large, filigranés : bon pour un écran, sans valeur pour un tirage. |
 | Filigrane retiré par IA | **Coûteux.** Trame dense traversant tout le sujet, visages compris : l'IA doit reconstruire ce qu'elle ne voit pas, et ça se remarque. |
 | Retrouver l'origine d'une fuite | **Oui.** Empreinte invisible propre à chaque galerie, lisible après capture d'écran, recadrage, redimensionnement, noir et blanc ou ré-encodage JPEG. |
@@ -68,7 +68,12 @@ données partagée entre confrères.
    Invisible (PSNR ≈ 37 dB), et sans la clé on ne sait pas où elle est — donc
    pas comment l'effacer.
 3. **Filigrane visible** en trame diagonale, tracé sombre et clair superposés
-   pour rester lisible sur une robe blanche comme sur un fond noir.
+   pour rester lisible sur une robe blanche comme sur un fond noir. Deux
+   lignes alternent dans la trame : studio + client, et un rappel explicite
+   du droit d'auteur (« Retirer ce filigrane par IA est une violation du
+   droit d'auteur ») — lisible par un assistant IA généraliste à qui l'on
+   demanderait de l'effacer, et une preuve que quiconque a retouché l'image
+   l'a vu.
 4. Découpage en deux niveaux (vignette 500 px, plein écran 1600 px) et envoi
    tuile par tuile.
 
@@ -100,6 +105,19 @@ compte (e-mail + mot de passe). Chaque compte ne voit, ne modifie et ne peut
 même deviner l'existence que de ses propres galeries — jamais celles d'un
 autre photographe. C'est vérifié explicitement par les tests (voir *Fiabilité
 mesurée*), pas seulement supposé par construction.
+
+Un compte se crée en libre-service, directement depuis l'écran de connexion
+de l'interface web (« Créer un compte ») — pas besoin de terminal ni de
+script pour commencer. `signup.mjs` reste utile pour scripter une création
+de compte (mise en place automatisée, tests), mais n'est plus la seule voie.
+
+Mot de passe de compte oublié ? Le lien « Mot de passe oublié ? » de l'écran
+de connexion envoie un e-mail (via Resend) avec un lien de réinitialisation
+valable trente minutes, à usage unique. Comme pour la connexion, la même
+réponse générique est renvoyée que le compte existe ou non — impossible de
+confirmer l'existence d'un compte par ce biais. (Ceci concerne le compte du
+photographe ; le mot de passe d'une galerie, lui, se régénère directement
+depuis son tableau de bord, voir plus loin.)
 
 Aujourd'hui, la préparation des photos (traitement, filigrane, envoi) se fait
 encore depuis l'ordinateur du photographe : `admin-server.mjs`, où chaque
@@ -147,6 +165,22 @@ window.GALERIE_CONFIG = {
   clipboardGuard: true,   // remplace le presse-papiers après une capture
 };
 ```
+
+`web/index.html` (+ `web/home.css`) est la page d'accueil marketing du
+produit : présentation du concept, fonctionnement en quatre étapes, liste des
+fonctionnalités et section sécurité, avec dans le menu les liens Connexion /
+Créer un compte vers l'interface d'administration. Renseignez l'adresse de
+cette interface dans `index.html` :
+
+```js
+window.HOME_CONFIG = {
+  adminUrl: "https://votre-interface-admin.example.com/",
+};
+```
+
+C'est une page statique sans dépendance au Worker : elle se déploie avec les
+mêmes outils que `galerie.html` (Cloudflare Pages, ou tout hébergement
+statique).
 
 ### 3. Les outils
 
@@ -202,6 +236,34 @@ local sur `127.0.0.1` n'est qu'un cas particulier, pas un système à part.
   d'en générer un nouveau (l'ancien cesse aussitôt de fonctionner) : il n'est
   jamais stocké autrement qu'en empreinte à sens unique, donc pas de
   « récupération » possible, seulement une rotation.
+- **Arrière-plan de l'écran de mot de passe** : une couleur parmi une
+  palette prédéfinie, une couleur personnalisée, ou une image importée par
+  le photographe. Jamais une photo de la galerie elle-même — cet écran
+  s'affiche avant que le client ait prouvé quoi que ce soit, donc rien qui y
+  apparaît ne doit être une livraison protégée.
+- **Mise en page de la galerie**, à choisir selon le type de séance : une
+  section dédiée sur la fiche de chaque galerie propose *Grille* (vignettes
+  régulières, le réglage historique — idéal pour parcourir beaucoup de
+  photos), *Mosaïque* (colonnes façon presse, chaque photo garde son propre
+  format — pratique quand portraits et paysages se mélangent) ou
+  *Défilement* (une photo à la fois, en grand — rendu éditorial, pour
+  raconter une séance plutôt que la survoler). Purement visuel : les trois
+  rendus s'appuient sur les mêmes tuiles, protégées de la même façon.
+- **Forfait et suppléments** : le nombre de photos déjà payées par le
+  client (optionnel — sans forfait défini, aucun supplément n'est jamais
+  calculé) et le prix de chaque photo au-delà. Le supplément se calcule
+  automatiquement à partir des coups de cœur du client, visible aussi bien
+  sur sa page (« 3 / 2 photos incluses — +1 supplément (15,00 €) ») que sur
+  la fiche de la galerie et la liste (badge 💶). Une fois le compte Stripe du
+  photographe actif, le client peut régler ce supplément en ligne directement
+  depuis sa galerie ; sinon le photographe règle ça de son côté.
+- **Facturation** (écran « 💳 Facturation », propre au compte, pas à une
+  galerie) : connexion d'un compte Stripe (Stripe Connect, comptes
+  « Express ») pour recevoir directement le règlement des suppléments, et
+  coordonnées à faire figurer sur les factures (raison sociale, adresse,
+  n° de TVA). Voir *Paiement en ligne des suppléments* plus bas pour la
+  configuration côté Stripe et le fonctionnement du règlement — seule
+  l'émission automatique des factures n'est pas encore construite.
 - **Glisser-déposer** des photos sur la page de la galerie : chacune est
   traitée (réduction, empreinte, filigrane, découpage) et envoyée avec une
   barre de progression individuelle. Plusieurs photos partent en parallèle.
@@ -209,10 +271,13 @@ local sur `127.0.0.1` n'est qu'un cas particulier, pas un système à part.
   aperçu généré à part.
 - **Sélection et remarques du client** visibles sur chaque vignette (cœur et
   pastille 💬, survolable pour lire la remarque) et sur le tableau de bord
-  (badges ♥ N et 💬 N sur la carte de la galerie). Un bouton « Copier les
-  notes du client » colle dans le presse-papiers la liste des photos
-  choisies et commentées, par numéro (voir *Retrouver l'origine d'une fuite*
-  pour la même convention).
+  (badges ♥ N et 💬 N sur la carte de la galerie). Une case « Afficher
+  uniquement la sélection du client (N) » filtre la grille de la fiche
+  galerie pour ne garder que les photos choisies — pratique dès que la
+  séance compte beaucoup de photos. Un bouton « Copier les notes du
+  client » colle dans le presse-papiers la liste des photos choisies et
+  commentées, par numéro (voir *Retrouver l'origine d'une fuite* pour la
+  même convention).
 - **Journal d'accès** intégré à la fiche de chaque galerie, coups de cœur et
   remarques compris.
 - **Suppression** d'une photo isolée ou de la galerie entière, avec
@@ -248,6 +313,8 @@ et protection. C'est le seul arbitrage esthétique du projet.
 
 ### Retrouver l'origine d'une fuite
 
+En ligne de commande :
+
 ```bash
 node detect.mjs capture-trouvee-sur-instagram.jpg
 ```
@@ -261,6 +328,12 @@ node detect.mjs capture-trouvee-sur-instagram.jpg
    fiabilité : signal/bruit 5.63, 32/32 bits concordants
 ```
 
+Ou directement depuis l'interface web : bouton **« 🔍 Vérifier une photo »**
+dans la barre du tableau de bord (pas besoin de savoir à l'avance de quelle
+galerie l'image pourrait venir). Le fichier est analysé localement par
+`admin-server.mjs` — comparé aux empreintes de vos propres galeries
+uniquement, jamais envoyé ni conservé au-delà de cette vérification.
+
 ### Consulter le journal d'accès
 
 ```bash
@@ -272,10 +345,91 @@ curl -H "Authorization: Bearer $TOKEN" \
   "$GALERIE_API/api/admin/galleries/dupont-mai/log"
 ```
 
-Connexions, tentatives ratées, photos ouvertes, captures suspectées. Les
-adresses IP ne sont jamais stockées en clair, seulement une empreinte salée.
-La même chose est visible directement sur la fiche de la galerie dans
-l'interface web.
+Connexions, tentatives ratées, photos ouvertes, captures suspectées — avec,
+quand une photo était ouverte en plein écran au moment de la capture, sa
+référence (« Photo n° 7 »). Les adresses IP ne sont jamais stockées en
+clair, seulement une empreinte salée. La même chose est visible directement
+sur la fiche de la galerie dans l'interface web.
+
+### Alerte e-mail sur capture d'écran
+
+Quand un client déclenche un signal de capture, le Worker envoie un e-mail
+au photographe via [Resend](https://resend.com), avec le titre de la
+galerie et la référence de la photo affichée à ce moment. Trois signaux
+déclenchent cet e-mail :
+
+- la touche « Impr. écran » sous Windows ;
+- `Cmd+Maj+3/4/5` sous macOS — sauf que ce raccourci est intercepté par le
+  système *avant* d'atteindre le navigateur (comme `Cmd+Espace`) : le
+  navigateur ne le voit jamais passer comme un raccourci clavier ;
+- c'est pourquoi, sur macOS, le vrai signal utilisé est indirect : une
+  **absence très brève** (moins de 1,5 s) de la fenêtre ou de l'onglet —
+  l'éclair d'une capture ressemble à ça, un vrai changement d'application
+  dure plus longtemps. Un changement de fenêtre plus long, lui, ne
+  déclenche jamais l'e-mail (juste une trace dans le journal) : ce serait
+  trop de faux positifs pour un simple coup d'œil à un autre onglet.
+
+Pas plus d'un e-mail toutes les deux minutes par galerie, pour éviter une
+rafale si plusieurs signaux se déclenchent d'affilée.
+
+C'est entièrement optionnel : sans les secrets ci-dessous, tout continue de
+fonctionner normalement, la capture reste simplement consignée dans le
+journal sans e-mail.
+
+```bash
+cd worker
+npx wrangler secret put RESEND_API_KEY   # clé API Resend
+npx wrangler secret put RESEND_FROM      # adresse d'expédition vérifiée sur Resend, ex. "Holypixx <alertes@votredomaine.com>"
+```
+
+`ADMIN_URL` (dans `wrangler.toml`, pas un secret) est l'adresse de
+l'interface d'administration, insérée en lien dans l'e-mail.
+
+### Paiement en ligne des suppléments (Stripe Connect)
+
+Chaque photographe connecte son propre compte [Stripe](https://stripe.com)
+(comptes « Express », [Stripe Connect](https://stripe.com/connect)) depuis
+l'écran « 💳 Facturation » du tableau de bord, et renseigne ses coordonnées
+de facturation (raison sociale, adresse, n° de TVA). L'argent d'un compte
+connecté arrive directement chez le photographe concerné — jamais via un
+compte intermédiaire (charge directe, sans commission de plateforme).
+
+Une fois le compte Stripe actif, le client voit un bouton « Régler le
+supplément » dans sa galerie dès qu'il a sélectionné plus de photos que son
+forfait n'en inclut. Il est redirigé vers une page de paiement Stripe
+hébergée (carte, Apple Pay, PayPal — tous proposés par une même intégration,
+sans configuration séparée), puis ramené à sa galerie. Le montant réglé est
+toujours celui **réellement dû à cet instant** : un supplément déjà payé
+n'est jamais recompté si le client sélectionne encore d'autres photos par la
+suite. Le tableau de bord affiche l'historique des paiements de chaque
+galerie (date, nombre de suppléments, montant, statut). L'émission
+automatique de la facture est l'étape suivante, pas encore construite.
+
+Préalable côté Stripe, avant de configurer quoi que ce soit ici :
+**Connect doit être activé** sur le compte Stripe qui servira de plateforme
+(Dashboard Stripe → Paramètres → Connect).
+
+```bash
+cd worker
+npx wrangler secret put STRIPE_SECRET_KEY      # clé secrète Stripe (sk_live_… ou sk_test_… en développement)
+npx wrangler secret put STRIPE_WEBHOOK_SECRET  # signature du point de terminaison webhook (whsec_…)
+```
+
+Le webhook se crée depuis Dashboard Stripe → Développeurs → Webhooks →
+Ajouter un point de terminaison, avec :
+- URL : `https://<votre-worker>.workers.dev/api/stripe/webhook`
+- Périmètre de destination des évènements : **Comptes connectés** (ce sont
+  les comptes Stripe des photographes qui déclenchent ces évènements, jamais
+  celui de la plateforme)
+- Évènements à écouter : `account.updated` **et** `checkout.session.completed`
+  (attention à ne pas confondre avec les évènements « Accounts v2 »
+  regroupés sous `v2.core.account.updated` — chercher dans l'onglet « Tous
+  les évènements »)
+
+C'est cette souscription qui donne `STRIPE_WEBHOOK_SECRET` ci-dessus. Sans
+ces deux secrets, l'écran « Facturation » et le bouton de règlement
+affichent un message clair plutôt que d'échouer silencieusement — rien
+d'autre n'est affecté.
 
 ---
 
@@ -307,34 +461,92 @@ photos claires :
 
 | plage | force | couverture |
 |---|---|---|
-| ombres | 9,8 à 14,6 niveaux | 7,6 à 15,3 % |
-| tons moyens | 7,4 à 8,2 niveaux | 7,9 à 15,3 % |
-| hautes lumières | 10,1 à 14,5 niveaux | 6,8 à 15,1 % |
+| ombres | 9,9 à 14,5 niveaux | 8,9 à 16,2 % |
+| tons moyens | 7,5 à 8,3 niveaux | 9,3 à 16,9 % |
+| hautes lumières | 10,0 à 14,5 niveaux | 6,3 à 15,7 % |
 
 **Interface client** — 15 vérifications dans un vrai navigateur : recomposition
 des tuiles, refus du mauvais mot de passe, absence de toute balise `<img>`,
 neutralisation du menu contextuel et de la copie, voile sur « Impr. écran » et
 sur perte de focus, consignation au journal.
 
-**API du Worker** — 91 vérifications contre le vrai moteur Cloudflare (D1 et R2
+**API du Worker** — 150 vérifications contre le vrai moteur Cloudflare (D1 et R2
 émulés localement par `wrangler dev`) : comptes photographes (inscription,
-connexion, session), cloisonnement strict entre comptes (un photographe ne
+connexion, session, mot de passe oublié — même réponse générique qu'un
+compte existe ou non), cloisonnement strict entre comptes (un photographe ne
 peut ni lister, ni lire, ni modifier, ni même deviner l'existence des
 galeries, photos et tuiles d'un autre compte), création et cloisonnement des
 galeries d'un même compte, authentification client, expiration, limitation
 des tentatives de mot de passe, suppression en cascade (galerie et photo
 isolée), sélection et commentaire posés et retirés, régénération du mot de
-passe d'une galerie (l'ancien cesse aussitôt de fonctionner), journal sans
-IP en clair.
+passe d'une galerie (l'ancien cesse aussitôt de fonctionner), arrière-plan
+personnalisé de l'écran de connexion (couleur ou image, cloisonné par
+compte, et une galerie inconnue ne se distingue jamais d'une galerie sans
+arrière-plan personnalisé), mise en page de la galerie (grille par défaut,
+cloisonnée par compte, valeur inconnue refusée, transmise telle quelle au
+client à la connexion), forfait et suppléments (aucun forfait par défaut,
+supplément calculé à partir des coups de cœur du client et recalculé après
+modification, cloisonné par compte, valeurs invalides refusées), Stripe
+Connect et facturation (aucun compte connecté par défaut, connexion refusée
+proprement quand la plateforme n'est pas configurée, statut jamais recontacté
+Stripe sans compte connecté, coordonnées de facturation cloisonnées par
+compte, webhook refusé sans configuration), règlement en ligne d'un
+supplément (refusé sans session, refusé proprement quand le photographe n'a
+pas encore activé Stripe, refusé quand la galerie n'a aucun forfait défini),
+référence de photo sur un évènement de capture
+(un identifiant inconnu n'est jamais enregistré), journal sans IP en clair.
+Le trajet complet de réinitialisation de mot de passe (jeton reçu par
+e-mail → nouveau mot de passe → ancien mot de passe rejeté → lien à usage
+unique) est vérifié manuellement plutôt qu'automatiquement : le jeton ne
+transite jamais par l'API, seulement par l'e-mail, et l'y exposer pour les
+tests reviendrait à affaiblir la sécurité qu'il apporte.
 
-**Interface d'administration** — 18 vérifications dans un vrai navigateur,
-contre le vrai Worker local : connexion depuis le formulaire (pas de session
-présupposée), création d'une galerie, régénération de son mot de passe,
+**Alertes e-mail** — 16 vérifications sans réseau ni `wrangler dev`
+(`buildCaptureAlertEmail` et `buildPasswordResetEmail` sont des fonctions
+pures) : sujet et corps référençant la bonne galerie et la bonne photo,
+message générique quand aucune photo n'est identifiée, raisons connues
+traduites en texte lisible, lien et durée de validité présents dans l'e-mail
+de réinitialisation, et surtout échappement HTML du nom de studio, du titre
+de galerie et du nom de client — autant de champs saisis par le
+photographe, jamais dignes de confiance tels quels dans un e-mail.
+
+**Signature de webhook Stripe et sessions de paiement** — 13 vérifications
+sans réseau (fetch intercepté, jamais appelé pour de vrai) :
+`verifyStripeSignature` est une fonction pure — signature valide acceptée,
+mauvais secret refusé, corps modifié après signature refusé, évènement trop
+ancien (rejeu) refusé, en-tête absent ou malformé refusé sans exception ;
+et l'encodage exact des appels Stripe — la session de paiement d'un
+supplément est bien créée sur le compte du photographe (charge directe), le
+tableau `line_items` et les métadonnées imbriquées sont correctement
+indexés, les moyens de paiement s'adaptent automatiquement, et la création
+d'un compte Connect ne porte jamais l'en-tête de charge directe.
+
+**Interface d'administration** — 38 vérifications dans un vrai navigateur,
+contre le vrai Worker local : demande de lien de réinitialisation de mot de
+passe (message générique affiché), création de compte et connexion depuis
+le formulaire (pas de session présupposée), création d'une galerie,
+régénération de son mot de passe,
+choix d'une couleur ou d'une image pour l'écran de connexion client, choix
+d'une mise en page pour la galerie, réglage d'un forfait de photos incluses,
+sélection du client retrouvée sur sa vignette (cœur) et filtrable en un
+clic, écran « Facturation » (bouton de connexion Stripe proposé,
+coordonnées de facturation enregistrées et relues après rechargement),
+historique des paiements affiché sur la fiche galerie une fois un
+règlement confirmé (date, nombre de suppléments, montant, statut « Réglé »),
 glisser-déposer de photos avec suivi de progression, vraies vignettes
-affichées, suppression d'une photo et d'une galerie, déconnexion qui tient
-après un rechargement de page — et un second compte, connecté dans un
-second contexte navigateur, qui ne voit jamais les galeries du premier dans
-son propre tableau de bord.
+affichées, suppression d'une photo et d'une galerie, navigation vers l'écran
+« Vérifier une photo » et retour à la liste, déconnexion qui tient après un
+rechargement de page — et un second compte, connecté dans un second
+contexte navigateur, qui ne voit jamais les galeries du premier dans son
+propre tableau de bord.
+
+**Vérifier une photo (empreinte invisible)** — 8 vérifications contre le vrai
+Worker local : une image reconstituée tuile par tuile — exactement comme le
+client la voit, pas le fichier d'origine — est reconnue, avec la bonne
+galerie et la bonne photo ; une image jamais envoyée n'est jamais présentée
+comme une correspondance ; un second compte ne peut jamais identifier une
+photo d'un autre (l'outil ne corrèle qu'avec les empreintes du compte
+connecté) ; refusé sans session.
 
 **Sélection client** — 15 vérifications dans un vrai navigateur, contre le
 vrai Worker local (galerie créée par le test lui-même, nettoyée à la fin) :
@@ -357,10 +569,13 @@ node tests/watermark.test.mjs         # lisibilité du filigrane visible
 node tests/calibration.mjs            # seuils de détection (≈ 6 min)
 node tests/viewer.test.mjs            # interface cliente, serveur d'aperçu lancé
 node tests/admin.test.mjs             # interface d'administration, admin-server.mjs lancé
+node tests/detect.test.mjs            # vérifier une photo, autonome (crée ses propres comptes)
 node tests/selection.test.mjs         # sélection client, autonome (crée sa propre galerie)
 node tests/comments.test.mjs          # commentaires client, autonome (crée sa propre galerie)
 
 cd ../worker
+node tests/notify.test.mjs            # e-mail d'alerte de capture, sans réseau
+node tests/stripe.test.mjs            # signature de webhook + encodage des sessions Stripe, sans réseau
 npx wrangler dev --local --port 8788  # dans un autre terminal
 BASE=http://127.0.0.1:8788 node tests/api.test.mjs
 ```

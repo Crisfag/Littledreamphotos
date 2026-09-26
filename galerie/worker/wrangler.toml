@@ -4,7 +4,9 @@ compatibility_date = "2025-01-01"
 
 # Origines autorisées à appeler l'API (le site qui héberge la page galerie).
 [vars]
-ALLOWED_ORIGINS = "https://holypixx-web.pages.dev,https://www.littledreamphotos.com,http://localhost:8000"
+ALLOWED_ORIGINS = "https://www.holypixx.com,https://holypixx.com,https://holypixx-web.pages.dev,https://www.littledreamphotos.com,http://localhost:8000"
+# Lien inséré dans l'e-mail d'alerte de capture, vers l'interface d'administration.
+ADMIN_URL = "https://holypixx-admin.onrender.com"
 
 # Base de métadonnées : galeries, photos, journal d'accès.
 # Créer avec :  npx wrangler d1 create galerie-protegee
@@ -21,5 +23,14 @@ binding = "TILES"
 bucket_name = "galerie-tuiles"
 
 # Secrets (jamais dans ce fichier) :
-#   npx wrangler secret put AUTH_SECRET    (sessions de compte photographe)
-#   npx wrangler secret put TOKEN_SECRET   (sessions client d'une galerie)
+#   npx wrangler secret put AUTH_SECRET          (sessions de compte photographe)
+#   npx wrangler secret put TOKEN_SECRET         (sessions client d'une galerie)
+#   npx wrangler secret put RESEND_API_KEY       (optionnel : alertes e-mail de capture — https://resend.com)
+#   npx wrangler secret put RESEND_FROM          (optionnel : adresse d'expédition vérifiée sur Resend)
+#   npx wrangler secret put STRIPE_SECRET_KEY    (optionnel : paiement en ligne des suppléments — https://stripe.com,
+#                                                  nécessite Connect activé sur le compte plateforme)
+#   npx wrangler secret put STRIPE_WEBHOOK_SECRET (optionnel : signature du webhook account.updated, voir README)
+# Sans RESEND_API_KEY, les captures restent consignées dans le journal mais
+# aucun e-mail n'est envoyé — jamais d'erreur pour le client pour autant. Sans
+# STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET, l'écran « Facturation » affiche
+# un message clair plutôt que d'échouer silencieusement.

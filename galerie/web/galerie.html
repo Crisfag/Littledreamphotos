@@ -75,16 +75,24 @@
     -->
     <aside class="gp-notice">
       <p>
-        <strong>Ces photos sont des épreuves de visionnage.</strong>
-        Elles sont en basse définition, filigranées, et portent une empreinte
-        invisible propre à votre galerie. Merci de ne pas les enregistrer ni
-        les diffuser : les fichiers définitifs, en pleine qualité et sans
+        <strong>Ces photos sont des épreuves de visionnage, pas les fichiers définitifs.</strong>
+        Elles sont volontairement en basse définition, filigranées, et
+        portent une empreinte propre à votre galerie qui permet de
+        retrouver leur origine en cas de diffusion, de retouche ou de
+        capture d'écran. Merci de ne pas les enregistrer, les retoucher ni
+        les partager — c'est aussi ce que prévoient nos conditions de
+        séance. Les fichiers définitifs, en pleine qualité et sans
         filigrane, vous seront livrés après votre sélection.
       </p>
     </aside>
 
     <div class="gp-toolbar" id="gp-toolbar" hidden>
-      <p class="gp-toolbar-count" id="gp-selection-count">Aucune photo sélectionnée pour l'instant</p>
+      <div>
+        <p class="gp-toolbar-count" id="gp-selection-count">Aucune photo sélectionnée pour l'instant</p>
+        <p class="gp-toolbar-quota" id="gp-toolbar-quota" hidden></p>
+        <button type="button" class="gp-pay-btn" id="gp-pay-supplement" hidden>Régler le supplément</button>
+        <p class="gp-pay-error" id="gp-pay-error" hidden></p>
+      </div>
       <label class="gp-toolbar-filter">
         <input type="checkbox" id="gp-filter-selected" />
         <span>Afficher uniquement ma sélection</span>

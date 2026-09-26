@@ -23,6 +23,21 @@
     devtools: "Outils de développement ouverts",
   };
 
+  var BACKGROUND_PRESETS = [
+    { color: "", label: "Défaut" },
+    { color: "#e5dbd0", label: "Sable" },
+    { color: "#b98a7a", label: "Rose" },
+    { color: "#dce3e0", label: "Sauge" },
+    { color: "#e3dce8", label: "Lavande" },
+    { color: "#3a332e", label: "Charbon" },
+  ];
+
+  var LAYOUT_OPTIONS = [
+    { value: "grille", label: "Grille", hint: "Vignettes régulières — pour parcourir beaucoup de photos rapidement." },
+    { value: "mosaique", label: "Mosaïque", hint: "Colonnes façon presse, chaque photo garde son format — portraits et paysages mélangés." },
+    { value: "defilement", label: "Défilement", hint: "Une photo à la fois, en grand — effet éditorial, pour une séance à raconter." },
+  ];
+
   var state = { view: "list", galleries: [], current: null, config: { previewCols: 2, previewRows: 2 } };
   var el = {
     view: document.getElementById("ad-view"),
@@ -34,9 +49,18 @@
 
   /* ---------- Session ---------- */
 
-  function showLogin() {
+  var LOGIN_CARD_IDS = ["ad-login-card", "ad-signup-card", "ad-forgot-card", "ad-reset-card"];
+
+  function showLoginCard(visibleId) {
     el.app.hidden = true;
     el.login.hidden = false;
+    LOGIN_CARD_IDS.forEach(function (id) {
+      document.getElementById(id).hidden = id !== visibleId;
+    });
+  }
+
+  function showLogin() {
+    showLoginCard("ad-login-card");
   }
 
   function showApp(photographer) {
@@ -219,6 +243,9 @@
         (g.comment_count > 0
           ? '<span class="ad-badge ad-badge-comment">💬 ' + g.comment_count + "</span>"
           : "") +
+        (g.due_extra_count > 0
+          ? '<span class="ad-badge ad-badge-due">💶 ' + formatEuros(g.due_total_cents) + "</span>"
+          : "") +
         (status.label ? '<span class="ad-badge ' + status.cls + '">' + esc(status.label) + "</span>" : "") +
         "</div>" +
         "</article>"
@@ -237,6 +264,224 @@
           open();
         }
       });
+    });
+  }
+
+  /* ---------- Vue : facturation (Stripe Connect + coordonnées) ---------- */
+  // Propre au compte, pas à une galerie : paiement en ligne des suppléments
+  // (chaque photographe connecte son propre compte Stripe, l'argent lui
+  // arrive directement) et coordonnées à faire figurer sur les factures.
+
+  function stripeStatusHtml(photographer) {
+    if (photographer.stripeChargesEnabled) {
+      return (
+        '<p class="ad-stripe-badge ad-stripe-badge-ok">✓ Compte Stripe actif</p>' +
+        '<p class="ad-hint">Les suppléments payés par vos clients (carte, Apple Pay, PayPal) arrivent directement sur votre compte — jamais via un compte intermédiaire.</p>'
+      );
+    }
+    if (photographer.stripeConnected) {
+      return (
+        '<p class="ad-stripe-badge">Configuration Stripe incomplète</p>' +
+        '<p class="ad-hint">Le compte a été créé, mais Stripe attend encore quelques informations (identité, coordonnées bancaires) avant d\'activer les paiements.</p>' +
+        '<div class="ad-stripe-actions">' +
+        '<button type="button" class="ad-btn ad-btn-primary" id="ad-stripe-connect">Continuer la configuration</button>' +
+        '<button type="button" class="ad-btn" id="ad-stripe-refresh">Vérifier le statut</button>' +
+        "</div>"
+      );
+    }
+    return (
+      '<p class="ad-hint">Connectez un compte Stripe pour que vos clients puissent régler leurs suppléments en ligne (carte, Apple Pay, PayPal) — l\'argent arrive directement chez vous.</p>' +
+      '<button type="button" class="ad-btn ad-btn-primary" id="ad-stripe-connect">Connecter Stripe</button>'
+    );
+  }
+
+  async function renderBilling(skipHash) {
+    var cameFromStripe = location.hash.indexOf("stripe=retour") !== -1 || location.hash.indexOf("stripe=repriser") !== -1;
+    if (!skipHash && location.hash.indexOf("#/facturation") !== 0) history.pushState(null, "", "#/facturation");
+    if (cameFromStripe) history.replaceState(null, "", "#/facturation");
+
+    el.view.innerHTML = '<p class="ad-loading">Chargement…</p>';
+    if (cameFromStripe) {
+      // Le webhook Stripe peut arriver après nous : on relit explicitement
+      // plutôt que d'afficher un statut qui n'est peut-être déjà plus à jour.
+      try { await api("POST", "/stripe/refresh"); } catch (err) { /* la relecture manuelle reste possible depuis l'écran */ }
+    }
+
+    var data;
+    try {
+      data = await api("GET", "/auth/me");
+    } catch (err) {
+      toast(err.message, true);
+      return renderList();
+    }
+    var photographer = data.photographer;
+
+    el.view.innerHTML =
+      '<button type="button" class="ad-back" id="ad-billing-back">&larr; Toutes les galeries</button>' +
+      '<header class="ad-detail-header"><div><h2>Facturation</h2>' +
+      '<p class="ad-hint">Paiement en ligne des suppléments, et informations à faire figurer sur vos factures.</p>' +
+      "</div></header>" +
+      '<section class="ad-stripe"><div class="ad-section-header"><h3>Paiement en ligne</h3></div>' +
+      stripeStatusHtml(photographer) +
+      "</section>" +
+      '<section class="ad-billing-profile"><div class="ad-section-header"><h3>Coordonnées de facturation</h3></div>' +
+      '<p class="ad-hint">Ces informations apparaîtront sur les factures émises pour vos clients.</p>' +
+      '<form id="ad-billing-form">' +
+      '<label class="ad-field"><span>Raison sociale</span>' +
+      '<input type="text" name="companyName" value="' + esc(photographer.billingCompanyName) + '" placeholder="Little Dream Photos" /></label>' +
+      '<label class="ad-field"><span>Adresse</span>' +
+      '<textarea name="address" rows="3" placeholder="Rue…, code postal, ville, pays">' + esc(photographer.billingAddress) + "</textarea></label>" +
+      '<label class="ad-field"><span>Numéro de TVA</span>' +
+      '<input type="text" name="vatNumber" value="' + esc(photographer.billingVatNumber) + '" placeholder="BE0123456789" /></label>' +
+      '<button type="submit" class="ad-btn ad-btn-primary" id="ad-billing-save">Enregistrer</button>' +
+      "</form></section>";
+
+    document.getElementById("ad-billing-back").addEventListener("click", function () {
+      renderList();
+    });
+
+    var connectBtn = document.getElementById("ad-stripe-connect");
+    if (connectBtn) {
+      connectBtn.addEventListener("click", async function () {
+        connectBtn.disabled = true;
+        connectBtn.textContent = "Connexion…";
+        try {
+          var result = await api("POST", "/stripe/connect");
+          window.location.href = result.url;
+        } catch (err) {
+          toast(err.message, true);
+          connectBtn.disabled = false;
+          connectBtn.textContent = "Connecter Stripe";
+        }
+      });
+    }
+    var refreshBtn = document.getElementById("ad-stripe-refresh");
+    if (refreshBtn) {
+      refreshBtn.addEventListener("click", async function () {
+        refreshBtn.disabled = true;
+        try {
+          await api("POST", "/stripe/refresh");
+          renderBilling(true);
+        } catch (err) {
+          toast(err.message, true);
+          refreshBtn.disabled = false;
+        }
+      });
+    }
+
+    document.getElementById("ad-billing-form").addEventListener("submit", async function (event) {
+      event.preventDefault();
+      var form = event.target;
+      var saveBtn = document.getElementById("ad-billing-save");
+      saveBtn.disabled = true;
+      try {
+        await api("POST", "/billing", {
+          companyName: form.companyName.value.trim(),
+          address: form.address.value.trim(),
+          vatNumber: form.vatNumber.value.trim(),
+        });
+        toast("Coordonnées de facturation enregistrées.");
+      } catch (err) {
+        toast(err.message, true);
+      } finally {
+        saveBtn.disabled = false;
+      }
+    });
+  }
+
+  /* ---------- Vue : vérifier une photo suspecte ---------- */
+  // Compare une image retrouvée ailleurs (réseaux sociaux, un site…) aux
+  // empreintes invisibles de toutes les galeries du compte, sans savoir à
+  // l'avance de laquelle elle pourrait venir. Même moteur que detect.mjs en
+  // ligne de commande (POST /local/detect), simplement accessible d'un clic.
+
+  function detectResultHtml(data) {
+    if (data.status === "match") {
+      return (
+        '<div class="ad-detect-result ad-detect-match">' +
+        '<p class="ad-detect-badge ad-detect-badge-ok">✓ Origine identifiée</p>' +
+        "<h3>" + esc(data.gallery.title) + "</h3>" +
+        (data.gallery.clientName ? "<p>" + esc(data.gallery.clientName) + "</p>" : "") +
+        '<p class="ad-hint">Photo n° ' + (data.photo.position + 1) +
+        " · fiabilité : signal/bruit " + data.snr.toFixed(2) + ", " + data.matchingBits + "/32 bits concordants</p>" +
+        "</div>"
+      );
+    }
+    if (data.status === "no-match") {
+      return (
+        '<div class="ad-detect-result">' +
+        '<p class="ad-detect-badge">Aucune correspondance fiable</p>' +
+        '<p class="ad-hint">Cette image ne semble pas venir de vos galeries, ou a été trop dégradée pour l\'affirmer avec certitude ' +
+        "(signal/bruit " + data.snr.toFixed(2) + ", " + data.matchingBits + "/32 bits — seuils : " +
+        data.thresholds.snr + " et " + data.thresholds.bits + "/32).</p>" +
+        "</div>"
+      );
+    }
+    if (data.status === "too-small") {
+      return (
+        '<div class="ad-detect-result"><p class="ad-detect-badge">Image trop petite</p>' +
+        '<p class="ad-hint">Elle ne peut pas porter une empreinte lisible.</p></div>'
+      );
+    }
+    if (data.status === "no-prints") {
+      return '<div class="ad-detect-result"><p class="ad-hint">Aucune de vos photos n’a encore d’empreinte enregistrée.</p></div>';
+    }
+    return '<div class="ad-detect-result"><p class="ad-hint">Résultat inattendu.</p></div>';
+  }
+
+  function renderDetect(skipHash) {
+    if (!skipHash && location.hash !== "#/detect") history.pushState(null, "", "#/detect");
+    el.view.innerHTML =
+      '<button type="button" class="ad-back" id="ad-detect-back">&larr; Toutes les galeries</button>' +
+      '<header class="ad-detail-header"><div><h2>Vérifier une photo</h2>' +
+      '<p class="ad-hint">Une image retrouvée ailleurs (réseaux sociaux, un site…) vous semble provenir de l’une de vos ' +
+      "galeries ? Déposez-la ici : elle est comparée aux empreintes invisibles de toutes vos photos, sans jamais quitter " +
+      "votre ordinateur.</p></div></header>" +
+      '<section class="ad-dropzone" id="ad-detect-dropzone">' +
+      "<p><strong>Glissez une photo ici</strong>, ou</p>" +
+      '<label class="ad-btn ad-btn-primary">Choisir un fichier<input type="file" id="ad-detect-file-input" accept="image/*" hidden /></label>' +
+      "</section>" +
+      '<div id="ad-detect-result"></div>';
+
+    document.getElementById("ad-detect-back").addEventListener("click", function () {
+      renderList();
+    });
+
+    var resultBox = document.getElementById("ad-detect-result");
+    var dropzone = document.getElementById("ad-detect-dropzone");
+
+    async function analyze(file) {
+      resultBox.innerHTML = '<p class="ad-loading">Analyse en cours…</p>';
+      var form = new FormData();
+      form.append("file", file, file.name);
+      try {
+        var response = await fetch("/local/detect", { method: "POST", body: form });
+        var data = await response.json().catch(function () { return {}; });
+        if (!response.ok) throw new Error(data.error || "Échec de l'analyse");
+        resultBox.innerHTML = detectResultHtml(data);
+      } catch (err) {
+        resultBox.innerHTML = '<div class="ad-error-panel"><h2>Analyse impossible</h2><p>' + esc(err.message) + "</p></div>";
+      }
+    }
+
+    document.getElementById("ad-detect-file-input").addEventListener("change", function (event) {
+      var file = event.target.files[0];
+      event.target.value = "";
+      if (file) analyze(file);
+    });
+
+    dropzone.addEventListener("dragover", function (event) {
+      event.preventDefault();
+      dropzone.classList.add("ad-dropzone-active");
+    });
+    dropzone.addEventListener("dragleave", function () {
+      dropzone.classList.remove("ad-dropzone-active");
+    });
+    dropzone.addEventListener("drop", function (event) {
+      event.preventDefault();
+      dropzone.classList.remove("ad-dropzone-active");
+      var file = event.dataTransfer.files && event.dataTransfer.files[0];
+      if (file) analyze(file);
     });
   }
 
@@ -284,12 +529,36 @@
   // plutôt sous la forme lisible « Photo n° X » quand on peut la retrouver.
   var PHOTO_ID_EVENTS = new Set(["view", "select", "deselect", "comment"]);
 
+  // Pour « capture_suspected », « print » et « devtools », le détail est la
+  // raison technique du déclenchement, et la photo (si une était ouverte)
+  // est référencée séparément par photo_id.
+  var CAPTURE_EVENTS = new Set(["capture_suspected", "print", "devtools"]);
+  var CAPTURE_REASON_LABELS = {
+    "impr-ecran": "Touche Impr. écran",
+    "capture-macos": "Raccourci de capture (macOS)",
+    "enregistrer": "Tentative d'enregistrement",
+    "perte-focus": "Changement de fenêtre",
+    "onglet-masque": "Onglet mis en arrière-plan",
+    "absence-breve": "Absence très brève (capture probable)",
+  };
+  // Ces raisons précises sont celles qui déclenchent une alerte par e-mail
+  // au photographe (voir worker/src/viewer.js) : on le signale ici.
+  var EMAIL_ALERT_REASONS = new Set(["impr-ecran", "capture-macos", "absence-breve"]);
+
   function logRow(entry, photosById) {
     var label = EVENT_LABELS[entry.event] || entry.event;
+    if (entry.event === "capture_suspected" && EMAIL_ALERT_REASONS.has(entry.detail)) {
+      label = "🔔 " + label + " (e-mail envoyé)";
+    }
     var cls = /failed|expired|capture/.test(entry.event) ? "ad-log-warn" : "";
     var detail = entry.detail || "";
     if (PHOTO_ID_EVENTS.has(entry.event) && photosById[detail]) {
       detail = "Photo n° " + (photosById[detail].position + 1);
+    } else if (CAPTURE_EVENTS.has(entry.event)) {
+      detail = CAPTURE_REASON_LABELS[detail] || detail;
+      if (entry.photo_id && photosById[entry.photo_id]) {
+        detail += (detail ? " — " : "") + "Photo n° " + (photosById[entry.photo_id].position + 1);
+      }
     }
     return (
       '<tr class="' + cls + '">' +
@@ -298,6 +567,87 @@
       "<td>" + esc(detail) + "</td>" +
       "</tr>"
     );
+  }
+
+  function backgroundSwatchesHtml(gallery) {
+    var activeColor = gallery.login_background_type === "color" ? (gallery.login_background_color || "") : null;
+    return BACKGROUND_PRESETS.map(function (preset) {
+      var active = activeColor !== null && activeColor === preset.color;
+      var style = preset.color ? "background:" + preset.color + ";" : "background:linear-gradient(135deg,#f7f2ec,#efe6db);";
+      return (
+        '<button type="button" class="ad-bg-swatch' + (active ? " ad-bg-swatch-active" : "") + '" ' +
+        'data-color="' + esc(preset.color) + '" title="' + esc(preset.label) + '" style="' + style + '">' +
+        '<span class="ad-bg-swatch-label">' + esc(preset.label) + "</span>" +
+        "</button>"
+      );
+    }).join("");
+  }
+
+  function formatEuros(cents) {
+    return ((cents || 0) / 100).toLocaleString("fr-BE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
+  }
+
+  function quotaSummaryHtml(gallery) {
+    if (gallery.included_photos === null || gallery.included_photos === undefined) {
+      return '<p class="ad-hint">Aucun forfait défini pour l\'instant — les coups de cœur du client ne déclenchent aucun supplément.</p>';
+    }
+    var selected = gallery.selected_count || 0;
+    var included = gallery.included_photos;
+    var extra = gallery.extra_count || 0;
+    var due = gallery.due_extra_count || 0;
+    var paid = gallery.paid_extra_count || 0;
+    var withinQuota = '<p class="ad-quota-count">' + selected + ' / ' + included + ' photo' + (included > 1 ? "s" : "") + ' incluse' + (included > 1 ? "s" : "") + '</p>';
+    if (extra <= 0) return withinQuota;
+
+    var html = withinQuota;
+    if (due > 0) {
+      html +=
+        '<p class="ad-quota-due">' +
+        "+" + due + " supplément" + (due > 1 ? "s" : "") + " × " + formatEuros(gallery.extra_photo_price_cents) +
+        " = <strong>" + formatEuros(gallery.due_total_cents) + " à régler</strong>" +
+        "</p>";
+    }
+    if (paid > 0) {
+      html +=
+        '<p class="ad-quota-paid">✓ ' + paid + " supplément" + (paid > 1 ? "s" : "") +
+        " déjà réglé" + (paid > 1 ? "s" : "") + " en ligne</p>";
+    }
+    return html;
+  }
+
+  function paymentsHistoryHtml(payments) {
+    if (!payments || !payments.length) return "";
+    var rows = payments.map(function (p) {
+      var statusLabel = p.status === "paid" ? "Réglé" : "En attente";
+      var statusCls = p.status === "paid" ? "ad-badge-selected" : "";
+      return (
+        "<tr>" +
+        "<td>" + esc(formatDateTime(p.paid_at || p.created_at)) + "</td>" +
+        "<td>" + p.extra_count + " photo" + (p.extra_count > 1 ? "s" : "") + "</td>" +
+        "<td>" + formatEuros(p.amount_cents) + "</td>" +
+        "<td><span class=\"ad-badge " + statusCls + "\">" + statusLabel + "</span></td>" +
+        "</tr>"
+      );
+    });
+    return (
+      '<div class="ad-table-wrap"><table class="ad-table"><thead><tr>' +
+      "<th>Quand</th><th>Suppléments</th><th>Montant</th><th>Statut</th>" +
+      "</tr></thead><tbody>" + rows.join("") + "</tbody></table></div>"
+    );
+  }
+
+  function layoutOptionsHtml(gallery) {
+    var active = gallery.layout || "grille";
+    return LAYOUT_OPTIONS.map(function (opt) {
+      var isActive = opt.value === active;
+      return (
+        '<button type="button" class="ad-layout-option' + (isActive ? " ad-layout-option-active" : "") + '" ' +
+        'data-layout="' + esc(opt.value) + '">' +
+        '<span class="ad-layout-name">' + esc(opt.label) + "</span>" +
+        '<span class="ad-layout-hint">' + esc(opt.hint) + "</span>" +
+        "</button>"
+      );
+    }).join("");
   }
 
   async function renderDetail(slug, skipHash) {
@@ -336,6 +686,42 @@
       '<p class="ad-hint">Le mot de passe n\'est plus récupérable ici : il n\'a été affiché qu\'à la création. ' +
       '<button type="button" class="ad-link-btn" id="ad-new-password">Générer un nouveau mot de passe</button></p>' +
       "</section>" +
+      '<section class="ad-quota">' +
+      '<div class="ad-section-header"><h3>Forfait et suppléments</h3></div>' +
+      '<p class="ad-hint">Le nombre de photos déjà payées par le client, et le prix de chaque photo au-delà. Calculé automatiquement à partir de ses coups de cœur — réglable en ligne par le client une fois votre compte Stripe actif (écran Facturation).</p>' +
+      '<form class="ad-field-row" id="ad-quota-form">' +
+      '<label class="ad-field"><span>Photos incluses</span>' +
+      '<input type="number" name="includedPhotos" min="0" step="1" placeholder="aucun forfait" value="' +
+      (data.gallery.included_photos === null || data.gallery.included_photos === undefined ? "" : data.gallery.included_photos) + '" /></label>' +
+      '<label class="ad-field"><span>Prix du supplément (par photo, en €)</span>' +
+      '<input type="number" name="extraPhotoPrice" min="0" step="0.01" value="' +
+      ((data.gallery.extra_photo_price_cents || 0) / 100) + '" /></label>' +
+      '<button type="submit" class="ad-btn ad-btn-primary" id="ad-quota-save">Enregistrer</button>' +
+      "</form>" +
+      '<div id="ad-quota-summary">' + quotaSummaryHtml(data.gallery) + "</div>" +
+      (data.payments && data.payments.length
+        ? '<h4 class="ad-payments-heading">Historique des paiements</h4>' + paymentsHistoryHtml(data.payments)
+        : "") +
+      "</section>" +
+      '<section class="ad-background">' +
+      '<div class="ad-section-header"><h3>Arrière-plan de l\'écran de connexion client</h3></div>' +
+      '<p class="ad-hint">Ce que voit le client avant même d\'entrer son mot de passe. Jamais une de ses photos — uniquement une couleur ou une image que vous importez vous-même.</p>' +
+      '<div class="ad-bg-swatches" id="ad-bg-swatches">' + backgroundSwatchesHtml(data.gallery) + "</div>" +
+      '<div class="ad-bg-custom">' +
+      '<label class="ad-bg-color-label">Couleur personnalisée<input type="color" id="ad-bg-color-picker" value="' +
+      esc(data.gallery.login_background_color || "#f7f2ec") + '" /></label>' +
+      '<label class="ad-btn">Importer une image<input type="file" id="ad-bg-file-input" accept="image/*" hidden /></label>' +
+      "</div>" +
+      (data.gallery.login_background_type === "image"
+        ? '<img class="ad-bg-preview" alt="Arrière-plan actuel" src="' +
+          esc(state.config.api) + "/api/gallery/" + esc(data.gallery.slug) + "/background-image?t=" + Date.now() + '" />'
+        : "") +
+      "</section>" +
+      '<section class="ad-layout">' +
+      '<div class="ad-section-header"><h3>Mise en page de la galerie</h3></div>' +
+      '<p class="ad-hint">Comment les photos s\'affichent chez le client — à choisir selon le type de séance.</p>' +
+      '<div class="ad-layout-options" id="ad-layout-options">' + layoutOptionsHtml(data.gallery) + "</div>" +
+      "</section>" +
       '<section class="ad-dropzone" id="ad-dropzone">' +
       '<p><strong>Glissez vos photos ici</strong>, ou</p>' +
       '<label class="ad-btn ad-btn-primary">Choisir des fichiers<input type="file" id="ad-file-input" accept="image/*" multiple hidden /></label>' +
@@ -343,9 +729,15 @@
       "</section>" +
       '<section><div class="ad-section-header">' +
       '<h3 id="ad-photos-heading">Photos (' + data.photos.length + ")</h3>" +
+      '<div class="ad-photos-actions">' +
+      (data.photos.some(isSelected)
+        ? '<label class="ad-photos-filter"><input type="checkbox" id="ad-filter-selected" />' +
+          '<span>Afficher uniquement la sélection du client (' + data.photos.filter(isSelected).length + ")</span></label>"
+        : "") +
       (data.photos.some(function (p) { return isSelected(p) || hasComment(p); })
         ? '<button type="button" class="ad-btn" id="ad-copy-notes">Copier les notes du client</button>'
         : "") +
+      "</div>" +
       "</div>" +
       '<div class="ad-photos" id="ad-photos">' + data.photos.map(photoThumb).join("") + "</div>" +
       "</section>" +
@@ -363,6 +755,12 @@
     document.getElementById("ad-back").addEventListener("click", function () {
       renderList();
     });
+    var filterSelected = document.getElementById("ad-filter-selected");
+    if (filterSelected) {
+      filterSelected.addEventListener("change", function () {
+        document.getElementById("ad-photos").classList.toggle("ad-photos-filtered", filterSelected.checked);
+      });
+    }
     var copyNotesBtn = document.getElementById("ad-copy-notes");
     if (copyNotesBtn) {
       copyNotesBtn.addEventListener("click", function () {
@@ -394,6 +792,77 @@
           toast(err.message, true);
         }
       });
+    });
+    document.getElementById("ad-bg-swatches").addEventListener("click", async function (event) {
+      var btn = event.target.closest(".ad-bg-swatch");
+      if (!btn) return;
+      var color = btn.getAttribute("data-color");
+      try {
+        if (color) await api("POST", "/galleries/" + encodeURIComponent(slug) + "/background/color", { color: color });
+        else await api("DELETE", "/galleries/" + encodeURIComponent(slug) + "/background");
+        toast("Arrière-plan mis à jour.");
+        renderDetail(slug, true);
+      } catch (err) {
+        toast(err.message, true);
+      }
+    });
+    document.getElementById("ad-bg-color-picker").addEventListener("change", async function (event) {
+      try {
+        await api("POST", "/galleries/" + encodeURIComponent(slug) + "/background/color", { color: event.target.value });
+        toast("Arrière-plan mis à jour.");
+        renderDetail(slug, true);
+      } catch (err) {
+        toast(err.message, true);
+      }
+    });
+    document.getElementById("ad-bg-file-input").addEventListener("change", async function (event) {
+      var file = event.target.files[0];
+      event.target.value = "";
+      if (!file) return;
+      var form = new FormData();
+      form.append("file", file, file.name);
+      try {
+        var response = await fetch("/local/galleries/" + encodeURIComponent(slug) + "/background/image", {
+          method: "POST",
+          body: form,
+        });
+        var result = await response.json().catch(function () { return {}; });
+        if (!response.ok) throw new Error(result.error || "Échec de l'envoi");
+        toast("Arrière-plan mis à jour.");
+        renderDetail(slug, true);
+      } catch (err) {
+        toast(err.message, true);
+      }
+    });
+    document.getElementById("ad-quota-form").addEventListener("submit", async function (event) {
+      event.preventDefault();
+      var form = event.target;
+      var saveBtn = document.getElementById("ad-quota-save");
+      saveBtn.disabled = true;
+      try {
+        await api("POST", "/galleries/" + encodeURIComponent(slug) + "/quota", {
+          includedPhotos: form.includedPhotos.value.trim() || undefined,
+          extraPhotoPrice: form.extraPhotoPrice.value.trim() || undefined,
+        });
+        toast("Forfait mis à jour.");
+        renderDetail(slug, true);
+      } catch (err) {
+        toast(err.message, true);
+      } finally {
+        saveBtn.disabled = false;
+      }
+    });
+    document.getElementById("ad-layout-options").addEventListener("click", async function (event) {
+      var btn = event.target.closest(".ad-layout-option");
+      if (!btn || btn.classList.contains("ad-layout-option-active")) return;
+      var layout = btn.getAttribute("data-layout");
+      try {
+        await api("POST", "/galleries/" + encodeURIComponent(slug) + "/layout", { layout: layout });
+        toast("Mise en page mise à jour.");
+        renderDetail(slug, true);
+      } catch (err) {
+        toast(err.message, true);
+      }
     });
     document.getElementById("ad-new-password").addEventListener("click", function () {
       confirmAction("Générer un nouveau mot de passe ? L'ancien cessera aussitôt de fonctionner.", async function () {
@@ -526,6 +995,14 @@
     });
   }
 
+  document.getElementById("ad-check-photo").addEventListener("click", function () {
+    renderDetect();
+  });
+
+  document.getElementById("ad-billing").addEventListener("click", function () {
+    renderBilling();
+  });
+
   /* ---------- Création de galerie ---------- */
 
   document.getElementById("ad-new-gallery").addEventListener("click", function () {
@@ -549,6 +1026,8 @@
       slug: form.slug.value.trim(),
       password: form.password.value.trim(),
       expires: form.expires.value || undefined,
+      includedPhotos: form.includedPhotos.value.trim() || undefined,
+      extraPhotoPrice: form.extraPhotoPrice.value.trim() || undefined,
     };
 
     try {
@@ -569,6 +1048,52 @@
   });
 
   /* ---------- Connexion ---------- */
+
+  document.getElementById("ad-show-signup").addEventListener("click", function () {
+    showLoginCard("ad-signup-card");
+  });
+  document.getElementById("ad-show-login").addEventListener("click", function () {
+    showLoginCard("ad-login-card");
+  });
+  document.getElementById("ad-show-forgot").addEventListener("click", function () {
+    showLoginCard("ad-forgot-card");
+  });
+  document.getElementById("ad-forgot-back").addEventListener("click", function () {
+    showLoginCard("ad-login-card");
+  });
+
+  document.getElementById("ad-signup-form").addEventListener("submit", async function (event) {
+    event.preventDefault();
+    var form = event.target;
+    var errorBox = document.getElementById("ad-signup-error");
+    var submitBtn = document.getElementById("ad-signup-submit");
+    errorBox.hidden = true;
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Création…";
+
+    try {
+      var response = await fetch("/local/auth/signup", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          email: form.email.value.trim(),
+          password: form.password.value,
+          studioName: form.studioName.value.trim(),
+        }),
+      });
+      var data = await response.json().catch(function () { return {}; });
+      if (!response.ok) throw new Error(data.error || "Inscription refusée");
+      form.reset();
+      showApp(data.photographer);
+      bootstrap();
+    } catch (err) {
+      errorBox.textContent = err.message;
+      errorBox.hidden = false;
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Créer mon compte";
+    }
+  });
 
   document.getElementById("ad-login-form").addEventListener("submit", async function (event) {
     event.preventDefault();
@@ -599,6 +1124,69 @@
     }
   });
 
+  document.getElementById("ad-forgot-form").addEventListener("submit", async function (event) {
+    event.preventDefault();
+    var form = event.target;
+    var messageBox = document.getElementById("ad-forgot-message");
+    var submitBtn = document.getElementById("ad-forgot-submit");
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Envoi…";
+
+    try {
+      var response = await fetch("/local/auth/forgot-password", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: form.email.value.trim() }),
+      });
+      var data = await response.json().catch(function () { return {}; });
+      // Toujours le même message, que le compte existe ou non — c'est le
+      // Worker qui applique cette règle, l'interface ne fait que la refléter.
+      messageBox.textContent = data.message || "Si un compte existe avec cette adresse, un lien vient d'être envoyé.";
+      messageBox.hidden = false;
+      form.reset();
+    } catch (err) {
+      messageBox.textContent = "Connexion au serveur d'administration perdue.";
+      messageBox.hidden = false;
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Recevoir un lien";
+    }
+  });
+
+  var resetToken = new URLSearchParams(location.search).get("reset");
+
+  document.getElementById("ad-reset-form").addEventListener("submit", async function (event) {
+    event.preventDefault();
+    var form = event.target;
+    var errorBox = document.getElementById("ad-reset-error");
+    var submitBtn = document.getElementById("ad-reset-submit");
+    errorBox.hidden = true;
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Validation…";
+
+    try {
+      var response = await fetch("/local/auth/reset-password", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ token: resetToken, password: form.password.value }),
+      });
+      var data = await response.json().catch(function () { return {}; });
+      if (!response.ok) throw new Error(data.error || "Réinitialisation refusée");
+      form.reset();
+      // Le lien ne doit plus jamais réapparaître dans l'URL (partagée,
+      // mise en favori, historique du navigateur…) une fois utilisé.
+      history.replaceState(null, "", location.pathname + location.hash);
+      showApp(data.photographer);
+      bootstrap();
+    } catch (err) {
+      errorBox.textContent = err.message;
+      errorBox.hidden = false;
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Valider le nouveau mot de passe";
+    }
+  });
+
   document.getElementById("ad-logout").addEventListener("click", async function () {
     try {
       await fetch("/local/auth/logout", { method: "POST" });
@@ -613,6 +1201,8 @@
   function routeFromHash() {
     var match = /^#\/g\/(.+)$/.exec(location.hash);
     if (match) renderDetail(decodeURIComponent(match[1]), true);
+    else if (location.hash === "#/detect") renderDetect(true);
+    else if (location.hash.indexOf("#/facturation") === 0) renderBilling(true);
     else renderList(true);
   }
 
@@ -626,14 +1216,20 @@
     }).then(routeFromHash);
   }
 
-  fetch("/local/auth/me").then(function (response) {
-    if (!response.ok) {
-      showLogin();
-      return;
-    }
-    return response.json().then(function (data) {
-      showApp(data.photographer);
-      bootstrap();
-    });
-  }).catch(showLogin);
+  if (resetToken) {
+    // Un lien de réinitialisation prime sur une éventuelle session déjà
+    // ouverte dans ce navigateur : cliquer ce lien est une intention claire.
+    showLoginCard("ad-reset-card");
+  } else {
+    fetch("/local/auth/me").then(function (response) {
+      if (!response.ok) {
+        showLogin();
+        return;
+      }
+      return response.json().then(function (data) {
+        showApp(data.photographer);
+        bootstrap();
+      });
+    }).catch(showLogin);
+  }
 })();

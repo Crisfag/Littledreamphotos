@@ -21,9 +21,11 @@ import { readFile, stat } from "node:fs/promises";
 import { randomBytes } from "node:crypto";
 import { dirname, join, normalize, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import sharp from "sharp";
 import { processPhoto, DEFAULTS } from "./lib/pipeline.mjs";
 import { PREVIEW_COLS, PREVIEW_ROWS } from "./lib/tiles.mjs";
 import { WorkerClient } from "./lib/client.mjs";
+import { identify, isMatch, MATCH_MIN_SNR, MATCH_MIN_BITS } from "./lib/forensic.mjs";
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = join(ROOT, "admin");
@@ -271,6 +273,88 @@ async function handleAuth(req, res, parts) {
     return json(res, 200, { photographer: data.photographer });
   }
 
+  if (parts.length === 2 && parts[1] === "signup" && req.method === "POST") {
+    let body;
+    try {
+      body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
+    } catch {
+      return json(res, 400, { error: "Requête invalide" });
+    }
+    const email = String(body.email || "").trim();
+    const password = String(body.password || "");
+    const studioName = String(body.studioName || "").trim();
+    if (!email || !password) return json(res, 400, { error: "E-mail et mot de passe requis" });
+
+    let signupRes;
+    try {
+      signupRes = await fetch(`${config.api}/api/auth/signup`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email, password, studioName }),
+      });
+    } catch {
+      return json(res, 502, { error: "Worker injoignable" });
+    }
+    const data = await signupRes.json().catch(() => ({}));
+    if (!signupRes.ok) return json(res, signupRes.status, { error: data.error || "Inscription refusée" });
+
+    // Connexion automatique : pas de raison de faire retaper les mêmes
+    // identifiants juste après les avoir choisis.
+    setSessionCookie(req, res, data.token, Math.min(data.expiresIn || SESSION_MAX_AGE, SESSION_MAX_AGE));
+    return json(res, 201, { photographer: data.photographer });
+  }
+
+  if (parts.length === 2 && parts[1] === "forgot-password" && req.method === "POST") {
+    let body;
+    try {
+      body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
+    } catch {
+      return json(res, 400, { error: "Requête invalide" });
+    }
+    const email = String(body.email || "").trim();
+
+    let forgotRes;
+    try {
+      forgotRes = await fetch(`${config.api}/api/auth/forgot-password`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+    } catch {
+      return json(res, 502, { error: "Worker injoignable" });
+    }
+    const data = await forgotRes.json().catch(() => ({}));
+    return json(res, forgotRes.status, data);
+  }
+
+  if (parts.length === 2 && parts[1] === "reset-password" && req.method === "POST") {
+    let body;
+    try {
+      body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
+    } catch {
+      return json(res, 400, { error: "Requête invalide" });
+    }
+    const token = String(body.token || "");
+    const password = String(body.password || "");
+    if (!token || !password) return json(res, 400, { error: "Lien et mot de passe requis" });
+
+    let resetRes;
+    try {
+      resetRes = await fetch(`${config.api}/api/auth/reset-password`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ token, password }),
+      });
+    } catch {
+      return json(res, 502, { error: "Worker injoignable" });
+    }
+    const data = await resetRes.json().catch(() => ({}));
+    if (!resetRes.ok) return json(res, resetRes.status, { error: data.error || "Réinitialisation refusée" });
+
+    setSessionCookie(req, res, data.token, Math.min(data.expiresIn || SESSION_MAX_AGE, SESSION_MAX_AGE));
+    return json(res, 200, { photographer: data.photographer });
+  }
+
   if (parts.length === 2 && parts[1] === "logout" && req.method === "POST") {
     clearSessionCookie(req, res);
     return json(res, 200, { ok: true });
@@ -322,6 +406,116 @@ async function handleApi(req, res, url) {
     }
   }
 
+  // POST /local/detect — identifie l'origine d'une photo suspecte (retrouvée
+  // ailleurs sur internet) en comparant son empreinte invisible à celles de
+  // VOS galeries. Même moteur que detect.mjs, accessible depuis le tableau de
+  // bord — sans savoir à l'avance de quelle galerie elle pourrait venir.
+  if (parts.length === 1 && parts[0] === "detect" && req.method === "POST") {
+    if (!config.forensicKey) return json(res, 503, { error: "Clé forensique non configurée sur ce serveur" });
+
+    const contentLength = Number(req.headers["content-length"] || 0);
+    if (contentLength > MAX_UPLOAD_BYTES) return json(res, 413, { error: "Fichier trop volumineux" });
+
+    let form;
+    try {
+      const body = await readBody(req);
+      form = await nodeRequestToWebRequest(req, body).formData();
+    } catch (err) {
+      return json(res, err.status || 400, { error: err.status ? err.message : "Fichier illisible" });
+    }
+    const file = form.get("file");
+    if (!file || typeof file.arrayBuffer !== "function") return json(res, 400, { error: "Aucun fichier reçu" });
+
+    try {
+      const { prints } = await client.forensicPrints();
+      if (!prints.length) return json(res, 200, { status: "no-prints" });
+
+      const byId = new Map(prints.map((p) => [Number(p.forensic_id), p]));
+      const candidates = [...byId.keys()];
+      const input = Buffer.from(await file.arrayBuffer());
+
+      // Une capture d'écran est presque toujours redimensionnée : on essaie
+      // la taille reçue telle quelle, et la largeur de livraison standard
+      // (1600 px) — les deux cas couverts par detect.mjs en ligne de commande.
+      const best = await withProcessingSlot(async () => {
+        let found = null;
+        for (const width of [0, 1600]) {
+          const pipeline = sharp(input).removeAlpha().toColourspace("srgb");
+          const { data, info } = await (width ? pipeline.resize({ width }) : pipeline)
+            .raw()
+            .toBuffer({ resolveWithObject: true });
+          const result = identify(
+            { data, width: info.width, height: info.height, channels: info.channels },
+            config.forensicKey,
+            candidates
+          );
+          if (result && (!found || result.snr > found.snr)) found = result;
+        }
+        return found;
+      });
+
+      if (!best) return json(res, 200, { status: "too-small" });
+
+      if (isMatch(best)) {
+        const origin = byId.get(best.id);
+        return json(res, 200, {
+          status: "match",
+          gallery: { slug: origin.slug, title: origin.title, clientName: origin.client_name || "" },
+          photo: { id: origin.photo_id, position: origin.position },
+          snr: best.snr,
+          matchingBits: best.matchingBits,
+        });
+      }
+
+      return json(res, 200, {
+        status: "no-match",
+        snr: best.snr,
+        matchingBits: best.matchingBits,
+        thresholds: { snr: MATCH_MIN_SNR, bits: MATCH_MIN_BITS },
+      });
+    } catch (err) {
+      console.error("Échec de la détection :", err);
+      return relayError(res, err, "Échec de l'analyse de l'image");
+    }
+  }
+
+  // POST /local/stripe/connect — crée (au besoin) le compte Stripe Connect du
+  // photographe et renvoie un lien d'onboarding hébergé par Stripe. Les URL
+  // de retour pointent vers ce même tableau de bord, jamais ailleurs.
+  if (parts.length === 2 && parts[0] === "stripe" && parts[1] === "connect" && req.method === "POST") {
+    const base = `${isSecureRequest(req) ? "https" : "http"}://${req.headers.host}`;
+    try {
+      const result = await client.connectStripe(`${base}/#/facturation?stripe=retour`, `${base}/#/facturation?stripe=repriser`);
+      return json(res, 200, result);
+    } catch (err) {
+      return relayError(res, err, "Impossible de démarrer la connexion à Stripe");
+    }
+  }
+
+  // POST /local/stripe/refresh — relit l'état réel du compte côté Stripe
+  // (utile juste après l'onboarding : le webhook peut arriver après le retour).
+  if (parts.length === 2 && parts[0] === "stripe" && parts[1] === "refresh" && req.method === "POST") {
+    try {
+      const result = await client.refreshStripeStatus();
+      return json(res, 200, result);
+    } catch (err) {
+      return relayError(res, err, "Impossible de relire le statut Stripe");
+    }
+  }
+
+  // POST /local/billing — coordonnées de facturation (raison sociale, adresse, TVA).
+  if (parts.length === 1 && parts[0] === "billing" && req.method === "POST") {
+    const body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
+    try {
+      await client.setBillingProfile({
+        companyName: body.companyName, address: body.address, vatNumber: body.vatNumber,
+      });
+      return json(res, 200, { ok: true });
+    } catch (err) {
+      return relayError(res, err, "Impossible d'enregistrer le profil de facturation");
+    }
+  }
+
   if (parts[0] !== "galleries") return json(res, 404, { error: "Route inconnue" });
 
   // GET/POST /local/galleries
@@ -351,6 +545,7 @@ async function handleApi(req, res, url) {
       try {
         const created = await client.createGallery({
           slug, title, clientName: body.clientName || "", password, watermarkText, expiresAt,
+          includedPhotos: body.includedPhotos, extraPhotoPrice: body.extraPhotoPrice,
         });
         return json(res, 201, { id: created.id, slug, password, link: linkFor(slug) });
       } catch (err) {
@@ -395,6 +590,85 @@ async function handleApi(req, res, url) {
       return json(res, 200, { password: newPassword, link: linkFor(slug) });
     } catch (err) {
       return relayError(res, err, "Impossible de générer un nouveau mot de passe");
+    }
+  }
+
+  // POST /local/galleries/:slug/background/color
+  if (parts.length === 4 && parts[2] === "background" && parts[3] === "color" && req.method === "POST") {
+    const body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
+    try {
+      await client.setBackgroundColor(slug, String(body.color || ""));
+      return json(res, 200, { ok: true });
+    } catch (err) {
+      return relayError(res, err, "Impossible d'enregistrer la couleur");
+    }
+  }
+
+  // POST /local/galleries/:slug/background/image — image d'ambiance
+  // importée par le photographe (jamais une photo de la galerie elle-même,
+  // pour ne rien exposer avant que le client se soit identifié). Simple
+  // redimensionnement, sans filigrane ni empreinte : ce n'est pas une
+  // livraison, juste un décor.
+  if (parts.length === 4 && parts[2] === "background" && parts[3] === "image" && req.method === "POST") {
+    const contentLength = Number(req.headers["content-length"] || 0);
+    if (contentLength > MAX_UPLOAD_BYTES) return json(res, 413, { error: "Fichier trop volumineux" });
+
+    let form;
+    try {
+      const body = await readBody(req);
+      form = await nodeRequestToWebRequest(req, body).formData();
+    } catch (err) {
+      return json(res, err.status || 400, { error: err.status ? err.message : "Fichier illisible" });
+    }
+    const file = form.get("file");
+    if (!file || typeof file.arrayBuffer !== "function") return json(res, 400, { error: "Aucun fichier reçu" });
+
+    try {
+      const input = Buffer.from(await file.arrayBuffer());
+      const resized = await withProcessingSlot(() =>
+        sharp(input)
+          .rotate()
+          .resize({ width: 1920, height: 1920, fit: "inside", withoutEnlargement: true })
+          .jpeg({ quality: 80 })
+          .toBuffer()
+      );
+      await client.setBackgroundImage(slug, resized);
+      return json(res, 200, { ok: true });
+    } catch (err) {
+      console.error("Échec du traitement de l'image d'arrière-plan :", err);
+      return relayError(res, err, "Échec du traitement de l'image");
+    }
+  }
+
+  // DELETE /local/galleries/:slug/background — retour à la couleur par défaut
+  if (parts.length === 3 && parts[2] === "background" && req.method === "DELETE") {
+    try {
+      await client.resetBackground(slug);
+      return json(res, 200, { ok: true });
+    } catch (err) {
+      return relayError(res, err, "Impossible de réinitialiser l'arrière-plan");
+    }
+  }
+
+  // POST /local/galleries/:slug/layout — mise en page proposée au client
+  if (parts.length === 3 && parts[2] === "layout" && req.method === "POST") {
+    const body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
+    try {
+      await client.setLayout(slug, String(body.layout || ""));
+      return json(res, 200, { ok: true });
+    } catch (err) {
+      return relayError(res, err, "Impossible d'enregistrer la mise en page");
+    }
+  }
+
+  // POST /local/galleries/:slug/quota — forfait et prix du supplément
+  if (parts.length === 3 && parts[2] === "quota" && req.method === "POST") {
+    const body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
+    try {
+      await client.setQuota(slug, body.includedPhotos, body.extraPhotoPrice);
+      return json(res, 200, { ok: true });
+    } catch (err) {
+      return relayError(res, err, "Impossible d'enregistrer le forfait");
     }
   }
 

@@ -1,7 +1,9 @@
 // Vérification de l'interface d'administration dans un vrai navigateur,
-// contre un admin-server.mjs déjà lancé sur un Worker local. Le test crée
-// ses propres comptes photographes (via le Worker directement) et se
-// connecte depuis le formulaire, comme le ferait un vrai visiteur.
+// contre un admin-server.mjs déjà lancé sur un Worker local. Le compte
+// principal est créé depuis le formulaire d'inscription lui-même (comme le
+// ferait un vrai visiteur) ; le compte « voisin » utilisé pour vérifier le
+// cloisonnement est créé directement via le Worker, pour ne pas retester
+// l'inscription une seconde fois.
 //
 //   npx wrangler dev --local --port 8788                     (depuis worker/)
 //   GALERIE_API=http://127.0.0.1:8788 GALERIE_FORENSIC_KEY=… \
@@ -10,6 +12,7 @@
 
 import { chromium } from "playwright";
 import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createTestAccount } from "./lib/testAccount.mjs";
@@ -19,6 +22,7 @@ const API = process.env.GALERIE_API || "http://127.0.0.1:8788";
 const EXECUTABLE = process.env.CHROMIUM_PATH || undefined;
 // tests/admin.test.mjs → tools → galerie → Littledreamphotos (racine du dépôt)
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
+const WORKER_DIR = join(REPO_ROOT, "galerie", "worker");
 const PHOTOS = [
   join(REPO_ROOT, "images", "famille", "famille-01.jpeg"),
   join(REPO_ROOT, "images", "famille", "famille-02.jpeg"),
@@ -36,19 +40,45 @@ const page = await browser.newPage({ viewport: { width: 1200, height: 900 } });
 const exceptions = [];
 page.on("pageerror", (err) => exceptions.push(String(err)));
 
-/* ---------- Connexion depuis le formulaire ---------- */
+/* ---------- Création de compte et connexion, depuis le formulaire ---------- */
 
-const account = await createTestAccount(API, "admin-ui");
+const RUN = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+const email = `admin-ui-${RUN}@test.invalid`;
+const password = "mot-de-passe-de-test-1234";
 
 await page.goto(BASE, { waitUntil: "domcontentloaded" });
 await page.waitForSelector("#ad-login-form", { timeout: 10000 });
 check("l'écran de connexion s'affiche avant tout", await page.isVisible("#ad-login-form"));
 
-await page.fill('#ad-login-form [name="email"]', account.email);
-await page.fill('#ad-login-form [name="password"]', account.password);
-await page.click("#ad-login-submit");
+/* ---------- Mot de passe de compte oublié ---------- */
+// Le trajet complet (jeton reçu par e-mail → nouveau mot de passe) n'est
+// pas automatisable ici : le jeton ne transite jamais par l'API, seulement
+// par l'e-mail — l'exposer aux tests reviendrait à affaiblir la sécurité
+// qu'il apporte (voir worker/tests/api.test.mjs pour ce qui EST vérifié).
+
+await page.click("#ad-show-forgot");
+await page.waitForSelector("#ad-forgot-card", { state: "visible", timeout: 5000 });
+await page.fill('#ad-forgot-form [name="email"]', email);
+await page.click("#ad-forgot-submit");
+await page.waitForSelector("#ad-forgot-message:not([hidden])", { timeout: 10000 });
+check("demander un lien de réinitialisation affiche un message générique",
+      (await page.textContent("#ad-forgot-message")).indexOf("vient d'être envoyé") !== -1);
+
+await page.click("#ad-forgot-back");
+await page.waitForSelector("#ad-login-card", { state: "visible", timeout: 5000 });
+check("le lien « retour » ramène bien au formulaire de connexion", await page.isVisible("#ad-login-form"));
+
+await page.click("#ad-show-signup");
+await page.waitForSelector("#ad-signup-card", { state: "visible", timeout: 5000 });
+await page.fill('#ad-signup-form [name="studioName"]', "Studio de test");
+await page.fill('#ad-signup-form [name="email"]', email);
+await page.fill('#ad-signup-form [name="password"]', password);
+await page.click("#ad-signup-submit");
 await page.waitForSelector("#ad-new-gallery", { timeout: 10000 });
-check("le tableau de bord se charge après connexion", await page.isVisible("#ad-new-gallery"));
+check("créer un compte depuis le formulaire connecte automatiquement au tableau de bord",
+      await page.isVisible("#ad-new-gallery"));
+check("le nom du studio renseigné à l'inscription apparaît dans la barre supérieure",
+      (await page.textContent("#ad-current-account")).indexOf("Studio de test") === 0);
 
 /* ---------- Création ---------- */
 
@@ -61,9 +91,9 @@ await page.click("#ad-create-submit");
 
 await page.waitForSelector("#ad-created-modal:not([hidden])", { timeout: 10000 });
 const link = await page.inputValue("#ad-created-link");
-const password = await page.inputValue("#ad-created-password");
+const galleryPassword = await page.inputValue("#ad-created-password");
 check("la galerie créée fournit un lien et un mot de passe",
-      link.includes("?g=") && password.length >= 8, `${link} / ${password}`);
+      link.includes("?g=") && galleryPassword.length >= 8, `${link} / ${galleryPassword}`);
 
 await page.click('#ad-created-modal [data-close-modal]');
 await page.waitForSelector("#ad-created-modal", { state: "hidden" });
@@ -76,11 +106,58 @@ await page.click("#ad-confirm-ok");
 await page.waitForSelector("#ad-password-modal:not([hidden])", { timeout: 10000 });
 const regeneratedPassword = await page.inputValue("#ad-password-value");
 check("le nouveau mot de passe diffère de celui affiché à la création",
-      regeneratedPassword.length >= 8 && regeneratedPassword !== password);
+      regeneratedPassword.length >= 8 && regeneratedPassword !== galleryPassword);
 await page.click('#ad-password-modal [data-close-modal]');
 await page.waitForSelector("#ad-password-modal", { state: "hidden" });
 await page.waitForSelector(".ad-dropzone", { timeout: 10000 });
 check("après création, la vue détail s'ouvre directement", await page.isVisible(".ad-dropzone"));
+
+/* ---------- Arrière-plan de l'écran de connexion ---------- */
+
+await page.click('.ad-bg-swatch[data-color="#b98a7a"]');
+await page.waitForFunction(
+  () => {
+    const btn = document.querySelector('.ad-bg-swatch[data-color="#b98a7a"]');
+    return btn && btn.classList.contains("ad-bg-swatch-active");
+  },
+  { timeout: 10000 }
+);
+check("une couleur prédéfinie choisie dans l'admin est bien enregistrée (confirmé après rechargement des données)", true);
+
+await page.setInputFiles("#ad-bg-file-input", PHOTOS[0]);
+await page.waitForSelector(".ad-bg-preview", { timeout: 15000 });
+check("une image importée comme arrière-plan s'affiche en aperçu", await page.isVisible(".ad-bg-preview"));
+
+/* ---------- Mise en page de la galerie ---------- */
+
+check("par défaut, la grille est l'option active",
+      await page.locator('.ad-layout-option[data-layout="grille"].ad-layout-option-active').count() === 1);
+
+await page.click('.ad-layout-option[data-layout="mosaique"]');
+await page.waitForFunction(
+  () => {
+    const btn = document.querySelector('.ad-layout-option[data-layout="mosaique"]');
+    return btn && btn.classList.contains("ad-layout-option-active");
+  },
+  { timeout: 10000 }
+);
+check("choisir « Mosaïque » dans l'admin l'enregistre (confirmé après rechargement des données)", true);
+
+/* ---------- Forfait et suppléments ---------- */
+
+check("aucun forfait n'est défini par défaut",
+      (await page.textContent("#ad-quota-summary")).indexOf("Aucun forfait défini") !== -1);
+
+await page.fill('#ad-quota-form [name="includedPhotos"]', "5");
+await page.fill('#ad-quota-form [name="extraPhotoPrice"]', "12.50");
+await page.click("#ad-quota-save");
+await page.waitForFunction(
+  () => (document.querySelector("#ad-quota-summary")?.textContent || "").indexOf("/ 5 photo") !== -1,
+  { timeout: 10000 }
+);
+check("le forfait enregistré apparaît dans le résumé (confirmé après rechargement des données)",
+      (await page.textContent("#ad-quota-summary")).indexOf("0 / 5 photos incluses") !== -1,
+      await page.textContent("#ad-quota-summary"));
 
 /* ---------- Retour à la liste, la galerie y apparaît ---------- */
 
@@ -161,6 +238,82 @@ await peerContext.close();
 const gallerySlug = new URL(link, "http://x").search.replace("?g=", "");
 check("le slug est extrait du lien", gallerySlug.length > 0, gallerySlug);
 
+/* ---------- Retrouver la sélection du client ---------- */
+// Le client choisit une photo directement via l'API (comme le ferait sa
+// propre page) ; on vérifie que le tableau de bord la retrouve, avec de quoi
+// n'afficher que celle-ci.
+
+const clientLogin = await fetch(`${API}/api/gallery/${gallerySlug}/login`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ password: regeneratedPassword }),
+});
+const clientSession = await clientLogin.json();
+const firstPhotoId = clientSession.photos?.[0]?.id;
+await fetch(`${API}/api/gallery/${gallerySlug}/select`, {
+  method: "POST",
+  headers: { authorization: `Bearer ${clientSession.token}`, "content-type": "application/json" },
+  body: JSON.stringify({ photoId: firstPhotoId, selected: true }),
+});
+
+await page.reload({ waitUntil: "domcontentloaded" });
+await page.waitForSelector("#ad-photos .ad-photo", { timeout: 10000 });
+check("la photo choisie par le client porte bien le cœur sur sa vignette",
+      await page.locator(`.ad-photo[data-photo-id="${firstPhotoId}"].ad-photo-selected`).count() === 1);
+check("la case « afficher uniquement la sélection » propose le bon décompte",
+      (await page.textContent("#ad-filter-selected + span")).indexOf("(1)") !== -1,
+      await page.textContent("#ad-filter-selected + span"));
+
+await page.click("#ad-filter-selected");
+const visiblePhotosWhileFiltered = await page.locator("#ad-photos .ad-photo").evaluateAll(
+  (nodes) => nodes.filter((n) => getComputedStyle(n).display !== "none").length
+);
+check("filtrer sur la sélection ne laisse apparaître que la photo choisie",
+      visiblePhotosWhileFiltered === 1, `${visiblePhotosWhileFiltered} vignette(s) visible(s)`);
+await page.click("#ad-filter-selected"); // on désactive : la suite du test veut voir toutes les photos
+
+/* ---------- Historique des paiements ---------- */
+// Un vrai règlement Stripe ne peut pas être rejoué ici (pas de compte Stripe
+// réel en local — voir stripe.test.mjs pour le câblage de la session de
+// paiement, sans réseau). Ce qui EST vérifiable ici, c'est l'affichage de
+// l'historique une fois qu'un paiement existe : on insère directement la
+// ligne dans la base D1 locale (comme le ferait le webhook), pour tester le
+// rendu réel de l'admin plutôt qu'une reconstitution en mémoire.
+
+const adminLogin = await fetch(`${API}/api/auth/login`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ email, password }),
+});
+const adminLoginData = await adminLogin.json();
+const galleryForPayments = await (await fetch(`${API}/api/admin/galleries/${gallerySlug}`, {
+  headers: { authorization: `Bearer ${adminLoginData.token}` },
+})).json();
+const galleryIdForPayments = galleryForPayments.gallery.id;
+
+const paidAt = Math.floor(Date.now() / 1000);
+execFileSync(
+  "npx",
+  [
+    "wrangler", "d1", "execute", "galerie-protegee", "--local", "--command",
+    `INSERT INTO payments (id, gallery_id, stripe_checkout_session_id, extra_count, amount_cents, status, created_at, paid_at) ` +
+      `VALUES ('pay_admin_ui_test', '${galleryIdForPayments}', 'cs_admin_ui_test', 2, 2500, 'paid', ${paidAt}, ${paidAt})`,
+  ],
+  { cwd: WORKER_DIR, stdio: "pipe" }
+);
+
+await page.reload({ waitUntil: "domcontentloaded" });
+await page.waitForSelector(".ad-payments-heading", { timeout: 10000 });
+check("l'historique des paiements apparaît après un règlement confirmé",
+      await page.isVisible(".ad-payments-heading"));
+
+const paymentsRowText = await page.textContent(".ad-payments-heading + .ad-table-wrap");
+check("la ligne du paiement affiche le nombre de suppléments, le montant et le statut « Réglé »",
+      paymentsRowText.indexOf("2 photos") !== -1 &&
+      paymentsRowText.indexOf("25,00") !== -1 &&
+      paymentsRowText.indexOf("Réglé") !== -1,
+      paymentsRowText);
+
 /* ---------- Suppression d'une photo ---------- */
 
 const firstPhoto = page.locator("#ad-photos .ad-photo").first();
@@ -177,6 +330,53 @@ await page.reload({ waitUntil: "domcontentloaded" });
 await page.waitForSelector("#ad-back", { timeout: 10000 });
 const logRowsBefore = await page.locator(".ad-table tbody tr").count();
 check("le journal est affiché (vide au départ)", logRowsBefore === 0 || logRowsBefore > 0, `${logRowsBefore} ligne(s)`);
+
+/* ---------- Vérifier une photo (navigation) ---------- */
+// Le moteur de détection lui-même (empreinte invisible, cloisonnement) est
+// vérifié sans navigateur dans tests/detect.test.mjs ; ici on ne teste que
+// la navigation de l'interface.
+
+await page.click("#ad-check-photo");
+await page.waitForSelector("#ad-detect-dropzone", { timeout: 5000 });
+check("le bouton « Vérifier une photo » ouvre bien cet écran, avec son propre lien dans l'URL",
+      await page.isVisible("#ad-detect-dropzone") && (await page.evaluate(() => location.hash)) === "#/detect");
+
+await page.click("#ad-detect-back");
+await page.waitForSelector(".ad-grid, .ad-empty", { timeout: 5000 });
+check("« Toutes les galeries » depuis cet écran ramène bien à la liste",
+      await page.isVisible(".ad-grid, .ad-empty"));
+
+/* ---------- Facturation (Stripe Connect + coordonnées) ---------- */
+// La connexion Stripe elle-même n'est pas exercée ici (il faudrait un vrai
+// compte plateforme) — seuls le câblage de l'écran et la persistance des
+// coordonnées le sont ; le reste est couvert côté API dans api.test.mjs.
+
+await page.click("#ad-billing");
+await page.waitForSelector("#ad-billing-form", { timeout: 10000 });
+check("le bouton « Facturation » ouvre bien cet écran, avec son propre lien dans l'URL",
+      await page.isVisible("#ad-billing-form") && (await page.evaluate(() => location.hash)) === "#/facturation");
+check("sans compte Stripe connecté, le bouton de connexion est proposé",
+      await page.isVisible("#ad-stripe-connect"));
+
+await page.fill('#ad-billing-form [name="companyName"]', "Little Dream Photos SRL");
+await page.fill('#ad-billing-form [name="address"]', "Rue de la Paix 1, 1000 Bruxelles, Belgique");
+await page.fill('#ad-billing-form [name="vatNumber"]', "BE0123456789");
+await page.click("#ad-billing-save");
+await page.waitForSelector(".ad-toast", { timeout: 10000 });
+
+await page.reload({ waitUntil: "domcontentloaded" });
+await page.waitForSelector("#ad-billing-form", { timeout: 10000 });
+check("les coordonnées de facturation enregistrées sont bien relues après rechargement",
+      await page.inputValue('#ad-billing-form [name="companyName"]') === "Little Dream Photos SRL" &&
+      await page.inputValue('#ad-billing-form [name="vatNumber"]') === "BE0123456789");
+
+await page.click("#ad-billing-back");
+await page.waitForSelector(".ad-grid, .ad-empty", { timeout: 5000 });
+
+// On avait quitté le détail de la galerie pour tester ces navigations :
+// on y retourne avant de poursuivre (suppression, déconnexion).
+await page.locator(`.ad-card:has-text("${title}")`).click();
+await page.waitForSelector(".ad-dropzone", { timeout: 5000 });
 
 /* ---------- Suppression de la galerie ---------- */
 
@@ -197,6 +397,15 @@ await page.reload({ waitUntil: "domcontentloaded" });
 await page.waitForSelector("#ad-login-form", { timeout: 10000 });
 check("après déconnexion, recharger la page ne rouvre pas le tableau de bord",
       await page.isVisible("#ad-login-form"));
+
+/* ---------- Le compte créé plus haut se reconnecte normalement ---------- */
+
+await page.fill('#ad-login-form [name="email"]', email);
+await page.fill('#ad-login-form [name="password"]', password);
+await page.click("#ad-login-submit");
+await page.waitForSelector("#ad-new-gallery", { timeout: 10000 });
+check("le compte créé depuis le formulaire d'inscription se reconnecte ensuite normalement",
+      await page.isVisible("#ad-new-gallery"));
 
 check("aucune exception JavaScript", exceptions.length === 0, exceptions.join(" | "));
 

@@ -27,6 +27,7 @@
   var PREVIEW_COLS = 2;
   var PREVIEW_ROWS = 2;
   var PARALLEL_TILES = 6;
+  var LAYOUTS = { grille: 1, mosaique: 1, defilement: 1 };
 
   var state = {
     slug: null,
@@ -73,6 +74,88 @@
     button.title = heartLabel(selected);
   }
 
+  function formatEuros(cents) {
+    return ((cents || 0) / 100).toLocaleString("fr-BE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
+  }
+
+  // Forfait : nombre de photos déjà payées par le client, au-delà duquel un
+  // supplément se calcule automatiquement à partir de ses coups de cœur.
+  // Absent (includedPhotos null) sur les galeries sans forfait défini —
+  // comportement d'avant cette fonctionnalité, rien ne s'affiche alors.
+  // `paidExtraCount` (déjà réglé en ligne, confirmé par Stripe) est toujours
+  // déduit du brut : ce qui s'affiche ici est ce qui reste réellement dû.
+  function updateQuotaUI(count) {
+    if (!el.toolbarQuota) return;
+    var included = state.gallery && state.gallery.includedPhotos;
+    if (included === null || included === undefined) {
+      el.toolbarQuota.hidden = true;
+      if (el.payButton) el.payButton.hidden = true;
+      return;
+    }
+    var extra = Math.max(0, count - included);
+    var paid = (state.gallery && state.gallery.paidExtraCount) || 0;
+    var due = Math.max(0, extra - paid);
+    var text = count + " / " + included + " photo" + (included > 1 ? "s" : "") + " incluse" + (included > 1 ? "s" : "");
+    if (due > 0) {
+      text +=
+        " — +" + due + " supplément" + (due > 1 ? "s" : "") +
+        " (" + formatEuros(due * (state.gallery.extraPhotoPriceCents || 0)) + ")";
+    } else if (extra > 0) {
+      text += " — supplément réglé ✓";
+    }
+    el.toolbarQuota.textContent = text;
+    el.toolbarQuota.classList.toggle("gp-toolbar-quota-due", due > 0);
+    el.toolbarQuota.hidden = false;
+
+    if (el.payButton) {
+      el.payButton.hidden = !(due > 0 && state.gallery.canPayOnline);
+    }
+  }
+
+  // Ouvre la page de paiement hébergée par Stripe pour le supplément dû.
+  // Le montant réel est recalculé côté serveur au moment de la requête — ce
+  // qui s'affiche ici n'est qu'un affichage, jamais la source de vérité.
+  function payForSupplement() {
+    if (!el.payButton) return;
+    el.payButton.disabled = true;
+    el.payButton.textContent = "Redirection…";
+    if (el.payError) el.payError.hidden = true;
+
+    var here = window.location.href;
+    var returnUrl = here + (here.indexOf("?") === -1 ? "?" : "&");
+
+    fetch(apiUrl("/checkout"), {
+      method: "POST",
+      headers: Object.assign({ "content-type": "application/json" }, authHeaders()),
+      body: JSON.stringify({
+        successUrl: returnUrl + "paiement=succes",
+        cancelUrl: returnUrl + "paiement=annule",
+      }),
+    })
+      .then(function (response) {
+        if (response.status === 401) throw new Error("session");
+        return response.json().then(function (data) {
+          if (!response.ok) throw new Error(data.error || "Le paiement n'a pas pu démarrer.");
+          return data;
+        });
+      })
+      .then(function (data) {
+        window.location.href = data.url;
+      })
+      .catch(function (err) {
+        if (err.message === "session") {
+          sessionLost("Votre session a expiré. Saisissez à nouveau le mot de passe.");
+          return;
+        }
+        el.payButton.disabled = false;
+        el.payButton.textContent = "Régler le supplément";
+        if (el.payError) {
+          el.payError.textContent = err.message || "Le paiement n'a pas pu démarrer. Réessayez dans un instant.";
+          el.payError.hidden = false;
+        }
+      });
+  }
+
   function updateSelectionUI() {
     var count = selectedCount();
     if (el.selectionCount) {
@@ -80,6 +163,7 @@
         count === 0 ? "Aucune photo sélectionnée pour l'instant"
           : count + (count > 1 ? " photos sélectionnées" : " photo sélectionnée");
     }
+    updateQuotaUI(count);
     if (el.filterEmpty) {
       el.filterEmpty.hidden = !(state.filterSelected && count === 0);
     }
@@ -238,13 +322,13 @@
     return { authorization: "Bearer " + state.token };
   }
 
-  function logEvent(event, detail) {
+  function logEvent(event, detail, photoId) {
     if (!state.token) return;
     // `keepalive` : l'évènement part même si la page se ferme juste après.
     fetch(apiUrl("/event"), {
       method: "POST",
       headers: Object.assign({ "content-type": "application/json" }, authHeaders()),
-      body: JSON.stringify({ event: event, detail: detail || "" }),
+      body: JSON.stringify({ event: event, detail: detail || "", photoId: photoId || "" }),
       keepalive: true,
     }).catch(function () {});
   }
@@ -469,6 +553,18 @@
   /* ---------- Voile de dissuasion ---------- */
 
   var veilTimer = null;
+  var blurStartedAt = 0;
+  var blurReason = "";
+  // Sur macOS, le raccourci de capture (Cmd+Maj+3/4/5) est intercepté par le
+  // système avant même d'atteindre le navigateur — impossible à voir passer
+  // comme un raccourci clavier. Ce qu'on voit, en revanche : l'éclair très
+  // bref d'un changement de fenêtre ou d'onglet au moment de la capture,
+  // bien plus court qu'un vrai passage à une autre application. Compte le
+  // temps de sélectionner une zone (Cmd+Maj+4) et de voir la miniature de
+  // confirmation s'afficher : mesuré en usage réel autour de 2-3 s, donc une
+  // marge confortable pour ne pas rater le signal tout en excluant un vrai
+  // départ vers une autre application (souvent bien plus long).
+  var BRIEF_ABSENCE_MS = 4000;
 
   // Masquer les photos dès que l'attention quitte la page : la plupart des
   // outils de capture prennent le focus, et un raccourci de capture se voit.
@@ -476,12 +572,33 @@
   function veil(reason) {
     el.veil.hidden = false;
     document.body.classList.add("gp-veiled");
-    if (reason) logEvent(reason === "print" ? "print" : "capture_suspected", reason);
     clearTimeout(veilTimer);
+    if (reason === "perte-focus" || reason === "onglet-masque") {
+      // On ne sait pas encore si c'est un vrai changement d'application ou
+      // l'éclair d'une capture : on tranche au retour du focus, selon la
+      // durée de l'absence (voir unveil ci-dessous).
+      blurStartedAt = Date.now();
+      blurReason = reason;
+      return;
+    }
+    if (reason) {
+      // Si une photo est ouverte en plein écran au moment du signal, on la
+      // référence : c'est ce qui permet au photographe d'être averti de LA
+      // photo concernée, pas juste « une capture a eu lieu ».
+      var photo = currentViewerPhoto();
+      logEvent(reason === "print" ? "print" : "capture_suspected", reason, photo ? photo.id : "");
+    }
   }
 
   function unveil() {
     clearTimeout(veilTimer);
+    if (blurReason) {
+      var elapsed = Date.now() - blurStartedAt;
+      var finalReason = elapsed < BRIEF_ABSENCE_MS ? "absence-breve" : blurReason;
+      var photo = currentViewerPhoto();
+      logEvent("capture_suspected", finalReason, photo ? photo.id : "");
+      blurReason = "";
+    }
     veilTimer = setTimeout(function () {
       el.veil.hidden = true;
       document.body.classList.remove("gp-veiled");
@@ -634,6 +751,7 @@
         el.subtitle.textContent = state.gallery.clientName
           ? "Galerie de " + state.gallery.clientName
           : "";
+        el.grid.setAttribute("data-layout", LAYOUTS[state.gallery.layout] ? state.gallery.layout : "grille");
         if (state.gallery.expiresAt) {
           var date = new Date(state.gallery.expiresAt * 1000);
           el.expiry.textContent =
@@ -673,6 +791,31 @@
     return slug ? slug.toLowerCase().replace(/[^a-z0-9-]/g, "") : "";
   }
 
+  // Arrière-plan personnalisé de l'écran de mot de passe — choisi par le
+  // photographe (couleur ou image importée, jamais une photo protégée de la
+  // galerie). Échoue en silence : sans réponse, on garde l'apparence par
+  // défaut, ce n'est jamais bloquant pour accéder à la galerie.
+  function applyBackground() {
+    fetch(apiUrl("/background"))
+      .then(function (response) {
+        return response.ok ? response.json() : null;
+      })
+      .then(function (data) {
+        if (!data || !el.login) return;
+        if (data.type === "image") {
+          el.login.style.backgroundImage =
+            "linear-gradient(rgba(20, 16, 14, .4), rgba(20, 16, 14, .4)), url(" + apiUrl("/background-image") + ")";
+          el.login.style.backgroundSize = "cover";
+          el.login.style.backgroundPosition = "center";
+        } else if (data.color) {
+          el.login.style.background = data.color;
+        }
+      })
+      .catch(function () {
+        /* apparence par défaut, sans conséquence */
+      });
+  }
+
   function init() {
     el = {
       login: $("gp-login"),
@@ -697,6 +840,9 @@
       missing: $("gp-missing"),
       toolbar: $("gp-toolbar"),
       selectionCount: $("gp-selection-count"),
+      toolbarQuota: $("gp-toolbar-quota"),
+      payButton: $("gp-pay-supplement"),
+      payError: $("gp-pay-error"),
       filterCheckbox: $("gp-filter-selected"),
       filterEmpty: $("gp-filter-empty"),
       commentToggle: $("gp-comment-toggle"),
@@ -717,6 +863,7 @@
       show(el.missing);
       return;
     }
+    applyBackground();
 
     el.form.addEventListener("submit", function (event) {
       event.preventDefault();
@@ -744,6 +891,9 @@
         el.grid.classList.toggle("gp-grid-filtered", state.filterSelected);
         updateSelectionUI();
       });
+    }
+    if (el.payButton) {
+      el.payButton.addEventListener("click", payForSupplement);
     }
     if (el.commentToggle) {
       el.commentToggle.addEventListener("click", toggleCommentPanel);
