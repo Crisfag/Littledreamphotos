@@ -123,6 +123,11 @@ export function createCheckoutSession(env, connectedAccountId, { label, unitAmou
     payment_intent_data: {
       transfer_data: { destination: connectedAccountId },
     },
+    // "Managed Payments" (activé par défaut sur les comptes Stripe récents)
+    // est incompatible avec transfer_data ci-dessus — Stripe refuse la
+    // requête tant qu'on ne le désactive pas explicitement pour cette
+    // session, qui doit rester gérée "à l'ancienne" (Connect classique).
+    managed_payments: { enabled: false },
     success_url: successUrl,
     cancel_url: cancelUrl,
     metadata,

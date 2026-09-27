@@ -69,6 +69,8 @@ check("la session de paiement est créée sur la plateforme, sans en-tête Strip
       captured.headers["Stripe-Account"] === undefined);
 check("le montant est transféré au photographe via transfer_data.destination",
       body.get("payment_intent_data[transfer_data][destination]") === "acct_123");
+check("Managed Payments est désactivé (incompatible avec transfer_data)",
+      body.get("managed_payments[enabled]") === "false");
 check("le tableau line_items est correctement indexé",
       body.get("line_items[0][price_data][currency]") === "eur" &&
       body.get("line_items[0][price_data][unit_amount]") === "1500" &&
