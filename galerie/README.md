@@ -261,9 +261,14 @@ local sur `127.0.0.1` n'est qu'un cas particulier, pas un système à part.
   galerie) : connexion d'un compte Stripe (Stripe Connect, comptes
   « Express ») pour recevoir directement le règlement des suppléments, et
   coordonnées à faire figurer sur les factures (raison sociale, adresse,
-  n° de TVA). Voir *Paiement en ligne des suppléments* plus bas pour la
-  configuration côté Stripe et le fonctionnement du règlement — seule
-  l'émission automatique des factures n'est pas encore construite.
+  n° de TVA). Une facture PDF est émise automatiquement dès qu'un supplément
+  est réglé en ligne — numérotée en continu par année (ex. 2026-0001),
+  avec TVA belge (21 %) si un numéro de TVA est renseigné, ou mention
+  d'exonération (régime de la franchise) sinon. Le client la télécharge
+  depuis sa galerie et la reçoit par e-mail si son adresse a été renseignée ;
+  le photographe la retrouve dans l'historique des paiements de la galerie.
+  Voir *Paiement en ligne des suppléments* plus bas pour la configuration
+  côté Stripe.
 - **Glisser-déposer** des photos sur la page de la galerie : chacune est
   traitée (réduction, empreinte, filigrane, découpage) et envoyée avec une
   barre de progression individuelle. Plusieurs photos partent en parallèle.
@@ -407,8 +412,20 @@ sans configuration séparée), puis ramené à sa galerie. Le montant réglé es
 toujours celui **réellement dû à cet instant** : un supplément déjà payé
 n'est jamais recompté si le client sélectionne encore d'autres photos par la
 suite. Le tableau de bord affiche l'historique des paiements de chaque
-galerie (date, nombre de suppléments, montant, statut). L'émission
-automatique de la facture est l'étape suivante, pas encore construite.
+galerie (date, nombre de suppléments, montant, statut, lien vers la facture).
+
+Dès que le webhook confirme le paiement, une facture PDF est générée
+automatiquement (numérotation continue par photographe, en séries annuelles :
+2026-0001, 2026-0002, …) et rangée dans R2. Si le photographe a renseigné un
+numéro de TVA (écran Facturation), la TVA belge à 21 % est calculée sur le
+montant déjà encaissé (TTC) ; sinon la facture porte la mention d'exonération
+du régime de la franchise. Le client la télécharge directement depuis sa
+galerie (bouton « Télécharger ma facture ») et la reçoit aussi par e-mail
+(pièce jointe, via Resend) si un e-mail a été renseigné pour cette galerie à
+la création. **La mention légale d'exonération de TVA (`invoices.js`,
+fonction `buildInvoicePdf`) a été rédigée du mieux possible mais mérite
+d'être relue par une comptable avant un usage à grande échelle** — ce n'est
+pas un domaine où je peux garantir l'exactitude réglementaire à 100 %.
 
 Préalable côté Stripe, avant de configurer quoi que ce soit ici :
 **Connect doit être activé** sur le compte Stripe qui servira de plateforme
@@ -482,7 +499,7 @@ des tuiles, refus du mauvais mot de passe, absence de toute balise `<img>`,
 neutralisation du menu contextuel et de la copie, voile sur « Impr. écran » et
 sur perte de focus, consignation au journal.
 
-**API du Worker** — 150 vérifications contre le vrai moteur Cloudflare (D1 et R2
+**API du Worker** — 156 vérifications contre le vrai moteur Cloudflare (D1 et R2
 émulés localement par `wrangler dev`) : comptes photographes (inscription,
 connexion, session, mot de passe oublié — même réponse générique qu'un
 compte existe ou non), cloisonnement strict entre comptes (un photographe ne
@@ -505,7 +522,9 @@ Stripe sans compte connecté, coordonnées de facturation cloisonnées par
 compte, webhook refusé sans configuration), règlement en ligne d'un
 supplément (refusé sans session, refusé proprement quand le photographe n'a
 pas encore activé Stripe, refusé quand la galerie n'a aucun forfait défini),
-référence de photo sur un évènement de capture
+e-mail client (accepté et relu, mal formé refusé à la création), téléchargement
+de facture (refusé sans session, identifiant inconnu refusé côté admin comme
+côté galerie cliente), référence de photo sur un évènement de capture
 (un identifiant inconnu n'est jamais enregistré), journal sans IP en clair.
 Le trajet complet de réinitialisation de mot de passe (jeton reçu par
 e-mail → nouveau mot de passe → ancien mot de passe rejeté → lien à usage
@@ -522,18 +541,28 @@ de réinitialisation, et surtout échappement HTML du nom de studio, du titre
 de galerie et du nom de client — autant de champs saisis par le
 photographe, jamais dignes de confiance tels quels dans un e-mail.
 
-**Signature de webhook Stripe et sessions de paiement** — 13 vérifications
+**Signature de webhook Stripe et sessions de paiement** — 16 vérifications
 sans réseau (fetch intercepté, jamais appelé pour de vrai) :
 `verifyStripeSignature` est une fonction pure — signature valide acceptée,
 mauvais secret refusé, corps modifié après signature refusé, évènement trop
 ancien (rejeu) refusé, en-tête absent ou malformé refusé sans exception ;
 et l'encodage exact des appels Stripe — la session de paiement d'un
-supplément est bien créée sur le compte du photographe (charge directe), le
-tableau `line_items` et les métadonnées imbriquées sont correctement
-indexés, les moyens de paiement s'adaptent automatiquement, et la création
-d'un compte Connect ne porte jamais l'en-tête de charge directe.
+supplément est bien créée sur la plateforme et non sur le compte du
+photographe (charge de destination, `transfer_data.destination` correctement
+adressé), `managed_payments` désactivé (incompatible avec ce schéma), le
+tableau `line_items` et les métadonnées imbriquées correctement indexés,
+aucun `payment_method_types` ni `automatic_payment_methods` imposé (réservé
+aux PaymentIntents), et la création d'un compte Connect qui ne porte jamais
+l'en-tête d'une charge directe.
 
-**Interface d'administration** — 38 vérifications dans un vrai navigateur,
+**Facturation automatique** — 9 vérifications sans réseau ni D1
+(`computeVat` et `buildInvoicePdf` sont des fonctions pures) : aucune TVA
+calculée en régime de la franchise (pas de numéro de TVA), taux belge à 21 %
+appliqué sinon, HT + TVA se recomposant exactement au centime près en TTC
+même sur un montant qui ne se divise pas rond, et un vrai PDF valide généré
+aussi bien avec des coordonnées complètes qu'avec des champs vides.
+
+**Interface d'administration** — 40 vérifications dans un vrai navigateur,
 contre le vrai Worker local : demande de lien de réinitialisation de mot de
 passe (message générique affiché), création de compte et connexion depuis
 le formulaire (pas de session présupposée), création d'une galerie,
@@ -544,7 +573,8 @@ sélection du client retrouvée sur sa vignette (cœur) et filtrable en un
 clic, écran « Facturation » (bouton de connexion Stripe proposé,
 coordonnées de facturation enregistrées et relues après rechargement),
 historique des paiements affiché sur la fiche galerie une fois un
-règlement confirmé (date, nombre de suppléments, montant, statut « Réglé »),
+règlement confirmé (date, nombre de suppléments, montant, statut « Réglé »,
+numéro et adresse d'envoi de la facture émise, lien de téléchargement),
 glisser-déposer de photos avec suivi de progression, vraies vignettes
 affichées, suppression d'une photo et d'une galerie, navigation vers l'écran
 « Vérifier une photo » et retour à la liste, déconnexion qui tient après un
@@ -588,6 +618,7 @@ node tests/comments.test.mjs          # commentaires client, autonome (crée sa 
 cd ../worker
 node tests/notify.test.mjs            # e-mail d'alerte de capture, sans réseau
 node tests/stripe.test.mjs            # signature de webhook + encodage des sessions Stripe, sans réseau
+node tests/invoices.test.mjs          # calcul de TVA + génération du PDF de facture, sans réseau
 npx wrangler dev --local --port 8788  # dans un autre terminal
 BASE=http://127.0.0.1:8788 node tests/api.test.mjs
 ```

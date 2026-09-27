@@ -406,6 +406,22 @@ async function handleApi(req, res, url) {
     }
   }
 
+  // GET /local/invoices/:id — relais vers le Worker, PDF de la facture.
+  if (parts[0] === "invoices" && parts.length === 2 && req.method === "GET") {
+    try {
+      const upstream = await client.getInvoiceResponse(parts[1]);
+      if (!upstream.ok) return json(res, upstream.status, { error: "Facture introuvable" });
+      const buffer = Buffer.from(await upstream.arrayBuffer());
+      res.writeHead(200, {
+        "content-type": "application/pdf",
+        "content-disposition": upstream.headers.get("content-disposition") || "attachment",
+      });
+      return res.end(buffer);
+    } catch (err) {
+      return json(res, 502, { error: "Worker injoignable" });
+    }
+  }
+
   // POST /local/detect — identifie l'origine d'une photo suspecte (retrouvée
   // ailleurs sur internet) en comparant son empreinte invisible à celles de
   // VOS galeries. Même moteur que detect.mjs, accessible depuis le tableau de
@@ -544,7 +560,8 @@ async function handleApi(req, res, url) {
       const watermarkText = [brand, String(body.clientName || "").trim()].filter(Boolean).join("  ·  ");
       try {
         const created = await client.createGallery({
-          slug, title, clientName: body.clientName || "", password, watermarkText, expiresAt,
+          slug, title, clientName: body.clientName || "", clientEmail: body.clientEmail || "",
+          password, watermarkText, expiresAt,
           includedPhotos: body.includedPhotos, extraPhotoPrice: body.extraPhotoPrice,
         });
         return json(res, 201, { id: created.id, slug, password, link: linkFor(slug) });

@@ -181,7 +181,54 @@ export function buildPasswordResetEmail({ studioName, resetUrl, ts }) {
   return { subject, html, text };
 }
 
-async function sendEmail(env, { to, subject, html, text }) {
+function formatEuros(cents) {
+  return ((cents || 0) / 100).toLocaleString("fr-BE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
+}
+
+// Fonction pure : facile à tester unitairement, sans accès réseau.
+export function buildInvoiceEmail({ galleryTitle, number, amountCents }) {
+  const subject = `Votre facture ${number} — ${galleryTitle}`;
+
+  const bodyHtml = [
+    eyebrow("Facture"),
+    heading(`Facture ${escapeHtml(number)}`),
+    paragraph(
+      `Merci pour votre règlement de <strong>${formatEuros(amountCents)}</strong> ` +
+        `concernant « ${escapeHtml(galleryTitle)} ».`
+    ),
+    paragraph("Vous trouverez votre facture en pièce jointe de cet e-mail (PDF).", { small: true }),
+  ].join("\n");
+
+  const html = emailShell({ preheader: `Facture ${number} — ${galleryTitle}`, bodyHtml });
+
+  const text =
+    `Merci pour votre règlement de ${formatEuros(amountCents)} concernant "${galleryTitle}". ` +
+    `Facture ${number} en pièce jointe.`;
+
+  return { subject, html, text };
+}
+
+// Encodage base64 par blocs : `String.fromCharCode(...bytes)` déborderait la
+// pile d'appels sur un fichier de plusieurs dizaines de Ko (peu probable ici,
+// une facture d'une page, mais autant rester correct dans tous les cas).
+function bytesToBase64(bytes) {
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
+}
+
+export async function sendInvoiceEmail(env, { to, galleryTitle, number, amountCents, pdfBytes }) {
+  await sendEmail(env, {
+    to,
+    ...buildInvoiceEmail({ galleryTitle, number, amountCents }),
+    attachments: [{ filename: `facture-${number}.pdf`, content: bytesToBase64(pdfBytes) }],
+  });
+}
+
+async function sendEmail(env, { to, subject, html, text, attachments }) {
   if (!env.RESEND_API_KEY || !to) return;
   try {
     const response = await fetch("https://api.resend.com/emails", {
@@ -196,6 +243,7 @@ async function sendEmail(env, { to, subject, html, text }) {
         subject,
         html,
         text,
+        ...(attachments ? { attachments } : {}),
       }),
     });
     // `fetch` ne lève une exception qu'en cas de panne réseau — un refus de

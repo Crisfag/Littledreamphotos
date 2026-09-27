@@ -20,6 +20,11 @@ CREATE TABLE IF NOT EXISTS photographers (
   billing_company_name    TEXT NOT NULL DEFAULT '',
   billing_address         TEXT NOT NULL DEFAULT '',
   billing_vat_number      TEXT NOT NULL DEFAULT '',
+  -- Numérotation des factures : continue et sans trou par photographe, en
+  -- séries annuelles (ex. 2026-0001) — remise à zéro dès le premier
+  -- règlement d'une nouvelle année civile, jamais en cours d'année.
+  invoice_counter_year    INTEGER NOT NULL DEFAULT 0,
+  invoice_counter         INTEGER NOT NULL DEFAULT 0,
   created_at     INTEGER NOT NULL
 );
 
@@ -29,6 +34,9 @@ CREATE TABLE IF NOT EXISTS galleries (
   slug                   TEXT NOT NULL UNIQUE,
   title                  TEXT NOT NULL,
   client_name            TEXT NOT NULL DEFAULT '',
+  -- Facultatif : sert uniquement à envoyer sa facture après un règlement de
+  -- supplément — jamais utilisé pour se connecter (toujours le mot de passe).
+  client_email           TEXT NOT NULL DEFAULT '',
   password_hash          TEXT NOT NULL,
   password_salt          TEXT NOT NULL,
   watermark_text         TEXT NOT NULL DEFAULT '',
@@ -227,3 +235,59 @@ CREATE INDEX IF NOT EXISTS idx_payments_session ON payments(stripe_checkout_sess
 --   );
 --   CREATE INDEX IF NOT EXISTS idx_payments_gallery ON payments(gallery_id, status);
 --   CREATE INDEX IF NOT EXISTS idx_payments_session ON payments(stripe_checkout_session_id);
+
+-- Migration vers l'e-mail client et la numérotation des factures (bases créées avant) :
+--   ALTER TABLE galleries ADD COLUMN client_email TEXT NOT NULL DEFAULT '';
+--   ALTER TABLE photographers ADD COLUMN invoice_counter_year INTEGER NOT NULL DEFAULT 0;
+--   ALTER TABLE photographers ADD COLUMN invoice_counter INTEGER NOT NULL DEFAULT 0;
+
+-- Facture émise automatiquement dès qu'un paiement passe à "paid" (voir
+-- billing.js). Toujours un seul montant total (TTC) : reprend exactement
+-- amount_cents du paiement réglé, jamais recalculé. Les colonnes seller_*
+-- sont un instantané des coordonnées de facturation du photographe AU
+-- MOMENT de l'émission — une facture déjà émise ne doit jamais changer si le
+-- photographe modifie ensuite son profil. vat_rate_percent à 0 signifie
+-- régime de la franchise (aucun numéro de TVA renseigné à l'émission) :
+-- vat_amount_cents vaut alors 0 et net_amount_cents == amount_cents. Le PDF
+-- lui-même vit dans R2, sous invoices/{id}.pdf.
+CREATE TABLE IF NOT EXISTS invoices (
+  id                   TEXT PRIMARY KEY,
+  photographer_id      TEXT NOT NULL REFERENCES photographers(id) ON DELETE CASCADE,
+  gallery_id           TEXT NOT NULL REFERENCES galleries(id) ON DELETE CASCADE,
+  payment_id           TEXT NOT NULL UNIQUE REFERENCES payments(id) ON DELETE CASCADE,
+  number               TEXT NOT NULL,
+  issued_at            INTEGER NOT NULL,
+  amount_cents         INTEGER NOT NULL,
+  vat_rate_percent     INTEGER NOT NULL DEFAULT 0,
+  vat_amount_cents     INTEGER NOT NULL DEFAULT 0,
+  net_amount_cents     INTEGER NOT NULL,
+  client_name          TEXT NOT NULL DEFAULT '',
+  seller_company_name  TEXT NOT NULL DEFAULT '',
+  seller_address       TEXT NOT NULL DEFAULT '',
+  seller_vat_number    TEXT NOT NULL DEFAULT '',
+  emailed_to           TEXT NOT NULL DEFAULT '',
+  created_at           INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_invoices_photographer ON invoices(photographer_id, number);
+
+-- Migration (bases créées avant cette fonctionnalité) :
+--   CREATE TABLE IF NOT EXISTS invoices (
+--     id                   TEXT PRIMARY KEY,
+--     photographer_id      TEXT NOT NULL REFERENCES photographers(id) ON DELETE CASCADE,
+--     gallery_id           TEXT NOT NULL REFERENCES galleries(id) ON DELETE CASCADE,
+--     payment_id           TEXT NOT NULL UNIQUE REFERENCES payments(id) ON DELETE CASCADE,
+--     number               TEXT NOT NULL,
+--     issued_at            INTEGER NOT NULL,
+--     amount_cents         INTEGER NOT NULL,
+--     vat_rate_percent     INTEGER NOT NULL DEFAULT 0,
+--     vat_amount_cents     INTEGER NOT NULL DEFAULT 0,
+--     net_amount_cents     INTEGER NOT NULL,
+--     client_name          TEXT NOT NULL DEFAULT '',
+--     seller_company_name  TEXT NOT NULL DEFAULT '',
+--     seller_address       TEXT NOT NULL DEFAULT '',
+--     seller_vat_number    TEXT NOT NULL DEFAULT '',
+--     emailed_to           TEXT NOT NULL DEFAULT '',
+--     created_at           INTEGER NOT NULL
+--   );
+--   CREATE INDEX IF NOT EXISTS idx_invoices_photographer ON invoices(photographer_id, number);

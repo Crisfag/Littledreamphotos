@@ -19,6 +19,10 @@ function newId(prefix) {
 }
 
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{1,60}$/;
+// Volontairement permissive (pas de validation RFC complète) : ce champ ne
+// sert qu'à recevoir la facture, jamais à authentifier qui que ce soit — un
+// format grossièrement valide suffit à éviter les fautes de frappe évidentes.
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // Prix saisi par le photographe en euros (ex. "15", "15.5") converti en
 // centimes — l'unité stockée, qui évite les erreurs d'arrondi d'un flottant.
@@ -90,6 +94,9 @@ async function createGallery(request, env, photographerId) {
   const password = String(body.password || "");
   if (password.length < 8) return fail(400, "Mot de passe trop court (8 caractères minimum)");
 
+  const clientEmail = String(body.clientEmail || "").trim().slice(0, 200);
+  if (clientEmail && !EMAIL_RE.test(clientEmail)) return fail(400, "E-mail du client invalide");
+
   // Forfait facultatif : nombre de photos déjà payées par le client. Non
   // renseigné = pas de forfait (aucun supplément jamais calculé).
   let includedPhotos = null;
@@ -114,9 +121,9 @@ async function createGallery(request, env, photographerId) {
 
   await env.DB.prepare(
     `INSERT INTO galleries
-       (id, photographer_id, slug, title, client_name, password_hash, password_salt, watermark_text, expires_at,
+       (id, photographer_id, slug, title, client_name, client_email, password_hash, password_salt, watermark_text, expires_at,
         included_photos, extra_photo_price_cents, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   )
     .bind(
       id,
@@ -124,6 +131,7 @@ async function createGallery(request, env, photographerId) {
       slug,
       String(body.title || slug).slice(0, 120),
       String(body.clientName || "").slice(0, 120),
+      clientEmail,
       hash,
       salt,
       String(body.watermarkText || "").slice(0, 120),
@@ -178,8 +186,11 @@ async function getGallery(env, photographerId, slug) {
   const selectedCount = photos.filter((p) => p.selected).length;
 
   const { results: payments } = await env.DB.prepare(
-    `SELECT id, extra_count, amount_cents, status, created_at, paid_at
-     FROM payments WHERE gallery_id = ? ORDER BY created_at DESC`
+    `SELECT payments.id, payments.extra_count, payments.amount_cents, payments.status,
+            payments.created_at, payments.paid_at,
+            invoices.id AS invoice_id, invoices.number AS invoice_number, invoices.emailed_to AS invoice_emailed_to
+     FROM payments LEFT JOIN invoices ON invoices.payment_id = payments.id
+     WHERE payments.gallery_id = ? ORDER BY payments.created_at DESC`
   )
     .bind(gallery.id)
     .all();
@@ -195,6 +206,7 @@ async function getGallery(env, photographerId, slug) {
       slug: gallery.slug,
       title: gallery.title,
       client_name: gallery.client_name,
+      client_email: gallery.client_email,
       watermark_text: gallery.watermark_text,
       expires_at: gallery.expires_at,
       created_at: gallery.created_at,
@@ -491,6 +503,25 @@ async function getTile(env, photographerId, photoId, level, col, row) {
   });
 }
 
+// Cloisonnée directement par photographer_id (colonne stockée sur la
+// facture elle-même à l'émission) — pas besoin de remonter par la galerie.
+async function getInvoice(env, photographerId, invoiceId) {
+  const invoice = await env.DB.prepare("SELECT * FROM invoices WHERE id = ? AND photographer_id = ?")
+    .bind(invoiceId, photographerId)
+    .first();
+  if (!invoice) return fail(404, "Facture introuvable");
+
+  const object = await env.TILES.get(`invoices/${invoiceId}.pdf`);
+  if (!object) return fail(404, "Facture introuvable");
+  return new Response(object.body, {
+    headers: {
+      "content-type": "application/pdf",
+      "content-disposition": `attachment; filename="facture-${invoice.number}.pdf"`,
+      "cache-control": "private, max-age=300",
+    },
+  });
+}
+
 async function galleryLog(request, env, photographerId, slug) {
   const gallery = await ownedGallery(env, photographerId, slug);
   if (!gallery) return fail(404, "Galerie introuvable");
@@ -588,6 +619,10 @@ export async function handleAdmin(request, env, ctx, path) {
     const photographer = await env.DB.prepare("SELECT * FROM photographers WHERE id = ?").bind(photographerId).first();
     if (!photographer) return fail(401, "Session invalide");
     return setBillingProfile(request, env, photographer);
+  }
+
+  if (section === "invoices" && parts.length === 4 && request.method === "GET") {
+    return getInvoice(env, photographerId, parts[3]);
   }
 
   return fail(404, "Route inconnue");

@@ -87,6 +87,7 @@ await page.click("#ad-new-gallery");
 await page.waitForSelector("#ad-create-modal:not([hidden])");
 await page.fill('#ad-create-form [name="title"]', title);
 await page.fill('#ad-create-form [name="clientName"]', "Famille Test");
+await page.fill('#ad-create-form [name="clientEmail"]', "famille.test@example.com");
 await page.click("#ad-create-submit");
 
 await page.waitForSelector("#ad-created-modal:not([hidden])", { timeout: 10000 });
@@ -297,7 +298,13 @@ execFileSync(
   [
     "wrangler", "d1", "execute", "galerie-protegee", "--local", "--command",
     `INSERT INTO payments (id, gallery_id, stripe_checkout_session_id, extra_count, amount_cents, status, created_at, paid_at) ` +
-      `VALUES ('pay_admin_ui_test', '${galleryIdForPayments}', 'cs_admin_ui_test', 2, 2500, 'paid', ${paidAt}, ${paidAt})`,
+      `VALUES ('pay_admin_ui_test', '${galleryIdForPayments}', 'cs_admin_ui_test', 2, 2500, 'paid', ${paidAt}, ${paidAt});` +
+      `INSERT INTO invoices (id, photographer_id, gallery_id, payment_id, number, issued_at, amount_cents, ` +
+      `vat_rate_percent, vat_amount_cents, net_amount_cents, client_name, seller_company_name, seller_address, ` +
+      `seller_vat_number, emailed_to, created_at) VALUES ('inv_admin_ui_test', ` +
+      `(SELECT photographer_id FROM galleries WHERE id='${galleryIdForPayments}'), '${galleryIdForPayments}', ` +
+      `'pay_admin_ui_test', '2026-0001', ${paidAt}, 2500, 0, 0, 2500, 'Famille Test', 'Studio de test', '', '', ` +
+      `'client@test.invalid', ${paidAt});`,
   ],
   { cwd: WORKER_DIR, stdio: "pipe" }
 );
@@ -313,6 +320,14 @@ check("la ligne du paiement affiche le nombre de suppléments, le montant et le 
       paymentsRowText.indexOf("25,00") !== -1 &&
       paymentsRowText.indexOf("Réglé") !== -1,
       paymentsRowText);
+check("la ligne affiche aussi le numéro de la facture émise et son adresse d'envoi",
+      paymentsRowText.indexOf("2026-0001") !== -1 &&
+      paymentsRowText.indexOf("client@test.invalid") !== -1,
+      paymentsRowText);
+
+const invoiceLinkHref = await page.getAttribute(".ad-payments-heading + .ad-table-wrap a", "href");
+check("le lien de la facture pointe vers le bon identifiant, servi par le serveur local",
+      invoiceLinkHref === "/local/invoices/inv_admin_ui_test", invoiceLinkHref);
 
 /* ---------- Suppression d'une photo ---------- */
 

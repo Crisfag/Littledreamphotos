@@ -950,6 +950,44 @@ check("régler un supplément est refusé quand la galerie n'a aucun forfait dé
       checkoutNoQuota.status === 400, `HTTP ${checkoutNoQuota.status}`);
 await admin("DELETE", `/api/admin/galleries/${noQuotaSlug}`);
 
+/* ---------- E-mail du client (pour l'envoi de la facture) ---------- */
+
+const clientEmailSlug = `${SLUG}-email-client`;
+const clientEmailCreated = await admin("POST", "/api/admin/galleries", {
+  slug: clientEmailSlug, password: "mot-de-passe-solide", clientEmail: "famille.dupont@example.com",
+});
+check("une galerie peut être créée avec un e-mail client", clientEmailCreated.status === 201);
+
+const clientEmailDetail = await (await admin("GET", `/api/admin/galleries/${clientEmailSlug}`)).json();
+check("l'e-mail client enregistré est bien relu dans le détail de la galerie",
+      clientEmailDetail.gallery?.client_email === "famille.dupont@example.com",
+      JSON.stringify(clientEmailDetail.gallery?.client_email));
+
+const badClientEmail = await admin("POST", "/api/admin/galleries", {
+  slug: `${clientEmailSlug}-b`, password: "mot-de-passe-solide", clientEmail: "pas-un-email",
+});
+check("un e-mail client mal formé est refusé à la création", badClientEmail.status === 400);
+
+await admin("DELETE", `/api/admin/galleries/${clientEmailSlug}`);
+
+/* ---------- Téléchargement de facture (admin + client) ---------- */
+// Aucune facture réelle n'existe en local (elle n'est émise qu'une fois un
+// paiement confirmé par le vrai webhook Stripe — voir invoices.test.mjs pour
+// le calcul de TVA et la génération du PDF, sans réseau). Ce qui EST
+// vérifiable ici, c'est le cloisonnement et le refus propre d'un identifiant
+// inconnu, pour les deux routes de téléchargement.
+
+const invoiceAdminUnknown = await admin("GET", "/api/admin/invoices/inv_inexistante");
+check("télécharger une facture inconnue depuis l'admin renvoie 404", invoiceAdminUnknown.status === 404);
+
+const invoiceClientNoAuth = await fetch(`${BASE}/api/gallery/${quotaSlug}/invoice/inv_inexistante`);
+check("télécharger une facture sans session client est refusé", invoiceClientNoAuth.status === 401);
+
+const invoiceClientUnknown = await fetch(`${BASE}/api/gallery/${quotaSlug}/invoice/inv_inexistante`, {
+  headers: quotaBearer,
+});
+check("télécharger une facture inconnue depuis la galerie cliente renvoie 404", invoiceClientUnknown.status === 404);
+
 const failed = checks.filter((c) => !c.ok);
 console.log(failed.length ? `\n${failed.length} vérification(s) en échec.` : `\n${checks.length} vérifications, toutes passent.`);
 process.exit(failed.length ? 1 : 0);

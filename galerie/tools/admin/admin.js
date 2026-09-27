@@ -620,18 +620,24 @@
     var rows = payments.map(function (p) {
       var statusLabel = p.status === "paid" ? "Réglé" : "En attente";
       var statusCls = p.status === "paid" ? "ad-badge-selected" : "";
+      var invoiceCell = p.invoice_id
+        ? '<a href="/local/invoices/' + encodeURIComponent(p.invoice_id) + '" target="_blank" rel="noopener">' +
+          esc(p.invoice_number) + "</a>" +
+          (p.invoice_emailed_to ? ' <span class="ad-hint">(envoyée à ' + esc(p.invoice_emailed_to) + ")</span>" : "")
+        : "—";
       return (
         "<tr>" +
         "<td>" + esc(formatDateTime(p.paid_at || p.created_at)) + "</td>" +
         "<td>" + p.extra_count + " photo" + (p.extra_count > 1 ? "s" : "") + "</td>" +
         "<td>" + formatEuros(p.amount_cents) + "</td>" +
         "<td><span class=\"ad-badge " + statusCls + "\">" + statusLabel + "</span></td>" +
+        "<td>" + invoiceCell + "</td>" +
         "</tr>"
       );
     });
     return (
       '<div class="ad-table-wrap"><table class="ad-table"><thead><tr>' +
-      "<th>Quand</th><th>Suppléments</th><th>Montant</th><th>Statut</th>" +
+      "<th>Quand</th><th>Suppléments</th><th>Montant</th><th>Statut</th><th>Facture</th>" +
       "</tr></thead><tbody>" + rows.join("") + "</tbody></table></div>"
     );
   }
@@ -1023,6 +1029,7 @@
     var payload = {
       title: form.title.value.trim(),
       clientName: form.clientName.value.trim(),
+      clientEmail: form.clientEmail.value.trim(),
       slug: form.slug.value.trim(),
       password: form.password.value.trim(),
       expires: form.expires.value || undefined,

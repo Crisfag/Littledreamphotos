@@ -5,6 +5,8 @@
 
 import { json, fail } from "./http.js";
 import { createConnectAccount, createAccountLink, retrieveAccount, verifyStripeSignature } from "./stripe.js";
+import { createInvoiceForPayment } from "./invoices.js";
+import { sendInvoiceEmail } from "./notify.js";
 
 function stripeFailure(err) {
   console.error("Échec d'un appel Stripe :", err);
@@ -134,14 +136,61 @@ export async function handleStripeWebhook(request, env) {
     // notamment) — mieux vaut attendre leur propre confirmation que de
     // libérer un supplément pas vraiment encaissé.
     if (session && session.id && session.payment_status === "paid") {
-      await env.DB.prepare(
+      const result = await env.DB.prepare(
         `UPDATE payments SET status = 'paid', paid_at = ?, stripe_payment_intent_id = ?
          WHERE stripe_checkout_session_id = ? AND status != 'paid'`
       )
         .bind(Math.floor(Date.now() / 1000), session.payment_intent || "", session.id)
         .run();
+
+      // meta.changes reste à 0 si ce paiement était déjà "paid" : Stripe
+      // redélivre parfois le même évènement, et une facture ne doit jamais
+      // être émise deux fois pour le même règlement.
+      if (result.meta && result.meta.changes > 0) {
+        await issueInvoice(env, session.id);
+      }
     }
   }
 
   return json({ received: true });
+}
+
+// Toujours appelé APRÈS que le paiement soit confirmé "paid" en base — jamais
+// avant, pour ne jamais facturer un règlement qui échouerait finalement. Un
+// incident ici (génération de PDF, R2, e-mail) est consigné mais ne doit
+// jamais faire échouer la réponse au webhook : Stripe réessaierait sinon
+// indéfiniment, alors que le paiement lui, est bel et bien confirmé.
+async function issueInvoice(env, stripeCheckoutSessionId) {
+  try {
+    const payment = await env.DB.prepare("SELECT * FROM payments WHERE stripe_checkout_session_id = ?")
+      .bind(stripeCheckoutSessionId)
+      .first();
+    if (!payment) return;
+    const gallery = await env.DB.prepare("SELECT * FROM galleries WHERE id = ?").bind(payment.gallery_id).first();
+    if (!gallery) return;
+    const photographer = await env.DB.prepare("SELECT * FROM photographers WHERE id = ?")
+      .bind(gallery.photographer_id)
+      .first();
+    if (!photographer) return;
+
+    const invoice = await createInvoiceForPayment(env, { payment, gallery, photographer });
+
+    // "emailed_to" atteste qu'un envoi a été tenté vers cette adresse, pas
+    // qu'il a été livré avec certitude — l'envoi d'e-mail est toujours au
+    // mieux dans ce projet (voir notify.js), jamais garanti ni réessayé.
+    if (gallery.client_email) {
+      await env.DB.prepare("UPDATE invoices SET emailed_to = ? WHERE id = ?")
+        .bind(gallery.client_email, invoice.id)
+        .run();
+      await sendInvoiceEmail(env, {
+        to: gallery.client_email,
+        galleryTitle: gallery.title,
+        number: invoice.number,
+        amountCents: payment.amount_cents,
+        pdfBytes: invoice.pdfBytes,
+      });
+    }
+  } catch (err) {
+    console.error("Échec de la génération de la facture :", err);
+  }
 }

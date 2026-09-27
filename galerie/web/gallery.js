@@ -110,6 +110,50 @@
     if (el.payButton) {
       el.payButton.hidden = !(due > 0 && state.gallery.canPayOnline);
     }
+    if (el.invoiceButton) {
+      var invoices = state.gallery.invoices || [];
+      el.invoiceButton.hidden = invoices.length === 0;
+    }
+  }
+
+  // Facture la plus récente : suffisant tant qu'un seul supplément est réglé
+  // par galerie — s'il y en a plusieurs, celle-ci couvre le tout dernier.
+  function downloadInvoice() {
+    if (!el.invoiceButton) return;
+    var invoices = (state.gallery && state.gallery.invoices) || [];
+    var invoice = invoices[0];
+    if (!invoice) return;
+
+    el.invoiceButton.disabled = true;
+    el.invoiceButton.textContent = "Téléchargement…";
+
+    fetch(apiUrl("/invoice/" + invoice.id), { headers: authHeaders() })
+      .then(function (response) {
+        if (response.status === 401) throw new Error("session");
+        if (!response.ok) throw new Error("échec");
+        return response.blob();
+      })
+      .then(function (blob) {
+        var url = URL.createObjectURL(blob);
+        var link = document.createElement("a");
+        link.href = url;
+        link.download = "facture-" + invoice.number + ".pdf";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.setTimeout(function () {
+          URL.revokeObjectURL(url);
+        }, 1000);
+        el.invoiceButton.disabled = false;
+        el.invoiceButton.textContent = "Télécharger ma facture";
+      })
+      .catch(function (err) {
+        el.invoiceButton.disabled = false;
+        el.invoiceButton.textContent = "Télécharger ma facture";
+        if (err.message === "session") {
+          sessionLost("Votre session a expiré. Saisissez à nouveau le mot de passe.");
+        }
+      });
   }
 
   // Ouvre la page de paiement hébergée par Stripe pour le supplément dû.
@@ -843,6 +887,7 @@
       toolbarQuota: $("gp-toolbar-quota"),
       payButton: $("gp-pay-supplement"),
       payError: $("gp-pay-error"),
+      invoiceButton: $("gp-download-invoice"),
       filterCheckbox: $("gp-filter-selected"),
       filterEmpty: $("gp-filter-empty"),
       commentToggle: $("gp-comment-toggle"),
@@ -894,6 +939,9 @@
     }
     if (el.payButton) {
       el.payButton.addEventListener("click", payForSupplement);
+    }
+    if (el.invoiceButton) {
+      el.invoiceButton.addEventListener("click", downloadInvoice);
     }
     if (el.commentToggle) {
       el.commentToggle.addEventListener("click", toggleCommentPanel);

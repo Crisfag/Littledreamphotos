@@ -192,6 +192,23 @@ h1 { font-family: var(--serif); font-weight: 500; font-size: clamp(1.9rem, 4vw, 
 .gp-pay-btn:hover:not(:disabled) { background: var(--rose-deep); transform: translateY(-1px); }
 .gp-pay-btn:disabled { opacity: .6; cursor: default; }
 .gp-pay-error { margin-top: .4rem; font-size: .8rem; color: #a4423a; }
+.gp-invoice-btn {
+  margin-top: .4rem;
+  margin-left: .5rem;
+  font-family: var(--sans);
+  font-size: .8rem;
+  font-weight: 500;
+  letter-spacing: .07em;
+  color: var(--rose-deep);
+  background: transparent;
+  border: 1px solid var(--rose);
+  border-radius: 999px;
+  padding: .5rem 1.1rem;
+  cursor: pointer;
+  transition: background .2s var(--ease), transform .2s var(--ease);
+}
+.gp-invoice-btn:hover:not(:disabled) { background: var(--cream); transform: translateY(-1px); }
+.gp-invoice-btn:disabled { opacity: .6; cursor: default; }
 .gp-toolbar-filter {
   display: flex;
   align-items: center;

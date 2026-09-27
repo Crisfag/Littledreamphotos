@@ -135,6 +135,12 @@ async function handleLogin(request, env, slug) {
     .bind(gallery.photographer_id)
     .first();
 
+  const { results: invoices } = await env.DB.prepare(
+    `SELECT id, number, amount_cents, issued_at FROM invoices WHERE gallery_id = ? ORDER BY issued_at DESC`
+  )
+    .bind(gallery.id)
+    .all();
+
   return json({
     token,
     expiresIn: SESSION_TTL_SECONDS,
@@ -148,6 +154,12 @@ async function handleLogin(request, env, slug) {
       extraPhotoPriceCents: gallery.extra_photo_price_cents || 0,
       paidExtraCount: await paidExtraCount(env, gallery.id),
       canPayOnline: Boolean(photographer?.stripe_account_id) && Boolean(photographer?.stripe_charges_enabled),
+      invoices: invoices.map((i) => ({
+        id: i.id,
+        number: i.number,
+        amountCents: i.amount_cents,
+        issuedAt: i.issued_at,
+      })),
     },
     photos: photos.map((p) => ({
       id: p.id,
@@ -360,6 +372,29 @@ async function handleCheckout(request, env, slug) {
   return json({ url: session.url });
 }
 
+// Facture d'un règlement déjà confirmé — jamais accessible sans session, et
+// jamais celle d'une autre galerie (voir schema.sql : gallery_id est bien
+// celui de la facture, pas déduit du paiement).
+async function handleInvoice(request, env, slug, invoiceId) {
+  const auth = await authorize(request, env, slug);
+  if (auth.error) return auth.error;
+
+  const invoice = await env.DB.prepare("SELECT * FROM invoices WHERE id = ? AND gallery_id = ?")
+    .bind(invoiceId, auth.gallery.id)
+    .first();
+  if (!invoice) return fail(404, "Facture introuvable");
+
+  const object = await env.TILES.get(`invoices/${invoiceId}.pdf`);
+  if (!object) return fail(404, "Facture introuvable");
+  return new Response(object.body, {
+    headers: {
+      "content-type": "application/pdf",
+      "content-disposition": `attachment; filename="facture-${invoice.number}.pdf"`,
+      "cache-control": "private, max-age=300",
+    },
+  });
+}
+
 // Le photographe n'est prévenu que si on n'en a pas déjà avisé un pour
 // cette galerie dans les dernières minutes : un client qui reste appuyé
 // sur une touche ou déclenche plusieurs raccourcis coup sur coup ne doit
@@ -513,6 +548,10 @@ export async function handleViewer(request, env, ctx, path) {
   }
   if (action === "checkout" && request.method === "POST") {
     return handleCheckout(request, env, slug);
+  }
+  // /api/gallery/<slug>/invoice/<invoiceId>
+  if (action === "invoice" && request.method === "GET" && parts.length === 5) {
+    return handleInvoice(request, env, slug, parts[4]);
   }
   return fail(404, "Route inconnue");
 }
