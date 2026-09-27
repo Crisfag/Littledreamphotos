@@ -65,8 +65,10 @@ await createCheckoutSession({ STRIPE_SECRET_KEY: "sk_test_fake" }, "acct_123", {
 });
 const body = new URLSearchParams(captured.body);
 
-check("la session de paiement est créée sur le compte du photographe (charge directe)",
-      captured.headers["Stripe-Account"] === "acct_123");
+check("la session de paiement est créée sur la plateforme, sans en-tête Stripe-Account (charge de destination)",
+      captured.headers["Stripe-Account"] === undefined);
+check("le montant est transféré au photographe via transfer_data.destination",
+      body.get("payment_intent_data[transfer_data][destination]") === "acct_123");
 check("le tableau line_items est correctement indexé",
       body.get("line_items[0][price_data][currency]") === "eur" &&
       body.get("line_items[0][price_data][unit_amount]") === "1500" &&

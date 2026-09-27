@@ -30,12 +30,12 @@ function flatten(params, prefix, out) {
   return out;
 }
 
-// `connectedAccountId`, quand fourni, ajoute l'en-tête Stripe-Account : la
-// requête agit alors DIRECTEMENT sur le compte Connect du photographe (une
-// « charge directe ») plutôt que sur la plateforme — c'est ce qui fait que
-// l'argent d'un paiement lui arrive sans jamais transiter par un compte
-// intermédiaire, sans code de transfert séparé à écrire.
-async function stripeRequest(env, method, path, params, connectedAccountId) {
+// Toutes les requêtes se font sur le compte PLATEFORME (jamais d'en-tête
+// Stripe-Account) : les comptes connectés des photographes sont toujours
+// désignés par leur identifiant dans le corps de la requête (`account`,
+// `transfer_data.destination`, …), jamais par une charge agissant
+// directement sur leur compte — voir `createCheckoutSession`.
+async function stripeRequest(env, method, path, params) {
   if (!env.STRIPE_SECRET_KEY) {
     const err = new Error("STRIPE_SECRET_KEY n'est pas configurée");
     err.stripeNotConfigured = true;
@@ -48,7 +48,6 @@ async function stripeRequest(env, method, path, params, connectedAccountId) {
       authorization: `Bearer ${env.STRIPE_SECRET_KEY}`,
       "content-type": "application/x-www-form-urlencoded",
       "Stripe-Version": API_VERSION,
-      ...(connectedAccountId ? { "Stripe-Account": connectedAccountId } : {}),
     },
     body,
   });
@@ -98,13 +97,18 @@ export function retrieveAccount(env, accountId) {
 }
 
 // Page de paiement hébergée par Stripe, pour UNE fois (mode "payment", pas
-// un abonnement). Charge directe sur le compte Connect du photographe (voir
-// `stripeRequest`) : l'argent lui arrive sans détour. On ne précise pas
+// un abonnement). Depuis septembre 2026, Stripe n'autorise plus les charges
+// directes (Stripe-Account) sur les comptes Connect Express des nouvelles
+// plateformes — voir Santé → Indicateurs dans le Dashboard Stripe. On passe
+// donc par une CHARGE DE DESTINATION : la session est créée sur LA
+// PLATEFORME (pas d'en-tête Stripe-Account ici), et `transfer_data.destination`
+// dit à Stripe de transférer automatiquement le montant au photographe une
+// fois le paiement encaissé — toujours 100 %, sans `application_fee_amount`
+// (aucune commission de plateforme). C'est la plateforme qui règle les frais
+// Stripe, comme l'exige ce nouveau mode. On ne précise pas
 // `payment_method_types` : une session Checkout propose déjà, sans qu'on ait
-// à le demander, tout ce qui est activé sur le compte du photographe pour
-// cette devise (carte et portefeuilles comme Apple Pay toujours ; PayPal dès
-// qu'il l'aura activé côté Stripe) — `automatic_payment_methods` n'existe
-// que sur l'API des PaymentIntents, pas sur celle des sessions Checkout.
+// à le demander, tout ce qui est activé sur le compte plateforme pour cette
+// devise (carte, portefeuilles comme Apple Pay, etc.).
 export function createCheckoutSession(env, connectedAccountId, { label, unitAmountCents, quantity, successUrl, cancelUrl, metadata }) {
   return stripeRequest(env, "POST", "/checkout/sessions", {
     mode: "payment",
@@ -116,16 +120,20 @@ export function createCheckoutSession(env, connectedAccountId, { label, unitAmou
       },
       quantity,
     }],
+    payment_intent_data: {
+      transfer_data: { destination: connectedAccountId },
+    },
     success_url: successUrl,
     cancel_url: cancelUrl,
     metadata,
-  }, connectedAccountId);
+  });
 }
 
 // Relit une session — utilisée pour vérifier son statut si jamais le webhook
-// tardait, jamais comme seule source de vérité (voir schema.sql).
-export function retrieveCheckoutSession(env, connectedAccountId, sessionId) {
-  return stripeRequest(env, "GET", `/checkout/sessions/${encodeURIComponent(sessionId)}`, undefined, connectedAccountId);
+// tardait, jamais comme seule source de vérité (voir schema.sql). Vit sur la
+// plateforme (charge de destination, voir plus haut), donc sans Stripe-Account.
+export function retrieveCheckoutSession(env, sessionId) {
+  return stripeRequest(env, "GET", `/checkout/sessions/${encodeURIComponent(sessionId)}`);
 }
 
 function toHex(buffer) {

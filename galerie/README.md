@@ -390,9 +390,14 @@ l'interface d'administration, insérée en lien dans l'e-mail.
 Chaque photographe connecte son propre compte [Stripe](https://stripe.com)
 (comptes « Express », [Stripe Connect](https://stripe.com/connect)) depuis
 l'écran « 💳 Facturation » du tableau de bord, et renseigne ses coordonnées
-de facturation (raison sociale, adresse, n° de TVA). L'argent d'un compte
-connecté arrive directement chez le photographe concerné — jamais via un
-compte intermédiaire (charge directe, sans commission de plateforme).
+de facturation (raison sociale, adresse, n° de TVA). Le règlement d'un
+supplément passe par une **charge de destination** (`transfer_data.destination`) :
+la session de paiement est créée sur la plateforme, qui règle les frais
+Stripe, puis le montant est automatiquement transféré au photographe —
+toujours 100 %, sans commission de plateforme. (Les charges directes,
+utilisées au tout début de cette fonctionnalité, ne sont plus autorisées par
+Stripe pour les nouvelles plateformes Connect — voir Dashboard Stripe →
+Santé → Indicateurs si ce message réapparaît un jour.)
 
 Une fois le compte Stripe actif, le client voit un bouton « Régler le
 supplément » dans sa galerie dès qu'il a sélectionné plus de photos que son
@@ -411,23 +416,30 @@ Préalable côté Stripe, avant de configurer quoi que ce soit ici :
 
 ```bash
 cd worker
-npx wrangler secret put STRIPE_SECRET_KEY      # clé secrète Stripe (sk_live_… ou sk_test_… en développement)
-npx wrangler secret put STRIPE_WEBHOOK_SECRET  # signature du point de terminaison webhook (whsec_…)
+npx wrangler secret put STRIPE_SECRET_KEY               # clé secrète Stripe (sk_live_… ou sk_test_… en développement)
+npx wrangler secret put STRIPE_WEBHOOK_SECRET           # signature du webhook « Comptes connectés » (whsec_…)
+npx wrangler secret put STRIPE_WEBHOOK_SECRET_PLATFORM  # signature du webhook « Votre compte » (whsec_…)
 ```
 
-Le webhook se crée depuis Dashboard Stripe → Développeurs → Webhooks →
-Ajouter un point de terminaison, avec :
-- URL : `https://<votre-worker>.workers.dev/api/stripe/webhook`
-- Périmètre de destination des évènements : **Comptes connectés** (ce sont
-  les comptes Stripe des photographes qui déclenchent ces évènements, jamais
-  celui de la plateforme)
-- Évènements à écouter : `account.updated` **et** `checkout.session.completed`
-  (attention à ne pas confondre avec les évènements « Accounts v2 »
-  regroupés sous `v2.core.account.updated` — chercher dans l'onglet « Tous
-  les évènements »)
+Les deux évènements utilisés n'ont pas la même origine, donc **deux points
+de terminaison Stripe distincts** sont nécessaires, tous les deux vers la
+même URL (`https://<votre-worker>.workers.dev/api/stripe/webhook`) — le
+Worker essaie chaque secret configuré tour à tour pour vérifier la
+signature, peu importe lequel des deux a réellement livré l'évènement :
 
-C'est cette souscription qui donne `STRIPE_WEBHOOK_SECRET` ci-dessus. Sans
-ces deux secrets, l'écran « Facturation » et le bouton de règlement
+1. Un premier point de terminaison, périmètre **Comptes connectés** (ce sont
+   les comptes Stripe des photographes), écoutant `account.updated` (état de
+   l'inscription Connect) — sa clé de signature va dans `STRIPE_WEBHOOK_SECRET`.
+2. Un second, périmètre **Votre compte** (la plateforme elle-même, puisque
+   les sessions de paiement des suppléments y sont créées — charge de
+   destination), écoutant `checkout.session.completed` — sa clé va dans
+   `STRIPE_WEBHOOK_SECRET_PLATFORM`.
+
+Attention à ne pas confondre `account.updated` avec les évènements
+« Accounts v2 » regroupés sous `v2.core.account.updated` (chercher dans
+l'onglet « Tous les évènements » plutôt que la recherche par défaut).
+
+Sans ces secrets, l'écran « Facturation » et le bouton de règlement
 affichent un message clair plutôt que d'échouer silencieusement — rien
 d'autre n'est affecté.
 

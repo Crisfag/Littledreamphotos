@@ -87,17 +87,28 @@ export async function setBillingProfile(request, env, photographer) {
 
 // Webhook Stripe : pas de session, l'authenticité vient de la signature
 // (Stripe-Signature, vérifiée sur le corps brut — jamais reparsé avant).
-// Deux évènements traités : account.updated (état de l'inscription Connect)
-// et checkout.session.completed (règlement d'un supplément) — les deux
-// délivrés côté « Comptes connectés », puisqu'ils concernent les comptes
-// Stripe des photographes, jamais celui de la plateforme.
+// Deux évènements traités, mais reçus par DEUX destinations Stripe
+// distinctes (donc deux clés de signature) : account.updated arrive côté
+// « Comptes connectés » (état de l'inscription Connect du photographe,
+// STRIPE_WEBHOOK_SECRET), tandis que checkout.session.completed arrive
+// côté « Votre compte » (la session de paiement du supplément est une
+// charge de destination créée sur la plateforme, voir stripe.js —
+// STRIPE_WEBHOOK_SECRET_PLATFORM). On essaie chaque clé configurée tour à
+// tour plutôt que de deviner laquelle correspond à l'évènement reçu.
 export async function handleStripeWebhook(request, env) {
   if (request.method !== "POST") return fail(405, "Méthode non autorisée");
-  if (!env.STRIPE_WEBHOOK_SECRET) return fail(503, "Webhook Stripe non configuré");
+  const secrets = [env.STRIPE_WEBHOOK_SECRET, env.STRIPE_WEBHOOK_SECRET_PLATFORM].filter(Boolean);
+  if (!secrets.length) return fail(503, "Webhook Stripe non configuré");
 
   const payload = await request.text();
   const signature = request.headers.get("Stripe-Signature");
-  const valid = await verifyStripeSignature(payload, signature, env.STRIPE_WEBHOOK_SECRET);
+  let valid = false;
+  for (const secret of secrets) {
+    if (await verifyStripeSignature(payload, signature, secret)) {
+      valid = true;
+      break;
+    }
+  }
   if (!valid) return fail(400, "Signature invalide");
 
   let event;
