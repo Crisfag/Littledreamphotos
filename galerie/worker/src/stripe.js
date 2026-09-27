@@ -99,11 +99,12 @@ export function retrieveAccount(env, accountId) {
 
 // Page de paiement hébergée par Stripe, pour UNE fois (mode "payment", pas
 // un abonnement). Charge directe sur le compte Connect du photographe (voir
-// `stripeRequest`) : l'argent lui arrive sans détour. `automatic_payment_methods`
-// laisse Stripe proposer ce qui est réellement disponible pour ce compte et
+// `stripeRequest`) : l'argent lui arrive sans détour. On ne précise pas
+// `payment_method_types` : une session Checkout propose déjà, sans qu'on ait
+// à le demander, tout ce qui est activé sur le compte du photographe pour
 // cette devise (carte et portefeuilles comme Apple Pay toujours ; PayPal dès
-// que le photographe l'aura activé côté Stripe) plutôt que d'imposer une
-// liste figée qui échouerait si un moyen n'est pas encore activé.
+// qu'il l'aura activé côté Stripe) — `automatic_payment_methods` n'existe
+// que sur l'API des PaymentIntents, pas sur celle des sessions Checkout.
 export function createCheckoutSession(env, connectedAccountId, { label, unitAmountCents, quantity, successUrl, cancelUrl, metadata }) {
   return stripeRequest(env, "POST", "/checkout/sessions", {
     mode: "payment",
@@ -115,7 +116,6 @@ export function createCheckoutSession(env, connectedAccountId, { label, unitAmou
       },
       quantity,
     }],
-    automatic_payment_methods: { enabled: true },
     success_url: successUrl,
     cancel_url: cancelUrl,
     metadata,

@@ -72,8 +72,10 @@ check("le tableau line_items est correctement indexé",
       body.get("line_items[0][price_data][unit_amount]") === "1500" &&
       body.get("line_items[0][quantity]") === "2",
       captured.body);
-check("les moyens de paiement s'adaptent automatiquement à ce qui est activé",
-      body.get("automatic_payment_methods[enabled]") === "true");
+check("aucun automatic_payment_methods n'est envoyé (paramètre invalide pour les sessions Checkout, réservé aux PaymentIntents)",
+      body.get("automatic_payment_methods[enabled]") === null);
+check("aucun payment_method_types n'est imposé : Stripe propose ce qui est activé sur le compte du photographe",
+      body.get("payment_method_types") === null && body.get("payment_method_types[0]") === null);
 check("les métadonnées imbriquées sont bien encodées",
       body.get("metadata[gallery_id]") === "gal_abc");
 
