@@ -571,6 +571,16 @@ async function handleApi(req, res, url) {
     }
   }
 
+  // GET /local/stats — compteurs globaux du compte (galeries, ventes, suppléments).
+  if (parts.length === 1 && parts[0] === "stats" && req.method === "GET") {
+    try {
+      const result = await client.stats();
+      return json(res, 200, result);
+    } catch (err) {
+      return relayError(res, err, "Impossible de lire les compteurs");
+    }
+  }
+
   // POST /local/account — nom du studio.
   if (parts.length === 1 && parts[0] === "account" && req.method === "POST") {
     const body = JSON.parse((await readBody(req)).toString("utf8") || "{}");

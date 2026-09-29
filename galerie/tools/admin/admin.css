@@ -134,6 +134,27 @@ h3 { font-size: 1.15rem; margin-bottom: .9rem; }
 .ad-empty { text-align: center; padding: 4rem 1rem; }
 .ad-empty h2 { margin-bottom: .6rem; }
 
+.ad-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: .8rem;
+  margin-bottom: 1.4rem;
+}
+.ad-stat {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 1rem 1.1rem;
+}
+.ad-stat-value { font-family: var(--serif); font-weight: 600; font-size: 1.7rem; color: var(--ink); line-height: 1.1; }
+.ad-stat-label { font-size: .76rem; color: var(--muted); margin-top: .3rem; }
+.ad-stat-sub { font-size: .74rem; color: var(--muted); margin-top: .2rem; }
+.ad-stat-success { border-color: #cfe0d5; background: #f4f9f5; }
+.ad-stat-success .ad-stat-value { color: var(--success); }
+.ad-stat-warn { border-color: #f3d9ad; background: #fdf6ea; }
+.ad-stat-warn .ad-stat-value { color: #96591a; }
+.ad-stat-warn .ad-stat-sub { color: #96591a; }
+
 .ad-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));

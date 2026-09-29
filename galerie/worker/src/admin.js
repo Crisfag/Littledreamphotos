@@ -531,6 +531,56 @@ async function listInvoices(env, photographerId) {
   return json({ invoices: results, totalCents });
 }
 
+// Compteurs globaux du compte, affichés en aperçu sur l'onglet Galeries —
+// galeries créées, ventes effectuées et leur montant, suppléments déjà
+// réglés et encore en attente. Les suppléments en attente reprennent
+// exactement le même calcul que listGalleries/supplementFor (jamais une
+// simple somme stockée : le client peut sélectionner plus de photos après
+// un premier paiement), pour rester cohérents avec ce qu'affiche déjà
+// l'onglet Facturation.
+async function getStats(env, photographerId) {
+  const galleriesRow = await env.DB.prepare(
+    "SELECT COUNT(*) AS n FROM galleries WHERE photographer_id = ?"
+  )
+    .bind(photographerId)
+    .first();
+
+  const salesRow = await env.DB.prepare(
+    `SELECT COUNT(*) AS n, COALESCE(SUM(payments.amount_cents), 0) AS amount_cents,
+            COALESCE(SUM(payments.extra_count), 0) AS extra_count
+     FROM payments JOIN galleries ON galleries.id = payments.gallery_id
+     WHERE galleries.photographer_id = ? AND payments.status = 'paid'`
+  )
+    .bind(photographerId)
+    .first();
+
+  const { results: galleries } = await env.DB.prepare(
+    `SELECT g.included_photos, g.extra_photo_price_cents,
+            (SELECT COUNT(*) FROM photos p WHERE p.gallery_id = g.id AND p.selected = 1) AS selected_count,
+            (SELECT COALESCE(SUM(extra_count), 0) FROM payments WHERE payments.gallery_id = g.id AND payments.status = 'paid') AS paid_extra_count
+     FROM galleries g WHERE g.photographer_id = ?`
+  )
+    .bind(photographerId)
+    .all();
+
+  let dueExtraCount = 0;
+  let dueTotalCents = 0;
+  for (const g of galleries) {
+    const supplement = supplementFor(g.included_photos, g.extra_photo_price_cents, g.selected_count, g.paid_extra_count);
+    dueExtraCount += supplement.dueExtraCount;
+    dueTotalCents += supplement.dueTotalCents;
+  }
+
+  return json({
+    galleriesCount: galleriesRow?.n || 0,
+    salesCount: salesRow?.n || 0,
+    salesAmountCents: salesRow?.amount_cents || 0,
+    extrasPaidCount: salesRow?.extra_count || 0,
+    extrasDueCount: dueExtraCount,
+    extrasDueAmountCents: dueTotalCents,
+  });
+}
+
 // Cloisonnée directement par photographer_id (colonne stockée sur la
 // facture elle-même à l'émission) — pas besoin de remonter par la galerie.
 async function getInvoice(env, photographerId, invoiceId) {
@@ -654,6 +704,10 @@ export async function handleAdmin(request, env, ctx, path) {
   }
   if (section === "invoices" && parts.length === 4 && request.method === "GET") {
     return getInvoice(env, photographerId, parts[3]);
+  }
+
+  if (section === "stats" && parts.length === 3 && request.method === "GET") {
+    return getStats(env, photographerId);
   }
 
   // Paramètres du compte : nom de studio, mot de passe, e-mail (avec

@@ -242,6 +242,12 @@ Le tableau de bord s'organise en trois onglets, chacun avec son propre lien
 
 #### Onglet Galeries
 
+- **Bandeau de compteurs**, en aperçu au-dessus de la liste : galeries
+  créées, ventes effectuées (suppléments réglés en ligne) et leur montant,
+  suppléments en ordre (déjà réglés) et suppléments en attente (dus mais pas
+  encore réglés — mis en évidence dès qu'il y en a). Purement informatif,
+  toutes galeries confondues ; un coup d'œil sur l'activité du compte avant
+  même d'en ouvrir une.
 - **Nouvelle galerie** : titre, client, mot de passe (généré si laissé vide),
   date d'expiration. Le mot de passe n'est affiché qu'une seule fois, à la
   création — notez-le tout de suite. Perdu ? La fiche de la galerie propose
@@ -546,7 +552,7 @@ des tuiles, refus du mauvais mot de passe, absence de toute balise `<img>`,
 neutralisation du menu contextuel et de la copie, voile sur « Impr. écran » et
 sur perte de focus, consignation au journal.
 
-**API du Worker** — 179 vérifications contre le vrai moteur Cloudflare (D1 et R2
+**API du Worker** — 185 vérifications contre le vrai moteur Cloudflare (D1 et R2
 émulés localement par `wrangler dev`) : comptes photographes (inscription,
 connexion, session, mot de passe oublié — même réponse générique qu'un
 compte existe ou non), cloisonnement strict entre comptes (un photographe ne
@@ -586,7 +592,12 @@ adresse du compte inchangée tant que le lien de confirmation n'a pas été
 ouvert, lien de confirmation absent ou invalide refusé (le jeton lui-même,
 comme pour la réinitialisation de mot de passe, ne transite jamais par
 l'API), facturation agrégée (liste vide par défaut, jamais les factures
-d'un autre compte).
+d'un autre compte). Compteurs globaux (galeries créées, ventes et montant,
+suppléments en ordre et en attente), testés en différentiel plutôt qu'en
+valeur absolue : créer une galerie incrémente aussitôt le compteur de
+galeries sans toucher aux ventes ni aux suppléments, un supplément non réglé
+n'apparaît que dans « en attente » — jamais « en ordre » —, invisible chez
+un autre compte, et supprimer la galerie ramène tout à l'état de départ.
 Le trajet complet de réinitialisation de mot de passe (jeton reçu par
 e-mail → nouveau mot de passe → ancien mot de passe rejeté → lien à usage
 unique) est vérifié manuellement plutôt qu'automatiquement : le jeton ne
@@ -625,21 +636,26 @@ appliqué sinon, HT + TVA se recomposant exactement au centime près en TTC
 même sur un montant qui ne se divise pas rond, et un vrai PDF valide généré
 aussi bien avec des coordonnées complètes qu'avec des champs vides.
 
-**Interface d'administration** — 55 vérifications dans un vrai navigateur,
+**Interface d'administration** — 60 vérifications dans un vrai navigateur,
 contre le vrai Worker local : demande de lien de réinitialisation de mot de
 passe (message générique affiché), création de compte et connexion depuis
 le formulaire (pas de session présupposée), barre d'onglets Galeries /
 Facturation / Paramètres visible avec l'onglet Galeries actif par défaut,
-création d'une galerie, régénération de son mot de passe,
+bandeau de compteurs affiché dès l'arrivée et tout à zéro pour un compte
+tout neuf (aucune tuile en alerte ni en succès), création d'une galerie,
+régénération de son mot de passe,
 choix d'une couleur ou d'une image pour l'écran de connexion client, choix
 d'une mise en page pour la galerie, réglage d'un forfait de photos incluses,
 sélection du client retrouvée sur sa vignette (cœur) et filtrable en un
 clic, historique des paiements affiché sur la fiche galerie une fois un
 règlement confirmé (date, nombre de suppléments, montant, statut « Réglé »,
-numéro et adresse d'envoi de la facture émise, lien de téléchargement),
-glisser-déposer de photos avec suivi de progression, vraies vignettes
-affichées, suppression d'une photo, navigation vers l'écran « Vérifier une
-photo » et retour à la liste. Onglet Facturation : bouton de connexion
+numéro et adresse d'envoi de la facture émise, lien de téléchargement), et
+le bandeau de compteurs qui reflète aussitôt ce règlement (ventes, montant,
+suppléments « en ordre » en évidence, aucun « en attente » puisque le
+forfait a été relevé au-dessus de la sélection du client), glisser-déposer
+de photos avec suivi de progression, vraies vignettes affichées, suppression
+d'une photo, navigation vers l'écran « Vérifier une photo » et retour à la
+liste. Onglet Facturation : bouton de connexion
 Stripe proposé, résumé des suppléments dus, la facture émise plus haut bien
 présente dans l'historique agrégé, et un clic sur sa ligne ramène à la bonne
 galerie. Onglet Paramètres : nom du studio modifié aussitôt reflété dans la

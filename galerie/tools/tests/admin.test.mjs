@@ -87,6 +87,20 @@ check("la barre d'onglets Galeries / Facturation / Paramètres est visible",
 check("l'onglet Galeries est actif par défaut, à l'arrivée sur le tableau de bord",
       await page.locator("#ad-tab-galleries.ad-tab-active").count() === 1);
 
+/* ---------- Bandeau de compteurs (avant toute galerie) ---------- */
+
+check("le bandeau de compteurs s'affiche dès l'arrivée, avant toute galerie",
+      await page.locator(".ad-stat").count() === 5);
+const emptyStatsText = await page.textContent(".ad-stats");
+check("tous les compteurs démarrent à zéro pour un compte tout neuf",
+      emptyStatsText.indexOf("Galeries créées") !== -1 &&
+      emptyStatsText.indexOf("Ventes effectuées") !== -1 &&
+      emptyStatsText.indexOf("Suppléments en ordre") !== -1 &&
+      emptyStatsText.indexOf("Suppléments en attente") !== -1 &&
+      (await page.locator(".ad-stat-warn").count()) === 0 &&
+      (await page.locator(".ad-stat-success").count()) === 0,
+      emptyStatsText.replace(/\s+/g, " "));
+
 /* ---------- Création ---------- */
 
 const title = `Séance de test ${Date.now().toString(36)}`;
@@ -335,6 +349,25 @@ check("la ligne affiche aussi le numéro de la facture émise et son adresse d'e
 const invoiceLinkHref = await page.getAttribute(".ad-payments-heading + .ad-table-wrap a", "href");
 check("le lien de la facture pointe vers le bon identifiant, servi par le serveur local",
       invoiceLinkHref === "/local/invoices/inv_admin_ui_test", invoiceLinkHref);
+
+/* ---------- Le bandeau de compteurs reflète le règlement inséré plus haut ---------- */
+// Forfait relevé à 5 photos incluses (section « Forfait et suppléments » plus
+// haut), un seul coup de cœur du client : aucun supplément dû, mais les 2
+// suppléments du règlement synthétique sont bien comptés comme « en ordre ».
+
+await page.click("#ad-tab-galleries");
+await page.waitForSelector(".ad-stats", { timeout: 10000 });
+const statsAfterPayment = await page.textContent(".ad-stats");
+check("le compteur de ventes reflète le règlement inséré plus haut (1 vente, 25,00 €)",
+      statsAfterPayment.indexOf("Ventes effectuées") !== -1 && statsAfterPayment.indexOf("25,00") !== -1,
+      statsAfterPayment.replace(/\s+/g, " "));
+check("les 2 suppléments réglés apparaissent comme « en ordre », en succès",
+      (await page.locator(".ad-stat-success").count()) === 1);
+check("aucun supplément n'est en attente (forfait déjà relevé au-dessus de la sélection du client)",
+      (await page.locator(".ad-stat-warn").count()) === 0);
+
+await page.locator(`.ad-card:has-text("${title}")`).click();
+await page.waitForSelector(".ad-dropzone", { timeout: 10000 });
 
 /* ---------- Suppression d'une photo ---------- */
 

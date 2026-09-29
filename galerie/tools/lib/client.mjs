@@ -116,6 +116,10 @@ export class WorkerClient {
     return this.request("GET", "/api/admin/invoices");
   }
 
+  stats() {
+    return this.request("GET", "/api/admin/stats");
+  }
+
   listGalleries() {
     return this.request("GET", "/api/admin/galleries");
   }

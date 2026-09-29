@@ -237,6 +237,36 @@
     openModal("ad-create-modal");
   }
 
+  // Bandeau de compteurs en aperçu sur l'onglet Galeries : un coup d'œil sur
+  // l'activité du compte avant même d'ouvrir une galerie. Purement affiché —
+  // aucune de ces valeurs n'est modifiable ici.
+  function statTile(label, value, sub, cls) {
+    return (
+      '<div class="ad-stat' + (cls ? " " + cls : "") + '">' +
+      '<p class="ad-stat-value">' + esc(value) + "</p>" +
+      '<p class="ad-stat-label">' + esc(label) + "</p>" +
+      (sub ? '<p class="ad-stat-sub">' + esc(sub) + "</p>" : "") +
+      "</div>"
+    );
+  }
+
+  function statsHtml(stats) {
+    return (
+      '<div class="ad-stats">' +
+      statTile("Galeries créées", stats.galleriesCount) +
+      statTile("Ventes effectuées", stats.salesCount) +
+      statTile("Montant encaissé", formatEuros(stats.salesAmountCents)) +
+      statTile("Suppléments en ordre", stats.extrasPaidCount, "", stats.extrasPaidCount > 0 ? "ad-stat-success" : "") +
+      statTile(
+        "Suppléments en attente",
+        stats.extrasDueCount,
+        stats.extrasDueCount > 0 ? formatEuros(stats.extrasDueAmountCents) + " à régler" : "",
+        stats.extrasDueCount > 0 ? "ad-stat-warn" : ""
+      ) +
+      "</div>"
+    );
+  }
+
   async function renderList(skipHash) {
     if (!skipHash && location.hash) history.pushState(null, "", location.pathname);
     setActiveTab("galleries");
@@ -251,6 +281,17 @@
     }
     state.galleries = data.galleries;
 
+    // Purement informatif : un échec ici ne doit jamais empêcher de voir ou
+    // gérer ses galeries, donc on se contente de masquer le bandeau plutôt
+    // que de faire échouer toute la vue.
+    var stats = null;
+    try {
+      stats = await api("GET", "/stats");
+    } catch (err) {
+      stats = null;
+    }
+    var statsBar = stats ? statsHtml(stats) : "";
+
     var header =
       '<div class="ad-section-header">' +
       "<h2>Vos galeries</h2>" +
@@ -259,6 +300,7 @@
 
     if (state.galleries.length === 0) {
       el.view.innerHTML =
+        statsBar +
         header +
         '<div class="ad-empty"><h2>Aucune galerie pour le moment</h2>' +
         '<p>Cliquez sur « Nouvelle galerie » pour envoyer votre première séance.</p></div>';
@@ -291,7 +333,7 @@
       );
     });
 
-    el.view.innerHTML = header + '<div class="ad-grid">' + rows.join("") + "</div>";
+    el.view.innerHTML = statsBar + header + '<div class="ad-grid">' + rows.join("") + "</div>";
     document.getElementById("ad-new-gallery").addEventListener("click", openCreateModal);
     el.view.querySelectorAll(".ad-card").forEach(function (card) {
       var open = function () {

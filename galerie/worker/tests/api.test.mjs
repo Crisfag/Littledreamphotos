@@ -1117,6 +1117,77 @@ const peerInvoices = await (await peerAdmin("GET", "/api/admin/invoices")).json(
 check("un photographe ne voit jamais les factures d'un autre compte dans la liste agrégée",
       Array.isArray(peerInvoices.invoices) && !peerInvoices.invoices.some((inv) => inv.gallery_slug === SLUG));
 
+/* ---------- Compteurs globaux (galeries, ventes, suppléments) ---------- */
+// Testés en différentiel (avant/après), jamais en valeur absolue : le compte
+// utilisé dans ce fichier accumule d'autres galeries au fil des sections
+// précédentes, et ce test ne doit pas dépendre de leur nombre exact.
+
+const statsBefore = await (await admin("GET", "/api/admin/stats")).json();
+const peerStatsBefore = await (await peerAdmin("GET", "/api/admin/stats")).json();
+
+const statsSlug = `${SLUG}-stats`;
+const statsGalleryCreated = await admin("POST", "/api/admin/galleries", {
+  slug: statsSlug, password: "mot-de-passe-solide", includedPhotos: 1, extraPhotoPrice: "10",
+});
+check("une galerie de test pour les compteurs peut être créée", statsGalleryCreated.status === 201);
+
+const statsAfterCreate = await (await admin("GET", "/api/admin/stats")).json();
+check("créer une galerie incrémente aussitôt le compteur de galeries créées",
+      statsAfterCreate.galleriesCount === statsBefore.galleriesCount + 1,
+      JSON.stringify({ before: statsBefore.galleriesCount, after: statsAfterCreate.galleriesCount }));
+check("créer une galerie ne modifie ni les ventes ni les suppléments",
+      statsAfterCreate.salesCount === statsBefore.salesCount &&
+      statsAfterCreate.extrasPaidCount === statsBefore.extrasPaidCount &&
+      statsAfterCreate.extrasDueCount === statsBefore.extrasDueCount);
+
+// Deux photos sélectionnées contre un forfait d'une seule photo incluse : un
+// supplément dû, jamais compté comme réglé tant qu'aucun paiement n'existe.
+const statsPhotoIds = [];
+for (let i = 0; i < 2; i++) {
+  const id = `pho_Stats${RUN}${i}`;
+  await admin("POST", `/api/admin/galleries/${statsSlug}/photos`, {
+    id, position: i, width: 100, height: 100, cols: 1, rows: 1,
+  });
+  statsPhotoIds.push(id);
+}
+const statsLogin = await (await fetch(`${BASE}/api/gallery/${statsSlug}/login`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ password: "mot-de-passe-solide" }),
+})).json();
+const statsBearer = { authorization: `Bearer ${statsLogin.token}` };
+for (const id of statsPhotoIds) {
+  await fetch(`${BASE}/api/gallery/${statsSlug}/select`, {
+    method: "POST",
+    headers: { ...statsBearer, "content-type": "application/json" },
+    body: JSON.stringify({ photoId: id, selected: true }),
+  });
+}
+
+const statsAfterDue = await (await admin("GET", "/api/admin/stats")).json();
+check("un supplément non réglé apparaît dans le compteur « en attente », jamais dans « en ordre »",
+      statsAfterDue.extrasDueCount === statsBefore.extrasDueCount + 1 &&
+      statsAfterDue.extrasDueAmountCents === statsBefore.extrasDueAmountCents + 1000 &&
+      statsAfterDue.extrasPaidCount === statsBefore.extrasPaidCount &&
+      statsAfterDue.salesCount === statsBefore.salesCount &&
+      statsAfterDue.salesAmountCents === statsBefore.salesAmountCents,
+      JSON.stringify(statsAfterDue));
+
+const peerStatsAfterDue = await (await peerAdmin("GET", "/api/admin/stats")).json();
+check("le supplément dû d'un compte n'apparaît jamais dans les compteurs d'un autre",
+      peerStatsAfterDue.extrasDueCount === peerStatsBefore.extrasDueCount &&
+      peerStatsAfterDue.galleriesCount === peerStatsBefore.galleriesCount,
+      JSON.stringify(peerStatsAfterDue));
+
+await admin("DELETE", `/api/admin/galleries/${statsSlug}`);
+
+const statsAfterDelete = await (await admin("GET", "/api/admin/stats")).json();
+check("supprimer la galerie ramène les compteurs à leur état de départ",
+      statsAfterDelete.galleriesCount === statsBefore.galleriesCount &&
+      statsAfterDelete.extrasDueCount === statsBefore.extrasDueCount &&
+      statsAfterDelete.extrasDueAmountCents === statsBefore.extrasDueAmountCents,
+      JSON.stringify(statsAfterDelete));
+
 const failed = checks.filter((c) => !c.ok);
 console.log(failed.length ? `\n${failed.length} vérification(s) en échec.` : `\n${checks.length} vérifications, toutes passent.`);
 process.exit(failed.length ? 1 : 0);
