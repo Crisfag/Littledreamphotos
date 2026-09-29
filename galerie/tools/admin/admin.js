@@ -45,7 +45,31 @@
     login: document.getElementById("ad-login"),
     app: document.getElementById("ad-app"),
     account: document.getElementById("ad-current-account"),
+    tabs: document.getElementById("ad-tabs"),
   };
+
+  /* ---------- Onglets (Galeries / Facturation / Paramètres) ---------- */
+  // Purement visuel : chaque écran reste atteignable par son propre lien de
+  // hachage (#/facturation, #/parametres…) — les onglets ne sont qu'un
+  // raccourci qui reflète, et met à jour, ce même état.
+
+  function setActiveTab(name) {
+    if (!el.tabs) return;
+    el.tabs.querySelectorAll(".ad-tab").forEach(function (btn) {
+      btn.classList.toggle("ad-tab-active", btn.getAttribute("data-tab") === name);
+    });
+  }
+
+  if (el.tabs) {
+    el.tabs.addEventListener("click", function (event) {
+      var btn = event.target.closest(".ad-tab");
+      if (!btn) return;
+      var tab = btn.getAttribute("data-tab");
+      if (tab === "galleries") renderList();
+      else if (tab === "billing") renderBilling();
+      else if (tab === "settings") renderSettings();
+    });
+  }
 
   /* ---------- Session ---------- */
 
@@ -207,8 +231,15 @@
     return { label: "Sans expiration", cls: "" };
   }
 
+  function openCreateModal() {
+    document.getElementById("ad-create-form").reset();
+    document.getElementById("ad-create-error").hidden = true;
+    openModal("ad-create-modal");
+  }
+
   async function renderList(skipHash) {
     if (!skipHash && location.hash) history.pushState(null, "", location.pathname);
+    setActiveTab("galleries");
     el.view.innerHTML = '<p class="ad-loading">Chargement des galeries…</p>';
     var data;
     try {
@@ -220,10 +251,18 @@
     }
     state.galleries = data.galleries;
 
+    var header =
+      '<div class="ad-section-header">' +
+      "<h2>Vos galeries</h2>" +
+      '<button type="button" class="ad-btn ad-btn-primary" id="ad-new-gallery">+ Nouvelle galerie</button>' +
+      "</div>";
+
     if (state.galleries.length === 0) {
       el.view.innerHTML =
+        header +
         '<div class="ad-empty"><h2>Aucune galerie pour le moment</h2>' +
         '<p>Cliquez sur « Nouvelle galerie » pour envoyer votre première séance.</p></div>';
+      document.getElementById("ad-new-gallery").addEventListener("click", openCreateModal);
       return;
     }
 
@@ -252,7 +291,8 @@
       );
     });
 
-    el.view.innerHTML = '<div class="ad-grid">' + rows.join("") + "</div>";
+    el.view.innerHTML = header + '<div class="ad-grid">' + rows.join("") + "</div>";
+    document.getElementById("ad-new-gallery").addEventListener("click", openCreateModal);
     el.view.querySelectorAll(".ad-card").forEach(function (card) {
       var open = function () {
         renderDetail(card.getAttribute("data-slug"));
@@ -295,10 +335,58 @@
     );
   }
 
+  function invoiceRowsHtml(invoices) {
+    if (!invoices.length) {
+      return '<p class="ad-hint">Aucune facture émise pour l\'instant — elles apparaissent ici dès qu\'un client règle un supplément en ligne.</p>';
+    }
+    var rows = invoices.map(function (inv) {
+      return (
+        "<tr>" +
+        "<td>" + esc(formatDateTime(inv.issued_at)) + "</td>" +
+        '<td><a href="/local/invoices/' + encodeURIComponent(inv.id) + '" target="_blank" rel="noopener">' + esc(inv.number) + "</a></td>" +
+        '<td><button type="button" class="ad-link-btn" data-slug="' + esc(inv.gallery_slug) + '">' + esc(inv.gallery_title) + "</button></td>" +
+        "<td>" + formatEuros(inv.amount_cents) + "</td>" +
+        "<td>" + (inv.emailed_to ? esc(inv.emailed_to) : '<span class="ad-hint">—</span>') + "</td>" +
+        "</tr>"
+      );
+    });
+    return (
+      '<div class="ad-table-wrap"><table class="ad-table"><thead><tr>' +
+      "<th>Quand</th><th>Facture</th><th>Galerie</th><th>Montant</th><th>Envoyée à</th>" +
+      "</tr></thead><tbody>" + rows.join("") + "</tbody></table></div>"
+    );
+  }
+
+  // Rien n'agrège encore les suppléments dus toutes galeries confondues côté
+  // Worker : la liste des galeries porte déjà due_extra_count/due_total_cents
+  // par galerie (voir admin.js du Worker), il suffit de les additionner ici.
+  function dueSummaryHtml(galleries) {
+    var due = galleries.filter(function (g) { return g.due_extra_count > 0; });
+    if (!due.length) {
+      return '<p class="ad-hint">Aucun supplément en attente de règlement pour l\'instant.</p>';
+    }
+    var totalCents = due.reduce(function (sum, g) { return sum + g.due_total_cents; }, 0);
+    var rows = due.map(function (g) {
+      return (
+        "<tr>" +
+        '<td><button type="button" class="ad-link-btn" data-slug="' + esc(g.slug) + '">' + esc(g.title) + "</button></td>" +
+        "<td>" + g.due_extra_count + " photo" + (g.due_extra_count > 1 ? "s" : "") + "</td>" +
+        "<td>" + formatEuros(g.due_total_cents) + "</td>" +
+        "</tr>"
+      );
+    });
+    return (
+      '<p class="ad-quota-due">' + formatEuros(totalCents) + " au total, sur " + due.length + " galerie" + (due.length > 1 ? "s" : "") + "</p>" +
+      '<div class="ad-table-wrap"><table class="ad-table"><thead><tr><th>Galerie</th><th>Suppléments</th><th>Montant</th></tr></thead><tbody>' +
+      rows.join("") + "</tbody></table></div>"
+    );
+  }
+
   async function renderBilling(skipHash) {
     var cameFromStripe = location.hash.indexOf("stripe=retour") !== -1 || location.hash.indexOf("stripe=repriser") !== -1;
     if (!skipHash && location.hash.indexOf("#/facturation") !== 0) history.pushState(null, "", "#/facturation");
     if (cameFromStripe) history.replaceState(null, "", "#/facturation");
+    setActiveTab("billing");
 
     el.view.innerHTML = '<p class="ad-loading">Chargement…</p>';
     if (cameFromStripe) {
@@ -307,37 +395,37 @@
       try { await api("POST", "/stripe/refresh"); } catch (err) { /* la relecture manuelle reste possible depuis l'écran */ }
     }
 
-    var data;
+    var photographer, invoicesData, galleriesData;
     try {
-      data = await api("GET", "/auth/me");
+      var me = await api("GET", "/auth/me");
+      photographer = me.photographer;
+      invoicesData = await api("GET", "/invoices");
+      galleriesData = await api("GET", "/galleries");
     } catch (err) {
       toast(err.message, true);
       return renderList();
     }
-    var photographer = data.photographer;
 
     el.view.innerHTML =
-      '<button type="button" class="ad-back" id="ad-billing-back">&larr; Toutes les galeries</button>' +
       '<header class="ad-detail-header"><div><h2>Facturation</h2>' +
-      '<p class="ad-hint">Paiement en ligne des suppléments, et informations à faire figurer sur vos factures.</p>' +
+      '<p class="ad-hint">Paiement en ligne des suppléments, factures émises et montants encore dus, toutes galeries confondues.</p>' +
       "</div></header>" +
       '<section class="ad-stripe"><div class="ad-section-header"><h3>Paiement en ligne</h3></div>' +
       stripeStatusHtml(photographer) +
       "</section>" +
-      '<section class="ad-billing-profile"><div class="ad-section-header"><h3>Coordonnées de facturation</h3></div>' +
-      '<p class="ad-hint">Ces informations apparaîtront sur les factures émises pour vos clients.</p>' +
-      '<form id="ad-billing-form">' +
-      '<label class="ad-field"><span>Raison sociale</span>' +
-      '<input type="text" name="companyName" value="' + esc(photographer.billingCompanyName) + '" placeholder="Little Dream Photos" /></label>' +
-      '<label class="ad-field"><span>Adresse</span>' +
-      '<textarea name="address" rows="3" placeholder="Rue…, code postal, ville, pays">' + esc(photographer.billingAddress) + "</textarea></label>" +
-      '<label class="ad-field"><span>Numéro de TVA</span>' +
-      '<input type="text" name="vatNumber" value="' + esc(photographer.billingVatNumber) + '" placeholder="BE0123456789" /></label>' +
-      '<button type="submit" class="ad-btn ad-btn-primary" id="ad-billing-save">Enregistrer</button>' +
-      "</form></section>";
+      '<section><div class="ad-section-header"><h3>Suppléments dus</h3></div>' +
+      dueSummaryHtml(galleriesData.galleries) +
+      "</section>" +
+      '<section><div class="ad-section-header"><h3>Historique des factures</h3>' +
+      (invoicesData.invoices.length ? "<p class=\"ad-hint\">" + formatEuros(invoicesData.totalCents) + " au total</p>" : "") +
+      "</div>" +
+      invoiceRowsHtml(invoicesData.invoices) +
+      "</section>";
 
-    document.getElementById("ad-billing-back").addEventListener("click", function () {
-      renderList();
+    el.view.querySelectorAll("[data-slug]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        renderDetail(btn.getAttribute("data-slug"));
+      });
     });
 
     var connectBtn = document.getElementById("ad-stripe-connect");
@@ -368,6 +456,108 @@
         }
       });
     }
+  }
+
+  /* ---------- Vue : paramètres du compte ---------- */
+  // Studio, présentation par défaut des futures galeries, coordonnées
+  // fiscales, connexion (e-mail, mot de passe) — tout ce qui concerne le
+  // compte lui-même plutôt qu'une galerie en particulier.
+
+  async function renderSettings(skipHash) {
+    if (!skipHash && location.hash !== "#/parametres") history.pushState(null, "", "#/parametres");
+    setActiveTab("settings");
+    el.view.innerHTML = '<p class="ad-loading">Chargement…</p>';
+
+    var data;
+    try {
+      data = await api("GET", "/auth/me");
+    } catch (err) {
+      toast(err.message, true);
+      return renderList();
+    }
+    var photographer = data.photographer;
+
+    el.view.innerHTML =
+      '<header class="ad-detail-header"><div><h2>Paramètres</h2>' +
+      '<p class="ad-hint">Studio, présentation par défaut de vos futures galeries, coordonnées fiscales et connexion.</p>' +
+      "</div></header>" +
+
+      '<section><div class="ad-section-header"><h3>Studio</h3></div>' +
+      '<form id="ad-studio-form">' +
+      '<label class="ad-field"><span>Nom du studio</span>' +
+      '<input type="text" name="studioName" value="' + esc(photographer.studioName) + '" placeholder="Mon Studio" /></label>' +
+      '<button type="submit" class="ad-btn ad-btn-primary" id="ad-studio-save">Enregistrer</button>' +
+      "</form></section>" +
+
+      '<section><div class="ad-section-header"><h3>Présentation par défaut</h3></div>' +
+      '<p class="ad-hint">Proposée à la création d\'une nouvelle galerie — modifiable au cas par cas ensuite, comme pour n\'importe quelle galerie déjà créée.</p>' +
+      '<div class="ad-layout-options" id="ad-default-layout-options">' +
+      layoutOptionsHtml({ layout: photographer.defaultLayout }) +
+      "</div></section>" +
+
+      '<section><div class="ad-section-header"><h3>Coordonnées fiscales</h3></div>' +
+      '<p class="ad-hint">Ces informations apparaissent sur les factures émises pour vos clients.</p>' +
+      '<form id="ad-billing-form">' +
+      '<label class="ad-field"><span>Raison sociale</span>' +
+      '<input type="text" name="companyName" value="' + esc(photographer.billingCompanyName) + '" placeholder="Little Dream Photos" /></label>' +
+      '<label class="ad-field"><span>Adresse</span>' +
+      '<textarea name="address" rows="3" placeholder="Rue…, code postal, ville, pays">' + esc(photographer.billingAddress) + "</textarea></label>" +
+      '<label class="ad-field"><span>Numéro de TVA</span>' +
+      '<input type="text" name="vatNumber" value="' + esc(photographer.billingVatNumber) + '" placeholder="BE0123456789" /></label>' +
+      '<button type="submit" class="ad-btn ad-btn-primary" id="ad-billing-save">Enregistrer</button>' +
+      "</form></section>" +
+
+      '<section><div class="ad-section-header"><h3>Adresse e-mail</h3></div>' +
+      '<p class="ad-hint">Adresse actuelle : <strong>' + esc(photographer.email) + '</strong>. La changer nécessite de confirmer la nouvelle adresse en ouvrant le lien reçu par e-mail — rien ne change avant ça.</p>' +
+      '<form id="ad-email-form">' +
+      '<label class="ad-field"><span>Nouvelle adresse</span>' +
+      '<input type="email" name="newEmail" required autocomplete="username" /></label>' +
+      '<label class="ad-field"><span>Mot de passe actuel</span>' +
+      '<input type="password" name="password" required autocomplete="current-password" /></label>' +
+      '<p class="ad-error" id="ad-email-error" hidden></p>' +
+      '<p class="ad-hint" id="ad-email-message" hidden></p>' +
+      '<button type="submit" class="ad-btn ad-btn-primary" id="ad-email-save">Envoyer le lien de confirmation</button>' +
+      "</form></section>" +
+
+      '<section><div class="ad-section-header"><h3>Mot de passe</h3></div>' +
+      '<form id="ad-password-change-form">' +
+      '<label class="ad-field"><span>Mot de passe actuel</span>' +
+      '<input type="password" name="currentPassword" required autocomplete="current-password" /></label>' +
+      '<label class="ad-field"><span>Nouveau mot de passe <em>(10 caractères minimum)</em></span>' +
+      '<input type="password" name="newPassword" required minlength="10" autocomplete="new-password" /></label>' +
+      '<p class="ad-error" id="ad-password-change-error" hidden></p>' +
+      '<button type="submit" class="ad-btn ad-btn-primary" id="ad-password-change-save">Changer le mot de passe</button>' +
+      "</form></section>";
+
+    document.getElementById("ad-studio-form").addEventListener("submit", async function (event) {
+      event.preventDefault();
+      var form = event.target;
+      var btn = document.getElementById("ad-studio-save");
+      btn.disabled = true;
+      try {
+        var studioName = form.studioName.value.trim();
+        await api("POST", "/account", { studioName: studioName });
+        toast("Nom du studio enregistré.");
+        if (el.account) el.account.textContent = (studioName || photographer.email) + " · Galeries protégées";
+      } catch (err) {
+        toast(err.message, true);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    document.getElementById("ad-default-layout-options").querySelectorAll(".ad-layout-option").forEach(function (btn) {
+      btn.addEventListener("click", async function () {
+        var layout = btn.getAttribute("data-layout");
+        try {
+          await api("POST", "/account/defaults", { defaultLayout: layout });
+          toast("Présentation par défaut mise à jour.");
+          renderSettings(true);
+        } catch (err) {
+          toast(err.message, true);
+        }
+      });
+    });
 
     document.getElementById("ad-billing-form").addEventListener("submit", async function (event) {
       event.preventDefault();
@@ -385,6 +575,53 @@
         toast(err.message, true);
       } finally {
         saveBtn.disabled = false;
+      }
+    });
+
+    document.getElementById("ad-email-form").addEventListener("submit", async function (event) {
+      event.preventDefault();
+      var form = event.target;
+      var errorBox = document.getElementById("ad-email-error");
+      var messageBox = document.getElementById("ad-email-message");
+      var btn = document.getElementById("ad-email-save");
+      errorBox.hidden = true;
+      messageBox.hidden = true;
+      btn.disabled = true;
+      btn.textContent = "Envoi…";
+      try {
+        var newEmail = form.newEmail.value.trim();
+        await api("POST", "/account/email", { newEmail: newEmail, password: form.password.value });
+        messageBox.textContent = "Un lien de confirmation a été envoyé à " + newEmail + ". Ouvrez-le pour finaliser le changement — rien ne change avant ça.";
+        messageBox.hidden = false;
+        form.reset();
+      } catch (err) {
+        errorBox.textContent = err.message;
+        errorBox.hidden = false;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Envoyer le lien de confirmation";
+      }
+    });
+
+    document.getElementById("ad-password-change-form").addEventListener("submit", async function (event) {
+      event.preventDefault();
+      var form = event.target;
+      var errorBox = document.getElementById("ad-password-change-error");
+      var btn = document.getElementById("ad-password-change-save");
+      errorBox.hidden = true;
+      btn.disabled = true;
+      try {
+        await api("POST", "/account/password", {
+          currentPassword: form.currentPassword.value,
+          newPassword: form.newPassword.value,
+        });
+        toast("Mot de passe changé.");
+        form.reset();
+      } catch (err) {
+        errorBox.textContent = err.message;
+        errorBox.hidden = false;
+      } finally {
+        btn.disabled = false;
       }
     });
   }
@@ -659,6 +896,7 @@
   async function renderDetail(slug, skipHash) {
     var hash = "#/g/" + encodeURIComponent(slug);
     if (!skipHash && location.hash !== hash) history.pushState(null, "", hash);
+    setActiveTab("galleries");
     el.view.innerHTML = '<p class="ad-loading">Chargement…</p>';
     var data;
     try {
@@ -1005,17 +1243,9 @@
     renderDetect();
   });
 
-  document.getElementById("ad-billing").addEventListener("click", function () {
-    renderBilling();
-  });
-
   /* ---------- Création de galerie ---------- */
-
-  document.getElementById("ad-new-gallery").addEventListener("click", function () {
-    document.getElementById("ad-create-form").reset();
-    document.getElementById("ad-create-error").hidden = true;
-    openModal("ad-create-modal");
-  });
+  // Le bouton « + Nouvelle galerie » lui-même est rendu dans renderList
+  // (onglet Galeries) — ce formulaire reste partagé par toute l'appli.
 
   document.getElementById("ad-create-form").addEventListener("submit", async function (event) {
     event.preventDefault();
@@ -1210,6 +1440,7 @@
     if (match) renderDetail(decodeURIComponent(match[1]), true);
     else if (location.hash === "#/detect") renderDetect(true);
     else if (location.hash.indexOf("#/facturation") === 0) renderBilling(true);
+    else if (location.hash === "#/parametres") renderSettings(true);
     else renderList(true);
   }
 
@@ -1223,19 +1454,50 @@
     }).then(routeFromHash);
   }
 
+  // Confirmation d'un changement d'adresse e-mail (voir renderSettings) :
+  // n'exige aucune session — le lien envoyé par e-mail en tient lieu, et peut
+  // donc être ouvert depuis un autre appareil que celui où le changement a
+  // été demandé. On l'efface de l'URL une fois traité, comme pour `reset`.
+  var confirmEmailToken = new URLSearchParams(location.search).get("confirm-email");
+
+  function handleEmailConfirmation() {
+    return fetch("/local/auth/confirm-email", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ token: confirmEmailToken }),
+    })
+      .then(function (response) {
+        return response.json().then(function (data) {
+          history.replaceState(null, "", location.pathname + location.hash);
+          if (!response.ok) {
+            toast(data.error || "Lien de confirmation invalide ou expiré.", true);
+          } else {
+            toast("Nouvelle adresse confirmée : " + data.email);
+          }
+        });
+      })
+      .catch(function () {
+        history.replaceState(null, "", location.pathname + location.hash);
+        toast("Connexion au serveur d'administration perdue.", true);
+      });
+  }
+
   if (resetToken) {
     // Un lien de réinitialisation prime sur une éventuelle session déjà
     // ouverte dans ce navigateur : cliquer ce lien est une intention claire.
     showLoginCard("ad-reset-card");
   } else {
-    fetch("/local/auth/me").then(function (response) {
-      if (!response.ok) {
-        showLogin();
-        return;
-      }
-      return response.json().then(function (data) {
-        showApp(data.photographer);
-        bootstrap();
+    var afterConfirm = confirmEmailToken ? handleEmailConfirmation() : Promise.resolve();
+    afterConfirm.then(function () {
+      return fetch("/local/auth/me").then(function (response) {
+        if (!response.ok) {
+          showLogin();
+          return;
+        }
+        return response.json().then(function (data) {
+          showApp(data.photographer);
+          bootstrap();
+        });
       });
     }).catch(showLogin);
   }

@@ -181,6 +181,34 @@ export function buildPasswordResetEmail({ studioName, resetUrl, ts }) {
   return { subject, html, text };
 }
 
+// Fonction pure : facile à tester unitairement, sans accès réseau.
+export function buildEmailChangeConfirmationEmail({ studioName, confirmUrl, ts }) {
+  const subject = "Confirmez votre nouvelle adresse e-mail Holypixx";
+
+  const bodyHtml = [
+    eyebrow("Sécurité du compte"),
+    heading("Confirmer votre nouvelle adresse"),
+    paragraph(`Bonjour${studioName ? " " + escapeHtml(studioName) : ""},`),
+    paragraph(`Un changement d'adresse e-mail a été demandé pour votre compte Holypixx le ${escapeHtml(formatWhen(ts))}. Cette adresse-ci deviendra votre identifiant de connexion dès confirmation.`),
+    emailButton(confirmUrl, "Confirmer cette adresse"),
+    `<div style="height:20px;"></div>`,
+    paragraph(
+      "Ce lien n'est valable qu'une demi-heure et ne fonctionne qu'une seule fois. Si vous n'êtes pas à l'origine de cette demande, ignorez simplement cet e-mail : rien ne change tant que ce lien n'est pas ouvert.",
+      { small: true }
+    ),
+  ].join("\n");
+
+  const html = emailShell({ preheader: "Confirmez votre nouvelle adresse e-mail Holypixx", bodyHtml });
+
+  const text =
+    `Un changement d'adresse e-mail a été demandé pour votre compte Holypixx le ${formatWhen(ts)}. ` +
+    `Confirmez cette adresse : ${confirmUrl} ` +
+    `Ce lien n'est valable qu'une demi-heure et ne fonctionne qu'une seule fois. ` +
+    "Si vous n'êtes pas à l'origine de cette demande, ignorez simplement cet e-mail.";
+
+  return { subject, html, text };
+}
+
 function formatEuros(cents) {
   return ((cents || 0) / 100).toLocaleString("fr-BE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
 }
@@ -270,4 +298,8 @@ export async function sendCaptureAlert(env, params) {
 
 export async function sendPasswordResetEmail(env, params) {
   await sendEmail(env, { to: params.to, ...buildPasswordResetEmail(params) });
+}
+
+export async function sendEmailChangeConfirmation(env, params) {
+  await sendEmail(env, { to: params.to, ...buildEmailChangeConfirmationEmail(params) });
 }

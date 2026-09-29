@@ -230,6 +230,18 @@ propres galeries. C'est ce qui rend cette même interface utilisable telle
 quelle si elle est un jour hébergée pour plusieurs photographes — l'usage
 local sur `127.0.0.1` n'est qu'un cas particulier, pas un système à part.
 
+Le tableau de bord s'organise en trois onglets, chacun avec son propre lien
+(rechargeable, partageable dans l'historique du navigateur) :
+
+- **Galeries** — la liste des séances en cours, et la fiche de chacune.
+- **Facturation** — statut Stripe Connect, suppléments encore dus et
+  historique des factures émises, toutes galeries confondues.
+- **Paramètres** — tout ce qui concerne le compte plutôt qu'une galerie en
+  particulier : nom du studio, présentation par défaut des futures galeries,
+  coordonnées fiscales, adresse e-mail et mot de passe de connexion.
+
+#### Onglet Galeries
+
 - **Nouvelle galerie** : titre, client, mot de passe (généré si laissé vide),
   date d'expiration. Le mot de passe n'est affiché qu'une seule fois, à la
   création — notez-le tout de suite. Perdu ? La fiche de la galerie propose
@@ -257,18 +269,6 @@ local sur `127.0.0.1` n'est qu'un cas particulier, pas un système à part.
   la fiche de la galerie et la liste (badge 💶). Une fois le compte Stripe du
   photographe actif, le client peut régler ce supplément en ligne directement
   depuis sa galerie ; sinon le photographe règle ça de son côté.
-- **Facturation** (écran « 💳 Facturation », propre au compte, pas à une
-  galerie) : connexion d'un compte Stripe (Stripe Connect, comptes
-  « Express ») pour recevoir directement le règlement des suppléments, et
-  coordonnées à faire figurer sur les factures (raison sociale, adresse,
-  n° de TVA). Une facture PDF est émise automatiquement dès qu'un supplément
-  est réglé en ligne — numérotée en continu par année (ex. 2026-0001),
-  avec TVA belge (21 %) si un numéro de TVA est renseigné, ou mention
-  d'exonération (régime de la franchise) sinon. Le client la télécharge
-  depuis sa galerie et la reçoit par e-mail si son adresse a été renseignée ;
-  le photographe la retrouve dans l'historique des paiements de la galerie.
-  Voir *Paiement en ligne des suppléments* plus bas pour la configuration
-  côté Stripe.
 - **Glisser-déposer** des photos sur la page de la galerie : chacune est
   traitée (réduction, empreinte, filigrane, découpage) et envoyée avec une
   barre de progression individuelle. Plusieurs photos partent en parallèle.
@@ -287,6 +287,52 @@ local sur `127.0.0.1` n'est qu'un cas particulier, pas un système à part.
   remarques compris.
 - **Suppression** d'une photo isolée ou de la galerie entière, avec
   confirmation.
+
+#### Onglet Facturation
+
+Propre au compte, pas à une galerie particulière — regroupe tout ce qui
+touche à l'argent, toutes galeries confondues :
+
+- **Paiement en ligne** : connexion d'un compte Stripe (Stripe Connect,
+  comptes « Express ») pour recevoir directement le règlement des
+  suppléments. Voir *Paiement en ligne des suppléments* plus bas pour la
+  configuration côté Stripe.
+- **Suppléments dus** : la liste des galeries où le client a sélectionné
+  plus de photos que son forfait, avec le montant total à régler — un lien
+  sur chaque ligne ramène directement à la fiche de la galerie concernée.
+- **Historique des factures** : toutes les factures émises (toutes galeries
+  confondues), avec un lien vers chaque PDF et l'adresse à laquelle elle a
+  été envoyée. Une facture PDF est émise automatiquement dès qu'un
+  supplément est réglé en ligne — numérotée en continu par année (ex.
+  2026-0001), avec TVA belge (21 %) si un numéro de TVA est renseigné dans
+  les Paramètres, ou mention d'exonération (régime de la franchise) sinon.
+
+#### Onglet Paramètres
+
+Tout ce qui concerne le compte plutôt qu'une galerie en particulier :
+
+- **Studio** : le nom affiché dans la barre du tableau de bord et sur le
+  filigrane des photos.
+- **Présentation par défaut** : la mise en page (*Grille*, *Mosaïque* ou
+  *Défilement* — voir plus haut) proposée à la création d'une nouvelle
+  galerie. Une simple valeur de départ, jamais imposée : chaque galerie reste
+  modifiable au cas par cas depuis sa propre fiche, comme avant.
+- **Coordonnées fiscales** : raison sociale, adresse et n° de TVA à faire
+  figurer sur les factures émises pour vos clients (voir l'onglet
+  Facturation).
+- **Adresse e-mail** : redemande le mot de passe actuel, et ne prend jamais
+  effet immédiatement — un lien de confirmation est envoyé à la *nouvelle*
+  adresse (jamais l'ancienne), valable trente minutes, à usage unique.
+  Ouvrir ce lien est ce qui applique réellement le changement. Cette
+  confirmation par lien, comme pour la réinitialisation de mot de passe,
+  empêche qu'un jeton de session volé suffise à lui seul à rediriger
+  silencieusement les notifications futures du compte (dont les prochaines
+  réinitialisations de mot de passe) vers une adresse contrôlée par un
+  attaquant.
+- **Mot de passe** : changement directement depuis le tableau de bord,
+  sans passer par « Mot de passe oublié ? ». Redemande lui aussi le mot de
+  passe actuel — un jeton de session volé ne doit jamais, à lui seul,
+  suffire à changer le mot de passe du compte.
 
 Ce serveur n'écoute que sur `127.0.0.1` : il n'est joignable que depuis votre
 propre machine, jamais depuis le réseau.
@@ -394,8 +440,9 @@ l'interface d'administration, insérée en lien dans l'e-mail.
 
 Chaque photographe connecte son propre compte [Stripe](https://stripe.com)
 (comptes « Express », [Stripe Connect](https://stripe.com/connect)) depuis
-l'écran « 💳 Facturation » du tableau de bord, et renseigne ses coordonnées
-de facturation (raison sociale, adresse, n° de TVA). Le règlement d'un
+l'onglet Facturation du tableau de bord, et renseigne ses coordonnées de
+facturation (raison sociale, adresse, n° de TVA) depuis l'onglet Paramètres.
+Le règlement d'un
 supplément passe par une **charge de destination** (`transfer_data.destination`) :
 la session de paiement est créée sur la plateforme, qui règle les frais
 Stripe, puis le montant est automatiquement transféré au photographe —
@@ -417,7 +464,7 @@ galerie (date, nombre de suppléments, montant, statut, lien vers la facture).
 Dès que le webhook confirme le paiement, une facture PDF est générée
 automatiquement (numérotation continue par photographe, en séries annuelles :
 2026-0001, 2026-0002, …) et rangée dans R2. Si le photographe a renseigné un
-numéro de TVA (écran Facturation), la TVA belge à 21 % est calculée sur le
+numéro de TVA (onglet Paramètres), la TVA belge à 21 % est calculée sur le
 montant déjà encaissé (TTC) ; sinon la facture porte la mention d'exonération
 du régime de la franchise. Le client la télécharge directement depuis sa
 galerie (bouton « Télécharger ma facture ») et la reçoit aussi par e-mail
@@ -499,7 +546,7 @@ des tuiles, refus du mauvais mot de passe, absence de toute balise `<img>`,
 neutralisation du menu contextuel et de la copie, voile sur « Impr. écran » et
 sur perte de focus, consignation au journal.
 
-**API du Worker** — 156 vérifications contre le vrai moteur Cloudflare (D1 et R2
+**API du Worker** — 179 vérifications contre le vrai moteur Cloudflare (D1 et R2
 émulés localement par `wrangler dev`) : comptes photographes (inscription,
 connexion, session, mot de passe oublié — même réponse générique qu'un
 compte existe ou non), cloisonnement strict entre comptes (un photographe ne
@@ -526,20 +573,36 @@ e-mail client (accepté et relu, mal formé refusé à la création), téléchar
 de facture (refusé sans session, identifiant inconnu refusé côté admin comme
 côté galerie cliente), référence de photo sur un évènement de capture
 (un identifiant inconnu n'est jamais enregistré), journal sans IP en clair.
+Paramètres du compte : nom du studio modifiable (vide refusé), présentation
+par défaut modifiable (valeur inconnue refusée) et bien héritée par les
+nouvelles galeries créées ensuite, changement de mot de passe et changement
+d'adresse e-mail exigeant tous deux le mot de passe **actuel** — refusés avec
+un 400, jamais un 401, pour qu'une simple faute de frappe ne déconnecte
+jamais la session en cours (un bug réel, introduit puis corrigé pendant ce
+développement — voir ce test), ancien mot de passe rejeté et nouveau
+fonctionnel après un changement réussi, nouvelle adresse refusée si mal
+formée, déjà prise par un autre compte ou égale à l'adresse actuelle,
+adresse du compte inchangée tant que le lien de confirmation n'a pas été
+ouvert, lien de confirmation absent ou invalide refusé (le jeton lui-même,
+comme pour la réinitialisation de mot de passe, ne transite jamais par
+l'API), facturation agrégée (liste vide par défaut, jamais les factures
+d'un autre compte).
 Le trajet complet de réinitialisation de mot de passe (jeton reçu par
 e-mail → nouveau mot de passe → ancien mot de passe rejeté → lien à usage
 unique) est vérifié manuellement plutôt qu'automatiquement : le jeton ne
 transite jamais par l'API, seulement par l'e-mail, et l'y exposer pour les
 tests reviendrait à affaiblir la sécurité qu'il apporte.
 
-**Alertes e-mail** — 16 vérifications sans réseau ni `wrangler dev`
-(`buildCaptureAlertEmail` et `buildPasswordResetEmail` sont des fonctions
-pures) : sujet et corps référençant la bonne galerie et la bonne photo,
-message générique quand aucune photo n'est identifiée, raisons connues
-traduites en texte lisible, lien et durée de validité présents dans l'e-mail
-de réinitialisation, et surtout échappement HTML du nom de studio, du titre
-de galerie et du nom de client — autant de champs saisis par le
-photographe, jamais dignes de confiance tels quels dans un e-mail.
+**Alertes e-mail** — 21 vérifications sans réseau ni `wrangler dev`
+(`buildCaptureAlertEmail`, `buildPasswordResetEmail` et
+`buildEmailChangeConfirmationEmail` sont des fonctions pures) : sujet et
+corps référençant la bonne galerie et la bonne photo, message générique
+quand aucune photo n'est identifiée, raisons connues traduites en texte
+lisible, lien et durée de validité présents dans l'e-mail de réinitialisation
+comme dans celui de confirmation d'un changement d'adresse (envoyé
+exclusivement à la nouvelle adresse), et surtout échappement HTML du nom de
+studio, du titre de galerie et du nom de client — autant de champs saisis
+par le photographe, jamais dignes de confiance tels quels dans un e-mail.
 
 **Signature de webhook Stripe et sessions de paiement** — 16 vérifications
 sans réseau (fetch intercepté, jamais appelé pour de vrai) :
@@ -562,23 +625,34 @@ appliqué sinon, HT + TVA se recomposant exactement au centime près en TTC
 même sur un montant qui ne se divise pas rond, et un vrai PDF valide généré
 aussi bien avec des coordonnées complètes qu'avec des champs vides.
 
-**Interface d'administration** — 40 vérifications dans un vrai navigateur,
+**Interface d'administration** — 55 vérifications dans un vrai navigateur,
 contre le vrai Worker local : demande de lien de réinitialisation de mot de
 passe (message générique affiché), création de compte et connexion depuis
-le formulaire (pas de session présupposée), création d'une galerie,
-régénération de son mot de passe,
+le formulaire (pas de session présupposée), barre d'onglets Galeries /
+Facturation / Paramètres visible avec l'onglet Galeries actif par défaut,
+création d'une galerie, régénération de son mot de passe,
 choix d'une couleur ou d'une image pour l'écran de connexion client, choix
 d'une mise en page pour la galerie, réglage d'un forfait de photos incluses,
 sélection du client retrouvée sur sa vignette (cœur) et filtrable en un
-clic, écran « Facturation » (bouton de connexion Stripe proposé,
-coordonnées de facturation enregistrées et relues après rechargement),
-historique des paiements affiché sur la fiche galerie une fois un
+clic, historique des paiements affiché sur la fiche galerie une fois un
 règlement confirmé (date, nombre de suppléments, montant, statut « Réglé »,
 numéro et adresse d'envoi de la facture émise, lien de téléchargement),
 glisser-déposer de photos avec suivi de progression, vraies vignettes
-affichées, suppression d'une photo et d'une galerie, navigation vers l'écran
-« Vérifier une photo » et retour à la liste, déconnexion qui tient après un
-rechargement de page — et un second compte, connecté dans un second
+affichées, suppression d'une photo, navigation vers l'écran « Vérifier une
+photo » et retour à la liste. Onglet Facturation : bouton de connexion
+Stripe proposé, résumé des suppléments dus, la facture émise plus haut bien
+présente dans l'historique agrégé, et un clic sur sa ligne ramène à la bonne
+galerie. Onglet Paramètres : nom du studio modifié aussitôt reflété dans la
+barre supérieure, présentation par défaut choisie et relue après
+rechargement, coordonnées fiscales enregistrées et relues après
+rechargement, mauvais mot de passe actuel rejeté **sans déconnecter la
+session en cours** (le bug corrigé pendant ce développement — voir
+*Fiabilité mesurée* côté API), changement de mot de passe réussi avec le mot
+de passe actuel, demande de changement d'e-mail rejetée avec un mauvais mot
+de passe puis acceptée avec le bon (message de confirmation affiché, rien
+changé tout de suite). Puis suppression de la galerie, déconnexion qui tient
+après un rechargement de page, et reconnexion avec le mot de passe modifié
+en cours de test — et un second compte, connecté dans un second
 contexte navigateur, qui ne voit jamais les galeries du premier dans son
 propre tableau de bord.
 

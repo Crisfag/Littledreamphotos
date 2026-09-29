@@ -120,16 +120,19 @@
           <p class="ad-brand-sub" id="ad-current-account">Galeries protégées — administration</p>
         </div>
       </div>
+      <nav class="ad-tabs" id="ad-tabs" aria-label="Sections du tableau de bord">
+        <button type="button" class="ad-tab" id="ad-tab-galleries" data-tab="galleries">Galeries</button>
+        <button type="button" class="ad-tab" id="ad-tab-billing" data-tab="billing">Facturation</button>
+        <button type="button" class="ad-tab" id="ad-tab-settings" data-tab="settings">Paramètres</button>
+      </nav>
       <div class="ad-topbar-actions">
-        <button type="button" class="ad-btn" id="ad-check-photo">🔍 Vérifier une photo</button>
-        <button type="button" class="ad-btn" id="ad-billing">💳 Facturation</button>
-        <button type="button" class="ad-btn ad-btn-primary" id="ad-new-gallery">+ Nouvelle galerie</button>
+        <button type="button" class="ad-btn ad-btn-icon" id="ad-check-photo" title="Vérifier une photo">🔍</button>
         <button type="button" class="ad-btn" id="ad-logout">Se déconnecter</button>
       </div>
     </header>
 
     <main id="ad-view">
-      <!-- Rempli par admin.js : liste des galeries, ou détail d'une galerie -->
+      <!-- Rempli par admin.js : liste des galeries, détail d'une galerie, facturation ou paramètres -->
     </main>
   </div>
 

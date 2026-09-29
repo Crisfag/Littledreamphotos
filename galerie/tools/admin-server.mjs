@@ -355,6 +355,35 @@ async function handleAuth(req, res, parts) {
     return json(res, 200, { photographer: data.photographer });
   }
 
+  // POST /local/auth/confirm-email — confirme un changement d'adresse e-mail
+  // demandé depuis l'écran Paramètres. Public comme reset-password : le lien
+  // envoyé par e-mail en tient lieu, aucune session requise (peut être ouvert
+  // depuis un autre appareil que celui où le changement a été demandé).
+  if (parts.length === 2 && parts[1] === "confirm-email" && req.method === "POST") {
+    let body;
+    try {
+      body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
+    } catch {
+      return json(res, 400, { error: "Requête invalide" });
+    }
+    const token = String(body.token || "");
+    if (!token) return json(res, 400, { error: "Lien invalide ou expiré" });
+
+    let confirmRes;
+    try {
+      confirmRes = await fetch(`${config.api}/api/auth/confirm-email`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ token }),
+      });
+    } catch {
+      return json(res, 502, { error: "Worker injoignable" });
+    }
+    const data = await confirmRes.json().catch(() => ({}));
+    if (!confirmRes.ok) return json(res, confirmRes.status, { error: data.error || "Confirmation refusée" });
+    return json(res, 200, data);
+  }
+
   if (parts.length === 2 && parts[1] === "logout" && req.method === "POST") {
     clearSessionCookie(req, res);
     return json(res, 200, { ok: true });
@@ -529,6 +558,60 @@ async function handleApi(req, res, url) {
       return json(res, 200, { ok: true });
     } catch (err) {
       return relayError(res, err, "Impossible d'enregistrer le profil de facturation");
+    }
+  }
+
+  // GET /local/invoices — toutes les factures du compte, toutes galeries confondues.
+  if (parts.length === 1 && parts[0] === "invoices" && req.method === "GET") {
+    try {
+      const result = await client.listInvoices();
+      return json(res, 200, result);
+    } catch (err) {
+      return relayError(res, err, "Impossible de lire les factures");
+    }
+  }
+
+  // POST /local/account — nom du studio.
+  if (parts.length === 1 && parts[0] === "account" && req.method === "POST") {
+    const body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
+    try {
+      await client.setStudioName(String(body.studioName || ""));
+      return json(res, 200, { ok: true });
+    } catch (err) {
+      return relayError(res, err, "Impossible d'enregistrer le nom du studio");
+    }
+  }
+
+  // POST /local/account/password — mot de passe de connexion, en session.
+  if (parts.length === 2 && parts[0] === "account" && parts[1] === "password" && req.method === "POST") {
+    const body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
+    try {
+      await client.changePassword(String(body.currentPassword || ""), String(body.newPassword || ""));
+      return json(res, 200, { ok: true });
+    } catch (err) {
+      return relayError(res, err, "Impossible de changer le mot de passe");
+    }
+  }
+
+  // POST /local/account/email — demande de changement d'adresse (confirmation par lien envoyé sur la nouvelle adresse).
+  if (parts.length === 2 && parts[0] === "account" && parts[1] === "email" && req.method === "POST") {
+    const body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
+    try {
+      await client.requestEmailChange(String(body.newEmail || ""), String(body.password || ""));
+      return json(res, 200, { ok: true });
+    } catch (err) {
+      return relayError(res, err, "Impossible de démarrer le changement d'adresse");
+    }
+  }
+
+  // POST /local/account/defaults — mise en page proposée par défaut aux futures galeries.
+  if (parts.length === 2 && parts[0] === "account" && parts[1] === "defaults" && req.method === "POST") {
+    const body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
+    try {
+      await client.setDefaults(String(body.defaultLayout || "grille"));
+      return json(res, 200, { ok: true });
+    } catch (err) {
+      return relayError(res, err, "Impossible d'enregistrer la présentation par défaut");
     }
   }
 

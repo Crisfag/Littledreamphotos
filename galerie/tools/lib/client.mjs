@@ -96,6 +96,26 @@ export class WorkerClient {
     return this.request("POST", "/api/admin/billing", data);
   }
 
+  setStudioName(studioName) {
+    return this.request("POST", "/api/admin/account", { studioName });
+  }
+
+  changePassword(currentPassword, newPassword) {
+    return this.request("POST", "/api/admin/account/password", { currentPassword, newPassword });
+  }
+
+  requestEmailChange(newEmail, password) {
+    return this.request("POST", "/api/admin/account/email", { newEmail, password });
+  }
+
+  setDefaults(defaultLayout) {
+    return this.request("POST", "/api/admin/account/defaults", { defaultLayout });
+  }
+
+  listInvoices() {
+    return this.request("GET", "/api/admin/invoices");
+  }
+
   listGalleries() {
     return this.request("GET", "/api/admin/galleries");
   }

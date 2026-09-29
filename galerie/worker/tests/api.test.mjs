@@ -988,6 +988,135 @@ const invoiceClientUnknown = await fetch(`${BASE}/api/gallery/${quotaSlug}/invoi
 });
 check("télécharger une facture inconnue depuis la galerie cliente renvoie 404", invoiceClientUnknown.status === 404);
 
+/* ---------- Paramètres du compte (studio, mot de passe, e-mail, présentation par défaut) ---------- */
+
+const studioNameSet = await admin("POST", "/api/admin/account", { studioName: "Nouveau nom de studio" });
+check("le nom du studio peut être modifié", studioNameSet.status === 200);
+
+const meAfterStudioName = await (await admin("GET", "/api/auth/me")).json();
+check("le nouveau nom du studio est relu dans le profil",
+      meAfterStudioName.photographer?.studioName === "Nouveau nom de studio");
+
+const emptyStudioName = await admin("POST", "/api/admin/account", { studioName: "   " });
+check("un nom de studio vide est refusé", emptyStudioName.status === 400);
+
+const badDefaultLayout = await admin("POST", "/api/admin/account/defaults", { defaultLayout: "n-importe-quoi" });
+check("une présentation par défaut inconnue est refusée", badDefaultLayout.status === 400);
+
+const defaultLayoutSet = await admin("POST", "/api/admin/account/defaults", { defaultLayout: "mosaique" });
+check("la présentation par défaut peut être modifiée", defaultLayoutSet.status === 200);
+
+const meAfterDefaultLayout = await (await admin("GET", "/api/auth/me")).json();
+check("la présentation par défaut choisie est relue dans le profil",
+      meAfterDefaultLayout.photographer?.defaultLayout === "mosaique");
+
+const defaultLayoutInheritedSlug = `${SLUG}-defaut-mosaique`;
+const defaultLayoutInherited = await admin("POST", "/api/admin/galleries", {
+  slug: defaultLayoutInheritedSlug, password: "mot-de-passe-solide",
+});
+check("une nouvelle galerie est créée avec succès après le changement de présentation par défaut",
+      defaultLayoutInherited.status === 201);
+const defaultLayoutInheritedDetail = await (await admin("GET", `/api/admin/galleries/${defaultLayoutInheritedSlug}`)).json();
+check("une nouvelle galerie hérite de la présentation par défaut du compte",
+      defaultLayoutInheritedDetail.gallery?.layout === "mosaique",
+      JSON.stringify(defaultLayoutInheritedDetail.gallery?.layout));
+await admin("DELETE", `/api/admin/galleries/${defaultLayoutInheritedSlug}`);
+await admin("POST", "/api/admin/account/defaults", { defaultLayout: "grille" });
+
+// Changer le mot de passe redemande le mot de passe ACTUEL (jamais la seule
+// session) — un jeton volé ne doit jamais suffire seul à ce changement.
+const wrongCurrentPassword = await admin("POST", "/api/admin/account/password", {
+  currentPassword: "mauvais-mot-de-passe", newPassword: "un-autre-mot-de-passe-1234",
+});
+check("changer de mot de passe avec un mauvais mot de passe actuel est refusé (400, jamais 401 — ne déconnecte pas la session)",
+      wrongCurrentPassword.status === 400);
+
+const weakNewPassword = await admin("POST", "/api/admin/account/password", {
+  currentPassword: PASSWORD, newPassword: "court",
+});
+check("un nouveau mot de passe trop court est refusé", weakNewPassword.status === 400);
+
+const ACCOUNT_NEW_PASSWORD = "un-nouveau-mot-de-passe-1234";
+const passwordChanged = await admin("POST", "/api/admin/account/password", {
+  currentPassword: PASSWORD, newPassword: ACCOUNT_NEW_PASSWORD,
+});
+check("le mot de passe peut être changé en fournissant l'actuel", passwordChanged.status === 200);
+
+const loginWithOldPassword = await fetch(`${BASE}/api/auth/login`, {
+  method: "POST", headers: { "content-type": "application/json" },
+  body: JSON.stringify({ email: EMAIL, password: PASSWORD }),
+});
+check("l'ancien mot de passe ne fonctionne plus après le changement", loginWithOldPassword.status === 401);
+
+const loginWithNewPassword = await fetch(`${BASE}/api/auth/login`, {
+  method: "POST", headers: { "content-type": "application/json" },
+  body: JSON.stringify({ email: EMAIL, password: ACCOUNT_NEW_PASSWORD }),
+});
+check("le nouveau mot de passe fonctionne pour se connecter", loginWithNewPassword.status === 200);
+
+// Changer d'adresse e-mail redemande aussi le mot de passe actuel, mais ne
+// prend jamais effet immédiatement : seule la confirmation du lien envoyé à
+// la NOUVELLE adresse (jamais l'ancienne) l'applique réellement — voir plus
+// bas. Sans ça, un jeton de session volé suffirait à rediriger silencieusement
+// toutes les notifications futures du compte (dont les prochaines
+// réinitialisations de mot de passe) vers une adresse contrôlée par l'attaquant.
+const NEW_EMAIL = `nouvelle-adresse-${RUN}@test.invalid`;
+
+const emailChangeWrongPassword = await admin("POST", "/api/admin/account/email", {
+  newEmail: NEW_EMAIL, password: "mauvais-mot-de-passe",
+});
+check("demander un changement d'e-mail avec un mauvais mot de passe est refusé (400, jamais 401)",
+      emailChangeWrongPassword.status === 400);
+
+const emailChangeBadFormat = await admin("POST", "/api/admin/account/email", {
+  newEmail: "pas-un-email", password: ACCOUNT_NEW_PASSWORD,
+});
+check("une nouvelle adresse mal formée est refusée", emailChangeBadFormat.status === 400);
+
+const emailChangeSameAddress = await admin("POST", "/api/admin/account/email", {
+  newEmail: EMAIL, password: ACCOUNT_NEW_PASSWORD,
+});
+check("demander à changer vers sa propre adresse actuelle est refusé", emailChangeSameAddress.status === 400);
+
+const emailChangeTaken = await admin("POST", "/api/admin/account/email", {
+  newEmail: peerEmail, password: ACCOUNT_NEW_PASSWORD,
+});
+check("une adresse déjà utilisée par un autre compte est refusée", emailChangeTaken.status === 409);
+
+const emailChangeRequested = await admin("POST", "/api/admin/account/email", {
+  newEmail: NEW_EMAIL, password: ACCOUNT_NEW_PASSWORD,
+});
+check("une demande de changement d'e-mail valide est acceptée", emailChangeRequested.status === 200);
+
+const meAfterEmailRequest = await (await admin("GET", "/api/auth/me")).json();
+check("l'adresse du compte ne change pas tant que le lien de confirmation n'a pas été ouvert",
+      meAfterEmailRequest.photographer?.email === EMAIL);
+
+// Le jeton lui-même ne transite jamais par l'API — seulement par l'e-mail
+// envoyé à la nouvelle adresse (même raisonnement que pour reset-password
+// plus haut) : le trajet complet n'est donc pas automatisable ici sans
+// affaiblir la sécurité qu'il apporte. Ce qui EST vérifiable, c'est le refus
+// propre d'un lien absent ou invalide.
+const confirmEmailMissingToken = await fetch(`${BASE}/api/auth/confirm-email`, {
+  method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({}),
+});
+check("confirmer un changement d'e-mail sans jeton est refusé", confirmEmailMissingToken.status === 400);
+
+const confirmEmailBogusToken = await fetch(`${BASE}/api/auth/confirm-email`, {
+  method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token: "jeton-invalide" }),
+});
+check("confirmer un changement d'e-mail avec un jeton invalide est refusé", confirmEmailBogusToken.status === 400);
+
+/* ---------- Facturation agrégée (toutes galeries confondues) ---------- */
+
+const invoicesEmpty = await (await admin("GET", "/api/admin/invoices")).json();
+check("la liste des factures est vide pour un compte qui n'en a émis aucune",
+      Array.isArray(invoicesEmpty.invoices) && invoicesEmpty.invoices.length === 0 && invoicesEmpty.totalCents === 0);
+
+const peerInvoices = await (await peerAdmin("GET", "/api/admin/invoices")).json();
+check("un photographe ne voit jamais les factures d'un autre compte dans la liste agrégée",
+      Array.isArray(peerInvoices.invoices) && !peerInvoices.invoices.some((inv) => inv.gallery_slug === SLUG));
+
 const failed = checks.filter((c) => !c.ok);
 console.log(failed.length ? `\n${failed.length} vérification(s) en échec.` : `\n${checks.length} vérifications, toutes passent.`);
 process.exit(failed.length ? 1 : 0);

@@ -44,7 +44,10 @@ page.on("pageerror", (err) => exceptions.push(String(err)));
 
 const RUN = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 const email = `admin-ui-${RUN}@test.invalid`;
-const password = "mot-de-passe-de-test-1234";
+// Changé en cours de route par le test du formulaire « Mot de passe » de
+// l'onglet Paramètres — la reconnexion finale doit donc utiliser la valeur
+// courante, pas celle de l'inscription.
+let password = "mot-de-passe-de-test-1234";
 
 await page.goto(BASE, { waitUntil: "domcontentloaded" });
 await page.waitForSelector("#ad-login-form", { timeout: 10000 });
@@ -79,6 +82,10 @@ check("créer un compte depuis le formulaire connecte automatiquement au tableau
       await page.isVisible("#ad-new-gallery"));
 check("le nom du studio renseigné à l'inscription apparaît dans la barre supérieure",
       (await page.textContent("#ad-current-account")).indexOf("Studio de test") === 0);
+check("la barre d'onglets Galeries / Facturation / Paramètres est visible",
+      await page.isVisible("#ad-tabs"));
+check("l'onglet Galeries est actif par défaut, à l'arrivée sur le tableau de bord",
+      await page.locator("#ad-tab-galleries.ad-tab-active").count() === 1);
 
 /* ---------- Création ---------- */
 
@@ -361,35 +368,113 @@ await page.waitForSelector(".ad-grid, .ad-empty", { timeout: 5000 });
 check("« Toutes les galeries » depuis cet écran ramène bien à la liste",
       await page.isVisible(".ad-grid, .ad-empty"));
 
-/* ---------- Facturation (Stripe Connect + coordonnées) ---------- */
+/* ---------- Onglet Facturation (Stripe Connect + factures + suppléments dus) ---------- */
 // La connexion Stripe elle-même n'est pas exercée ici (il faudrait un vrai
-// compte plateforme) — seuls le câblage de l'écran et la persistance des
-// coordonnées le sont ; le reste est couvert côté API dans api.test.mjs.
+// compte plateforme) — seul le câblage de l'écran est vérifié ; le reste est
+// couvert côté API dans api.test.mjs. La facture insérée plus haut (section
+// « Historique des paiements ») doit apparaître ici, agrégée toutes galeries
+// confondues.
 
-await page.click("#ad-billing");
-await page.waitForSelector("#ad-billing-form", { timeout: 10000 });
-check("le bouton « Facturation » ouvre bien cet écran, avec son propre lien dans l'URL",
-      await page.isVisible("#ad-billing-form") && (await page.evaluate(() => location.hash)) === "#/facturation");
+await page.click("#ad-tab-billing");
+await page.waitForSelector(".ad-stripe", { timeout: 10000 });
+check("l'onglet « Facturation » ouvre bien cet écran, avec son propre lien dans l'URL",
+      await page.isVisible(".ad-stripe") && (await page.evaluate(() => location.hash)) === "#/facturation");
+check("l'onglet Facturation est marqué actif dans la barre",
+      await page.locator("#ad-tab-billing.ad-tab-active").count() === 1);
 check("sans compte Stripe connecté, le bouton de connexion est proposé",
       await page.isVisible("#ad-stripe-connect"));
+
+const billingViewText = await page.textContent("#ad-view");
+check("le supplément dû n'apparaît plus une fois le forfait relevé au-dessus de la sélection du client",
+      billingViewText.indexOf("Aucun supplément en attente") !== -1, billingViewText);
+check("la facture émise pour le paiement inséré plus haut apparaît dans l'historique agrégé",
+      billingViewText.indexOf("2026-0001") !== -1 && billingViewText.indexOf("25,00") !== -1, billingViewText);
+
+await page.locator(`[data-slug="${gallerySlug}"]`).first().click();
+await page.waitForSelector(".ad-dropzone", { timeout: 10000 });
+check("cliquer sur une ligne de facture depuis l'onglet Facturation ouvre la bonne galerie",
+      await page.evaluate(() => location.hash) === `#/g/${gallerySlug}`);
+
+/* ---------- Onglet Paramètres (studio, présentation par défaut, coordonnées fiscales, connexion) ---------- */
+
+await page.click("#ad-tab-settings");
+await page.waitForSelector("#ad-studio-form", { timeout: 10000 });
+check("l'onglet « Paramètres » ouvre bien cet écran, avec son propre lien dans l'URL",
+      await page.isVisible("#ad-studio-form") && (await page.evaluate(() => location.hash)) === "#/parametres");
+check("l'onglet Paramètres est marqué actif dans la barre",
+      await page.locator("#ad-tab-settings.ad-tab-active").count() === 1);
+
+await page.fill('#ad-studio-form [name="studioName"]', "Studio de test — renommé");
+await page.click("#ad-studio-save");
+await page.waitForSelector(".ad-toast-visible", { timeout: 5000 });
+check("le nom du studio modifié apparaît aussitôt dans la barre supérieure",
+      (await page.textContent("#ad-current-account")).indexOf("Studio de test — renommé") === 0);
+
+check("la grille est l'option de présentation par défaut active avant tout changement",
+      await page.locator('#ad-default-layout-options .ad-layout-option[data-layout="grille"].ad-layout-option-active').count() === 1);
+await page.click('#ad-default-layout-options .ad-layout-option[data-layout="mosaique"]');
+await page.waitForFunction(
+  () => document.querySelector('#ad-default-layout-options .ad-layout-option[data-layout="mosaique"]')?.classList.contains("ad-layout-option-active"),
+  { timeout: 10000 }
+);
+await page.reload({ waitUntil: "domcontentloaded" });
+await page.waitForSelector("#ad-studio-form", { timeout: 10000 });
+check("la présentation par défaut choisie est bien relue après rechargement",
+      await page.locator('#ad-default-layout-options .ad-layout-option[data-layout="mosaique"].ad-layout-option-active').count() === 1);
 
 await page.fill('#ad-billing-form [name="companyName"]', "Little Dream Photos SRL");
 await page.fill('#ad-billing-form [name="address"]', "Rue de la Paix 1, 1000 Bruxelles, Belgique");
 await page.fill('#ad-billing-form [name="vatNumber"]', "BE0123456789");
 await page.click("#ad-billing-save");
-await page.waitForSelector(".ad-toast", { timeout: 10000 });
+await page.waitForSelector(".ad-toast-visible", { timeout: 10000 });
 
 await page.reload({ waitUntil: "domcontentloaded" });
 await page.waitForSelector("#ad-billing-form", { timeout: 10000 });
-check("les coordonnées de facturation enregistrées sont bien relues après rechargement",
+check("les coordonnées fiscales enregistrées sont bien relues après rechargement",
       await page.inputValue('#ad-billing-form [name="companyName"]') === "Little Dream Photos SRL" &&
       await page.inputValue('#ad-billing-form [name="vatNumber"]') === "BE0123456789");
 
-await page.click("#ad-billing-back");
-await page.waitForSelector(".ad-grid, .ad-empty", { timeout: 5000 });
+// Changer le mot de passe redemande le mot de passe ACTUEL : un jeton de
+// session volé ne doit jamais suffire seul à ce changement.
+await page.fill('#ad-password-change-form [name="currentPassword"]', "mauvais-mot-de-passe");
+await page.fill('#ad-password-change-form [name="newPassword"]', "peu-importe-1234567890");
+await page.click("#ad-password-change-save");
+await page.waitForSelector("#ad-password-change-error:not([hidden])", { timeout: 5000 });
+check("un mauvais mot de passe actuel est rejeté sans déconnecter la session en cours",
+      await page.isVisible("#ad-tabs"));
+
+const newPassword = "nouveau-mot-de-passe-admin-1234";
+await page.fill('#ad-password-change-form [name="currentPassword"]', password);
+await page.fill('#ad-password-change-form [name="newPassword"]', newPassword);
+await page.click("#ad-password-change-save");
+await page.waitForSelector(".ad-toast-visible", { timeout: 5000 });
+check("le mot de passe peut être changé depuis les Paramètres en fournissant l'actuel", true);
+password = newPassword;
+
+// Changer d'adresse e-mail ne prend jamais effet immédiatement : seule la
+// confirmation du lien envoyé à la NOUVELLE adresse l'applique (voir
+// worker/src/account.js) — on ne teste ici que la demande elle-même, jamais
+// le jeton (qui ne transite jamais par l'API, seulement par l'e-mail).
+const newEmail = `admin-ui-nouvelle-${RUN}@test.invalid`;
+await page.fill('#ad-email-form [name="newEmail"]', newEmail);
+await page.fill('#ad-email-form [name="password"]', "mauvais-mot-de-passe");
+await page.click("#ad-email-save");
+await page.waitForSelector("#ad-email-error:not([hidden])", { timeout: 5000 });
+check("demander un changement d'e-mail avec un mauvais mot de passe est rejeté", true);
+
+await page.fill('#ad-email-form [name="newEmail"]', newEmail);
+await page.fill('#ad-email-form [name="password"]', password);
+await page.click("#ad-email-save");
+await page.waitForSelector("#ad-email-message:not([hidden])", { timeout: 10000 });
+const emailChangeMessage = await page.textContent("#ad-email-message");
+check("une demande de changement d'e-mail valide affiche la confirmation attendue, sans rien changer tout de suite",
+      emailChangeMessage.indexOf(newEmail) !== -1 && emailChangeMessage.indexOf("lien de confirmation") !== -1,
+      emailChangeMessage);
 
 // On avait quitté le détail de la galerie pour tester ces navigations :
 // on y retourne avant de poursuivre (suppression, déconnexion).
+await page.click("#ad-tab-galleries");
+await page.waitForSelector(".ad-grid, .ad-empty", { timeout: 10000 });
 await page.locator(`.ad-card:has-text("${title}")`).click();
 await page.waitForSelector(".ad-dropzone", { timeout: 5000 });
 

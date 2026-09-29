@@ -25,6 +25,12 @@ CREATE TABLE IF NOT EXISTS photographers (
   -- règlement d'une nouvelle année civile, jamais en cours d'année.
   invoice_counter_year    INTEGER NOT NULL DEFAULT 0,
   invoice_counter         INTEGER NOT NULL DEFAULT 0,
+  -- Mise en page proposée par défaut à la création d'une nouvelle galerie
+  -- (le photographe peut toujours la changer au cas par cas ensuite — une
+  -- valeur de départ, jamais imposée). Le filigrane, lui, se déduit déjà du
+  -- nom de studio ci-dessus (voir admin-server.mjs, brandFor) : pas besoin
+  -- d'un réglage séparé qui ferait doublon.
+  default_layout          TEXT NOT NULL DEFAULT 'grille',
   created_at     INTEGER NOT NULL
 );
 
@@ -291,3 +297,39 @@ CREATE INDEX IF NOT EXISTS idx_invoices_photographer ON invoices(photographer_id
 --     created_at           INTEGER NOT NULL
 --   );
 --   CREATE INDEX IF NOT EXISTS idx_invoices_photographer ON invoices(photographer_id, number);
+
+-- Migration vers le tableau de bord réorganisé (compte, présentation par
+-- défaut) — bases créées avant :
+--   ALTER TABLE photographers ADD COLUMN default_layout TEXT NOT NULL DEFAULT 'grille';
+
+-- Changement d'adresse e-mail du compte : jamais immédiat, toujours confirmé
+-- par un lien envoyé sur la NOUVELLE adresse (même logique que
+-- password_resets) — ça évite qu'une session volée suffise à détourner
+-- silencieusement les notifications d'un compte. new_email est en clair (on
+-- en a besoin pour l'appliquer une fois confirmé) ; token_hash est une
+-- empreinte, comme partout ailleurs.
+CREATE TABLE IF NOT EXISTS email_changes (
+  id              TEXT PRIMARY KEY,
+  photographer_id TEXT NOT NULL REFERENCES photographers(id) ON DELETE CASCADE,
+  new_email       TEXT NOT NULL,
+  token_hash      TEXT NOT NULL UNIQUE,
+  expires_at      INTEGER NOT NULL,
+  used_at         INTEGER,
+  created_at      INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_email_changes_token ON email_changes(token_hash);
+CREATE INDEX IF NOT EXISTS idx_email_changes_photographer ON email_changes(photographer_id, created_at);
+
+-- Migration (bases créées avant cette fonctionnalité) :
+--   CREATE TABLE IF NOT EXISTS email_changes (
+--     id              TEXT PRIMARY KEY,
+--     photographer_id TEXT NOT NULL REFERENCES photographers(id) ON DELETE CASCADE,
+--     new_email       TEXT NOT NULL,
+--     token_hash      TEXT NOT NULL UNIQUE,
+--     expires_at      INTEGER NOT NULL,
+--     used_at         INTEGER,
+--     created_at      INTEGER NOT NULL
+--   );
+--   CREATE INDEX IF NOT EXISTS idx_email_changes_token ON email_changes(token_hash);
+--   CREATE INDEX IF NOT EXISTS idx_email_changes_photographer ON email_changes(photographer_id, created_at);

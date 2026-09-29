@@ -17,6 +17,7 @@ import {
   b64url,
 } from "./auth.js";
 import { sendPasswordResetEmail } from "./notify.js";
+import { confirmEmailChange } from "./account.js";
 
 // Outil utilisé au long cours (CLI, admin locale) plutôt qu'une session web
 // ponctuelle : durée de vie longue, à l'image d'un jeton d'API.
@@ -75,6 +76,7 @@ function profileOf(photographer) {
     billingCompanyName: photographer.billing_company_name || "",
     billingAddress: photographer.billing_address || "",
     billingVatNumber: photographer.billing_vat_number || "",
+    defaultLayout: photographer.default_layout || "grille",
   };
 }
 
@@ -275,5 +277,6 @@ export async function handleAuth(request, env, ctx, path) {
   if (action === "me" && request.method === "GET") return me(request, env);
   if (action === "forgot-password" && request.method === "POST") return forgotPassword(request, env, ctx);
   if (action === "reset-password" && request.method === "POST") return resetPassword(request, env);
+  if (action === "confirm-email" && request.method === "POST") return confirmEmailChange(request, env);
   return fail(404, "Route inconnue");
 }

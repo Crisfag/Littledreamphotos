@@ -3,7 +3,7 @@
 //
 //   node tests/notify.test.mjs
 
-import { buildCaptureAlertEmail, buildPasswordResetEmail } from "../src/notify.js";
+import { buildCaptureAlertEmail, buildPasswordResetEmail, buildEmailChangeConfirmationEmail } from "../src/notify.js";
 
 const checks = [];
 function check(label, ok, detail) {
@@ -75,6 +75,31 @@ const hostileReset = buildPasswordResetEmail({
   ts: 1_700_000_000,
 });
 check("le nom du studio est échappé dans l'e-mail de réinitialisation", !hostileReset.html.includes("<img"));
+
+/* ---------- Changement d'adresse e-mail ---------- */
+// Envoyé exclusivement à la NOUVELLE adresse (jamais l'ancienne) — c'est ce
+// qui empêche un jeton de session volé de rediriger seul les notifications
+// futures du compte. Mêmes exigences que la réinitialisation : lien à usage
+// unique et limité dans le temps, nom du studio échappé.
+
+const emailChangeEmail = buildEmailChangeConfirmationEmail({
+  studioName: "Studio Test",
+  confirmUrl: "https://holypixx-admin.onrender.com/?confirm-email=abc123",
+  ts: 1_700_000_000,
+});
+check("le sujet évoque la confirmation d'une nouvelle adresse",
+      emailChangeEmail.subject.toLowerCase().includes("confirmez") || emailChangeEmail.subject.toLowerCase().includes("adresse"));
+check("le lien de confirmation est inclus dans le HTML", emailChangeEmail.html.includes("?confirm-email=abc123"));
+check("le lien de confirmation est inclus dans le texte", emailChangeEmail.text.includes("?confirm-email=abc123"));
+check("le message précise que le lien est à usage unique et limité dans le temps",
+      emailChangeEmail.html.includes("une demi-heure") && emailChangeEmail.html.includes("qu'une seule"));
+
+const hostileEmailChange = buildEmailChangeConfirmationEmail({
+  studioName: '<img src=x onerror=alert(1)>',
+  confirmUrl: "https://holypixx-admin.onrender.com/?confirm-email=abc123",
+  ts: 1_700_000_000,
+});
+check("le nom du studio est échappé dans l'e-mail de confirmation d'adresse", !hostileEmailChange.html.includes("<img"));
 
 const failed = checks.filter((c) => !c.ok);
 console.log(failed.length ? `\n${failed.length} vérification(s) en échec.` : `\n${checks.length} vérifications, toutes passent.`);

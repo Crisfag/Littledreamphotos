@@ -9,6 +9,7 @@ import { json, fail } from "./http.js";
 import { hashPassword, randomBytes, b64url } from "./auth.js";
 import { authenticatePhotographer } from "./authPhotographer.js";
 import { connectStripe, refreshStripeStatus, setBillingProfile } from "./billing.js";
+import { updateStudioName, changePassword, requestEmailChange, updateDefaults } from "./account.js";
 
 function now() {
   return Math.floor(Date.now() / 1000);
@@ -119,11 +120,18 @@ async function createGallery(request, env, photographerId) {
   const { hash, salt } = await hashPassword(password);
   const id = newId("gal");
 
+  // Mise en page de départ : celle choisie par défaut dans les paramètres du
+  // compte (voir account.js), jamais imposée — modifiable au cas par cas
+  // ensuite comme n'importe quelle galerie déjà créée.
+  const photographer = await env.DB.prepare("SELECT default_layout FROM photographers WHERE id = ?")
+    .bind(photographerId)
+    .first();
+
   await env.DB.prepare(
     `INSERT INTO galleries
        (id, photographer_id, slug, title, client_name, client_email, password_hash, password_salt, watermark_text, expires_at,
-        included_photos, extra_photo_price_cents, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        included_photos, extra_photo_price_cents, layout, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   )
     .bind(
       id,
@@ -138,6 +146,7 @@ async function createGallery(request, env, photographerId) {
       body.expiresAt ? Number(body.expiresAt) : null,
       includedPhotos,
       extraPhotoPriceCents,
+      photographer?.default_layout || "grille",
       now()
     )
     .run();
@@ -503,6 +512,25 @@ async function getTile(env, photographerId, photoId, level, col, row) {
   });
 }
 
+// Toutes les factures du compte, toutes galeries confondues — l'onglet
+// Facturation du tableau de bord, qui n'a plus à ouvrir chaque galerie une
+// par une pour retrouver ce qui a été réglé.
+async function listInvoices(env, photographerId) {
+  const { results } = await env.DB.prepare(
+    `SELECT invoices.id, invoices.number, invoices.issued_at, invoices.amount_cents,
+            invoices.vat_rate_percent, invoices.emailed_to,
+            galleries.title AS gallery_title, galleries.slug AS gallery_slug
+     FROM invoices JOIN galleries ON galleries.id = invoices.gallery_id
+     WHERE invoices.photographer_id = ?
+     ORDER BY invoices.issued_at DESC`
+  )
+    .bind(photographerId)
+    .all();
+
+  const totalCents = results.reduce((sum, inv) => sum + inv.amount_cents, 0);
+  return json({ invoices: results, totalCents });
+}
+
 // Cloisonnée directement par photographer_id (colonne stockée sur la
 // facture elle-même à l'émission) — pas besoin de remonter par la galerie.
 async function getInvoice(env, photographerId, invoiceId) {
@@ -621,8 +649,26 @@ export async function handleAdmin(request, env, ctx, path) {
     return setBillingProfile(request, env, photographer);
   }
 
+  if (section === "invoices" && parts.length === 3 && request.method === "GET") {
+    return listInvoices(env, photographerId);
+  }
   if (section === "invoices" && parts.length === 4 && request.method === "GET") {
     return getInvoice(env, photographerId, parts[3]);
+  }
+
+  // Paramètres du compte : nom de studio, mot de passe, e-mail (avec
+  // confirmation), présentation par défaut des futures galeries.
+  if (section === "account" && parts.length === 3 && request.method === "POST") {
+    return updateStudioName(request, env, photographerId);
+  }
+  if (section === "account" && parts[3] === "password" && parts.length === 4 && request.method === "POST") {
+    return changePassword(request, env, photographerId);
+  }
+  if (section === "account" && parts[3] === "email" && parts.length === 4 && request.method === "POST") {
+    return requestEmailChange(request, env, ctx, photographerId);
+  }
+  if (section === "account" && parts[3] === "defaults" && parts.length === 4 && request.method === "POST") {
+    return updateDefaults(request, env, photographerId);
   }
 
   return fail(404, "Route inconnue");
