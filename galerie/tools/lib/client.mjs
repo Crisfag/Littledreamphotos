@@ -84,6 +84,42 @@ export class WorkerClient {
     return this.request("GET", "/api/auth/me");
   }
 
+  connectStripe(returnUrl, refreshUrl) {
+    return this.request("POST", "/api/admin/stripe/connect", { returnUrl, refreshUrl });
+  }
+
+  refreshStripeStatus() {
+    return this.request("POST", "/api/admin/stripe/refresh");
+  }
+
+  setBillingProfile(data) {
+    return this.request("POST", "/api/admin/billing", data);
+  }
+
+  setStudioName(studioName) {
+    return this.request("POST", "/api/admin/account", { studioName });
+  }
+
+  changePassword(currentPassword, newPassword) {
+    return this.request("POST", "/api/admin/account/password", { currentPassword, newPassword });
+  }
+
+  requestEmailChange(newEmail, password) {
+    return this.request("POST", "/api/admin/account/email", { newEmail, password });
+  }
+
+  setDefaults(defaultLayout) {
+    return this.request("POST", "/api/admin/account/defaults", { defaultLayout });
+  }
+
+  listInvoices() {
+    return this.request("GET", "/api/admin/invoices");
+  }
+
+  stats() {
+    return this.request("GET", "/api/admin/stats");
+  }
+
   listGalleries() {
     return this.request("GET", "/api/admin/galleries");
   }
@@ -102,6 +138,26 @@ export class WorkerClient {
 
   regeneratePassword(slug, password) {
     return this.request("POST", `/api/admin/galleries/${encodeURIComponent(slug)}/password`, { password });
+  }
+
+  setBackgroundColor(slug, color) {
+    return this.request("POST", `/api/admin/galleries/${encodeURIComponent(slug)}/background/color`, { color });
+  }
+
+  setBackgroundImage(slug, buffer) {
+    return this.request("PUT", `/api/admin/galleries/${encodeURIComponent(slug)}/background/image`, buffer, true);
+  }
+
+  resetBackground(slug) {
+    return this.request("DELETE", `/api/admin/galleries/${encodeURIComponent(slug)}/background`);
+  }
+
+  setLayout(slug, layout) {
+    return this.request("POST", `/api/admin/galleries/${encodeURIComponent(slug)}/layout`, { layout });
+  }
+
+  setQuota(slug, includedPhotos, extraPhotoPrice) {
+    return this.request("POST", `/api/admin/galleries/${encodeURIComponent(slug)}/quota`, { includedPhotos, extraPhotoPrice });
   }
 
   addPhoto(slug, photo) {
@@ -125,6 +181,21 @@ export class WorkerClient {
     if (response.status === 401 && this.canRelogin) {
       await this.login();
       response = await fetch(`${this.base}/api/admin/tiles/${photoId}/${level}/${col}/${row}`, {
+        headers: { authorization: `Bearer ${this.token}` },
+      });
+    }
+    return response;
+  }
+
+  // Renvoie la réponse brute (pas de JSON) : un flux d'octets PDF.
+  async getInvoiceResponse(invoiceId) {
+    if (!this.token) await this.login();
+    let response = await fetch(`${this.base}/api/admin/invoices/${invoiceId}`, {
+      headers: { authorization: `Bearer ${this.token}` },
+    });
+    if (response.status === 401 && this.canRelogin) {
+      await this.login();
+      response = await fetch(`${this.base}/api/admin/invoices/${invoiceId}`, {
         headers: { authorization: `Bearer ${this.token}` },
       });
     }

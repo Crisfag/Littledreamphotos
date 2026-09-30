@@ -12,6 +12,7 @@
 import { handleAdmin } from "./admin.js";
 import { handleViewer } from "./viewer.js";
 import { handleAuth } from "./authPhotographer.js";
+import { handleStripeWebhook } from "./billing.js";
 import { json, fail } from "./http.js";
 
 function corsHeaders(request, env) {
@@ -60,6 +61,10 @@ export default {
         response = await handleAdmin(request, env, ctx, path);
       } else if (path.startsWith("/api/gallery/")) {
         response = await handleViewer(request, env, ctx, path);
+      } else if (path === "/api/stripe/webhook") {
+        // Appelé par les serveurs Stripe, jamais par un navigateur : pas de
+        // session applicative, l'authenticité vient de la signature.
+        response = await handleStripeWebhook(request, env);
       } else {
         response = fail(404, "Route inconnue");
       }

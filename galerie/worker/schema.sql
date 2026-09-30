@@ -7,20 +7,67 @@ CREATE TABLE IF NOT EXISTS photographers (
   password_hash  TEXT NOT NULL,
   password_salt  TEXT NOT NULL,
   studio_name    TEXT NOT NULL DEFAULT '',
+  -- Paiement en ligne des suppléments (Stripe Connect, comptes « Express ») :
+  -- chaque photographe connecte son propre compte, l'argent lui arrive
+  -- directement, jamais via un compte pivot. stripe_charges_enabled reflète
+  -- l'état réel côté Stripe (mis à jour par le webhook account.updated, ou
+  -- relu manuellement) : un identifiant seul ne veut pas dire que
+  -- l'inscription est terminée.
+  stripe_account_id       TEXT NOT NULL DEFAULT '',
+  stripe_charges_enabled  INTEGER NOT NULL DEFAULT 0,
+  -- Mentions à faire figurer sur les factures — jamais déduites d'ailleurs
+  -- (le nom de studio sert à l'affichage, pas à la facturation).
+  billing_company_name    TEXT NOT NULL DEFAULT '',
+  billing_address         TEXT NOT NULL DEFAULT '',
+  billing_vat_number      TEXT NOT NULL DEFAULT '',
+  -- Numérotation des factures : continue et sans trou par photographe, en
+  -- séries annuelles (ex. 2026-0001) — remise à zéro dès le premier
+  -- règlement d'une nouvelle année civile, jamais en cours d'année.
+  invoice_counter_year    INTEGER NOT NULL DEFAULT 0,
+  invoice_counter         INTEGER NOT NULL DEFAULT 0,
+  -- Mise en page proposée par défaut à la création d'une nouvelle galerie
+  -- (le photographe peut toujours la changer au cas par cas ensuite — une
+  -- valeur de départ, jamais imposée). Le filigrane, lui, se déduit déjà du
+  -- nom de studio ci-dessus (voir admin-server.mjs, brandFor) : pas besoin
+  -- d'un réglage séparé qui ferait doublon.
+  default_layout          TEXT NOT NULL DEFAULT 'grille',
   created_at     INTEGER NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS galleries (
-  id              TEXT PRIMARY KEY,
-  photographer_id TEXT NOT NULL REFERENCES photographers(id) ON DELETE CASCADE,
-  slug            TEXT NOT NULL UNIQUE,
-  title           TEXT NOT NULL,
-  client_name     TEXT NOT NULL DEFAULT '',
-  password_hash   TEXT NOT NULL,
-  password_salt   TEXT NOT NULL,
-  watermark_text  TEXT NOT NULL DEFAULT '',
-  expires_at      INTEGER,              -- epoch secondes ; NULL = pas d'expiration
-  created_at      INTEGER NOT NULL
+  id                     TEXT PRIMARY KEY,
+  photographer_id        TEXT NOT NULL REFERENCES photographers(id) ON DELETE CASCADE,
+  slug                   TEXT NOT NULL UNIQUE,
+  title                  TEXT NOT NULL,
+  client_name            TEXT NOT NULL DEFAULT '',
+  -- Facultatif : sert uniquement à envoyer sa facture après un règlement de
+  -- supplément — jamais utilisé pour se connecter (toujours le mot de passe).
+  client_email           TEXT NOT NULL DEFAULT '',
+  password_hash          TEXT NOT NULL,
+  password_salt          TEXT NOT NULL,
+  watermark_text         TEXT NOT NULL DEFAULT '',
+  expires_at             INTEGER,              -- epoch secondes ; NULL = pas d'expiration
+  -- Arrière-plan de l'écran de mot de passe client : 'color' (défaut, palette
+  -- de la marque) ou 'image' (photo importée par le photographe — jamais une
+  -- des photos protégées de la galerie, pour ne rien exposer avant
+  -- authentification). L'image elle-même vit dans R2 sous backgrounds/{id}.jpg.
+  login_background_type  TEXT NOT NULL DEFAULT 'color',
+  login_background_color TEXT NOT NULL DEFAULT '',
+  -- Mise en page proposée au client : 'grille' (vignettes régulières, défaut),
+  -- 'mosaique' (colonnes façon presse, chaque photo garde son format) ou
+  -- 'defilement' (une photo à la fois, en grand). Purement visuel — ne change
+  -- rien au niveau de tuile chargé ni à la protection des images.
+  layout                 TEXT NOT NULL DEFAULT 'grille',
+  -- Forfait : nombre de photos incluses dans ce que le client a déjà payé.
+  -- NULL = pas de forfait défini (comportement d'avant cette fonctionnalité :
+  -- aucun supplément calculé, quel que soit le nombre de coups de cœur).
+  included_photos        INTEGER,
+  -- Prix d'une photo au-delà du forfait, en centimes (évite les erreurs
+  -- d'arrondi d'un flottant, et c'est l'unité qu'utilisera le paiement en
+  -- ligne le jour où il sera branché). 0 tant que le photographe n'a rien
+  -- réglé.
+  extra_photo_price_cents INTEGER NOT NULL DEFAULT 0,
+  created_at             INTEGER NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_galleries_photographer ON galleries(photographer_id, created_at);
@@ -74,6 +121,24 @@ CREATE TABLE IF NOT EXISTS photos (
 -- colonne existante : elle reste nullable en pratique, mais le Worker refuse
 -- déjà toute galerie sans photographer_id via les requêtes applicatives.)
 
+-- Migration vers l'arrière-plan personnalisable (bases créées avant) :
+--   ALTER TABLE galleries ADD COLUMN login_background_type TEXT NOT NULL DEFAULT 'color';
+--   ALTER TABLE galleries ADD COLUMN login_background_color TEXT NOT NULL DEFAULT '';
+
+-- Migration vers la mise en page personnalisable (bases créées avant) :
+--   ALTER TABLE galleries ADD COLUMN layout TEXT NOT NULL DEFAULT 'grille';
+
+-- Migration vers le forfait et les suppléments (bases créées avant) :
+--   ALTER TABLE galleries ADD COLUMN included_photos INTEGER;
+--   ALTER TABLE galleries ADD COLUMN extra_photo_price_cents INTEGER NOT NULL DEFAULT 0;
+
+-- Migration vers Stripe Connect et le profil de facturation (bases créées avant) :
+--   ALTER TABLE photographers ADD COLUMN stripe_account_id TEXT NOT NULL DEFAULT '';
+--   ALTER TABLE photographers ADD COLUMN stripe_charges_enabled INTEGER NOT NULL DEFAULT 0;
+--   ALTER TABLE photographers ADD COLUMN billing_company_name TEXT NOT NULL DEFAULT '';
+--   ALTER TABLE photographers ADD COLUMN billing_address TEXT NOT NULL DEFAULT '';
+--   ALTER TABLE photographers ADD COLUMN billing_vat_number TEXT NOT NULL DEFAULT '';
+
 CREATE INDEX IF NOT EXISTS idx_photos_gallery ON photos(gallery_id, position);
 
 CREATE TABLE IF NOT EXISTS access_log (
@@ -82,12 +147,21 @@ CREATE TABLE IF NOT EXISTS access_log (
   viewer_id  TEXT NOT NULL DEFAULT '',
   event      TEXT NOT NULL,   -- login, login_failed, view, select, deselect, comment, capture_suspected, blur, print
   detail     TEXT NOT NULL DEFAULT '',
+  -- Photo affichée au moment de l'évènement (capture_suspected, print,
+  -- devtools) : permet d'alerter le photographe sur LA photo concernée,
+  -- pas seulement « une capture a eu lieu ». Vide si aucune photo n'était
+  -- ouverte en plein écran (ex. capture depuis la grille de vignettes).
+  photo_id   TEXT NOT NULL DEFAULT '',
   ip_hash    TEXT NOT NULL DEFAULT '',
   user_agent TEXT NOT NULL DEFAULT '',
   ts         INTEGER NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_log_gallery ON access_log(gallery_id, ts);
+
+-- Migration vers la référence de photo sur les évènements de capture
+-- (bases créées avant cette fonctionnalité) :
+--   ALTER TABLE access_log ADD COLUMN photo_id TEXT NOT NULL DEFAULT '';
 
 -- Tentatives de connexion aux comptes photographes (distinct de access_log,
 -- qui journalise les visites des galeries clients). email_hash et ip_hash
@@ -101,3 +175,161 @@ CREATE TABLE IF NOT EXISTS auth_log (
 );
 
 CREATE INDEX IF NOT EXISTS idx_auth_log ON auth_log(email_hash, ts);
+
+-- Réinitialisation du mot de passe d'un compte photographe (celui de
+-- connexion à l'interface, pas celui d'une galerie — qui se régénère déjà
+-- directement depuis le tableau de bord). token_hash est une empreinte, la
+-- valeur brute part uniquement dans le lien envoyé par e-mail.
+CREATE TABLE IF NOT EXISTS password_resets (
+  id              TEXT PRIMARY KEY,
+  photographer_id TEXT NOT NULL REFERENCES photographers(id) ON DELETE CASCADE,
+  token_hash      TEXT NOT NULL UNIQUE,
+  expires_at      INTEGER NOT NULL,
+  used_at         INTEGER,
+  created_at      INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_password_resets_token ON password_resets(token_hash);
+CREATE INDEX IF NOT EXISTS idx_password_resets_photographer ON password_resets(photographer_id, created_at);
+
+-- Migration (bases créées avant cette fonctionnalité) :
+--   CREATE TABLE IF NOT EXISTS password_resets (
+--     id              TEXT PRIMARY KEY,
+--     photographer_id TEXT NOT NULL REFERENCES photographers(id) ON DELETE CASCADE,
+--     token_hash      TEXT NOT NULL UNIQUE,
+--     expires_at      INTEGER NOT NULL,
+--     used_at         INTEGER,
+--     created_at      INTEGER NOT NULL
+--   );
+--   CREATE INDEX IF NOT EXISTS idx_password_resets_token ON password_resets(token_hash);
+--   CREATE INDEX IF NOT EXISTS idx_password_resets_photographer ON password_resets(photographer_id, created_at);
+
+-- Règlement en ligne des suppléments (Stripe Checkout, paiement direct sur le
+-- compte Connect du photographe). Une ligne par session de paiement créée —
+-- « pending » tant que le client n'a pas terminé, « paid » une fois confirmé
+-- par le webhook Stripe (jamais par le simple retour du navigateur, qui peut
+-- mentir ou ne jamais arriver). extra_count fige le nombre de suppléments
+-- couverts par CE règlement : la somme des lignes « paid » d'une galerie dit
+-- combien ont déjà été payés, pour ne jamais faire payer deux fois la même
+-- photo si le client en sélectionne encore plus ensuite.
+CREATE TABLE IF NOT EXISTS payments (
+  id                          TEXT PRIMARY KEY,
+  gallery_id                  TEXT NOT NULL REFERENCES galleries(id) ON DELETE CASCADE,
+  stripe_checkout_session_id  TEXT NOT NULL UNIQUE,
+  stripe_payment_intent_id    TEXT NOT NULL DEFAULT '',
+  extra_count                 INTEGER NOT NULL,
+  amount_cents                INTEGER NOT NULL,
+  status                      TEXT NOT NULL DEFAULT 'pending', -- pending, paid
+  created_at                  INTEGER NOT NULL,
+  paid_at                     INTEGER
+);
+
+CREATE INDEX IF NOT EXISTS idx_payments_gallery ON payments(gallery_id, status);
+CREATE INDEX IF NOT EXISTS idx_payments_session ON payments(stripe_checkout_session_id);
+
+-- Migration vers le règlement en ligne des suppléments (bases créées avant) :
+--   CREATE TABLE IF NOT EXISTS payments (
+--     id                          TEXT PRIMARY KEY,
+--     gallery_id                  TEXT NOT NULL REFERENCES galleries(id) ON DELETE CASCADE,
+--     stripe_checkout_session_id  TEXT NOT NULL UNIQUE,
+--     stripe_payment_intent_id    TEXT NOT NULL DEFAULT '',
+--     extra_count                 INTEGER NOT NULL,
+--     amount_cents                INTEGER NOT NULL,
+--     status                      TEXT NOT NULL DEFAULT 'pending',
+--     created_at                  INTEGER NOT NULL,
+--     paid_at                     INTEGER
+--   );
+--   CREATE INDEX IF NOT EXISTS idx_payments_gallery ON payments(gallery_id, status);
+--   CREATE INDEX IF NOT EXISTS idx_payments_session ON payments(stripe_checkout_session_id);
+
+-- Migration vers l'e-mail client et la numérotation des factures (bases créées avant) :
+--   ALTER TABLE galleries ADD COLUMN client_email TEXT NOT NULL DEFAULT '';
+--   ALTER TABLE photographers ADD COLUMN invoice_counter_year INTEGER NOT NULL DEFAULT 0;
+--   ALTER TABLE photographers ADD COLUMN invoice_counter INTEGER NOT NULL DEFAULT 0;
+
+-- Facture émise automatiquement dès qu'un paiement passe à "paid" (voir
+-- billing.js). Toujours un seul montant total (TTC) : reprend exactement
+-- amount_cents du paiement réglé, jamais recalculé. Les colonnes seller_*
+-- sont un instantané des coordonnées de facturation du photographe AU
+-- MOMENT de l'émission — une facture déjà émise ne doit jamais changer si le
+-- photographe modifie ensuite son profil. vat_rate_percent à 0 signifie
+-- régime de la franchise (aucun numéro de TVA renseigné à l'émission) :
+-- vat_amount_cents vaut alors 0 et net_amount_cents == amount_cents. Le PDF
+-- lui-même vit dans R2, sous invoices/{id}.pdf.
+CREATE TABLE IF NOT EXISTS invoices (
+  id                   TEXT PRIMARY KEY,
+  photographer_id      TEXT NOT NULL REFERENCES photographers(id) ON DELETE CASCADE,
+  gallery_id           TEXT NOT NULL REFERENCES galleries(id) ON DELETE CASCADE,
+  payment_id           TEXT NOT NULL UNIQUE REFERENCES payments(id) ON DELETE CASCADE,
+  number               TEXT NOT NULL,
+  issued_at            INTEGER NOT NULL,
+  amount_cents         INTEGER NOT NULL,
+  vat_rate_percent     INTEGER NOT NULL DEFAULT 0,
+  vat_amount_cents     INTEGER NOT NULL DEFAULT 0,
+  net_amount_cents     INTEGER NOT NULL,
+  client_name          TEXT NOT NULL DEFAULT '',
+  seller_company_name  TEXT NOT NULL DEFAULT '',
+  seller_address       TEXT NOT NULL DEFAULT '',
+  seller_vat_number    TEXT NOT NULL DEFAULT '',
+  emailed_to           TEXT NOT NULL DEFAULT '',
+  created_at           INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_invoices_photographer ON invoices(photographer_id, number);
+
+-- Migration (bases créées avant cette fonctionnalité) :
+--   CREATE TABLE IF NOT EXISTS invoices (
+--     id                   TEXT PRIMARY KEY,
+--     photographer_id      TEXT NOT NULL REFERENCES photographers(id) ON DELETE CASCADE,
+--     gallery_id           TEXT NOT NULL REFERENCES galleries(id) ON DELETE CASCADE,
+--     payment_id           TEXT NOT NULL UNIQUE REFERENCES payments(id) ON DELETE CASCADE,
+--     number               TEXT NOT NULL,
+--     issued_at            INTEGER NOT NULL,
+--     amount_cents         INTEGER NOT NULL,
+--     vat_rate_percent     INTEGER NOT NULL DEFAULT 0,
+--     vat_amount_cents     INTEGER NOT NULL DEFAULT 0,
+--     net_amount_cents     INTEGER NOT NULL,
+--     client_name          TEXT NOT NULL DEFAULT '',
+--     seller_company_name  TEXT NOT NULL DEFAULT '',
+--     seller_address       TEXT NOT NULL DEFAULT '',
+--     seller_vat_number    TEXT NOT NULL DEFAULT '',
+--     emailed_to           TEXT NOT NULL DEFAULT '',
+--     created_at           INTEGER NOT NULL
+--   );
+--   CREATE INDEX IF NOT EXISTS idx_invoices_photographer ON invoices(photographer_id, number);
+
+-- Migration vers le tableau de bord réorganisé (compte, présentation par
+-- défaut) — bases créées avant :
+--   ALTER TABLE photographers ADD COLUMN default_layout TEXT NOT NULL DEFAULT 'grille';
+
+-- Changement d'adresse e-mail du compte : jamais immédiat, toujours confirmé
+-- par un lien envoyé sur la NOUVELLE adresse (même logique que
+-- password_resets) — ça évite qu'une session volée suffise à détourner
+-- silencieusement les notifications d'un compte. new_email est en clair (on
+-- en a besoin pour l'appliquer une fois confirmé) ; token_hash est une
+-- empreinte, comme partout ailleurs.
+CREATE TABLE IF NOT EXISTS email_changes (
+  id              TEXT PRIMARY KEY,
+  photographer_id TEXT NOT NULL REFERENCES photographers(id) ON DELETE CASCADE,
+  new_email       TEXT NOT NULL,
+  token_hash      TEXT NOT NULL UNIQUE,
+  expires_at      INTEGER NOT NULL,
+  used_at         INTEGER,
+  created_at      INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_email_changes_token ON email_changes(token_hash);
+CREATE INDEX IF NOT EXISTS idx_email_changes_photographer ON email_changes(photographer_id, created_at);
+
+-- Migration (bases créées avant cette fonctionnalité) :
+--   CREATE TABLE IF NOT EXISTS email_changes (
+--     id              TEXT PRIMARY KEY,
+--     photographer_id TEXT NOT NULL REFERENCES photographers(id) ON DELETE CASCADE,
+--     new_email       TEXT NOT NULL,
+--     token_hash      TEXT NOT NULL UNIQUE,
+--     expires_at      INTEGER NOT NULL,
+--     used_at         INTEGER,
+--     created_at      INTEGER NOT NULL
+--   );
+--   CREATE INDEX IF NOT EXISTS idx_email_changes_token ON email_changes(token_hash);
+--   CREATE INDEX IF NOT EXISTS idx_email_changes_photographer ON email_changes(photographer_id, created_at);
