@@ -10,6 +10,7 @@
 // réseau (tests/prodigi.test.mjs).
 
 import { b64url, unb64url, randomBytes, timingSafeEqual } from "./auth.js";
+import { SUGGESTED_SELECTIONS, resolveSelection } from "./printCatalogue.js";
 
 const enc = new TextEncoder();
 const dec = new TextDecoder();
@@ -27,16 +28,11 @@ export function prodigiBase(env, environment) {
   return environment === "live" ? PRODIGI_BASES.live : PRODIGI_BASES.sandbox;
 }
 
-// Formats proposés d'un clic dans l'admin. Les SKU sont ceux du catalogue
-// Prodigi ; le photographe peut les modifier, en ajouter d'autres, et
-// vérifier chacun par un devis réel avant de les proposer à ses clients.
-export const SUGGESTED_PRODUCTS = [
-  { label: "Tirage photo 10 × 15 cm", sku: "GLOBAL-PHO-4x6", attributes: { finish: "lustre" }, priceCents: 400 },
-  { label: "Tirage photo 20 × 30 cm", sku: "GLOBAL-PHO-8x12", attributes: { finish: "lustre" }, priceCents: 1200 },
-  { label: "Tirage d'art 30 × 40 cm", sku: "GLOBAL-FAP-12x16", attributes: {}, priceCents: 3900 },
-  { label: "Toile 30 × 40 cm", sku: "GLOBAL-CAN-12x16", attributes: { wrap: "MirrorWrap" }, priceCents: 7900 },
-  { label: "Cadre noir avec passe-partout 40 × 50 cm", sku: "GLOBAL-CFPM-16x20", attributes: { color: "black" }, priceCents: 11900 },
-];
+// Formats proposés d'un clic dans l'admin (voir printCatalogue.js).
+export const SUGGESTED_PRODUCTS = SUGGESTED_SELECTIONS.map((sel) => {
+  const resolved = resolveSelection(sel);
+  return { label: resolved.label, sku: resolved.sku, attributes: resolved.attributes, ref: resolved.ref, priceCents: sel.priceCents };
+});
 
 // Pays de livraison proposés au client (Prodigi livre bien au-delà, mais
 // le forfait de port du photographe est pensé pour l'Europe proche).

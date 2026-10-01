@@ -9,6 +9,7 @@ import {
   buildOrderPayload, buildQuotePayload, costFromQuote, statusFromProdigiOrder, prodigiErrorMessage,
   prodigiBase, SUGGESTED_PRODUCTS,
 } from "../src/prodigi.js";
+import { CATALOGUE, resolveSelection, catalogueForAdmin, categoryLabelFor } from "../src/printCatalogue.js";
 
 const checks = [];
 function check(label, ok, detail) {
@@ -132,6 +133,33 @@ check("une clé refusée (mauvais environnement) donne une explication claire",
 check("l'environnement choisit l'adresse de Prodigi (test ou production)",
       prodigiBase({}, "sandbox") === "https://api.sandbox.prodigi.com/v4.0" && prodigiBase({}, "live") === "https://api.prodigi.com/v4.0");
 check("les formats suggérés ont tous un SKU et un prix", SUGGESTED_PRODUCTS.every((p) => p.sku && p.priceCents > 0));
+
+/* ---------- Catalogue en menus déroulants ---------- */
+
+check("le catalogue propose 4 catégories (tirages photo, tirages d'art & posters, toiles, cadres)",
+      CATALOGUE.length === 4 && CATALOGUE.map((c) => c.key).join(",") === "photo,art,canvas,frames");
+const adminCatalogue = catalogueForAdmin();
+check("chaque format est présenté en centimètres, jamais en référence Prodigi",
+      adminCatalogue.every((c) => c.products.every((p) => p.sizes.every((s) => /cm$/.test(s.label) && !/GLOBAL/.test(s.label)))));
+const canvas = resolveSelection({ product: "canvas-stretched", size: "12x16", option: "ImageWrap" });
+check("un choix de menus devient la bonne référence Prodigi, ses options et un libellé lisible",
+      canvas.sku === "GLOBAL-CAN-12x16" && canvas.attributes.wrap === "ImageWrap" && canvas.label === "Toile sur châssis 30 × 40 cm — image prolongée",
+      JSON.stringify(canvas));
+const photo = resolveSelection({ product: "photo-ctype", size: "4x6" });
+check("sans option précisée, la première finition est prise (tirage photo lustré)", photo.attributes.finish === "lustre" && photo.sku === "GLOBAL-PHO-4x6");
+const floatFrame = resolveSelection({ product: "canvas-float", size: "16x20", option: "natural" });
+check("les options imposées par le produit sont ajoutées d'office (toile encadrée : bord miroir)",
+      floatFrame.attributes.wrap === "MirrorWrap" && floatFrame.attributes.color === "natural" && floatFrame.sku === "GLOBAL-FRA-CAN-16x20");
+check("un produit, un format ou une option hors catalogue sont refusés",
+      Boolean(resolveSelection({ product: "inconnu", size: "4x6" }).error) &&
+      Boolean(resolveSelection({ product: "photo-ctype", size: "30x40" }).error) &&
+      Boolean(resolveSelection({ product: "photo-ctype", size: "4x6", option: "mat" }).error) &&
+      Boolean(resolveSelection({ product: "art-fineart", size: "12x16", option: "lustre" }).error));
+check("la catégorie d'un produit se retrouve, y compris pour une référence saisie à la main",
+      categoryLabelFor({ catalog_ref: "frame-classic|16x20|black" }) === "Cadres" &&
+      categoryLabelFor({ sku: "GLOBAL-CAN-ROL-SC-16x20" }) === "Toiles" &&
+      categoryLabelFor({ sku: "GLOBAL-CFPM-16x20" }) === "Cadres" &&
+      categoryLabelFor({ sku: "PRODUIT-MAISON" }) === "Autres produits");
 
 const failed = checks.filter((c) => !c.ok);
 console.log(failed.length ? `\n${failed.length} vérification(s) en échec.` : `\n${checks.length} vérifications, toutes passent.`);

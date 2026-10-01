@@ -18,6 +18,7 @@ import {
   normalizeRecipient, buildOrderLines, buildOrderPayload, buildQuotePayload,
   prodigiRequest, costFromQuote, statusFromProdigiOrder,
 } from "./prodigi.js";
+import { resolveSelection, catalogueForAdmin, categoryLabelFor } from "./printCatalogue.js";
 
 const MAX_ORIGINAL_BYTES = 60 * 1024 * 1024;
 const MAX_PRODUCTS = 40;
@@ -61,6 +62,10 @@ function productOut(p) {
     priceCents: p.price_cents,
     active: Boolean(p.active),
     position: p.position,
+    category: categoryLabelFor(p),
+    fromCatalogue: Boolean(p.catalog_ref),
+    costCents: p.cost_cents || 0,
+    shipCostCents: p.ship_cost_cents || 0,
   };
 }
 
@@ -116,6 +121,7 @@ async function getShop(env, photographerId) {
     },
     products: products.map(productOut),
     suggested: SUGGESTED_PRODUCTS,
+    catalogue: catalogueForAdmin(),
     countries: SHOP_COUNTRIES,
   });
 }
@@ -166,9 +172,26 @@ function normalizeProduct(body) {
   };
 }
 
+// Coût communiqué par l'admin juste après son devis : purement indicatif
+// (affichage de la marge), jamais utilisé pour facturer quoi que ce soit.
+function costFrom(value) {
+  const n = Number(value);
+  return Number.isInteger(n) && n >= 0 && n <= 10000000 ? n : 0;
+}
+
 async function createProduct(request, env, photographerId) {
   const body = await request.json().catch(() => null);
-  const normalized = normalizeProduct(body);
+  let catalogRef = "";
+  let payload = body;
+  // Choix fait dans les menus déroulants : le serveur traduit lui-même en
+  // SKU et options, jamais à partir de ce que la page prétend.
+  if (body && body.product) {
+    const resolved = resolveSelection(body);
+    if (resolved.error) return fail(400, resolved.error);
+    catalogRef = resolved.ref;
+    payload = { label: body.label || resolved.label, sku: resolved.sku, attributes: resolved.attributes, priceCents: body.priceCents, active: true };
+  }
+  const normalized = normalizeProduct(payload);
   if (normalized.error) return fail(400, normalized.error);
   const count = await env.DB.prepare("SELECT COUNT(*) AS n, COALESCE(MAX(position), -1) AS last FROM print_products WHERE photographer_id = ?")
     .bind(photographerId)
@@ -177,10 +200,11 @@ async function createProduct(request, env, photographerId) {
   const p = normalized.product;
   const id = newId("prd");
   await env.DB.prepare(
-    `INSERT INTO print_products (id, photographer_id, label, sku, attributes, price_cents, active, position, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO print_products (id, photographer_id, label, sku, attributes, price_cents, active, position, catalog_ref, cost_cents, ship_cost_cents, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   )
-    .bind(id, photographerId, p.label, p.sku, p.attributes, p.priceCents, p.active, (count?.last ?? -1) + 1, now())
+    .bind(id, photographerId, p.label, p.sku, p.attributes, p.priceCents, p.active, (count?.last ?? -1) + 1,
+          catalogRef, costFrom(body?.costCents), costFrom(body?.shipCostCents), now())
     .run();
   return json({ id }, { status: 201 });
 }
@@ -195,9 +219,9 @@ async function addSuggestedProducts(env, photographerId) {
     position += 1;
     statements.push(
       env.DB.prepare(
-        `INSERT INTO print_products (id, photographer_id, label, sku, attributes, price_cents, active, position, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)`
-      ).bind(newId("prd"), photographerId, s.label, s.sku, JSON.stringify(s.attributes), s.priceCents, position, now())
+        `INSERT INTO print_products (id, photographer_id, label, sku, attributes, price_cents, active, position, catalog_ref, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?)`
+      ).bind(newId("prd"), photographerId, s.label, s.sku, JSON.stringify(s.attributes), s.priceCents, position, s.ref || "", now())
     );
   }
   if (statements.length) await env.DB.batch(statements);
@@ -254,17 +278,43 @@ async function quoteProducts(request, env, photographerId) {
       }));
       const cost = costFromQuote(data);
       if (!cost) throw new Error("Devis illisible");
+      await env.DB.prepare("UPDATE print_products SET cost_cents = ?, ship_cost_cents = ? WHERE id = ?")
+        .bind(cost.itemsCents, cost.shippingCents, product.id)
+        .run();
       quotes.push({
         productId: product.id,
         ...cost,
         totalCostCents: cost.itemsCents + cost.shippingCents,
-        marginCents: product.price_cents + (photographer.shop_shipping_cents || 0) - cost.itemsCents - cost.shippingCents,
+        // Marge sur le produit : prix de vente moins coût du labo. La
+        // livraison est couverte à part par le forfait de port.
+        marginCents: product.price_cents - cost.itemsCents,
       });
     } catch (err) {
       quotes.push({ productId: product.id, error: err.message || "Devis refusé" });
     }
   }
   return json({ countryCode, quotes });
+}
+
+// Devis d'un choix fait dans les menus, avant de l'ajouter à la boutique :
+// coût du produit et de la livraison, ou raison du refus du labo.
+async function quoteSelection(request, env, photographerId) {
+  const body = await request.json().catch(() => null);
+  const resolved = resolveSelection(body || {});
+  if (resolved.error) return fail(400, resolved.error);
+  const countryCode = SHOP_COUNTRIES[String(body?.countryCode || "").toUpperCase()] ? String(body.countryCode).toUpperCase() : "BE";
+  const photographer = await photographerRow(env, photographerId);
+  const creds = await credentialsFor(env, photographer);
+  if (!creds.apiKey) return fail(409, "Enregistrez d'abord votre clé Prodigi");
+  try {
+    const data = await prodigiRequest(env, creds, "POST", "/quotes", buildQuotePayload({ sku: resolved.sku, attributes: resolved.attributes, countryCode }));
+    const cost = costFromQuote(data);
+    if (!cost) throw new Error("Devis illisible");
+    return json({ available: true, label: resolved.label, countryCode, ...cost });
+  } catch (err) {
+    if (err.prodigiStatus === 401) return fail(502, err.message);
+    return json({ available: false, label: resolved.label, countryCode, error: err.message || "Indisponible chez le labo" });
+  }
 }
 
 async function setGalleryShop(request, env, gallery) {
@@ -322,6 +372,7 @@ export async function handleShopAdmin(request, env, photographerId, parts, helpe
     if (parts.length === 3 && method === "GET") return getShop(env, photographerId);
     if (parts.length === 4 && parts[3] === "settings" && method === "POST") return updateShopSettings(request, env, photographerId);
     if (parts.length === 4 && parts[3] === "quote" && method === "POST") return quoteProducts(request, env, photographerId);
+    if (parts.length === 4 && parts[3] === "quote-item" && method === "POST") return quoteSelection(request, env, photographerId);
     if (parts.length === 4 && parts[3] === "products" && method === "POST") return createProduct(request, env, photographerId);
     if (parts.length === 5 && parts[3] === "products" && parts[4] === "suggested" && method === "POST") return addSuggestedProducts(env, photographerId);
     if (parts.length === 5 && parts[3] === "products" && method === "PUT") return updateProduct(request, env, photographerId, parts[4]);

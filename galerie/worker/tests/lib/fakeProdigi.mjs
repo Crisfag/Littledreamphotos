@@ -5,12 +5,13 @@
 //
 // Comportements :
 //  - clé d'API qui ne commence pas par "test-key" → 401 ;
-//  - SKU contenant "INVALID" → 400 avec un détail d'erreur (format Prodigi) ;
+//  - SKU contenant "INVALID" (ou motif `rejectSku`) → 400 avec un détail
+//    d'erreur au format Prodigi ;
 //  - sinon : devis 12,50 € + 4,95 € de port, commande créée en "InProgress".
 
 import { createServer } from "node:http";
 
-export async function startFakeProdigi(port = Number(process.env.FAKE_PRODIGI_PORT || 8790)) {
+export async function startFakeProdigi(port = Number(process.env.FAKE_PRODIGI_PORT || 8790), { rejectSku = /INVALID/i } = {}) {
   const orders = new Map(); // id -> commande (format Prodigi)
   const received = [];      // corps des POST /orders, dans l'ordre
   const quotes = [];        // corps des POST /quotes
@@ -38,7 +39,7 @@ export async function startFakeProdigi(port = Number(process.env.FAKE_PRODIGI_PO
     const path = req.url.split("?")[0];
     if (req.method === "POST" && path === "/v4.0/quotes") {
       quotes.push(body);
-      const bad = (body.items || []).findIndex((i) => /INVALID/i.test(i.sku));
+      const bad = (body.items || []).findIndex((i) => rejectSku.test(i.sku));
       if (bad !== -1) return invalid(res, `items[${bad}].sku`);
       return send(res, 200, {
         outcome: "Created",

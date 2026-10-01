@@ -629,3 +629,21 @@ h3 { font-size: 1.15rem; margin-bottom: .9rem; }
 .ad-margin-ok { color: var(--success, #4b7a5c); }
 .ad-order-error { color: var(--danger, #b3564a); font-size: .8rem; }
 .ad-gallery-shop h4 { margin: 1.1rem 0 .5rem; font-size: .95rem; }
+
+/* Ajout de produit en menus déroulants */
+.ad-picker { border: 1px solid var(--line); border-radius: 12px; padding: 1rem 1.1rem; background: var(--ivory, #fdfbf8); }
+.ad-picker-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: .2rem .9rem; }
+.ad-picker select, .ad-picker input { width: 100%; }
+.ad-picker select {
+  font-family: var(--sans); font-size: .92rem; padding: .55rem .6rem;
+  border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--ink);
+}
+.ad-pick-cost { margin: .2rem 0 .8rem; font-size: .92rem; color: var(--charcoal); }
+.ad-picker-price { display: flex; align-items: flex-end; gap: 1.2rem; flex-wrap: wrap; }
+.ad-picker-price .ad-field { margin-bottom: 0; max-width: 11rem; }
+.ad-pick-total { display: flex; flex-direction: column; font-size: .8rem; color: var(--muted); padding-bottom: .45rem; }
+.ad-pick-total strong { font-size: 1.25rem; color: var(--ink); }
+.ad-cat-row th { background: var(--sand); color: var(--charcoal); font-size: .8rem; letter-spacing: .06em; text-transform: uppercase; padding: .45rem .6rem; }
+.ad-advanced { margin-top: 1.1rem; font-size: .9rem; }
+.ad-advanced summary { cursor: pointer; color: var(--muted); }
+.ad-advanced-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: .2rem .9rem; align-items: end; margin-top: .6rem; }

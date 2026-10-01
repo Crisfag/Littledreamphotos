@@ -674,7 +674,7 @@ await page.waitForFunction(() => {
 // Le Worker local parle au faux laboratoire Prodigi (worker/.dev.vars).
 
 const { startFakeProdigi } = await import("../../worker/tests/lib/fakeProdigi.mjs");
-const shopLab = await startFakeProdigi();
+const shopLab = await startFakeProdigi(undefined, { rejectSku: /INVALID|GLOBAL-BLP/i });
 
 await page.click("#ad-tab-shop");
 await page.waitForSelector("#ad-shop-settings", { timeout: 10000 });
@@ -692,26 +692,63 @@ check("les frais de port sont relus en euros", (await page.inputValue('#ad-shop-
 
 await page.click("#ad-shop-suggested");
 await page.waitForFunction(() => document.querySelectorAll("#ad-shop-products tr[data-product-id]").length === 5, { timeout: 10000 });
-check("« Ajouter les formats suggérés » remplit le catalogue (5 formats)", true);
+check("« Ajouter les formats suggérés » remplit la boutique (5 produits), rangés par catégorie",
+      (await page.locator("#ad-shop-products .ad-cat-row").allTextContents()).join("|") === "Tirages photo|Tirages d'art & posters|Toiles|Cadres",
+      (await page.locator("#ad-shop-products .ad-cat-row").allTextContents()).join("|"));
+check("aucune référence Prodigi ni option technique n'est affichée pour les produits du catalogue",
+      !(await page.textContent("#ad-shop-products")).includes("GLOBAL-"));
+
+// Ajout en menus déroulants : catégorie → produit → format → (option).
+await page.selectOption("#ad-pick-category", "canvas");
+await page.selectOption("#ad-pick-product", "canvas-rolled");
+check("une toile roulée n'a pas d'option : le menu d'option disparaît", await page.isHidden("#ad-pick-option-wrap"));
+await page.selectOption("#ad-pick-size", "16x20");
+await page.waitForFunction(() => (document.getElementById("ad-pick-cost") || {}).textContent?.includes("12,50"), { timeout: 10000 });
+check("le coût réel chez le labo s'affiche aussitôt le format choisi", (await page.textContent("#ad-pick-cost")).includes("le produit"));
+check("une marge est proposée et le prix client se calcule tout seul",
+      (await page.inputValue("#ad-pick-margin")) === "13.00" && (await page.textContent("#ad-pick-price")).includes("25,50"),
+      await page.textContent("#ad-pick-price"));
+await page.fill("#ad-pick-margin", "20");
+check("changer la marge recalcule le prix client", (await page.textContent("#ad-pick-price")).includes("32,50"));
+await page.click("#ad-pick-add");
+await page.waitForFunction(() => Array.from(document.querySelectorAll("#ad-shop-products tr[data-product-id]")).some((r) => r.textContent.includes("Toile roulée (sans châssis) 40 × 50 cm")), { timeout: 10000 });
+const pickedRow = page.locator("#ad-shop-products tr[data-product-id]", { hasText: "Toile roulée" });
+check("le produit ajouté apparaît dans « Mes produits », avec son coût et sa marge",
+      (await pickedRow.locator('[data-field="price"]').inputValue()) === "32.50" && (await pickedRow.locator(".ad-margin-cell").textContent()).includes("20,00"));
+
+await page.selectOption("#ad-pick-category", "frames");
+check("les cadres proposent la couleur du cadre", (await page.textContent("#ad-pick-option-label")) === "Couleur du cadre" &&
+      (await page.locator("#ad-pick-option option").count()) === 8);
+await page.selectOption("#ad-pick-category", "art");
+await page.selectOption("#ad-pick-product", "art-budget-poster");
+await page.waitForFunction(() => (document.getElementById("ad-pick-cost") || {}).textContent?.includes("Indisponible"), { timeout: 10000 });
+check("un produit que le labo refuse est signalé « indisponible » et ne peut pas être ajouté",
+      (await page.textContent("#ad-pick-cost")).includes("Unknown SKU") && await page.isDisabled("#ad-pick-add"));
+
+// Mode avancé : référence saisie à la main.
+await page.click(".ad-advanced summary");
 await page.fill('#ad-shop-new [data-field="label"]', "Format inconnu du labo");
 await page.fill('#ad-shop-new [data-field="sku"]', "GLOBAL-INVALID-9");
 await page.fill('#ad-shop-new [data-field="price"]', "3");
 await page.click("#ad-shop-add");
-await page.waitForFunction(() => document.querySelectorAll("#ad-shop-products tr[data-product-id]").length === 6, { timeout: 10000 });
-check("un format personnalisé s'ajoute au catalogue", true);
+await page.waitForFunction(() => document.querySelectorAll("#ad-shop-products tr[data-product-id]").length === 7, { timeout: 10000 });
+check("le mode avancé permet encore d'ajouter une référence hors catalogue (affichée sous le libellé)",
+      (await page.textContent("#ad-shop-products")).includes("Réf. GLOBAL-INVALID-9"));
 
 await page.click("#ad-shop-quote");
-await page.waitForFunction(() => Array.from(document.querySelectorAll(".ad-quote-cell")).every((c) => c.textContent.trim() !== "—"), { timeout: 15000 });
-const firstQuote = await page.textContent("#ad-shop-products tr[data-product-id] .ad-quote-cell");
-const lastQuote = await page.locator("#ad-shop-products tr[data-product-id] .ad-quote-cell").last().textContent();
-check("le devis affiche, pour chaque format, le coût du labo et la marge", firstQuote.includes("17,45") && firstQuote.includes("marge"), firstQuote);
-check("un format refusé par le labo affiche la raison donnée par Prodigi", lastQuote.includes("Unknown SKU"), lastQuote);
+await page.waitForFunction(() => Array.from(document.querySelectorAll(".ad-cost-cell")).every((c) => !c.textContent.includes("à estimer")), { timeout: 15000 });
+const firstCost = await page.textContent("#ad-shop-products tr[data-product-id] .ad-cost-cell");
+const invalidCost = await page.locator("#ad-shop-products tr[data-product-id]", { hasText: "Format inconnu" }).locator(".ad-cost-cell").textContent();
+check("« Mettre à jour les coûts labo » affiche le coût du produit et sa livraison", firstCost.includes("12,50") && firstCost.includes("4,95"), firstCost);
+check("un produit refusé par le labo affiche la raison donnée par Prodigi", invalidCost.includes("Unknown SKU"), invalidCost);
 
 const firstRow = page.locator("#ad-shop-products tr[data-product-id]").first();
-await firstRow.locator('[data-field="price"]').fill("4.50");
+await firstRow.locator('[data-field="price"]').fill("16.50");
+check("modifier un prix recalcule la marge immédiatement", (await firstRow.locator(".ad-margin-cell").textContent()).includes("4,00"),
+      await firstRow.locator(".ad-margin-cell").textContent());
 await firstRow.locator("[data-save-product]").click();
-await page.waitForFunction(() => document.querySelector('#ad-shop-products tr[data-product-id] [data-field="price"]')?.value === "4.50", { timeout: 10000 });
-check("modifier le prix d'un format l'enregistre (relu après rechargement de l'écran)", true);
+await page.waitForFunction(() => document.querySelector('#ad-shop-products tr[data-product-id] [data-field="price"]')?.value === "16.50", { timeout: 10000 });
+check("le nouveau prix est enregistré (relu après rechargement de l'écran)", true);
 check("aucune commande n'est encore listée", await page.isVisible("#ad-print-orders-empty"));
 
 await page.click("#ad-tab-galleries");
