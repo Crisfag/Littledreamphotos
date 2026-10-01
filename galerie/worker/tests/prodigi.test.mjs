@@ -120,6 +120,13 @@ check("les erreurs Prodigi deviennent un message lisible, détail compris",
       prodigiErrorMessage({ statusText: "ValidationFailed", data: { errors: [{ property: "items[0].sku", message: "Unknown SKU" }] } }, 400)
         === "ValidationFailed — items[0].sku : Unknown SKU");
 
+check("les erreurs Prodigi au format objet ({ propriété: [détails] }) sont lues sans planter",
+      prodigiErrorMessage({ outcome: "ValidationFailed", failures: { "items[0].attributes": [{ code: "MissingRequiredAttribute", description: "finish is required" }] } }, 400)
+        === "ValidationFailed — items[0].attributes : finish is required");
+check("un format inattendu de détails ne fait jamais planter la lecture",
+      prodigiErrorMessage({ outcome: "ValidationFailed", failures: "oups", errors: { a: "b" } }, 400).startsWith("ValidationFailed"));
+check("les tirages photo suggérés précisent leur finition (option exigée par Prodigi)",
+      SUGGESTED_PRODUCTS.filter((p) => p.sku.startsWith("GLOBAL-PHO")).every((p) => p.attributes.finish));
 check("une clé refusée (mauvais environnement) donne une explication claire",
       prodigiErrorMessage({ statusText: "NotAuthenticated", statusCode: 401 }, 401).includes("clé Sandbox"));
 check("l'environnement choisit l'adresse de Prodigi (test ou production)",
