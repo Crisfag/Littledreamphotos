@@ -41,8 +41,17 @@ CREATE TABLE IF NOT EXISTS photographers (
   -- Relances automatiques (client à J-7 et J-2 de l'expiration, photographe
   -- à J-2) tant que la sélection n'est pas validée. 1 = actives (défaut).
   reminders_enabled INTEGER NOT NULL DEFAULT 1,
+  -- Sous-domaine du studio (ex. « julie » pour julie.holypixx.com) : les
+  -- liens de galerie envoyés aux clients portent alors l'adresse du studio.
+  -- Vide = pas de sous-domaine (liens sur le site principal). Unique entre
+  -- comptes quand renseigné (voir l'index partiel ci-dessous) ; les noms
+  -- réservés (www, api, admin…) sont refusés côté Worker (studio.js).
+  subdomain      TEXT NOT NULL DEFAULT '',
   created_at     INTEGER NOT NULL
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_photographers_subdomain
+  ON photographers(subdomain) WHERE subdomain != '';
 
 CREATE TABLE IF NOT EXISTS galleries (
   id                     TEXT PRIMARY KEY,
@@ -364,6 +373,8 @@ CREATE INDEX IF NOT EXISTS idx_email_changes_photographer ON email_changes(photo
 --   ALTER TABLE galleries ADD COLUMN music_name TEXT NOT NULL DEFAULT '';
 --   ALTER TABLE galleries ADD COLUMN selection_done_at INTEGER;
 --   ALTER TABLE photographers ADD COLUMN reminders_enabled INTEGER NOT NULL DEFAULT 1;
+--   ALTER TABLE photographers ADD COLUMN subdomain TEXT NOT NULL DEFAULT '';
+--   CREATE UNIQUE INDEX IF NOT EXISTS idx_photographers_subdomain ON photographers(subdomain) WHERE subdomain != '';
 
 -- Relances déjà envoyées, pour ne jamais relancer deux fois pour la même
 -- échéance : une ligne par galerie et par type (client_j7, client_j2,

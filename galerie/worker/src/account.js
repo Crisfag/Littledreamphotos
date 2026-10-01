@@ -4,6 +4,7 @@
 // forgot-password/reset-password dans authPhotographer.js.
 
 import { json, fail } from "./http.js";
+import { normalizeSubdomain } from "./studio.js";
 import { hashPassword, verifyPassword, randomBytes, b64url, hashToken } from "./auth.js";
 import { sendEmailChangeConfirmation } from "./notify.js";
 
@@ -206,4 +207,32 @@ export async function updateReminders(request, env, photographerId) {
     .bind(enabled ? 1 : 0, photographerId)
     .run();
   return json({ ok: true, enabled });
+}
+
+// Sous-domaine du studio (julie.holypixx.com). Unique entre comptes ; les
+// noms réservés sont refusés ; vide = retirer.
+export async function updateSubdomain(request, env, photographerId) {
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return fail(400, "Requête invalide");
+  }
+  const normalized = normalizeSubdomain(body.subdomain);
+  if (normalized.error) return fail(400, normalized.error);
+  const { subdomain } = normalized;
+
+  if (subdomain) {
+    const taken = await env.DB.prepare("SELECT id FROM photographers WHERE subdomain = ? AND id != ?")
+      .bind(subdomain, photographerId)
+      .first();
+    if (taken) return fail(409, "Ce sous-domaine est déjà pris");
+  }
+  try {
+    await env.DB.prepare("UPDATE photographers SET subdomain = ? WHERE id = ?").bind(subdomain, photographerId).run();
+  } catch {
+    // L'index unique tranche en cas de course entre deux comptes.
+    return fail(409, "Ce sous-domaine est déjà pris");
+  }
+  return json({ ok: true, subdomain });
 }

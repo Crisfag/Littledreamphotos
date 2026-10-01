@@ -132,7 +132,7 @@ async function handleLogin(request, env, slug) {
     .all();
 
   const photographer = await env.DB.prepare(
-    "SELECT stripe_account_id, stripe_charges_enabled FROM photographers WHERE id = ?"
+    "SELECT stripe_account_id, stripe_charges_enabled, studio_name FROM photographers WHERE id = ?"
   )
     .bind(gallery.photographer_id)
     .first();
@@ -154,6 +154,7 @@ async function handleLogin(request, env, slug) {
       layout: gallery.layout || "grille",
       hasMusic: Boolean(gallery.music_name),
       selectionDoneAt: gallery.selection_done_at || null,
+      studioName: photographer?.studio_name || "",
       includedPhotos: gallery.included_photos,
       extraPhotoPriceCents: gallery.extra_photo_price_cents || 0,
       paidExtraCount: await paidExtraCount(env, gallery.id),

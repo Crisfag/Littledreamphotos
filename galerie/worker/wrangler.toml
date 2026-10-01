@@ -16,6 +16,13 @@ OWNER_EMAIL = "fagnantchristine@gmail.com"
 # le lien « Revoir ma galerie » des e-mails de relance envoyés aux clients.
 PUBLIC_SITE_ORIGIN = "https://www.holypixx.com"
 
+# Sous-domaine par studio (voir worker/src/studio.js) : julie.holypixx.com
+# sert la page de galerie et l'API du Worker sur une même origine. Nécessite,
+# côté DNS de la zone, un enregistrement joker « * » proxyé (voir README), et
+# la route ci-dessous. Le site principal (www, apex) traverse le Worker sans
+# être touché.
+STUDIO_DOMAIN = "holypixx.com"
+
 # Relances automatiques (voir worker/src/reminders.js) : une passe par jour,
 # 08:00 UTC (10:00 à Paris/Bruxelles en été, 09:00 en hiver). Client prévenu
 # à J-7 puis J-2 de l'expiration de sa galerie tant qu'il n'a pas validé sa
@@ -23,6 +30,13 @@ PUBLIC_SITE_ORIGIN = "https://www.holypixx.com"
 # mais n'envoie rien.
 [triggers]
 crons = ["0 8 * * *"]
+
+# Route du sous-domaine par studio : toute adresse « *.holypixx.com » arrive
+# ici (les studios sont servis, www et les noms réservés passent tels quels).
+# Commentez ce bloc si la zone n'est pas encore sur ce compte Cloudflare.
+routes = [
+  { pattern = "*.holypixx.com/*", zone_name = "holypixx.com" },
+]
 
 # Base de métadonnées : galeries, photos, journal d'accès.
 # Créer avec :  npx wrangler d1 create galerie-protegee

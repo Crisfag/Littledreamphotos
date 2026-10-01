@@ -627,6 +627,34 @@ await page.waitForSelector("#ad-name-form", { timeout: 10000 });
 check("le prénom modifié depuis Paramètres est bien relu après rechargement",
       await page.inputValue('#ad-name-form [name="firstName"]') === "Julie-Anne");
 
+/* ---------- Adresse du studio (sous-domaine) ---------- */
+
+check("sans sous-domaine, Paramètres le dit", (await page.textContent("#ad-subdomain-current")).includes("Aucun sous-domaine"));
+const SUBDOMAIN = `julie-${Date.now().toString(36)}`;
+await page.fill('#ad-subdomain-form [name="subdomain"]', SUBDOMAIN);
+await page.click("#ad-subdomain-save");
+await page.waitForFunction((sub) => {
+  const el = document.getElementById("ad-subdomain-current");
+  return el && el.textContent.includes("https://" + sub + ".");
+}, SUBDOMAIN, { timeout: 10000 });
+check("le sous-domaine enregistré est rappelé avec l'adresse complète des liens", true);
+await page.fill('#ad-subdomain-form [name="subdomain"]', "www");
+await page.click("#ad-subdomain-save");
+await page.waitForFunction(() => {
+  const toast = document.querySelector(".ad-toast-visible");
+  return toast && toast.textContent.includes("réservé");
+}, { timeout: 5000 });
+check("un nom réservé est refusé avec un message explicite", true);
+await page.click("#ad-tab-galleries");
+await page.waitForSelector(".ad-card", { timeout: 10000 });
+await page.locator(".ad-card").first().click();
+await page.waitForSelector("#ad-detail-link", { timeout: 10000 });
+check("le lien de la galerie porte désormais l'adresse du studio",
+      (await page.inputValue("#ad-detail-link")).startsWith("https://" + SUBDOMAIN + "."),
+      await page.inputValue("#ad-detail-link"));
+await page.click("#ad-tab-settings");
+await page.waitForSelector("#ad-reminders-toggle", { timeout: 10000 });
+
 check("les relances automatiques sont cochées par défaut", await page.isChecked("#ad-reminders-toggle"));
 await page.uncheck("#ad-reminders-toggle");
 await page.waitForFunction(() => {

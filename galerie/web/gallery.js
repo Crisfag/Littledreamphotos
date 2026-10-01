@@ -1191,6 +1191,10 @@
         state.photos = result.data.photos;
 
         el.title.textContent = state.gallery.title;
+        if (state.gallery.studioName) {
+          var eyebrows = document.querySelectorAll("#gp-gallery .gp-eyebrow");
+          for (var e = 0; e < eyebrows.length; e++) eyebrows[e].textContent = state.gallery.studioName;
+        }
         el.subtitle.textContent = state.gallery.clientName
           ? "Galerie de " + state.gallery.clientName
           : "";

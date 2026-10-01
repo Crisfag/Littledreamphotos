@@ -1547,6 +1547,139 @@ check("relances désactivées : plus rien ne part pour ce compte, ni au client n
       thirdPass.sent.filter((r) => r.slug === relDisabled).length === 0, JSON.stringify(thirdPass.sent));
 await admin("POST", "/api/admin/account/reminders", { enabled: true });
 
+/* ---------- Sous-domaine par studio ---------- */
+
+const meBeforeSub = await (await admin("GET", "/api/auth/me")).json();
+check("sans sous-domaine réglé, le profil le dit et annonce le domaine des studios",
+      meBeforeSub.photographer?.subdomain === "" && meBeforeSub.photographer?.studioDomain === "holypixx.com",
+      "STUDIO_DOMAIN (wrangler.toml ou .dev.vars) doit valoir holypixx.com pour ce test — reçu " + JSON.stringify(meBeforeSub.photographer?.studioDomain));
+
+const subBad = await admin("POST", "/api/admin/account/subdomain", { subdomain: "Mon Studio!" });
+check("un sous-domaine avec espaces ou caractères spéciaux est refusé", subBad.status === 400);
+const subShort = await admin("POST", "/api/admin/account/subdomain", { subdomain: "ab" });
+check("un sous-domaine trop court est refusé", subShort.status === 400);
+const subReserved = await admin("POST", "/api/admin/account/subdomain", { subdomain: "www" });
+const subReserved2 = await admin("POST", "/api/admin/account/subdomain", { subdomain: "api" });
+check("les noms réservés (www, api…) sont refusés", subReserved.status === 400 && subReserved2.status === 400);
+
+const SUB = `studio-${RUN}`;
+const subSet = await admin("POST", "/api/admin/account/subdomain", { subdomain: SUB.toUpperCase() });
+const subSetBody = await subSet.json();
+check("le photographe peut choisir son sous-domaine (mis en minuscules)", subSet.ok && subSetBody.subdomain === SUB, JSON.stringify(subSetBody));
+const meAfterSub = await (await admin("GET", "/api/auth/me")).json();
+check("le sous-domaine est relu dans le profil", meAfterSub.photographer?.subdomain === SUB);
+
+const subTaken = await peerAdmin("POST", "/api/admin/account/subdomain", { subdomain: SUB });
+check("un autre compte ne peut pas prendre le même sous-domaine (409)", subTaken.status === 409);
+const subPeer = await peerAdmin("POST", "/api/admin/account/subdomain", { subdomain: `${SUB}-bis` });
+check("un autre compte peut en choisir un autre", subPeer.ok);
+
+// Requêtes « comme depuis le sous-domaine » : même Worker, en-tête Host
+// différent — exactement ce qu'il recevra en production derrière la route
+// *.holypixx.com. `fetch` de Node ignore un Host fourni à la main : on passe
+// par node:http, qui l'envoie tel quel.
+const { request: httpRequest } = await import("node:http");
+function asStudio(sub, path, init = {}) {
+  return new Promise((resolve, reject) => {
+    const u = new URL(`${BASE}${path}`);
+    const req = httpRequest(
+      { hostname: u.hostname, port: u.port, path: u.pathname + u.search, method: init.method || "GET",
+        headers: { ...(init.headers || {}), host: `${sub}.holypixx.com` } },
+      (res) => {
+        const chunks = [];
+        res.on("data", (c) => chunks.push(c));
+        res.on("end", () => {
+          const buf = Buffer.concat(chunks);
+          resolve({
+            status: res.statusCode,
+            ok: res.statusCode >= 200 && res.statusCode < 300,
+            headers: { get: (k) => (res.headers[k.toLowerCase()] === undefined ? null : String(res.headers[k.toLowerCase()])) },
+            text: async () => buf.toString("utf8"),
+            json: async () => JSON.parse(buf.toString("utf8")),
+          });
+        });
+      }
+    );
+    req.on("error", reject);
+    if (init.body) req.write(init.body);
+    req.end();
+  });
+}
+
+const unknownStudio = await asStudio("studio-inexistant-" + RUN, "/");
+check("un sous-domaine qui ne correspond à aucun studio renvoie une page 404 lisible",
+      unknownStudio.status === 404 && (unknownStudio.headers.get("content-type") || "").includes("text/html"));
+
+// La galerie principale du test a été supprimée plus haut (suppression en
+// cascade) : on se sert de celle de la section « Valider ma sélection ».
+const loginOnStudio = await asStudio(SUB, `/api/gallery/${validateSlug}/login`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ password: "mot-de-passe-solide" }),
+});
+const loginOnStudioBody = await loginOnStudio.json();
+check("une galerie du studio s'ouvre sous l'adresse du studio, avec le nom du studio pour le client",
+      loginOnStudio.ok && loginOnStudioBody.gallery?.studioName === "Nouveau nom de studio",
+      `HTTP ${loginOnStudio.status} — ${JSON.stringify(loginOnStudioBody.gallery?.studioName ?? loginOnStudioBody)}`);
+
+const loginOnOtherStudio = await asStudio(`${SUB}-bis`, `/api/gallery/${validateSlug}/login`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ password: "mot-de-passe-solide" }),
+});
+check("la même galerie n'existe pas sous l'adresse d'un autre studio (404)", loginOnOtherStudio.status === 404);
+
+// La page elle-même est relue depuis PUBLIC_SITE_ORIGIN : en local, un petit
+// serveur statique sur web/ (PUBLIC_SITE_ORIGIN=http://localhost:8000 dans
+// .dev.vars). Si le port est déjà pris ou la variable absente, on le dit
+// plutôt que d'échouer pour une raison étrangère au Worker.
+{
+  const { createServer } = await import("node:http");
+  const { readFile } = await import("node:fs/promises");
+  const { fileURLToPath } = await import("node:url");
+  const { dirname, join } = await import("node:path");
+  const webDir = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "web");
+  const types = { html: "text/html; charset=utf-8", css: "text/css; charset=utf-8", js: "text/javascript; charset=utf-8" };
+  const site = createServer(async (req, res) => {
+    const pathname = req.url.split("?")[0] === "/" ? "/galerie.html" : req.url.split("?")[0];
+    try {
+      const body = await readFile(join(webDir, pathname));
+      res.writeHead(200, { "content-type": types[pathname.split(".").pop()] || "application/octet-stream" });
+      res.end(body);
+    } catch {
+      res.writeHead(404).end();
+    }
+  });
+  const listening = await new Promise((resolve) => {
+    site.once("error", () => resolve(false));
+    site.listen(8000, "localhost", () => resolve(true));
+  });
+  if (listening) {
+    const pageOnStudio = await asStudio(SUB, "/?g=" + validateSlug);
+    const pageHtml = await pageOnStudio.text();
+    check("la page de galerie est servie sous l'adresse du studio, l'API pointée sur ce même hôte (sans schéma)",
+          pageOnStudio.status === 200 && (pageOnStudio.headers.get("content-type") || "").includes("text/html") &&
+          pageHtml.includes(`api: "//${SUB}.holypixx.com"`),
+          pageOnStudio.status === 200 ? (pageHtml.match(/api: "[^"]*"/) || [])[0] : `HTTP ${pageOnStudio.status} — PUBLIC_SITE_ORIGIN=http://localhost:8000 attendu dans worker/.dev.vars`);
+    const cssOnStudio = await asStudio(SUB, "/gallery.css");
+    check("la feuille de style suit, avec son bon type",
+          cssOnStudio.status === 200 && (cssOnStudio.headers.get("content-type") || "").includes("text/css"));
+    const otherOnStudio = await asStudio(SUB, "/autre-chose.html");
+    check("rien d'autre que la page de galerie n'est servi sous l'adresse du studio", otherOnStudio.status === 404);
+    site.close();
+  } else {
+    console.log("  (port 8000 déjà pris : page sous sous-domaine non vérifiée ici)");
+  }
+}
+
+const subCleared = await admin("POST", "/api/admin/account/subdomain", { subdomain: "" });
+const meAfterClear = await (await admin("GET", "/api/auth/me")).json();
+check("vider le champ retire le sous-domaine", subCleared.ok && meAfterClear.photographer?.subdomain === "");
+const loginAfterClear = await asStudio(SUB, `/api/gallery/${validateSlug}/login`, {
+  method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ password: "mot-de-passe-solide" }),
+});
+check("une fois retiré, l'ancien sous-domaine ne mène plus nulle part", loginAfterClear.status === 404);
+
 const failed = checks.filter((c) => !c.ok);
 console.log(failed.length ? `\n${failed.length} vérification(s) en échec.` : `\n${checks.length} vérifications, toutes passent.`);
 process.exit(failed.length ? 1 : 0);

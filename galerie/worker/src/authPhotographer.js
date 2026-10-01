@@ -80,6 +80,8 @@ function profileOf(photographer, env) {
     billingVatNumber: photographer.billing_vat_number || "",
     defaultLayout: photographer.default_layout || "grille",
     remindersEnabled: photographer.reminders_enabled !== 0,
+    subdomain: photographer.subdomain || "",
+    studioDomain: env?.STUDIO_DOMAIN || "",
     // Donne droit à l'onglet Admin (toutes galeries/comptes confondus, voir
     // owner.js) côté interface — purement indicatif ici : chaque route
     // /api/owner/* revérifie elle-même l'e-mail côté serveur, jamais sur la

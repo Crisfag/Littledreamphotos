@@ -116,6 +116,18 @@ galerie affiche la date de validation, et les relances automatiques
 s'arrêtent. Le client peut encore changer d'avis et valider à nouveau
 (l'e-mail n'est pas renvoyé plus d'une fois par heure).
 
+**Une adresse au nom du studio** : chaque photographe peut choisir un
+sous-domaine dans Paramètres (`julie` → `julie.holypixx.com`), et tous ses
+liens de galerie le portent aussitôt : `https://julie.holypixx.com/?g=…`.
+Sous cette adresse, le Worker sert la page de galerie (relue depuis le site
+principal, l'adresse d'API réécrite en « //julie.holypixx.com » pour suivre
+le schéma de la page) et son API sur une même origine, affiche le nom du studio en
+tête de galerie à la place de la marque de la plateforme, et ne connaît que
+les galeries de ce studio — un lien vers la galerie d'un autre compte y
+reste « introuvable ». Les noms réservés (`www`, `api`, `admin`…) sont
+refusés, un sous-domaine ne peut appartenir qu'à un compte, et le vider
+ramène les liens sur le site principal.
+
 **Relances automatiques** : tant que la sélection n'est pas validée, une
 passe quotidienne sur le Worker (déclencheur planifié, 08:00 UTC) envoie au
 client un rappel à 7 jours puis à 2 jours de l'expiration de sa galerie
@@ -193,6 +205,17 @@ pointer vers le site qui héberge `galerie.html` (le lien « Revoir ma
 galerie » des e-mails en dépend), et le déclencheur planifié déclaré sous
 `[triggers]` est créé au déploiement — rien d'autre à faire côté Cloudflare.
 Sans `RESEND_API_KEY`, la passe quotidienne tourne mais n'envoie rien.
+
+Pour le sous-domaine par studio (`julie.holypixx.com`, voir plus bas), trois
+choses : `STUDIO_DOMAIN` dans `wrangler.toml` (déjà `holypixx.com`), la
+route `*.holypixx.com/*` déclarée sous `routes` (créée au déploiement — la
+zone doit être sur le même compte Cloudflare, sinon commentez le bloc), et
+un enregistrement DNS joker dans la zone : **DNS → Add record → type
+`AAAA`, nom `*`, valeur `100::`, proxy activé (nuage orange)**. Cette
+adresse « bidon » ne sert qu'à faire passer `*.holypixx.com` par Cloudflare,
+où la route confie la requête au Worker. `www` et l'apex gardent leurs
+enregistrements et leur hébergement : le Worker les laisse passer sans y
+toucher.
 
 ### 2. La page client
 
@@ -647,7 +670,7 @@ des tuiles, refus du mauvais mot de passe, absence de toute balise `<img>`,
 neutralisation du menu contextuel et de la copie, voile sur « Impr. écran » et
 sur perte de focus, consignation au journal.
 
-**API du Worker** — 246 vérifications contre le vrai moteur Cloudflare (D1 et R2
+**API du Worker** — 262 vérifications contre le vrai moteur Cloudflare (D1 et R2
 émulés localement par `wrangler dev`) : comptes photographes (inscription,
 connexion, session, mot de passe oublié — même réponse générique qu'un
 compte existe ou non), cloisonnement strict entre comptes (un photographe ne
@@ -715,7 +738,14 @@ du client. Relances automatiques (passe lancée par la propriétaire, refusée
 client et relance photographe à J-1, rien sans e-mail client, sans date
 d'expiration ou une fois la sélection validée, jamais deux fois la même
 relance d'une passe à l'autre, plus rien pour un compte qui a désactivé les
-relances.
+relances. Sous-domaine par studio : caractères, longueur et noms réservés
+refusés, mis en minuscules, relu dans le profil, refusé à un autre compte
+(409), et — en rejouant les requêtes avec l'en-tête `Host` du studio, tel
+que le Worker le reçoit en production — 404 lisible pour un studio inconnu,
+galerie du studio ouverte avec son nom, même galerie introuvable sous
+l'adresse d'un autre studio, page de galerie servie avec l'API pointée sur
+ce même hôte, sans schéma (feuille de style comprise, rien d'autre), plus
+rien une fois le sous-domaine retiré.
 Le trajet complet de réinitialisation de mot de passe (jeton reçu par
 e-mail → nouveau mot de passe → ancien mot de passe rejeté → lien à usage
 unique) est vérifié manuellement plutôt qu'automatiquement : le jeton ne
@@ -767,7 +797,7 @@ appliqué sinon, HT + TVA se recomposant exactement au centime près en TTC
 même sur un montant qui ne se divise pas rond, et un vrai PDF valide généré
 aussi bien avec des coordonnées complètes qu'avec des champs vides.
 
-**Interface d'administration** — 87 vérifications dans un vrai navigateur,
+**Interface d'administration** — 91 vérifications dans un vrai navigateur,
 contre le vrai Worker local : demande de lien de réinitialisation de mot de
 passe (message générique affiché), création de compte et connexion depuis
 le formulaire (pas de session présupposée), barre d'onglets Galeries /
@@ -820,7 +850,10 @@ qui rappelle d'abord que rien n'est validé, puis date de validation après
 le clic du client (via l'API), badge « Validée » sur la carte ; case des
 relances automatiques cochée par défaut dans Paramètres, décochée et relue
 après rechargement ; passe de relances lancée depuis l'onglet Admin par la
-propriétaire, avec son résumé.
+propriétaire, avec son résumé. Adresse du studio : « aucun sous-domaine »
+au départ, sous-domaine enregistré et rappelé avec l'adresse complète, nom
+réservé refusé avec son message, lien de la galerie qui porte aussitôt
+l'adresse du studio.
 
 **Vérifier une photo (empreinte invisible)** — 8 vérifications contre le vrai
 Worker local : une image reconstituée tuile par tuile — exactement comme le
@@ -856,6 +889,15 @@ repère existant mais retire un repère tout juste posé sans rien envoyer ;
 pastille et compteur dans la grille ; tout retrouvé après une reconnexion
 complète ; suppression répercutée côté Worker.
 
+**Sous-domaine par studio** — 8 vérifications dans un vrai navigateur, où
+Playwright rejoue toute requête vers `<studio>.holypixx.com` sur le Worker
+local avec l'en-tête `Host` du studio (ce que le Worker recevra derrière la
+route de production) : page de galerie affichée à l'adresse du studio, API
+inscrite dans la page sur cette même origine, feuille de style et script
+servis par elle, connexion et tuiles passées par l'API du studio, nom du
+studio en tête de galerie, galerie d'un autre studio introuvable, aucune
+exception.
+
 ```bash
 cd tools
 node tests/forensic.test.mjs 1600     # robustesse de l'empreinte
@@ -867,6 +909,7 @@ node tests/detect.test.mjs            # vérifier une photo, autonome (crée ses
 node tests/selection.test.mjs         # sélection client, autonome (crée sa propre galerie)
 node tests/comments.test.mjs          # commentaires client, autonome (crée sa propre galerie)
 node tests/marks.test.mjs             # codes couleur + repères client, autonome (crée sa propre galerie)
+node tests/subdomain.test.mjs         # sous-domaine par studio, autonome (PUBLIC_SITE_ORIGIN=http://localhost:8000 dans worker/.dev.vars)
 
 cd ../worker
 node tests/notify.test.mjs            # e-mails (alerte de capture, relances…), sans réseau

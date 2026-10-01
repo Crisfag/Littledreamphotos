@@ -557,6 +557,19 @@
       layoutOptionsHtml({ layout: photographer.defaultLayout }) +
       "</div></section>" +
 
+      '<section><div class="ad-section-header"><h3>Adresse de votre studio</h3></div>' +
+      '<p class="ad-hint">Vos clients ouvrent leurs galeries à une adresse à votre nom — <strong>votre-studio.' + esc(state.config.studioDomain || "holypixx.com") + '</strong> — plutôt que sur le site de la plateforme. Lettres minuscules, chiffres et tirets, 3 à 30 caractères. Laissez vide pour revenir au site principal.</p>' +
+      '<form id="ad-subdomain-form"><label class="ad-field"><span>Sous-domaine</span>' +
+      '<div class="ad-subdomain-row"><input type="text" name="subdomain" value="' + esc(photographer.subdomain || "") + '" placeholder="votre-studio" autocapitalize="off" autocomplete="off" spellcheck="false" maxlength="30" />' +
+      '<span class="ad-subdomain-suffix">.' + esc(state.config.studioDomain || "holypixx.com") + "</span></div></label>" +
+      '<p class="ad-hint" id="ad-subdomain-current">' +
+      (photographer.subdomain
+        ? "Vos liens de galerie commencent par <strong>https://" + esc(photographer.subdomain) + "." + esc(state.config.studioDomain || "holypixx.com") + "/</strong>."
+        : "Aucun sous-domaine pour l'instant : vos liens pointent vers le site principal.") +
+      "</p>" +
+      '<button type="submit" class="ad-btn ad-btn-primary" id="ad-subdomain-save">Enregistrer</button>' +
+      "</form></section>" +
+
       '<section><div class="ad-section-header"><h3>Relances automatiques</h3></div>' +
       '<p class="ad-hint">Tant qu\'un client n\'a pas cliqué « Valider ma sélection », il reçoit un rappel à 7 jours puis à 2 jours de l\'expiration de sa galerie (s\'il a un e-mail renseigné), et vous en recevez un à 2 jours. Rien n\'est envoyé pour une galerie sans date d\'expiration.</p>' +
       '<label class="ad-toggle"><input type="checkbox" id="ad-reminders-toggle"' + (photographer.remindersEnabled ? " checked" : "") + " />" +
@@ -625,6 +638,22 @@
           lastName: form.lastName.value.trim(),
         });
         toast("Identité enregistrée.");
+      } catch (err) {
+        toast(err.message, true);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    document.getElementById("ad-subdomain-form").addEventListener("submit", async function (event) {
+      event.preventDefault();
+      var form = event.target;
+      var btn = document.getElementById("ad-subdomain-save");
+      btn.disabled = true;
+      try {
+        var result = await api("POST", "/account/subdomain", { subdomain: form.subdomain.value.trim().toLowerCase() });
+        toast(result.subdomain ? "Adresse du studio enregistrée." : "Sous-domaine retiré.");
+        renderSettings(true);
       } catch (err) {
         toast(err.message, true);
       } finally {

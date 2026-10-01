@@ -10,7 +10,7 @@ import { parseMarks } from "./marks.js";
 import { hashPassword, randomBytes, b64url } from "./auth.js";
 import { authenticatePhotographer } from "./authPhotographer.js";
 import { connectStripe, refreshStripeStatus, setBillingProfile } from "./billing.js";
-import { updateStudioName, updateName, changePassword, requestEmailChange, updateDefaults, updateReminders } from "./account.js";
+import { updateStudioName, updateName, changePassword, requestEmailChange, updateDefaults, updateReminders, updateSubdomain } from "./account.js";
 
 function now() {
   return Math.floor(Date.now() / 1000);
@@ -775,6 +775,9 @@ export async function handleAdmin(request, env, ctx, path) {
   }
   if (section === "account" && parts[3] === "email" && parts.length === 4 && request.method === "POST") {
     return requestEmailChange(request, env, ctx, photographerId);
+  }
+  if (section === "account" && parts[3] === "subdomain" && parts.length === 4 && request.method === "POST") {
+    return updateSubdomain(request, env, photographerId);
   }
   if (section === "account" && parts[3] === "reminders" && parts.length === 4 && request.method === "POST") {
     return updateReminders(request, env, photographerId);

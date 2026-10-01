@@ -116,6 +116,10 @@ export class WorkerClient {
     return this.request("POST", "/api/admin/account/defaults", { defaultLayout });
   }
 
+  setSubdomain(subdomain) {
+    return this.request("POST", "/api/admin/account/subdomain", { subdomain });
+  }
+
   setReminders(enabled) {
     return this.request("POST", "/api/admin/account/reminders", { enabled: Boolean(enabled) });
   }

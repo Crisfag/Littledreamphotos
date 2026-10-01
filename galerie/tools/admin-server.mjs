@@ -75,6 +75,9 @@ const config = {
   // URL publique de web/galerie.html, pour reconstituer le lien complet à
   // donner au client. Sans elle, l'interface affiche seulement « ?g=slug ».
   site: (process.env.GALERIE_SITE || "").replace(/\/$/, ""),
+  // Domaine des sous-domaines de studio (julie.<domaine>) — doit valoir la
+  // même chose que STUDIO_DOMAIN côté Worker.
+  studioDomain: (process.env.GALERIE_STUDIO_DOMAIN || "holypixx.com").trim(),
 };
 
 const ENV_NAMES = { api: "GALERIE_API", forensicKey: "GALERIE_FORENSIC_KEY" };
@@ -414,7 +417,7 @@ async function handleApi(req, res, url) {
 
   if (parts.length === 1 && parts[0] === "config" && req.method === "GET") {
     return json(res, 200, {
-      site: config.site, api: config.api,
+      site: config.site, api: config.api, studioDomain: config.studioDomain,
       previewCols: PREVIEW_COLS, previewRows: PREVIEW_ROWS,
     });
   }
@@ -589,6 +592,7 @@ async function handleApi(req, res, url) {
     const body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
     try {
       await client.setStudioName(String(body.studioName || ""));
+      profileCache.delete(client.token);
       return json(res, 200, { ok: true });
     } catch (err) {
       return relayError(res, err, "Impossible d'enregistrer le nom du studio");
@@ -636,6 +640,18 @@ async function handleApi(req, res, url) {
       return json(res, 200, { ok: true });
     } catch (err) {
       return relayError(res, err, "Impossible d'enregistrer la présentation par défaut");
+    }
+  }
+
+  // POST /local/account/subdomain — adresse du studio (julie.holypixx.com).
+  if (parts.length === 2 && parts[0] === "account" && parts[1] === "subdomain" && req.method === "POST") {
+    const body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
+    try {
+      const result = await client.setSubdomain(String(body.subdomain || ""));
+      profileCache.delete(client.token);
+      return json(res, 200, result);
+    } catch (err) {
+      return relayError(res, err, "Impossible d'enregistrer le sous-domaine");
     }
   }
 
@@ -713,7 +729,7 @@ async function handleApi(req, res, url) {
           password, watermarkText, expiresAt,
           includedPhotos: body.includedPhotos, extraPhotoPrice: body.extraPhotoPrice,
         });
-        return json(res, 201, { id: created.id, slug, password, link: linkFor(slug) });
+        return json(res, 201, { id: created.id, slug, password, link: await linkFor(client, slug) });
       } catch (err) {
         return relayError(res, err, "Impossible de créer la galerie");
       }
@@ -731,7 +747,7 @@ async function handleApi(req, res, url) {
           client.getGallery(slug),
           client.galleryLog(slug, 100).catch(() => ({ log: [] })),
         ]);
-        return json(res, 200, { ...detail, log: logResult.log, link: linkFor(slug) });
+        return json(res, 200, { ...detail, log: logResult.log, link: await linkFor(client, slug) });
       } catch (err) {
         return relayError(res, err, "Galerie introuvable");
       }
@@ -753,7 +769,7 @@ async function handleApi(req, res, url) {
     const newPassword = generatePassword();
     try {
       await client.regeneratePassword(slug, newPassword);
-      return json(res, 200, { password: newPassword, link: linkFor(slug) });
+      return json(res, 200, { password: newPassword, link: await linkFor(client, slug) });
     } catch (err) {
       return relayError(res, err, "Impossible de générer un nouveau mot de passe");
     }
@@ -944,22 +960,36 @@ async function handleApi(req, res, url) {
   return json(res, 404, { error: "Route inconnue" });
 }
 
-// Marque par défaut du filigrane : celle du studio du compte connecté, avec
-// GALERIE_BRAND comme filet de secours (utile en développement local).
-const brandCache = new Map(); // jeton -> studioName, pour ne pas rappeler /me à chaque photo
-async function brandFor(client) {
-  if (brandCache.has(client.token)) return brandCache.get(client.token) || config.brand;
+// Profil du compte connecté (nom du studio, sous-domaine), mis en cache par
+// jeton pour ne pas rappeler /me à chaque photo ou à chaque lien. Invalidé
+// dès que le compte modifie l'un de ces réglages.
+const profileCache = new Map(); // jeton -> photographer
+async function profileFor(client) {
+  if (profileCache.has(client.token)) return profileCache.get(client.token);
   try {
     const { photographer } = await client.me();
-    const brand = photographer.studioName || config.brand;
-    brandCache.set(client.token, brand);
-    return brand;
+    profileCache.set(client.token, photographer);
+    return photographer;
   } catch {
-    return config.brand;
+    return null;
   }
 }
 
-function linkFor(slug) {
+// Marque par défaut du filigrane : celle du studio du compte connecté, avec
+// GALERIE_BRAND comme filet de secours (utile en développement local).
+async function brandFor(client) {
+  const photographer = await profileFor(client);
+  return (photographer && photographer.studioName) || config.brand;
+}
+
+// Lien à transmettre au client : l'adresse du studio si un sous-domaine est
+// réglé (julie.holypixx.com/?g=…), sinon le site principal (GALERIE_SITE),
+// sinon un lien relatif.
+async function linkFor(client, slug) {
+  const photographer = await profileFor(client);
+  if (photographer && photographer.subdomain && config.studioDomain) {
+    return `https://${photographer.subdomain}.${config.studioDomain}/?g=${encodeURIComponent(slug)}`;
+  }
   return config.site ? `${config.site}?g=${encodeURIComponent(slug)}` : `?g=${encodeURIComponent(slug)}`;
 }
 
