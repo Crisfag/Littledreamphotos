@@ -1445,6 +1445,108 @@ check("un compte créé plus haut dans ce test apparaît dans la liste, avec son
 check("les mots de passe ne figurent jamais dans la liste",
       !JSON.stringify(ownerPhotographers).toLowerCase().includes("password"));
 
+/* ---------- « Valider ma sélection » ---------- */
+
+const validateSlug = `${SLUG}-validation`;
+const validateCreated = await (await admin("POST", "/api/admin/galleries", {
+  slug: validateSlug, password: "mot-de-passe-solide", title: "Séance à valider", clientName: "Famille Valide",
+  expiresAt: Math.floor(Date.now() / 1000) + 10 * 86400,
+})).json();
+const validateSession = await (await fetch(`${BASE}/api/gallery/${validateSlug}/login`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ password: "mot-de-passe-solide" }),
+})).json();
+check("une galerie neuve n'a pas de sélection validée",
+      validateSession.gallery?.selectionDoneAt === null, JSON.stringify(validateSession.gallery?.selectionDoneAt));
+
+const validateNoAuth = await fetch(`${BASE}/api/gallery/${validateSlug}/validate`, { method: "POST" });
+check("valider sa sélection sans jeton est refusé", validateNoAuth.status === 401);
+
+const validateBearer = { authorization: `Bearer ${validateSession.token}` };
+const validateResponse = await fetch(`${BASE}/api/gallery/${validateSlug}/validate`, {
+  method: "POST", headers: { ...validateBearer, "content-type": "application/json" }, body: "{}",
+});
+const validateBody = await validateResponse.json();
+check("le client peut valider sa sélection (horodatée, photographe prévenu)",
+      validateResponse.ok && Number.isInteger(validateBody.selectionDoneAt) && validateBody.emailed === true, JSON.stringify(validateBody));
+
+const validateAgain = await (await fetch(`${BASE}/api/gallery/${validateSlug}/validate`, {
+  method: "POST", headers: { ...validateBearer, "content-type": "application/json" }, body: "{}",
+})).json();
+check("revalider dans l'heure met l'horodatage à jour mais ne renvoie pas d'e-mail",
+      Number.isInteger(validateAgain.selectionDoneAt) && validateAgain.emailed === false, JSON.stringify(validateAgain));
+
+const validateDetail = await (await admin("GET", `/api/admin/galleries/${validateSlug}`)).json();
+check("la validation apparaît sur la fiche de la galerie côté administration",
+      validateDetail.gallery?.selection_done_at === validateAgain.selectionDoneAt, JSON.stringify(validateDetail.gallery?.selection_done_at));
+const validateList = await (await admin("GET", "/api/admin/galleries")).json();
+check("… et dans la liste des galeries",
+      validateList.galleries.find((g) => g.slug === validateSlug)?.selection_done_at === validateAgain.selectionDoneAt);
+const validateLog = await (await admin("GET", `/api/admin/galleries/${validateSlug}/log`)).json();
+check("chaque validation est consignée au journal", validateLog.log.filter((e) => e.event === "validate").length === 2);
+const validateRelogin = await (await fetch(`${BASE}/api/gallery/${validateSlug}/login`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ password: "mot-de-passe-solide" }),
+})).json();
+check("le client retrouve sa validation à la reconnexion",
+      validateRelogin.gallery?.selectionDoneAt === validateAgain.selectionDoneAt);
+
+/* ---------- Relances automatiques ---------- */
+
+const meBeforeReminders = await (await admin("GET", "/api/auth/me")).json();
+check("les relances automatiques sont actives par défaut sur un compte", meBeforeReminders.photographer?.remindersEnabled === true);
+
+const DAY = 86400;
+const nowSec = Math.floor(Date.now() / 1000);
+async function reminderGallery(suffix, extra) {
+  const slug = `${SLUG}-rel-${suffix}`;
+  const response = await admin("POST", "/api/admin/galleries", { slug, password: "mot-de-passe-solide", title: `Relance ${suffix}`, ...extra });
+  check(`galerie de relance « ${suffix} » créée`, response.status === 201);
+  return slug;
+}
+const relJ5 = await reminderGallery("j5", { clientEmail: "client-j5@example.com", expiresAt: nowSec + 5 * DAY });
+const relJ1 = await reminderGallery("j1", { clientEmail: "client-j1@example.com", expiresAt: nowSec + 1 * DAY });
+const relNoEmail = await reminderGallery("sans-email", { expiresAt: nowSec + 5 * DAY });
+const relNoExpiry = await reminderGallery("sans-expiration", { clientEmail: "client-x@example.com" });
+const relValidated = await reminderGallery("validee", { clientEmail: "client-v@example.com", expiresAt: nowSec + 1 * DAY });
+const relValidatedSession = await (await fetch(`${BASE}/api/gallery/${relValidated}/login`, {
+  method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ password: "mot-de-passe-solide" }),
+})).json();
+await fetch(`${BASE}/api/gallery/${relValidated}/validate`, {
+  method: "POST", headers: { authorization: `Bearer ${relValidatedSession.token}`, "content-type": "application/json" }, body: "{}",
+});
+
+const remindersForbidden = await admin("POST", "/api/owner/reminders/run");
+check("un compte ordinaire ne peut pas lancer la passe de relances (403)", remindersForbidden.status === 403);
+
+const firstPass = await (await ownerClient("POST", "/api/owner/reminders/run")).json();
+const sentFor = (slug) => firstPass.sent.filter((r) => r.slug === slug).map((r) => r.kind).sort();
+check("à J-5, le client reçoit la première relance (et seulement elle)",
+      JSON.stringify(sentFor(relJ5)) === '["client_j7"]' && firstPass.sent.find((r) => r.slug === relJ5)?.to === "client-j5@example.com",
+      JSON.stringify(sentFor(relJ5)));
+check("à J-1, le client reçoit la seconde relance et le photographe la sienne",
+      JSON.stringify(sentFor(relJ1)) === '["client_j2","photographer_j2"]' &&
+      firstPass.sent.find((r) => r.slug === relJ1 && r.kind === "photographer_j2")?.to === EMAIL,
+      JSON.stringify(sentFor(relJ1)));
+check("sans e-mail client à J-5, rien ne part", sentFor(relNoEmail).length === 0);
+check("sans date d'expiration, rien ne part jamais", sentFor(relNoExpiry).length === 0);
+check("une sélection déjà validée n'est plus relancée", sentFor(relValidated).length === 0);
+
+const secondPass = await (await ownerClient("POST", "/api/owner/reminders/run")).json();
+check("relancer la passe ne renvoie aucune relance déjà envoyée", secondPass.sent.length === 0, JSON.stringify(secondPass.sent));
+
+const remindersOff = await admin("POST", "/api/admin/account/reminders", { enabled: false });
+const meAfterReminders = await (await admin("GET", "/api/auth/me")).json();
+check("le photographe peut désactiver les relances automatiques",
+      remindersOff.ok && meAfterReminders.photographer?.remindersEnabled === false);
+const relDisabled = await reminderGallery("desactivee", { clientEmail: "client-d@example.com", expiresAt: nowSec + 1 * DAY });
+const thirdPass = await (await ownerClient("POST", "/api/owner/reminders/run")).json();
+check("relances désactivées : plus rien ne part pour ce compte, ni au client ni au photographe",
+      thirdPass.sent.filter((r) => r.slug === relDisabled).length === 0, JSON.stringify(thirdPass.sent));
+await admin("POST", "/api/admin/account/reminders", { enabled: true });
+
 const failed = checks.filter((c) => !c.ok);
 console.log(failed.length ? `\n${failed.length} vérification(s) en échec.` : `\n${checks.length} vérifications, toutes passent.`);
 process.exit(failed.length ? 1 : 0);

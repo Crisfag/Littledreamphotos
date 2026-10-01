@@ -86,7 +86,13 @@ const siteBase = `http://localhost:${SITE_PORT}`;
 
 /* ---------- Navigateur ---------- */
 
-const browser = await chromium.launch(EXECUTABLE ? { executablePath: EXECUTABLE } : {});
+// Chromium récent bloque par défaut les requêtes d'une origine locale vers
+// un autre port local (« Local Network Access ») : la page servie ici doit
+// pourtant joindre le Worker local sur son propre port.
+const browser = await chromium.launch({
+  ...(EXECUTABLE ? { executablePath: EXECUTABLE } : {}),
+  args: ["--disable-features=LocalNetworkAccessChecks"],
+});
 const page = await browser.newPage({ viewport: { width: 1200, height: 900 } });
 const exceptions = [];
 page.on("pageerror", (err) => exceptions.push(String(err)));
@@ -161,6 +167,17 @@ const { galleries } = await client.listGalleries();
 const row = galleries.find((g) => g.slug === slug);
 check("le compteur de sélection de la liste des galeries est à jour",
       row?.selected_count === 2, JSON.stringify(row));
+
+/* ---------- « Valider ma sélection » ---------- */
+
+check("le bouton « Valider ma sélection » est proposé dès qu'il y a des coups de cœur",
+      await page.isVisible("#gp-validate") && !(await page.isDisabled("#gp-validate")));
+await page.click("#gp-validate");
+await page.waitForFunction(() => (document.getElementById("gp-validate-status") || {}).textContent.includes("Sélection validée le"), { timeout: 5000 });
+check("après le clic, la page confirme la validation avec sa date",
+      (await page.textContent("#gp-validate-status")).includes("Sélection validée le"));
+const validatedDetail = await client.getGallery(slug);
+check("le Worker a enregistré la validation", Number.isInteger(validatedDetail.gallery.selection_done_at));
 
 check("aucune exception JavaScript", exceptions.length === 0, exceptions.join(" | "));
 

@@ -346,6 +346,15 @@ check("les compteurs plateforme (photographes, galeries, ventes…) s'affichent"
       ownerStatsText.indexOf("Suppléments en attente") !== -1,
       ownerStatsText.replace(/\s+/g, " "));
 
+await ownerPage.click("#ad-run-reminders");
+await ownerPage.waitForFunction(() => {
+  const out = document.getElementById("ad-run-reminders-result");
+  return out && out.textContent.includes("examinée");
+}, { timeout: 10000 });
+check("la propriétaire peut lancer la passe de relances et en lire le résultat",
+      (await ownerPage.textContent("#ad-run-reminders-result")).includes("relance"),
+      await ownerPage.textContent("#ad-run-reminders-result"));
+
 const ownerPageText = await ownerPage.textContent("#ad-view");
 // Prénom/nom tels que saisis à l'inscription plus haut — le test de la
 // section Paramètres, qui renomme le prénom en « Julie-Anne », n'a lieu que
@@ -437,6 +446,26 @@ check("le code couleur est rappelé dans la fiche en grand",
       await page.locator("#ad-photo-modal .ad-badge-tag-yellow").count() === 1);
 await page.click("#ad-photo-modal-close");
 check("la fiche en grand se referme", await page.isHidden("#ad-photo-modal"));
+
+/* ---------- « Valider ma sélection » vue depuis l'admin ---------- */
+
+check("tant que le client n'a pas validé, la fiche le dit et annonce les relances",
+      await page.isVisible("#ad-selection-pending") && (await page.textContent("#ad-selection-pending")).includes("pas encore validée"));
+await fetch(`${API}/api/gallery/${gallerySlug}/validate`, {
+  method: "POST",
+  headers: { authorization: `Bearer ${clientSession.token}`, "content-type": "application/json" },
+  body: "{}",
+});
+await page.reload({ waitUntil: "domcontentloaded" });
+await page.waitForSelector("#ad-selection-validated", { timeout: 10000 });
+check("une fois validée, la fiche affiche la date de validation",
+      (await page.textContent("#ad-selection-validated")).includes("Sélection validée par le client le"));
+await page.click("#ad-back");
+await page.waitForSelector(".ad-card", { timeout: 10000 });
+check("la carte de la galerie porte le badge « Validée »",
+      await page.locator(".ad-card .ad-badge-validated").count() === 1);
+await page.locator(".ad-card").first().click();
+await page.waitForSelector("#ad-photos .ad-photo", { timeout: 10000 });
 
 /* ---------- Historique des paiements ---------- */
 // Un vrai règlement Stripe ne peut pas être rejoué ici (pas de compte Stripe
@@ -597,6 +626,21 @@ await page.reload({ waitUntil: "domcontentloaded" });
 await page.waitForSelector("#ad-name-form", { timeout: 10000 });
 check("le prénom modifié depuis Paramètres est bien relu après rechargement",
       await page.inputValue('#ad-name-form [name="firstName"]') === "Julie-Anne");
+
+check("les relances automatiques sont cochées par défaut", await page.isChecked("#ad-reminders-toggle"));
+await page.uncheck("#ad-reminders-toggle");
+await page.waitForFunction(() => {
+  const toast = document.querySelector(".ad-toast-visible");
+  return toast && toast.textContent.includes("désactivées");
+}, { timeout: 5000 });
+await page.reload({ waitUntil: "domcontentloaded" });
+await page.waitForSelector("#ad-reminders-toggle", { timeout: 10000 });
+check("décocher les relances est enregistré (relu après rechargement)", !(await page.isChecked("#ad-reminders-toggle")));
+await page.check("#ad-reminders-toggle");
+await page.waitForFunction(() => {
+  const toast = document.querySelector(".ad-toast-visible");
+  return toast && toast.textContent.includes("activées");
+}, { timeout: 5000 });
 
 check("la grille est l'option de présentation par défaut active avant tout changement",
       await page.locator('#ad-default-layout-options .ad-layout-option[data-layout="grille"].ad-layout-option-active').count() === 1);

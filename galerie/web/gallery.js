@@ -214,6 +214,63 @@
       el.filterEmpty.hidden = !(state.filterSelected && count === 0);
     }
     if (el.toolbar) el.toolbar.hidden = state.photos.length === 0;
+    updateValidateUI(count);
+  }
+
+  /* ---------- « Valider ma sélection » ---------- */
+
+  function formatDateTime(ts) {
+    return new Date(ts * 1000).toLocaleString("fr-FR", { dateStyle: "long", timeStyle: "short" });
+  }
+
+  // Le bouton reste disponible après validation (le client peut changer
+  // d'avis et revalider) ; le statut rappelle la dernière validation.
+  function updateValidateUI(count) {
+    if (!el.validateBlock) return;
+    el.validateBlock.hidden = state.photos.length === 0;
+    var doneAt = state.gallery && state.gallery.selectionDoneAt;
+    el.validate.disabled = count === 0 || state.validating;
+    el.validateBlock.classList.toggle("gp-validate-done", Boolean(doneAt));
+    if (doneAt) {
+      el.validate.textContent = "Valider à nouveau ma sélection";
+      el.validateStatus.textContent = "Sélection validée le " + formatDateTime(doneAt) + ". Vous pouvez encore la modifier et la valider à nouveau.";
+    } else {
+      el.validate.textContent = "Valider ma sélection";
+      el.validateStatus.textContent = count === 0
+        ? "Cochez d'abord vos coups de cœur."
+        : "Quand votre choix est fait, prévenez-moi d'un clic.";
+    }
+  }
+
+  function validateSelection() {
+    if (!state.gallery || state.validating) return;
+    state.validating = true;
+    updateValidateUI(selectedCount());
+    el.validateStatus.textContent = "Envoi…";
+    fetch(apiUrl("/validate"), {
+      method: "POST",
+      headers: Object.assign({ "content-type": "application/json" }, authHeaders()),
+      body: "{}",
+    })
+      .then(function (response) {
+        if (response.status === 401) throw new Error("session");
+        if (!response.ok) throw new Error("échec");
+        return response.json();
+      })
+      .then(function (data) {
+        state.gallery.selectionDoneAt = data.selectionDoneAt;
+        state.validating = false;
+        updateValidateUI(selectedCount());
+      })
+      .catch(function (err) {
+        state.validating = false;
+        updateValidateUI(selectedCount());
+        if (err.message === "session") {
+          sessionLost("Votre session a expiré. Saisissez à nouveau le mot de passe.");
+        } else {
+          el.validateStatus.textContent = "Impossible d'envoyer la validation pour l'instant. Réessayez dans un instant.";
+        }
+      });
   }
 
   /**
@@ -1232,6 +1289,9 @@
       payError: $("gp-pay-error"),
       invoiceButton: $("gp-download-invoice"),
       filterCheckbox: $("gp-filter-selected"),
+      validateBlock: $("gp-validate-block"),
+      validate: $("gp-validate"),
+      validateStatus: $("gp-validate-status"),
       filterEmpty: $("gp-filter-empty"),
       commentToggle: $("gp-comment-toggle"),
       commentPanel: $("gp-comment-panel"),
@@ -1298,6 +1358,9 @@
     }
     if (el.invoiceButton) {
       el.invoiceButton.addEventListener("click", downloadInvoice);
+    }
+    if (el.validate) {
+      el.validate.addEventListener("click", validateSelection);
     }
     if (el.commentToggle) {
       el.commentToggle.addEventListener("click", toggleCommentPanel);

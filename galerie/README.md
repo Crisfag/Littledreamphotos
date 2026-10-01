@@ -109,6 +109,22 @@ n'importe quel écran, puisque les positions sont relatives à la photo. Le
 photographe retrouve tout cela sur la fiche de la galerie, repères posés
 sur la photo en grand.
 
+Quand son choix est fait, le client le dit d'un clic : **« Valider ma
+sélection »**, en tête de galerie. Le photographe reçoit aussitôt un e-mail
+avec le nombre de photos choisies et le supplément éventuel, la fiche de la
+galerie affiche la date de validation, et les relances automatiques
+s'arrêtent. Le client peut encore changer d'avis et valider à nouveau
+(l'e-mail n'est pas renvoyé plus d'une fois par heure).
+
+**Relances automatiques** : tant que la sélection n'est pas validée, une
+passe quotidienne sur le Worker (déclencheur planifié, 08:00 UTC) envoie au
+client un rappel à 7 jours puis à 2 jours de l'expiration de sa galerie
+(s'il a un e-mail renseigné, avec le lien pour y revenir), et au
+photographe un rappel à 2 jours. Chaque relance ne part qu'une fois, une
+galerie sans date d'expiration n'en déclenche jamais, et le photographe
+peut tout désactiver dans Paramètres. La propriétaire peut lancer la passe
+à la demande depuis l'onglet Admin.
+
 ### Comptes photographes
 
 La plateforme est pensée pour plusieurs photographes, chacun avec son propre
@@ -171,6 +187,12 @@ photographe qui doit y avoir accès (jamais un secret : elle ne fait que
 désigner quel compte a ce droit, chaque route `/api/owner/*` revérifiant
 elle-même l'identité de l'appelant côté serveur). Sans cette variable,
 l'onglet reste simplement invisible pour tout le monde.
+
+Pour les relances automatiques (voir plus bas), `PUBLIC_SITE_ORIGIN` doit
+pointer vers le site qui héberge `galerie.html` (le lien « Revoir ma
+galerie » des e-mails en dépend), et le déclencheur planifié déclaré sous
+`[triggers]` est créé au déploiement — rien d'autre à faire côté Cloudflare.
+Sans `RESEND_API_KEY`, la passe quotidienne tourne mais n'envoie rien.
 
 ### 2. La page client
 
@@ -322,6 +344,9 @@ Le tableau de bord s'organise en trois onglets, chacun avec son propre lien
   d'un coup d'œil, à l'endroit exact où il l'a dit.
 - **Journal d'accès** intégré à la fiche de chaque galerie, coups de cœur et
   remarques compris.
+- **Sélection validée** : badge « ✓ Validée » sur la carte de la galerie et
+  date de validation sur sa fiche ; tant que le client n'a pas validé, la
+  fiche rappelle où en sont les relances automatiques.
 - **Suppression** d'une photo isolée ou de la galerie entière, avec
   confirmation.
 
@@ -622,7 +647,7 @@ des tuiles, refus du mauvais mot de passe, absence de toute balise `<img>`,
 neutralisation du menu contextuel et de la copie, voile sur « Impr. écran » et
 sur perte de focus, consignation au journal.
 
-**API du Worker** — 222 vérifications contre le vrai moteur Cloudflare (D1 et R2
+**API du Worker** — 246 vérifications contre le vrai moteur Cloudflare (D1 et R2
 émulés localement par `wrangler dev`) : comptes photographes (inscription,
 connexion, session, mot de passe oublié — même réponse générique qu'un
 compte existe ou non), cloisonnement strict entre comptes (un photographe ne
@@ -682,16 +707,25 @@ passe). Musique d'ambiance : dépôt refusé depuis un autre compte, piste
 annoncée au client à la connexion puis servie octet pour octet en
 `audio/mpeg`, lecture progressive par morceaux (`Range` → 206), retrait
 refusé depuis un autre compte, et plus rien de servi ni d'annoncé une fois
-la piste retirée.
+la piste retirée. « Valider ma sélection » : refusé sans jeton, horodaté et
+e-mail au photographe à la première validation mais pas à une seconde dans
+l'heure, relu sur la fiche, dans la liste, au journal et à la reconnexion
+du client. Relances automatiques (passe lancée par la propriétaire, refusée
+à un compte ordinaire) : première relance client à J-5, seconde relance
+client et relance photographe à J-1, rien sans e-mail client, sans date
+d'expiration ou une fois la sélection validée, jamais deux fois la même
+relance d'une passe à l'autre, plus rien pour un compte qui a désactivé les
+relances.
 Le trajet complet de réinitialisation de mot de passe (jeton reçu par
 e-mail → nouveau mot de passe → ancien mot de passe rejeté → lien à usage
 unique) est vérifié manuellement plutôt qu'automatiquement : le jeton ne
 transite jamais par l'API, seulement par l'e-mail, et l'y exposer pour les
 tests reviendrait à affaiblir la sécurité qu'il apporte.
 
-**Alertes e-mail** — 21 vérifications sans réseau ni `wrangler dev`
-(`buildCaptureAlertEmail`, `buildPasswordResetEmail` et
-`buildEmailChangeConfirmationEmail` sont des fonctions pures) : sujet et
+**Alertes e-mail** — 30 vérifications sans réseau ni `wrangler dev`
+(`buildCaptureAlertEmail`, `buildPasswordResetEmail`,
+`buildEmailChangeConfirmationEmail` et les trois bâtisseurs de relances et
+de sélection validée sont des fonctions pures) : sujet et
 corps référençant la bonne galerie et la bonne photo, message générique
 quand aucune photo n'est identifiée, raisons connues traduites en texte
 lisible, lien et durée de validité présents dans l'e-mail de réinitialisation
@@ -699,6 +733,18 @@ comme dans celui de confirmation d'un changement d'adresse (envoyé
 exclusivement à la nouvelle adresse), et surtout échappement HTML du nom de
 studio, du titre de galerie et du nom de client — autant de champs saisis
 par le photographe, jamais dignes de confiance tels quels dans un e-mail.
+Relances : échéance en jours (« demain » à J-1), coups de cœur déjà posés
+ou invitation à choisir, lien vers la galerie présent dans le HTML et le
+texte — ou aucun bouton du tout sans adresse publique configurée —, e-mail
+de sélection validée avec nombre de photos et supplément dû.
+
+**Décision des relances** — 11 vérifications sans réseau ni D1
+(`remindersDue` est une fonction pure) : rien à 10 jours, première relance
+client de J-7 à J-3, seconde relance client et relance photographe à J-2 et
+J-1, plus rien une fois expirée, seule la relance photographe sans e-mail
+client, jamais deux fois la même relance, pas de rattrapage d'une relance
+manquée le jour d'une autre, et lien de galerie construit (slug encodé)
+seulement si `PUBLIC_SITE_ORIGIN` est renseigné.
 
 **Signature de webhook Stripe et sessions de paiement** — 16 vérifications
 sans réseau (fetch intercepté, jamais appelé pour de vrai) :
@@ -721,7 +767,7 @@ appliqué sinon, HT + TVA se recomposant exactement au centime près en TTC
 même sur un montant qui ne se divise pas rond, et un vrai PDF valide généré
 aussi bien avec des coordonnées complètes qu'avec des champs vides.
 
-**Interface d'administration** — 81 vérifications dans un vrai navigateur,
+**Interface d'administration** — 87 vérifications dans un vrai navigateur,
 contre le vrai Worker local : demande de lien de réinitialisation de mot de
 passe (message générique affiché), création de compte et connexion depuis
 le formulaire (pas de session présupposée), barre d'onglets Galeries /
@@ -769,7 +815,12 @@ est pas un (la piste existante est conservée), retrait après confirmation.
 Codes couleur et repères posés par le client (via l'API, comme le ferait sa
 page) : pastille jaune et compteur de repères sur la vignette, légende de
 la galerie, photo ouverte en grand avec le repère dessus, sa note listée et
-le code couleur rappelé, fermeture de la fiche.
+le code couleur rappelé, fermeture de la fiche. Sélection validée : fiche
+qui rappelle d'abord que rien n'est validé, puis date de validation après
+le clic du client (via l'API), badge « Validée » sur la carte ; case des
+relances automatiques cochée par défaut dans Paramètres, décochée et relue
+après rechargement ; passe de relances lancée depuis l'onglet Admin par la
+propriétaire, avec son résumé.
 
 **Vérifier une photo (empreinte invisible)** — 8 vérifications contre le vrai
 Worker local : une image reconstituée tuile par tuile — exactement comme le
@@ -779,12 +830,14 @@ comme une correspondance ; un second compte ne peut jamais identifier une
 photo d'un autre (l'outil ne corrèle qu'avec les empreintes du compte
 connecté) ; refusé sans session.
 
-**Sélection client** — 15 vérifications dans un vrai navigateur, contre le
+**Sélection client** — 18 vérifications dans un vrai navigateur, contre le
 vrai Worker local (galerie créée par le test lui-même, nettoyée à la fin) :
 coup de cœur posé depuis la grille et depuis la visionneuse, compteur à jour,
 filtre « ma sélection » qui masque sans retélécharger et borne la navigation
 de la visionneuse, sélection qui survit à une reconnexion complète, cohérence
-entre ce que voit le client et ce que lit l'administration.
+entre ce que voit le client et ce que lit l'administration, bouton
+« Valider ma sélection » proposé dès qu'il y a des coups de cœur, validation
+confirmée à l'écran avec sa date et enregistrée côté Worker.
 
 **Commentaires client** — 16 vérifications dans un vrai navigateur, même
 principe (galerie autonome, nettoyée à la fin) : remarque laissée depuis la
@@ -816,7 +869,8 @@ node tests/comments.test.mjs          # commentaires client, autonome (crée sa 
 node tests/marks.test.mjs             # codes couleur + repères client, autonome (crée sa propre galerie)
 
 cd ../worker
-node tests/notify.test.mjs            # e-mail d'alerte de capture, sans réseau
+node tests/notify.test.mjs            # e-mails (alerte de capture, relances…), sans réseau
+node tests/reminders.test.mjs         # décision des relances automatiques, sans réseau
 node tests/stripe.test.mjs            # signature de webhook + encodage des sessions Stripe, sans réseau
 node tests/invoices.test.mjs          # calcul de TVA + génération du PDF de facture, sans réseau
 npx wrangler dev --local --port 8788  # dans un autre terminal

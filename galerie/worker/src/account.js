@@ -191,3 +191,19 @@ export async function updateDefaults(request, env, photographerId) {
     .run();
   return json({ ok: true });
 }
+
+// Relances automatiques (client à J-7/J-2, photographe à J-2) : actives par
+// défaut, désactivables d'un clic dans Paramètres.
+export async function updateReminders(request, env, photographerId) {
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return fail(400, "Requête invalide");
+  }
+  const enabled = body.enabled === true;
+  await env.DB.prepare("UPDATE photographers SET reminders_enabled = ? WHERE id = ?")
+    .bind(enabled ? 1 : 0, photographerId)
+    .run();
+  return json({ ok: true, enabled });
+}

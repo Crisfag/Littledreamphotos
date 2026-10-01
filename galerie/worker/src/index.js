@@ -14,6 +14,7 @@ import { handleViewer } from "./viewer.js";
 import { handleAuth } from "./authPhotographer.js";
 import { handleOwner } from "./owner.js";
 import { handleStripeWebhook } from "./billing.js";
+import { runReminders } from "./reminders.js";
 import { json, fail } from "./http.js";
 
 function corsHeaders(request, env) {
@@ -83,5 +84,14 @@ export default {
     headers.set("x-content-type-options", "nosniff");
     headers.set("referrer-policy", "no-referrer");
     return new Response(response.body, { status: response.status, headers });
+  },
+
+  // Déclencheur planifié (wrangler.toml, [triggers]) : relances automatiques.
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(
+      runReminders(env).catch((err) => {
+        console.error("Relances : échec de la passe planifiée :", err && err.stack ? err.stack : err);
+      })
+    );
   },
 };

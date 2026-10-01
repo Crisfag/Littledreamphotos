@@ -4,7 +4,8 @@
 import { json, fail } from "./http.js";
 import { isValidTag, parseMarks, normalizeMarks } from "./marks.js";
 import { verifyPassword, signToken, verifyToken, hashIp, randomBytes, b64url } from "./auth.js";
-import { sendCaptureAlert } from "./notify.js";
+import { sendCaptureAlert, sendSelectionValidated } from "./notify.js";
+import { supplementFor } from "./admin.js";
 import { createCheckoutSession } from "./stripe.js";
 
 const SESSION_TTL_SECONDS = 2 * 60 * 60; // 2 h
@@ -152,6 +153,7 @@ async function handleLogin(request, env, slug) {
       expiresAt: gallery.expires_at,
       layout: gallery.layout || "grille",
       hasMusic: Boolean(gallery.music_name),
+      selectionDoneAt: gallery.selection_done_at || null,
       includedPhotos: gallery.included_photos,
       extraPhotoPriceCents: gallery.extra_photo_price_cents || 0,
       paidExtraCount: await paidExtraCount(env, gallery.id),
@@ -377,6 +379,61 @@ async function handleMarks(request, env, slug) {
   });
 
   return json({ ok: true, marks: normalized.marks });
+}
+
+// « Valider ma sélection » : le client signale que son choix est fait. Le
+// moment est mémorisé (arrête les relances automatiques), consigné au
+// journal, et le photographe est prévenu par e-mail avec le détail. Peut
+// être refait si le client change d'avis ensuite ; l'e-mail, lui, n'est pas
+// renvoyé plus d'une fois par heure pour ne pas noyer le photographe.
+async function handleValidate(request, env, ctx, slug) {
+  const auth = await authorize(request, env, slug);
+  if (auth.error) return auth.error;
+  const gallery = auth.gallery;
+  const ts = now();
+
+  await env.DB.prepare("UPDATE galleries SET selection_done_at = ? WHERE id = ?").bind(ts, gallery.id).run();
+
+  const recent = await env.DB.prepare(
+    "SELECT COUNT(*) AS n FROM access_log WHERE gallery_id = ? AND event = 'validate' AND ts > ?"
+  )
+    .bind(gallery.id, ts - 3600)
+    .first();
+
+  await logAccess(env, {
+    galleryId: gallery.id,
+    viewerId: auth.viewerId,
+    event: "validate",
+    detail: "",
+    ipHash: await hashIp(request.headers.get("CF-Connecting-IP") || "", env.TOKEN_SECRET),
+    userAgent: request.headers.get("User-Agent") || "",
+  });
+
+  const selectedRow = await env.DB.prepare("SELECT COUNT(*) AS n FROM photos WHERE gallery_id = ? AND selected = 1")
+    .bind(gallery.id)
+    .first();
+  const selectedCount = selectedRow?.n || 0;
+  const supplement = supplementFor(gallery.included_photos, gallery.extra_photo_price_cents, selectedCount, await paidExtraCount(env, gallery.id));
+
+  if (!(recent?.n > 0)) {
+    ctx.waitUntil(
+      (async () => {
+        const photographer = await photographerOf(env, gallery.photographer_id);
+        if (!photographer?.email) return;
+        await sendSelectionValidated(env, {
+          to: photographer.email,
+          galleryTitle: gallery.title,
+          clientName: gallery.client_name,
+          selectedCount,
+          dueExtraCount: supplement.dueExtraCount,
+          dueTotalCents: supplement.dueTotalCents,
+          adminUrl: env.ADMIN_URL || "",
+        });
+      })().catch((err) => console.error("E-mail de sélection validée :", err && err.message ? err.message : err))
+    );
+  }
+
+  return json({ ok: true, selectionDoneAt: ts, selectedCount, emailed: !(recent?.n > 0) });
 }
 
 function newPaymentId() {
@@ -669,6 +726,9 @@ export async function handleViewer(request, env, ctx, path) {
   }
   if (action === "marks" && request.method === "POST") {
     return handleMarks(request, env, slug);
+  }
+  if (action === "validate" && request.method === "POST") {
+    return handleValidate(request, env, ctx, slug);
   }
   if (action === "event" && request.method === "POST") {
     return handleEvent(request, env, ctx, slug);

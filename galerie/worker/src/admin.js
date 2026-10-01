@@ -10,7 +10,7 @@ import { parseMarks } from "./marks.js";
 import { hashPassword, randomBytes, b64url } from "./auth.js";
 import { authenticatePhotographer } from "./authPhotographer.js";
 import { connectStripe, refreshStripeStatus, setBillingProfile } from "./billing.js";
-import { updateStudioName, updateName, changePassword, requestEmailChange, updateDefaults } from "./account.js";
+import { updateStudioName, updateName, changePassword, requestEmailChange, updateDefaults, updateReminders } from "./account.js";
 
 function now() {
   return Math.floor(Date.now() / 1000);
@@ -158,7 +158,7 @@ async function createGallery(request, env, photographerId) {
 async function listGalleries(env, photographerId) {
   const { results } = await env.DB.prepare(
     `SELECT g.id, g.slug, g.title, g.client_name, g.expires_at, g.created_at,
-            g.included_photos, g.extra_photo_price_cents,
+            g.included_photos, g.extra_photo_price_cents, g.selection_done_at,
             (SELECT COUNT(*) FROM photos p WHERE p.gallery_id = g.id) AS photo_count,
             (SELECT COUNT(*) FROM photos p WHERE p.gallery_id = g.id AND p.selected = 1) AS selected_count,
             (SELECT COUNT(*) FROM photos p WHERE p.gallery_id = g.id AND p.comment != '') AS comment_count,
@@ -228,6 +228,7 @@ async function getGallery(env, photographerId, slug) {
       login_background_color: gallery.login_background_color,
       layout: gallery.layout,
       music_name: gallery.music_name || "",
+      selection_done_at: gallery.selection_done_at,
       included_photos: gallery.included_photos,
       extra_photo_price_cents: gallery.extra_photo_price_cents,
       selected_count: selectedCount,
@@ -774,6 +775,9 @@ export async function handleAdmin(request, env, ctx, path) {
   }
   if (section === "account" && parts[3] === "email" && parts.length === 4 && request.method === "POST") {
     return requestEmailChange(request, env, ctx, photographerId);
+  }
+  if (section === "account" && parts[3] === "reminders" && parts.length === 4 && request.method === "POST") {
+    return updateReminders(request, env, photographerId);
   }
   if (section === "account" && parts[3] === "defaults" && parts.length === 4 && request.method === "POST") {
     return updateDefaults(request, env, photographerId);

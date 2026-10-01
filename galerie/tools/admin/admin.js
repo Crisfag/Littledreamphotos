@@ -19,6 +19,7 @@
     comment: "Remarque laissée",
     tag: "Code couleur posé",
     mark: "Repères annotés",
+    validate: "Sélection validée par le client",
     capture_suspected: "Capture suspectée",
     blur: "Photo floutée",
     print: "Tentative d'impression",
@@ -333,6 +334,9 @@
         (g.due_extra_count > 0
           ? '<span class="ad-badge ad-badge-due">💶 ' + formatEuros(g.due_total_cents) + "</span>"
           : "") +
+        (g.selection_done_at
+          ? '<span class="ad-badge ad-badge-validated" title="Sélection validée le ' + formatDate(g.selection_done_at) + '">✓ Validée</span>'
+          : "") +
         (status.label ? '<span class="ad-badge ' + status.cls + '">' + esc(status.label) + "</span>" : "") +
         "</div>" +
         "</article>"
@@ -553,6 +557,12 @@
       layoutOptionsHtml({ layout: photographer.defaultLayout }) +
       "</div></section>" +
 
+      '<section><div class="ad-section-header"><h3>Relances automatiques</h3></div>' +
+      '<p class="ad-hint">Tant qu\'un client n\'a pas cliqué « Valider ma sélection », il reçoit un rappel à 7 jours puis à 2 jours de l\'expiration de sa galerie (s\'il a un e-mail renseigné), et vous en recevez un à 2 jours. Rien n\'est envoyé pour une galerie sans date d\'expiration.</p>' +
+      '<label class="ad-toggle"><input type="checkbox" id="ad-reminders-toggle"' + (photographer.remindersEnabled ? " checked" : "") + " />" +
+      "<span>Envoyer les relances automatiques</span></label>" +
+      "</section>" +
+
       '<section><div class="ad-section-header"><h3>Coordonnées fiscales</h3></div>' +
       '<p class="ad-hint">Ces informations apparaissent sur les factures émises pour vos clients.</p>' +
       '<form id="ad-billing-form">' +
@@ -619,6 +629,17 @@
         toast(err.message, true);
       } finally {
         btn.disabled = false;
+      }
+    });
+
+    document.getElementById("ad-reminders-toggle").addEventListener("change", async function (event) {
+      var box = event.target;
+      try {
+        await api("POST", "/account/reminders", { enabled: box.checked });
+        toast(box.checked ? "Relances automatiques activées." : "Relances automatiques désactivées.");
+      } catch (err) {
+        box.checked = !box.checked;
+        toast(err.message, true);
       }
     });
 
@@ -827,9 +848,35 @@
       photographersTableHtml(photographersData.photographers) +
       "</section>" +
 
+      '<section><div class="ad-section-header"><h3>Relances automatiques</h3></div>' +
+      '<p class="ad-hint">Une passe tourne chaque jour sur le Worker (08:00 UTC) : rappel au client à J-7 et J-2 de l\'expiration tant que sa sélection n\'est pas validée, rappel au photographe à J-2. ' +
+      "Chaque relance ne part qu'une fois. Vous pouvez lancer la passe tout de suite :</p>" +
+      '<button type="button" class="ad-btn" id="ad-run-reminders">Lancer les relances maintenant</button>' +
+      '<p class="ad-hint" id="ad-run-reminders-result"></p>' +
+      "</section>" +
+
       '<section><div class="ad-section-header"><h3>Trafic du site &amp; sources de visiteurs</h3></div>' +
       trafficSectionHtml() +
       "</section>";
+
+    document.getElementById("ad-run-reminders").addEventListener("click", async function () {
+      var btn = this;
+      var out = document.getElementById("ad-run-reminders-result");
+      btn.disabled = true;
+      try {
+        var result = await api("POST", "/owner/reminders/run");
+        var n = result.sent.length;
+        out.textContent =
+          result.examined + " galerie" + (result.examined > 1 ? "s" : "") + " examinée" + (result.examined > 1 ? "s" : "") +
+          " · " + n + " relance" + (n > 1 ? "s" : "") + " envoyée" + (n > 1 ? "s" : "") +
+          (n ? " : " + result.sent.map(function (r) { return r.slug + " (" + r.kind + ")"; }).join(", ") : ".");
+        toast("Passe de relances terminée.");
+      } catch (err) {
+        toast(err.message, true);
+      } finally {
+        btn.disabled = false;
+      }
+    });
   }
 
   /* ---------- Vue : vérifier une photo suspecte ---------- */
@@ -1191,6 +1238,14 @@
       "<div>" +
       "<h2>" + esc(data.gallery.title) + "</h2>" +
       '<p class="ad-card-sub">' + (data.gallery.client_name ? esc(data.gallery.client_name) + " · " : "") + esc(data.gallery.slug) + "</p>" +
+      (data.gallery.selection_done_at
+        ? '<p class="ad-validated" id="ad-selection-validated">✓ Sélection validée par le client le ' + formatDateTime(data.gallery.selection_done_at) + "</p>"
+        : '<p class="ad-hint" id="ad-selection-pending">Sélection pas encore validée par le client' +
+          (data.gallery.expires_at
+            ? " — relances automatiques à J-7 et J-2 de l\'expiration" +
+              (data.gallery.client_email ? "" : " (aucun e-mail client renseigné : seule la relance qui vous est destinée à J-2 partira)")
+            : " — sans date d\'expiration, aucune relance automatique ne part") +
+          ".</p>") +
       "</div>" +
       (status.label ? '<span class="ad-badge ' + status.cls + '">' + esc(status.label) + "</span>" : "") +
       "</header>" +

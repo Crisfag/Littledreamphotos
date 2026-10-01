@@ -116,6 +116,10 @@ export class WorkerClient {
     return this.request("POST", "/api/admin/account/defaults", { defaultLayout });
   }
 
+  setReminders(enabled) {
+    return this.request("POST", "/api/admin/account/reminders", { enabled: Boolean(enabled) });
+  }
+
   listInvoices() {
     return this.request("GET", "/api/admin/invoices");
   }
@@ -126,6 +130,10 @@ export class WorkerClient {
 
   ownerPhotographers() {
     return this.request("GET", "/api/owner/photographers");
+  }
+
+  ownerRunReminders() {
+    return this.request("POST", "/api/owner/reminders/run");
   }
 
   ownerStats() {
