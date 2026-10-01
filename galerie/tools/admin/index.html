@@ -89,6 +89,16 @@
         </div>
       </div>
       <form id="ad-signup-form" autocomplete="on">
+        <div class="ad-field-row">
+          <label class="ad-field">
+            <span>Prénom</span>
+            <input type="text" name="firstName" autocomplete="given-name" placeholder="Christine" />
+          </label>
+          <label class="ad-field">
+            <span>Nom</span>
+            <input type="text" name="lastName" autocomplete="family-name" placeholder="Fagnant" />
+          </label>
+        </div>
         <label class="ad-field">
           <span>Nom de votre studio</span>
           <input type="text" name="studioName" autocomplete="organization" placeholder="Mon Studio" />
@@ -124,6 +134,7 @@
         <button type="button" class="ad-tab" id="ad-tab-galleries" data-tab="galleries">Galeries</button>
         <button type="button" class="ad-tab" id="ad-tab-billing" data-tab="billing">Facturation</button>
         <button type="button" class="ad-tab" id="ad-tab-settings" data-tab="settings">Paramètres</button>
+        <button type="button" class="ad-tab" id="ad-tab-owner" data-tab="owner" hidden>Admin</button>
       </nav>
       <div class="ad-topbar-actions">
         <button type="button" class="ad-btn ad-btn-icon" id="ad-check-photo" title="Vérifier une photo">🔍</button>

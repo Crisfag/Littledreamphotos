@@ -9,7 +9,7 @@ import { json, fail } from "./http.js";
 import { hashPassword, randomBytes, b64url } from "./auth.js";
 import { authenticatePhotographer } from "./authPhotographer.js";
 import { connectStripe, refreshStripeStatus, setBillingProfile } from "./billing.js";
-import { updateStudioName, changePassword, requestEmailChange, updateDefaults } from "./account.js";
+import { updateStudioName, updateName, changePassword, requestEmailChange, updateDefaults } from "./account.js";
 
 function now() {
   return Math.floor(Date.now() / 1000);
@@ -43,7 +43,7 @@ function priceToCents(value) {
 // voir schema.sql) est toujours déduit du brut : c'est ce qui distingue ce
 // qui est dû aujourd'hui de ce que le client a déjà réglé, si jamais il
 // sélectionne encore plus de photos après un premier paiement.
-function supplementFor(includedPhotos, extraPhotoPriceCents, selectedCount, paidExtraCount) {
+export function supplementFor(includedPhotos, extraPhotoPriceCents, selectedCount, paidExtraCount) {
   if (includedPhotos === null || includedPhotos === undefined) {
     return { extraCount: 0, extraTotalCents: 0, paidExtraCount: 0, dueExtraCount: 0, dueTotalCents: 0 };
   }
@@ -714,6 +714,9 @@ export async function handleAdmin(request, env, ctx, path) {
   // confirmation), présentation par défaut des futures galeries.
   if (section === "account" && parts.length === 3 && request.method === "POST") {
     return updateStudioName(request, env, photographerId);
+  }
+  if (section === "account" && parts[3] === "name" && parts.length === 4 && request.method === "POST") {
+    return updateName(request, env, photographerId);
   }
   if (section === "account" && parts[3] === "password" && parts.length === 4 && request.method === "POST") {
     return changePassword(request, env, photographerId);

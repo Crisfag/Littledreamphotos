@@ -154,6 +154,13 @@ npm run deploy
 Renseignez ensuite dans `wrangler.toml` la variable `ALLOWED_ORIGINS` avec
 l'adresse du site qui héberge la page galerie, puis redéployez.
 
+Pour l'onglet Admin (vue d'ensemble de toute la plateforme — voir plus bas),
+renseignez aussi `OWNER_EMAIL` dans `wrangler.toml` avec l'adresse du compte
+photographe qui doit y avoir accès (jamais un secret : elle ne fait que
+désigner quel compte a ce droit, chaque route `/api/owner/*` revérifiant
+elle-même l'identité de l'appelant côté serveur). Sans cette variable,
+l'onglet reste simplement invisible pour tout le monde.
+
 ### 2. La page client
 
 Copiez `web/galerie.html`, `web/gallery.css` et `web/gallery.js` à la racine de
@@ -319,6 +326,10 @@ Tout ce qui concerne le compte plutôt qu'une galerie en particulier :
 
 - **Studio** : le nom affiché dans la barre du tableau de bord et sur le
   filigrane des photos.
+- **Votre identité** (prénom, nom) : jamais affichée à vos clients,
+  contrairement au nom de studio — facultative, sert uniquement à vous
+  identifier sur l'onglet Admin (voir plus bas) si vous êtes la propriétaire
+  de la plateforme.
 - **Présentation par défaut** : la mise en page (*Grille*, *Mosaïque* ou
   *Défilement* — voir plus haut) proposée à la création d'une nouvelle
   galerie. Une simple valeur de départ, jamais imposée : chaque galerie reste
@@ -339,6 +350,41 @@ Tout ce qui concerne le compte plutôt qu'une galerie en particulier :
   sans passer par « Mot de passe oublié ? ». Redemande lui aussi le mot de
   passe actuel — un jeton de session volé ne doit jamais, à lui seul,
   suffire à changer le mot de passe du compte.
+
+#### Onglet Admin (réservé à la propriétaire de la plateforme)
+
+Invisible pour tout le monde sauf un seul compte, celui dont l'adresse
+e-mail correspond à `OWNER_EMAIL` (variable du Worker, voir
+`wrangler.toml` — jamais un secret puisqu'elle ne fait que désigner QUEL
+compte a ce droit, jamais l'accorder par elle-même). Chaque route
+`/api/owner/*` revérifie elle-même, côté serveur, que l'appelant correspond
+bien à cette adresse — `isOwner` dans le profil renvoyé au client n'est
+qu'un indicateur d'affichage pour savoir s'il faut montrer l'onglet, jamais
+une autorisation en soi. Un compte ordinaire qui devinerait ces URL se
+verrait toujours refuser l'accès (403).
+
+Vue d'ensemble de **toute la plateforme**, tous comptes et galeries
+confondus — à ne pas confondre avec les compteurs de l'onglet Galeries, qui
+restent propres à chaque photographe :
+
+- **Compteurs plateforme** : nombre de photographes inscrits, de galeries
+  créées, de photos envoyées, de ventes effectuées et leur montant total,
+  suppléments en ordre et en attente — même calcul que les compteurs par
+  compte, simplement sans filtrer par photographe.
+- **Inscriptions par mois** : un simple décompte des nouveaux comptes,
+  douze derniers mois, pour voir la croissance d'un coup d'œil.
+- **Comptes photographes** : la liste complète — prénom, nom, studio,
+  e-mail, date d'inscription, nombre de galeries et de photos, statut
+  Stripe. Jamais les mots de passe, bien sûr, ni rien que vous n'ayez pas
+  déjà le droit de voir sur votre propre compte.
+- **Trafic du site et sources de visiteurs** : ce Worker ne suit pas le
+  trafic du site marketing (ce n'est pas son rôle) — l'onglet explique
+  comment brancher **Cloudflare Web Analytics**, gratuit et déjà disponible
+  puisque le site est hébergé chez Cloudflare, plutôt que d'inventer un
+  système de suivi maison qui referait moins bien ce qui existe déjà. Le
+  référencement (mots-clés, position sur Google…) suit la même logique avec
+  **Google Search Console**, à connecter séparément avec votre propre
+  compte Google.
 
 Ce serveur n'écoute que sur `127.0.0.1` : il n'est joignable que depuis votre
 propre machine, jamais depuis le réseau.
@@ -552,7 +598,7 @@ des tuiles, refus du mauvais mot de passe, absence de toute balise `<img>`,
 neutralisation du menu contextuel et de la copie, voile sur « Impr. écran » et
 sur perte de focus, consignation au journal.
 
-**API du Worker** — 185 vérifications contre le vrai moteur Cloudflare (D1 et R2
+**API du Worker** — 198 vérifications contre le vrai moteur Cloudflare (D1 et R2
 émulés localement par `wrangler dev`) : comptes photographes (inscription,
 connexion, session, mot de passe oublié — même réponse générique qu'un
 compte existe ou non), cloisonnement strict entre comptes (un photographe ne
@@ -598,6 +644,14 @@ valeur absolue : créer une galerie incrémente aussitôt le compteur de
 galeries sans toucher aux ventes ni aux suppléments, un supplément non réglé
 n'apparaît que dans « en attente » — jamais « en ordre » —, invisible chez
 un autre compte, et supprimer la galerie ramène tout à l'état de départ.
+Prénom/nom du compte (facultatifs, vides par défaut, bien relus une fois
+enregistrés). Page Admin : un compte ordinaire se voit toujours refuser les
+routes `/api/owner/*` (403, ou 401 sans session du tout) — y compris un
+second compte, pour confirmer que ce n'est pas un cas particulier du
+premier —, le compte dont l'e-mail correspond à `OWNER_EMAIL` s'y voit
+reconnaître `isOwner`, peut lire les compteurs plateforme et la liste
+complète des comptes (avec le prénom/nom de chacun, jamais leur mot de
+passe).
 Le trajet complet de réinitialisation de mot de passe (jeton reçu par
 e-mail → nouveau mot de passe → ancien mot de passe rejeté → lien à usage
 unique) est vérifié manuellement plutôt qu'automatiquement : le jeton ne
@@ -636,7 +690,7 @@ appliqué sinon, HT + TVA se recomposant exactement au centime près en TTC
 même sur un montant qui ne se divise pas rond, et un vrai PDF valide généré
 aussi bien avec des coordonnées complètes qu'avec des champs vides.
 
-**Interface d'administration** — 60 vérifications dans un vrai navigateur,
+**Interface d'administration** — 69 vérifications dans un vrai navigateur,
 contre le vrai Worker local : demande de lien de réinitialisation de mot de
 passe (message générique affiché), création de compte et connexion depuis
 le formulaire (pas de session présupposée), barre d'onglets Galeries /
@@ -666,11 +720,18 @@ session en cours** (le bug corrigé pendant ce développement — voir
 *Fiabilité mesurée* côté API), changement de mot de passe réussi avec le mot
 de passe actuel, demande de changement d'e-mail rejetée avec un mauvais mot
 de passe puis acceptée avec le bon (message de confirmation affiché, rien
-changé tout de suite). Puis suppression de la galerie, déconnexion qui tient
-après un rechargement de page, et reconnexion avec le mot de passe modifié
-en cours de test — et un second compte, connecté dans un second
-contexte navigateur, qui ne voit jamais les galeries du premier dans son
-propre tableau de bord.
+changé tout de suite), prénom/nom saisis à l'inscription bien relus puis
+modifiables, persistant après rechargement. Puis suppression de la galerie,
+déconnexion qui tient après un rechargement de page, et reconnexion avec le
+mot de passe modifié en cours de test — et un second compte, connecté dans
+un second contexte navigateur, qui ne voit jamais les galeries du premier
+dans son propre tableau de bord, ni l'onglet Admin (masqué par défaut pour
+tout compte qui n'est pas la propriétaire). Page Admin, elle, testée dans
+un troisième contexte navigateur connecté avec le compte dont l'e-mail
+correspond à `OWNER_EMAIL` : onglet visible et accessible (avec son propre
+lien dans l'URL), compteurs plateforme affichés, le compte créé plus tôt
+dans ce test apparaît dans la liste complète avec son prénom et son nom, et
+la section trafic explique comment brancher Cloudflare Web Analytics.
 
 **Vérifier une photo (empreinte invisible)** — 8 vérifications contre le vrai
 Worker local : une image reconstituée tuile par tuile — exactement comme le

@@ -1188,6 +1188,90 @@ check("supprimer la galerie ramène les compteurs à leur état de départ",
       statsAfterDelete.extrasDueAmountCents === statsBefore.extrasDueAmountCents,
       JSON.stringify(statsAfterDelete));
 
+/* ---------- Prénom/nom du compte ---------- */
+// Jamais affiché au client, contrairement au nom de studio — juste de quoi
+// identifier qui est qui sur la page propriétaire (voir plus bas).
+
+const meBeforeName = await (await admin("GET", "/api/auth/me")).json();
+check("prénom et nom sont vides par défaut (facultatifs, contrairement au nom de studio)",
+      meBeforeName.photographer?.firstName === "" && meBeforeName.photographer?.lastName === "");
+
+const nameSet = await admin("POST", "/api/admin/account/name", { firstName: "Camille", lastName: "Durand" });
+check("le prénom et le nom peuvent être enregistrés", nameSet.status === 200);
+
+const meAfterName = await (await admin("GET", "/api/auth/me")).json();
+check("le prénom et le nom enregistrés sont bien relus dans le profil",
+      meAfterName.photographer?.firstName === "Camille" && meAfterName.photographer?.lastName === "Durand");
+
+/* ---------- Page propriétaire (toutes galeries et tous comptes confondus) ---------- */
+// L'accès n'est jamais déterminé par ce que le client prétend (isOwner dans
+// le profil n'est qu'un indicateur d'affichage) — chaque route /api/owner/*
+// revérifie elle-même l'e-mail de l'appelant contre OWNER_EMAIL (variable du
+// Worker, voir wrangler.toml). Un compte ordinaire, quel qu'il soit, doit
+// toujours se voir refuser ces routes.
+
+const ownerStatsForbidden = await admin("GET", "/api/owner/stats");
+check("un compte ordinaire ne peut jamais lire les compteurs plateforme (403)", ownerStatsForbidden.status === 403);
+
+const ownerPhotographersForbidden = await admin("GET", "/api/owner/photographers");
+check("un compte ordinaire ne peut jamais lire la liste de tous les photographes (403)",
+      ownerPhotographersForbidden.status === 403);
+
+const ownerStatsNoAuth = await fetch(`${BASE}/api/owner/stats`);
+check("les routes propriétaire exigent une session, comme le reste de l'admin (401)", ownerStatsNoAuth.status === 401);
+
+const peerOwnerForbidden = await peerAdmin("GET", "/api/owner/photographers");
+check("ce refus vaut pour tous les comptes ordinaires, pas seulement le premier", peerOwnerForbidden.status === 403);
+
+// Le compte propriétaire lui-même n'a pas d'identité dédiée en base : c'est
+// un compte photographe ordinaire dont l'e-mail correspond à OWNER_EMAIL.
+// On le crée ici avec l'adresse réellement configurée côté Worker pour ce
+// test — s'il existe déjà (un run précédent sur cette même base locale), on
+// se connecte avec le mot de passe fixe utilisé ci-dessous plutôt que de
+// recréer le compte.
+const OWNER_EMAIL = "fagnantchristine@gmail.com";
+const OWNER_PASSWORD = "mot-de-passe-de-la-proprietaire-1234";
+
+let ownerToken;
+const { response: ownerSignupResponse, data: ownerSignupData } = await signup(OWNER_EMAIL, OWNER_PASSWORD);
+if (ownerSignupResponse.status === 201) {
+  ownerToken = ownerSignupData.token;
+} else {
+  const ownerLoginResponse = await fetch(`${BASE}/api/auth/login`, {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email: OWNER_EMAIL, password: OWNER_PASSWORD }),
+  });
+  ownerToken = (await ownerLoginResponse.json()).token;
+}
+const ownerClient = adminClient(ownerToken);
+
+const ownerMe = await (await ownerClient("GET", "/api/auth/me")).json();
+// Ce test couple forcément l'adresse ci-dessus à OWNER_EMAIL tel que
+// configuré côté Worker local (wrangler.toml) : s'ils ne correspondent pas
+// (mauvaise config locale), cette seule vérification échoue avec un message
+// clair plutôt que de laisser échouer en cascade les appels /owner/* qui
+// suivent.
+check("le compte dont l'e-mail correspond à OWNER_EMAIL se voit bien reconnaître isOwner",
+      ownerMe.photographer?.isOwner === true,
+      "OWNER_EMAIL (wrangler.toml) doit valoir exactement " + OWNER_EMAIL + " pour ce test");
+
+const ownerStats = await (await ownerClient("GET", "/api/owner/stats")).json();
+check("la propriétaire peut lire les compteurs plateforme",
+      typeof ownerStats.photographersCount === "number" && typeof ownerStats.galleriesCount === "number",
+      JSON.stringify(ownerStats));
+check("les compteurs plateforme comptent bien plus que ce seul compte (les autres comptes créés par ce test)",
+      ownerStats.photographersCount >= 3, JSON.stringify(ownerStats.photographersCount));
+
+const ownerPhotographers = await (await ownerClient("GET", "/api/owner/photographers")).json();
+const ownerRow = ownerPhotographers.photographers.find((p) => p.email === OWNER_EMAIL);
+check("la propriétaire apparaît elle-même dans la liste de tous les comptes", Boolean(ownerRow));
+
+const adminRow = ownerPhotographers.photographers.find((p) => p.email === EMAIL);
+check("un compte créé plus haut dans ce test apparaît dans la liste, avec son prénom/nom",
+      adminRow?.firstName === "Camille" && adminRow?.lastName === "Durand", JSON.stringify(adminRow));
+check("les mots de passe ne figurent jamais dans la liste",
+      !JSON.stringify(ownerPhotographers).toLowerCase().includes("password"));
+
 const failed = checks.filter((c) => !c.ok);
 console.log(failed.length ? `\n${failed.length} vérification(s) en échec.` : `\n${checks.length} vérifications, toutes passent.`);
 process.exit(failed.length ? 1 : 0);
