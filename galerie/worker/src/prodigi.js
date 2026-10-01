@@ -10,6 +10,7 @@
 // réseau (tests/prodigi.test.mjs).
 
 import { b64url, unb64url, randomBytes, timingSafeEqual } from "./auth.js";
+import { SUGGESTED_SELECTIONS, resolveSelection } from "./printCatalogue.js";
 
 const enc = new TextEncoder();
 const dec = new TextDecoder();
@@ -27,16 +28,11 @@ export function prodigiBase(env, environment) {
   return environment === "live" ? PRODIGI_BASES.live : PRODIGI_BASES.sandbox;
 }
 
-// Formats proposés d'un clic dans l'admin. Les SKU sont ceux du catalogue
-// Prodigi ; le photographe peut les modifier, en ajouter d'autres, et
-// vérifier chacun par un devis réel avant de les proposer à ses clients.
-export const SUGGESTED_PRODUCTS = [
-  { label: "Tirage photo 10 × 15 cm", sku: "GLOBAL-PHO-4x6", attributes: {}, priceCents: 400 },
-  { label: "Tirage photo 20 × 30 cm", sku: "GLOBAL-PHO-8x12", attributes: {}, priceCents: 1200 },
-  { label: "Tirage d'art 30 × 40 cm", sku: "GLOBAL-FAP-12x16", attributes: {}, priceCents: 3900 },
-  { label: "Toile 30 × 40 cm", sku: "GLOBAL-CAN-12x16", attributes: { wrap: "MirrorWrap" }, priceCents: 7900 },
-  { label: "Cadre noir avec passe-partout 40 × 50 cm", sku: "GLOBAL-CFPM-16x20", attributes: { color: "black" }, priceCents: 11900 },
-];
+// Formats proposés d'un clic dans l'admin (voir printCatalogue.js).
+export const SUGGESTED_PRODUCTS = SUGGESTED_SELECTIONS.map((sel) => {
+  const resolved = resolveSelection(sel);
+  return { label: resolved.label, sku: resolved.sku, attributes: resolved.attributes, ref: resolved.ref, priceCents: sel.priceCents };
+});
 
 // Pays de livraison proposés au client (Prodigi livre bien au-delà, mais
 // le forfait de port du photographe est pensé pour l'Europe proche).
@@ -207,11 +203,28 @@ export function buildQuotePayload({ sku, attributes, countryCode }) {
 
 // Message d'erreur lisible à partir d'une réponse d'erreur Prodigi.
 export function prodigiErrorMessage(data, status) {
-  const details = (data?.data?.errors || data?.failures || [])
-    .map((e) => [e.property || e.field || e.key, e.message || e.description].filter(Boolean).join(" : "))
-    .filter(Boolean);
+  // Cas le plus fréquent à la mise en route : une clé « Live » utilisée en
+  // mode test (ou l'inverse) — Prodigi a deux clés distinctes.
+  if (status === 401 || data?.statusText === "NotAuthenticated") {
+    return "Clé refusée par Prodigi : en mode test il faut la clé Sandbox, en production la clé Live (ce sont deux clés différentes)";
+  }
+  // Prodigi renvoie ses détails sous plusieurs formes selon la route :
+  // tableau d'erreurs, ou objet { "items[0].sku": [{ code, description }] }.
+  const describe = (e) => (typeof e === "string" ? e : e?.message || e?.description || e?.code || "");
+  const details = [];
+  for (const source of [data?.data?.errors, data?.failures, data?.errors]) {
+    if (Array.isArray(source)) {
+      for (const e of source) details.push([e?.property || e?.field || e?.key, describe(e)].filter(Boolean).join(" : "));
+    } else if (source && typeof source === "object") {
+      for (const [property, list] of Object.entries(source)) {
+        const messages = (Array.isArray(list) ? list : [list]).map(describe).filter(Boolean);
+        details.push([property, messages.join(", ")].filter(Boolean).join(" : "));
+      }
+    }
+  }
   const head = data?.statusText || data?.outcome || `Prodigi a refusé la requête (HTTP ${status})`;
-  return details.length ? `${head} — ${details.join(" ; ")}` : head;
+  const cleaned = details.filter(Boolean);
+  return cleaned.length ? `${head} — ${cleaned.join(" ; ")}` : head;
 }
 
 export async function prodigiRequest(env, { apiKey, environment }, method, path, body) {

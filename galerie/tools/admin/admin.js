@@ -992,36 +992,174 @@
     );
   }
 
+  // Une ligne par produit de la boutique : seul le prix et l'activation se
+  // modifient ici ; référence Prodigi et options restent celles choisies
+  // dans les menus (affichées seulement pour un ajout en mode avancé).
   function productRowHtml(p) {
+    var cost = p.costCents || 0;
     return (
-      '<tr data-product-id="' + esc(p.id) + '">' +
-      '<td><input type="text" class="ad-input" data-field="label" value="' + esc(p.label) + '" maxlength="100" /></td>' +
-      '<td><input type="text" class="ad-input ad-input-mono" data-field="sku" value="' + esc(p.sku) + '" maxlength="80" /></td>' +
-      '<td><input type="text" class="ad-input ad-input-mono" data-field="attributes" value="' + esc(JSON.stringify(p.attributes || {})) + '" /></td>' +
-      '<td><input type="text" class="ad-input ad-input-price" data-field="price" value="' + eurosInput(p.priceCents) + '" inputmode="decimal" /></td>' +
+      '<tr data-product-id="' + esc(p.id) + '" data-cost="' + cost + '">' +
+      "<td><strong>" + esc(p.label) + "</strong>" +
+      (p.fromCatalogue ? "" : '<br /><span class="ad-hint">Réf. ' + esc(p.sku) + (Object.keys(p.attributes || {}).length ? " " + esc(JSON.stringify(p.attributes)) : "") + "</span>") +
+      "</td>" +
+      '<td class="ad-cost-cell" id="ad-quote-' + esc(p.id) + '">' + (cost ? formatEuros(cost) : '<span class="ad-hint">à estimer</span>') + "</td>" +
+      '<td><input type="text" class="ad-input ad-input-price" data-field="price" value="' + eurosInput(p.priceCents) + '" inputmode="decimal" aria-label="Prix pour le client" /></td>' +
+      '<td class="ad-margin-cell">' + (cost ? marginHtml(p.priceCents - cost) : "—") + "</td>" +
       '<td><input type="checkbox" data-field="active"' + (p.active ? " checked" : "") + ' aria-label="Proposé aux clients" /></td>' +
-      '<td class="ad-quote-cell" id="ad-quote-' + esc(p.id) + '">—</td>' +
       '<td class="ad-row-actions"><button type="button" class="ad-btn ad-btn-small" data-save-product>Enregistrer</button>' +
       ' <button type="button" class="ad-btn ad-btn-small ad-btn-danger" data-delete-product>Supprimer</button></td>' +
       "</tr>"
     );
   }
 
-  function readProductRow(row) {
-    var get = function (f) { return row.querySelector('[data-field="' + f + '"]'); };
-    var attributes;
-    try {
-      attributes = JSON.parse(get("attributes").value.trim() || "{}");
-    } catch (e) {
-      throw new Error("Options : JSON invalide (ex. {\"wrap\": \"MirrorWrap\"})");
+  function marginHtml(cents) {
+    return '<strong class="' + (cents > 0 ? "ad-margin-ok" : "ad-order-error") + '">' + formatEuros(cents) + "</strong>";
+  }
+
+  function productsTableHtml(products) {
+    if (!products.length) return '<p class="ad-hint" id="ad-shop-no-products">Aucun produit pour l\'instant : ajoutez-en avec les menus ci-dessus, ou en un clic avec « Ajouter les formats suggérés ».</p>';
+    var groups = {};
+    var order = [];
+    products.forEach(function (p) {
+      if (!groups[p.category]) { groups[p.category] = []; order.push(p.category); }
+      groups[p.category].push(p);
+    });
+    return (
+      '<div class="ad-table-wrap"><table class="ad-table ad-shop-products" id="ad-shop-products"><thead><tr>' +
+      "<th>Produit</th><th>Coût labo</th><th>Prix client (€)</th><th>Votre marge</th><th>Actif</th><th></th>" +
+      "</tr></thead><tbody>" +
+      order.map(function (category) {
+        return '<tr class="ad-cat-row"><th colspan="6">' + esc(category) + "</th></tr>" + groups[category].map(productRowHtml).join("");
+      }).join("") +
+      "</tbody></table></div>"
+    );
+  }
+
+  // Formulaire d'ajout en menus déroulants : catégorie → produit → format
+  // → finition, coût réel demandé à Prodigi à chaque choix, marge saisie,
+  // prix client calculé.
+  function pickerHtml(catalogue, connected) {
+    // Worker pas encore mis à jour (ancienne version sans catalogue) : on
+    // le dit plutôt que d'afficher des menus vides.
+    if (!catalogue || !catalogue.length) {
+      return '<p class="ad-hint" id="ad-shop-picker">Les menus d\'ajout apparaîtront dès que le serveur de la galerie (Worker) sera mis à jour.</p>';
     }
-    return {
-      label: get("label").value.trim(),
-      sku: get("sku").value.trim(),
-      attributes: attributes,
-      priceCents: centsFromEuros(get("price").value),
-      active: get("active") ? get("active").checked : true,
+    return (
+      '<div class="ad-picker" id="ad-shop-picker">' +
+      '<div class="ad-picker-grid">' +
+      '<label class="ad-field"><span>Catégorie</span><select id="ad-pick-category">' +
+      catalogue.map(function (c) { return '<option value="' + esc(c.key) + '">' + esc(c.label) + "</option>"; }).join("") +
+      "</select></label>" +
+      '<label class="ad-field"><span>Produit</span><select id="ad-pick-product"></select></label>' +
+      '<label class="ad-field"><span>Format</span><select id="ad-pick-size"></select></label>' +
+      '<label class="ad-field" id="ad-pick-option-wrap"><span id="ad-pick-option-label">Finition</span><select id="ad-pick-option"></select></label>' +
+      "</div>" +
+      '<p class="ad-hint" id="ad-pick-description"></p>' +
+      '<p class="ad-pick-cost" id="ad-pick-cost">' + (connected ? "—" : "Enregistrez d'abord votre clé Prodigi (plus haut) pour voir le coût de chaque produit.") + "</p>" +
+      '<div class="ad-picker-price">' +
+      '<label class="ad-field"><span>Votre marge (€)</span><input type="text" id="ad-pick-margin" inputmode="decimal" placeholder="Ex. 10" /></label>' +
+      '<div class="ad-pick-total"><span>Prix pour le client</span><strong id="ad-pick-price">—</strong></div>' +
+      '<button type="button" class="ad-btn ad-btn-primary" id="ad-pick-add" disabled>Ajouter à ma boutique</button>' +
+      "</div></div>"
+    );
+  }
+
+  function wirePicker(catalogue, connected, onAdded) {
+    if (!catalogue || !catalogue.length) return;
+    var $ = function (id) { return document.getElementById(id); };
+    var pick = { costCents: null, shipCents: 0, seq: 0 };
+    var findCategory = function () { return catalogue.find(function (c) { return c.key === $("ad-pick-category").value; }); };
+    var findProduct = function () {
+      var cat = findCategory();
+      return cat && cat.products.find(function (p) { return p.key === $("ad-pick-product").value; });
     };
+    var options = function (list) {
+      return list.map(function (o) { return '<option value="' + esc(o.value) + '">' + esc(o.label) + "</option>"; }).join("");
+    };
+
+    function refreshPrice() {
+      var margin = centsFromEuros($("ad-pick-margin").value);
+      var ok = pick.costCents !== null && !isNaN(margin) && margin >= 0;
+      $("ad-pick-price").textContent = ok ? formatEuros(pick.costCents + margin) : "—";
+      $("ad-pick-add").disabled = !ok;
+    }
+
+    async function requote() {
+      pick.costCents = null;
+      refreshPrice();
+      if (!connected) return;
+      var seq = ++pick.seq;
+      var product = findProduct();
+      $("ad-pick-cost").textContent = "Demande du coût au laboratoire…";
+      try {
+        var q = await api("POST", "/shop/quote-item", {
+          product: product.key,
+          size: $("ad-pick-size").value,
+          option: product.option ? $("ad-pick-option").value : "",
+          countryCode: $("ad-shop-country").value,
+        });
+        if (seq !== pick.seq) return; // un autre choix a été fait entre-temps
+        if (!q.available) {
+          $("ad-pick-cost").innerHTML = '<span class="ad-order-error">Indisponible chez le labo dans cette version : ' + esc(q.error || "") + "</span>";
+          return;
+        }
+        pick.costCents = q.itemsCents;
+        pick.shipCents = q.shippingCents;
+        $("ad-pick-cost").innerHTML =
+          "Coût labo : <strong>" + formatEuros(q.itemsCents) + "</strong> le produit" +
+          ' <span class="ad-hint">(+ ' + formatEuros(q.shippingCents) + " de livraison pour une commande d'un article, couverte par vos frais de port)</span>";
+        if (!$("ad-pick-margin").value) $("ad-pick-margin").value = eurosInput(Math.max(500, Math.ceil(q.itemsCents / 100) * 100));
+        refreshPrice();
+      } catch (err) {
+        if (seq === pick.seq) $("ad-pick-cost").innerHTML = '<span class="ad-order-error">' + esc(err.message) + "</span>";
+      }
+    }
+
+    function fillSizesAndOptions() {
+      var product = findProduct();
+      $("ad-pick-size").innerHTML = options(product.sizes.map(function (s) { return { value: s.key, label: s.label }; }));
+      $("ad-pick-description").textContent = product.description || "";
+      $("ad-pick-option-wrap").hidden = !product.option;
+      if (product.option) {
+        $("ad-pick-option-label").textContent = product.option.label;
+        $("ad-pick-option").innerHTML = options(product.option.choices);
+      }
+      requote();
+    }
+
+    function fillProducts() {
+      var cat = findCategory();
+      $("ad-pick-product").innerHTML = options(cat.products.map(function (p) { return { value: p.key, label: p.label }; }));
+      fillSizesAndOptions();
+    }
+
+    $("ad-pick-category").addEventListener("change", fillProducts);
+    $("ad-pick-product").addEventListener("change", fillSizesAndOptions);
+    $("ad-pick-size").addEventListener("change", requote);
+    $("ad-pick-option").addEventListener("change", requote);
+    $("ad-shop-country").addEventListener("change", requote);
+    $("ad-pick-margin").addEventListener("input", refreshPrice);
+    $("ad-pick-add").addEventListener("click", async function () {
+      var product = findProduct();
+      var margin = centsFromEuros($("ad-pick-margin").value);
+      this.disabled = true;
+      try {
+        await api("POST", "/shop/products", {
+          product: product.key,
+          size: $("ad-pick-size").value,
+          option: product.option ? $("ad-pick-option").value : "",
+          priceCents: pick.costCents + margin,
+          costCents: pick.costCents,
+          shipCostCents: pick.shipCents,
+        });
+        toast("Produit ajouté à votre boutique.");
+        onAdded();
+      } catch (err) {
+        toast(err.message, true);
+        this.disabled = false;
+      }
+    });
+    fillProducts();
   }
 
   async function renderShop(skipHash) {
@@ -1044,6 +1182,9 @@
       return '<option value="' + code + '"' + (code === "BE" ? " selected" : "") + ">" + esc(data.countries[code]) + "</option>";
     }).join("");
 
+    data.products.forEach(function (p) { if (!p.category) p.category = "Mes produits"; });
+    var maxShip = data.products.reduce(function (m, p) { return Math.max(m, p.shipCostCents || 0); }, 0);
+
     el.view.innerHTML =
       '<header class="ad-detail-header"><div><h2>Boutique de tirages</h2>' +
       '<p class="ad-hint">Vos clients commandent tirages, toiles et cadres directement depuis leur galerie. Le paiement arrive sur votre compte Stripe, la commande part automatiquement chez <strong>Prodigi</strong>, qui imprime et expédie. Prodigi vous facture son prix ; la différence avec votre prix de vente est votre marge.</p>' +
@@ -1060,8 +1201,8 @@
       '<section><div class="ad-section-header"><h3>Compte Prodigi</h3></div>' +
       '<ol class="ad-owner-steps">' +
       '<li>Créez un compte gratuit sur <a href="https://dashboard.prodigi.com/register" target="_blank" rel="noopener">dashboard.prodigi.com</a>.</li>' +
-      "<li>Commencez en <strong>mode test</strong> : Settings → Integrations → API, copiez la clé <em>Sandbox</em>. Rien n'est imprimé ni facturé.</li>" +
-      "<li>Quand tout est prêt, ajoutez un moyen de paiement chez Prodigi, collez la clé <em>Live</em> et passez en production.</li>" +
+      "<li>Commencez en <strong>mode test</strong> avec la clé <em>Sandbox</em> : elle figure dans l'e-mail de bienvenue de Prodigi, ou sur le tableau de bord de test <a href=\"https://sandbox-beta-dashboard.pwinty.com\" target=\"_blank\" rel=\"noopener\">sandbox-beta-dashboard.pwinty.com</a> (mêmes identifiants) → Settings → Integrations → API. Rien n'est imprimé ni facturé.</li>" +
+      "<li>Attention : la clé affichée sur dashboard.prodigi.com est la clé <em>Live</em>, refusée en mode test. Quand tout est prêt, ajoutez un moyen de paiement chez Prodigi, collez cette clé Live et passez en production.</li>" +
       "</ol>" +
       '<form id="ad-shop-settings">' +
       '<label class="ad-field"><span>Clé d\'API Prodigi</span>' +
@@ -1079,24 +1220,28 @@
       (s.connected ? ' <button type="button" class="ad-btn" id="ad-shop-clear-key">Retirer la clé</button>' : "") +
       "</form></section>" +
 
-      '<section><div class="ad-section-header"><h3>Formats proposés</h3>' +
+      '<section><div class="ad-section-header"><h3>Ajouter un produit</h3>' +
       '<button type="button" class="ad-btn" id="ad-shop-suggested">Ajouter les formats suggérés</button></div>' +
-      '<p class="ad-hint">Prix TTC payé par le client, frais de port en plus. La référence (SKU) et les options sont celles du <a href="https://www.prodigi.com/products/" target="_blank" rel="noopener">catalogue Prodigi</a>. Le labo recadre la photo au format choisi. « Estimer » interroge Prodigi pour chaque format actif : son coût réel (produit + port) et votre marge.</p>' +
-      '<div class="ad-shop-quote-bar"><label>Livraison en <select id="ad-shop-country">' + countryOptions + "</select></label>" +
-      ' <button type="button" class="ad-btn" id="ad-shop-quote"' + (s.connected ? "" : " disabled") + ">Estimer coûts et marges</button></div>" +
-      '<div class="ad-table-wrap"><table class="ad-table ad-shop-products" id="ad-shop-products"><thead><tr>' +
-      "<th>Libellé</th><th>SKU Prodigi</th><th>Options</th><th>Prix (€)</th><th>Actif</th><th>Coût labo · marge</th><th></th>" +
-      "</tr></thead><tbody>" +
-      data.products.map(productRowHtml).join("") +
-      '<tr id="ad-shop-new">' +
-      '<td><input type="text" class="ad-input" data-field="label" placeholder="Ex. Tirage 13 × 18 cm" maxlength="100" /></td>' +
-      '<td><input type="text" class="ad-input ad-input-mono" data-field="sku" placeholder="GLOBAL-PHO-5x7" maxlength="80" /></td>' +
-      '<td><input type="text" class="ad-input ad-input-mono" data-field="attributes" placeholder="{}" /></td>' +
-      '<td><input type="text" class="ad-input ad-input-price" data-field="price" placeholder="9.00" inputmode="decimal" /></td>' +
-      "<td></td><td></td>" +
-      '<td><button type="button" class="ad-btn ad-btn-small ad-btn-primary" id="ad-shop-add">Ajouter</button></td>' +
-      "</tr>" +
-      "</tbody></table></div></section>" +
+      '<p class="ad-hint">Choisissez dans les menus : le coût réel chez Prodigi s\'affiche aussitôt, vous indiquez votre marge, le prix client se calcule tout seul. Le labo recadre la photo au format choisi.</p>' +
+      '<div class="ad-shop-quote-bar"><label>Coûts calculés pour une livraison en <select id="ad-shop-country">' + countryOptions + "</select></label></div>" +
+      pickerHtml(data.catalogue, s.connected) +
+      "</section>" +
+
+      '<section><div class="ad-section-header"><h3>Mes produits</h3>' +
+      '<button type="button" class="ad-btn" id="ad-shop-quote"' + (s.connected && data.products.length ? "" : " disabled") + ">Mettre à jour les coûts labo</button></div>" +
+      '<p class="ad-hint">Prix TTC payé par le client. Votre marge = prix client − coût du produit chez le labo ; la livraison est couverte à part par vos frais de port (' + formatEuros(s.shippingCents) + " par commande)." +
+      (maxShip ? " Dernier devis : le labo facture jusqu'à " + formatEuros(maxShip) + " de livraison pour un article." : "") + "</p>" +
+      productsTableHtml(data.products) +
+      '<details class="ad-advanced"><summary>Mode avancé : ajouter une référence Prodigi hors catalogue</summary>' +
+      '<p class="ad-hint">Pour un produit absent des menus : sa référence (SKU) et ses options sont celles du <a href="https://www.prodigi.com/products/" target="_blank" rel="noopener">catalogue Prodigi</a>.</p>' +
+      '<div class="ad-advanced-grid" id="ad-shop-new">' +
+      '<label class="ad-field"><span>Libellé</span><input type="text" class="ad-input" data-field="label" placeholder="Ex. Tirage 13 × 18 cm" maxlength="100" /></label>' +
+      '<label class="ad-field"><span>Référence (SKU)</span><input type="text" class="ad-input ad-input-mono" data-field="sku" placeholder="GLOBAL-PHO-5x7" maxlength="80" /></label>' +
+      '<label class="ad-field"><span>Options (JSON)</span><input type="text" class="ad-input ad-input-mono" data-field="attributes" placeholder="{}" /></label>' +
+      '<label class="ad-field"><span>Prix client (€)</span><input type="text" class="ad-input ad-input-price" data-field="price" placeholder="9.00" inputmode="decimal" /></label>' +
+      '<button type="button" class="ad-btn ad-btn-primary" id="ad-shop-add">Ajouter</button>' +
+      "</div></details>" +
+      "</section>" +
 
       '<section><div class="ad-section-header"><h3>Commandes</h3></div>' +
       printOrdersTableHtml(ordersData.orders, true) +
@@ -1147,68 +1292,94 @@
       }
     });
 
+    wirePicker(data.catalogue, s.connected, function () { renderShop(true); });
+
     document.getElementById("ad-shop-add").addEventListener("click", async function () {
+      var row = document.getElementById("ad-shop-new");
+      var get = function (f) { return row.querySelector('[data-field="' + f + '"]').value.trim(); };
       try {
-        var product = readProductRow(document.getElementById("ad-shop-new"));
-        if (isNaN(product.priceCents)) throw new Error("Prix invalide.");
-        await api("POST", "/shop/products", product);
-        toast("Format ajouté.");
+        var attributes;
+        try {
+          attributes = JSON.parse(get("attributes") || "{}");
+        } catch (e) {
+          throw new Error("Options : JSON invalide (ex. {\"finish\": \"lustre\"})");
+        }
+        var price = centsFromEuros(get("price"));
+        if (isNaN(price)) throw new Error("Prix invalide.");
+        await api("POST", "/shop/products", { label: get("label"), sku: get("sku"), attributes: attributes, priceCents: price });
+        toast("Produit ajouté.");
         renderShop(true);
       } catch (err) {
         toast(err.message, true);
       }
     });
 
-    document.getElementById("ad-shop-products").addEventListener("click", async function (event) {
-      var row = event.target.closest("tr[data-product-id]");
-      if (!row) return;
-      var id = row.getAttribute("data-product-id");
-      if (event.target.closest("[data-save-product]")) {
-        try {
-          var product = readProductRow(row);
-          if (isNaN(product.priceCents)) throw new Error("Prix invalide.");
-          await api("PUT", "/shop/products/" + encodeURIComponent(id), product);
-          toast("Format enregistré.");
-          renderShop(true);
-        } catch (err) {
-          toast(err.message, true);
-        }
-      }
-      if (event.target.closest("[data-delete-product]")) {
-        confirmAction("Supprimer ce format ? Les commandes déjà passées ne changent pas.", async function () {
+    var productsTable = document.getElementById("ad-shop-products");
+    if (productsTable) {
+      productsTable.addEventListener("input", function (event) {
+        var row = event.target.closest("tr[data-product-id]");
+        if (!row || event.target.getAttribute("data-field") !== "price") return;
+        var cost = Number(row.getAttribute("data-cost")) || 0;
+        var price = centsFromEuros(event.target.value);
+        if (cost && !isNaN(price)) row.querySelector(".ad-margin-cell").innerHTML = marginHtml(price - cost);
+      });
+      productsTable.addEventListener("click", async function (event) {
+        var row = event.target.closest("tr[data-product-id]");
+        if (!row) return;
+        var id = row.getAttribute("data-product-id");
+        if (event.target.closest("[data-save-product]")) {
+          var price = centsFromEuros(row.querySelector('[data-field="price"]').value);
+          if (isNaN(price)) return toast("Prix invalide.", true);
           try {
-            await api("DELETE", "/shop/products/" + encodeURIComponent(id));
-            toast("Format supprimé.");
+            await api("PUT", "/shop/products/" + encodeURIComponent(id), {
+              priceCents: price,
+              active: row.querySelector('[data-field="active"]').checked,
+            });
+            toast("Produit enregistré.");
             renderShop(true);
           } catch (err) {
             toast(err.message, true);
           }
-        });
-      }
-    });
+        }
+        if (event.target.closest("[data-delete-product]")) {
+          confirmAction("Retirer ce produit de votre boutique ? Les commandes déjà passées ne changent pas.", async function () {
+            try {
+              await api("DELETE", "/shop/products/" + encodeURIComponent(id));
+              toast("Produit retiré.");
+              renderShop(true);
+            } catch (err) {
+              toast(err.message, true);
+            }
+          });
+        }
+      });
+    }
 
     document.getElementById("ad-shop-quote").addEventListener("click", async function () {
       var btn = this;
       btn.disabled = true;
-      btn.textContent = "Estimation…";
+      btn.textContent = "Mise à jour…";
       try {
         var result = await api("POST", "/shop/quote", { countryCode: document.getElementById("ad-shop-country").value });
         result.quotes.forEach(function (q) {
           var cell = document.getElementById("ad-quote-" + q.productId);
           if (!cell) return;
+          var row = cell.closest("tr");
           if (q.error) {
             cell.innerHTML = '<span class="ad-order-error">' + esc(q.error) + "</span>";
+            row.querySelector(".ad-margin-cell").textContent = "—";
           } else {
-            cell.innerHTML = formatEuros(q.totalCostCents) + ' <span class="ad-hint">(dont port ' + formatEuros(q.shippingCents) + ")</span><br />" +
-              '<strong class="' + (q.marginCents > 0 ? "ad-margin-ok" : "ad-order-error") + '">marge ' + formatEuros(q.marginCents) + "</strong>";
+            row.setAttribute("data-cost", q.itemsCents);
+            cell.innerHTML = formatEuros(q.itemsCents) + '<br /><span class="ad-hint">+ ' + formatEuros(q.shippingCents) + " livraison</span>";
+            row.querySelector(".ad-margin-cell").innerHTML = marginHtml(q.marginCents);
           }
         });
-        toast("Estimation terminée.");
+        toast("Coûts labo mis à jour.");
       } catch (err) {
         toast(err.message, true);
       } finally {
         btn.disabled = false;
-        btn.textContent = "Estimer coûts et marges";
+        btn.textContent = "Mettre à jour les coûts labo";
       }
     });
 

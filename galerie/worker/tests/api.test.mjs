@@ -1616,12 +1616,44 @@ check("le photographe peut changer le prix d'un format", priceUpdate.ok &&
 const quote = await (await admin("POST", "/api/admin/shop/quote", { countryCode: "FR" })).json();
 const tirageQuote = quote.quotes?.find((q) => q.productId === tirage.id);
 const invalidQuote = quote.quotes?.find((q) => q.productId === invalidProductId);
-check("le devis Prodigi donne le coût réel (produit + port) et la marge de chaque format",
-      quote.countryCode === "FR" && tirageQuote?.totalCostCents === 1745 && tirageQuote?.marginCents === 450 + 590 - 1745 &&
+check("le devis Prodigi donne le coût réel (produit + port) et la marge de chaque format (prix − coût du produit)",
+      quote.countryCode === "FR" && tirageQuote?.totalCostCents === 1745 && tirageQuote?.marginCents === 450 - 1250 &&
       lab.quotes.at(-1)?.destinationCountryCode === "FR",
       JSON.stringify(tirageQuote));
 check("un format refusé par le labo est signalé avec la raison donnée par Prodigi",
       /Unknown SKU/.test(invalidQuote?.error || ""), JSON.stringify(invalidQuote));
+
+const shopAfterQuote = await (await admin("GET", "/api/admin/shop")).json();
+check("le devis mémorise le coût du labo sur chaque produit (marge affichée sans nouveau devis)",
+      shopAfterQuote.products.find((p) => p.id === tirage.id)?.costCents === 1250 &&
+      shopAfterQuote.products.find((p) => p.id === tirage.id)?.shipCostCents === 495);
+
+// Ajout en menus déroulants (catalogue intégré).
+check("l'admin reçoit le catalogue en menus (catégories, produits, formats en cm, options)",
+      shopAfterQuote.catalogue?.length === 4 && shopAfterQuote.catalogue[2].products[0].sizes.some((x) => x.label === "30 × 40 cm"),
+      JSON.stringify(shopAfterQuote.catalogue?.map((c) => c.label)));
+check("les produits sont rangés par catégorie",
+      shopAfterQuote.products.find((p) => p.id === tirage.id)?.category === "Tirages photo" &&
+      shopAfterQuote.products.find((p) => p.sku === "GLOBAL-CAN-12x16")?.category === "Toiles");
+const pickQuote = await (await admin("POST", "/api/admin/shop/quote-item", { product: "canvas-rolled", size: "16x20", countryCode: "BE" })).json();
+check("choisir un produit dans les menus donne aussitôt son coût réel chez le labo",
+      pickQuote.available === true && pickQuote.itemsCents === 1250 && pickQuote.shippingCents === 495 &&
+      pickQuote.label === "Toile roulée (sans châssis) 40 × 50 cm" && lab.quotes.at(-1)?.items?.[0]?.sku === "GLOBAL-CAN-ROL-SC-16x20",
+      JSON.stringify(pickQuote));
+const pickBad = await admin("POST", "/api/admin/shop/quote-item", { product: "canvas-rolled", size: "99x99" });
+check("un format hors catalogue est refusé avant même d'interroger le labo (400)", pickBad.status === 400);
+const pickNoKey = await peerAdmin("POST", "/api/admin/shop/quote-item", { product: "canvas-rolled", size: "16x20" });
+check("sans clé Prodigi, le devis demande d'abord d'enregistrer la clé (409)", pickNoKey.status === 409);
+const pickAdd = await admin("POST", "/api/admin/shop/products", { product: "canvas-rolled", size: "16x20", priceCents: 2550, costCents: 1250, shipCostCents: 495, sku: "GLOBAL-PIRATE" });
+const shopWithPick = await (await admin("GET", "/api/admin/shop")).json();
+const picked = shopWithPick.products.find((p) => p.label === "Toile roulée (sans châssis) 40 × 50 cm");
+check("ajouter depuis les menus crée le produit avec la référence déduite par le serveur, jamais celle envoyée par la page",
+      pickAdd.status === 201 && picked?.sku === "GLOBAL-CAN-ROL-SC-16x20" && picked.fromCatalogue === true &&
+      picked.costCents === 1250 && picked.priceCents === 2550 && picked.category === "Toiles",
+      JSON.stringify(picked));
+const pickAddBad = await admin("POST", "/api/admin/shop/products", { product: "photo-ctype", size: "4x6", option: "mat", priceCents: 500 });
+check("une finition hors catalogue est refusée à l'ajout", pickAddBad.status === 400);
+await admin("DELETE", `/api/admin/shop/products/${picked.id}`);
 
 // Galerie et photos de la boutique.
 const shopSlug = `${SLUG}-boutique`;

@@ -398,6 +398,9 @@ CREATE INDEX IF NOT EXISTS idx_email_changes_photographer ON email_changes(photo
 --   ALTER TABLE photos ADD COLUMN has_original INTEGER NOT NULL DEFAULT 0;
 --   ALTER TABLE payments ADD COLUMN kind TEXT NOT NULL DEFAULT 'supplement';
 --   puis les tables print_products et print_orders (fin de ce fichier).
+--   ALTER TABLE print_products ADD COLUMN catalog_ref TEXT NOT NULL DEFAULT '';
+--   ALTER TABLE print_products ADD COLUMN cost_cents INTEGER NOT NULL DEFAULT 0;
+--   ALTER TABLE print_products ADD COLUMN ship_cost_cents INTEGER NOT NULL DEFAULT 0;
 --   CREATE UNIQUE INDEX IF NOT EXISTS idx_photographers_subdomain ON photographers(subdomain) WHERE subdomain != '';
 
 -- Relances déjà envoyées, pour ne jamais relancer deux fois pour la même
@@ -422,6 +425,13 @@ CREATE TABLE IF NOT EXISTS print_products (
   sku             TEXT NOT NULL,
   attributes      TEXT NOT NULL DEFAULT '{}',
   price_cents     INTEGER NOT NULL,
+  -- Produit choisi dans le catalogue intégré (printCatalogue.js) :
+  -- « produit|format|option », vide pour une référence saisie à la main.
+  catalog_ref     TEXT NOT NULL DEFAULT '',
+  -- Dernier coût connu chez Prodigi (produit seul, et livraison pour une
+  -- unité), en centimes — pour afficher la marge sans redemander un devis.
+  cost_cents      INTEGER NOT NULL DEFAULT 0,
+  ship_cost_cents INTEGER NOT NULL DEFAULT 0,
   active          INTEGER NOT NULL DEFAULT 1,
   position        INTEGER NOT NULL DEFAULT 0,
   created_at      INTEGER NOT NULL

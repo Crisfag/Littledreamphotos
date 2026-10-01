@@ -389,16 +389,21 @@ Le tableau de bord s'organise en trois onglets, chacun avec son propre lien
 - **Journal d'accès** intégré à la fiche de chaque galerie, coups de cœur et
   remarques compris.
 - **Onglet Boutique** : la liste de ce qui manque avant d'ouvrir la
-  boutique (clé Prodigi, paiement Stripe actif, au moins un format), la clé
+  boutique (clé Prodigi, paiement Stripe actif, au moins un produit), la clé
   d'API Prodigi (mode test « sandbox » où rien n'est imprimé, puis
-  production), les frais de port facturés au client, et le catalogue :
-  libellé, référence Prodigi (SKU), options (bord de toile, couleur de
-  cadre…), prix de vente TTC, actif ou non. « Ajouter les formats
-  suggérés » en pose cinq d'un clic ; « Estimer coûts et marges » interroge
-  Prodigi pour chaque format (coût réel du produit et du port vers le pays
-  choisi) et affiche la marge — un format que le labo refuse affiche sa
-  raison. En bas, toutes les commandes, leur statut, le lien de suivi, et
-  « Relancer au labo » pour une commande que le labo a refusée.
+  production) et les frais de port facturés au client. Ajouter un produit
+  se fait **en menus déroulants** : catégorie (tirages photo, tirages d'art
+  & posters, toiles, cadres), produit, format en centimètres, puis finition,
+  bords ou couleur du cadre selon le produit. Le coût réel chez Prodigi
+  s'affiche aussitôt (produit et livraison), le photographe indique sa
+  marge et le prix client se calcule tout seul ; un produit que le labo ne
+  propose pas est signalé « indisponible » et ne peut pas être ajouté.
+  Aucune référence Prodigi n'est à connaître (un mode avancé permet encore
+  d'en saisir une à la main). « Mes produits » les range par catégorie, avec
+  coût labo, prix client et marge recalculée à la frappe ; « Mettre à jour
+  les coûts labo » redemande les coûts à Prodigi. En bas, toutes les
+  commandes, leur statut, le lien de suivi, et « Relancer au labo » pour une
+  commande que le labo a refusée.
 - **Boutique sur la fiche galerie** : « Proposer des tirages sur cette
   galerie », le nombre de photos commandables, et les commandes de cette
   galerie. Seules les photos importées pendant que la boutique est ouverte
@@ -706,7 +711,7 @@ des tuiles, refus du mauvais mot de passe, absence de toute balise `<img>`,
 neutralisation du menu contextuel et de la copie, voile sur « Impr. écran » et
 sur perte de focus, consignation au journal.
 
-**API du Worker** — 301 vérifications contre le vrai moteur Cloudflare (D1 et R2
+**API du Worker** — 309 vérifications contre le vrai moteur Cloudflare (D1 et R2
 émulés localement par `wrangler dev`) : comptes photographes (inscription,
 connexion, session, mot de passe oublié — même réponse générique qu'un
 compte existe ou non), cloisonnement strict entre comptes (un photographe ne
@@ -778,7 +783,11 @@ relances. Boutique de tirages, contre un faux laboratoire Prodigi local :
 clé Prodigi enregistrée mais jamais renvoyée (seuls ses quatre derniers
 caractères), réglages et catalogue cloisonnés par compte, formats suggérés
 sans doublon, SKU, options et prix invalides refusés, devis avec coût réel
-et marge, format refusé par le labo avec sa raison ; côté client, boutique
+et marge, coût mémorisé sur chaque produit, format refusé par le labo avec
+sa raison ; catalogue en menus envoyé à l'admin, produits rangés par
+catégorie, devis instantané d'un choix de menus, format hors catalogue
+refusé avant d'interroger le labo, ajout depuis les menus avec la
+référence déduite par le serveur (jamais celle envoyée par la page) ; côté client, boutique
 invisible tant qu'elle n'est pas ouverte sur la galerie, que Stripe n'est
 pas actif ou que la photo n'a pas de fichier d'impression, références
 Prodigi jamais exposées, fichier d'impression inatteignable par la route
@@ -822,7 +831,7 @@ ou invitation à choisir, lien vers la galerie présent dans le HTML et le
 texte — ou aucun bouton du tout sans adresse publique configurée —, e-mail
 de sélection validée avec nombre de photos et supplément dû.
 
-**Boutique de tirages (logique)** — 31 vérifications sans réseau ni D1 :
+**Boutique de tirages (logique)** — 42 vérifications sans réseau ni D1 :
 clé Prodigi chiffrée (jamais en clair, illisible avec un autre secret, IV
 aléatoire), URLs signées propres à une commande et une photo, adresse de
 livraison nettoyée et validée (e-mail, ville, pays proposé), lignes figées
@@ -831,7 +840,12 @@ fichier d'impression, format désactivé ou quantité hors limites refusés,
 commande et devis au format exact de l'API Prodigi v4 (référence,
 idempotence par tentative, `postalOrZipCode`, `fillPrintArea`, options),
 coût d'un devis lu en centimes, statuts Prodigi traduits (en fabrication,
-expédiée avec suivi, annulée), erreurs Prodigi rendues lisibles.
+expédiée avec suivi, annulée), erreurs Prodigi rendues lisibles quel que soit leur format (clé du
+mauvais environnement expliquée), finition précisée sur les tirages photo
+suggérés ; catalogue en menus (4 catégories, formats en centimètres), choix
+traduit en référence Prodigi et options (options imposées comprises),
+produit, format ou option hors catalogue refusés, catégorie retrouvée même
+pour une référence saisie à la main.
 
 **Boutique de tirages (page client)** — 17 vérifications dans un vrai
 navigateur, contre le faux laboratoire : boutique annoncée, bouton
@@ -871,7 +885,7 @@ appliqué sinon, HT + TVA se recomposant exactement au centime près en TTC
 même sur un montant qui ne se divise pas rond, et un vrai PDF valide généré
 aussi bien avec des coordonnées complètes qu'avec des champs vides.
 
-**Interface d'administration** — 103 vérifications dans un vrai navigateur,
+**Interface d'administration** — 112 vérifications dans un vrai navigateur,
 contre le vrai Worker local : demande de lien de réinitialisation de mot de
 passe (message générique affiché), création de compte et connexion depuis
 le formulaire (pas de session présupposée), barre d'onglets Galeries /
@@ -929,9 +943,13 @@ au départ, sous-domaine enregistré et rappelé avec l'adresse complète, nom
 réservé refusé avec son message, lien de la galerie qui porte aussitôt
 l'adresse du studio. Boutique : onglet avec son propre lien, étape « clé
 Prodigi » à faire puis cochée après enregistrement (clé jamais réaffichée),
-frais de port relus, formats suggérés et format personnalisé ajoutés,
-estimation des coûts et marges avec la raison d'un refus du labo, prix
-modifié et relu, aucune commande au départ, et boutique ouverte depuis la
+frais de port relus, formats suggérés rangés par catégorie sans aucune
+référence Prodigi affichée, ajout en menus (option masquée quand le
+produit n'en a pas, coût du labo affiché aussitôt, marge proposée, prix
+client recalculé, produit ajouté avec son coût et sa marge, couleurs de
+cadre proposées, produit refusé par le labo signalé et impossible à
+ajouter), référence ajoutée en mode avancé, mise à jour des coûts labo avec
+la raison d'un refus, marge recalculée à la frappe et prix enregistré, aucune commande au départ, et boutique ouverte depuis la
 fiche galerie avec l'explication des photos commandables.
 
 **Vérifier une photo (empreinte invisible)** — 8 vérifications contre le vrai
