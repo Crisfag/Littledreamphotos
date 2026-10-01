@@ -169,6 +169,47 @@ await page.waitForFunction(
 );
 check("choisir « Mosaïque » dans l'admin l'enregistre (confirmé après rechargement des données)", true);
 
+/* ---------- Musique d'ambiance ---------- */
+
+check("sans piste déposée, la fiche indique qu'il n'y a aucune musique",
+      ((await page.textContent("#ad-music-state")) || "").includes("Aucune musique"));
+
+const musicBuffer = Buffer.alloc(4096);
+for (let i = 0; i < musicBuffer.length; i++) musicBuffer[i] = (i * 13 + 5) & 0xff;
+await page.setInputFiles("#ad-music-file-input", { name: "balade.mp3", mimeType: "audio/mpeg", buffer: musicBuffer });
+await page.waitForFunction(
+  () => {
+    const el = document.querySelector("#ad-music-state");
+    return el && el.textContent.includes("Piste actuelle") && el.textContent.includes("balade.mp3");
+  },
+  { timeout: 15000 }
+);
+check("un MP3 importé devient la piste actuelle de la galerie (confirmé après rechargement des données)", true);
+
+await page.setInputFiles("#ad-music-file-input", PHOTOS[0]);
+await page.waitForFunction(
+  () => {
+    const toast = document.querySelector(".ad-toast-visible");
+    return toast && toast.textContent.includes("MP3");
+  },
+  { timeout: 10000 }
+);
+check("un fichier qui n'est pas un MP3 est refusé avec un message explicite", true);
+check("la piste existante est conservée après un import refusé",
+      ((await page.textContent("#ad-music-state")) || "").includes("balade.mp3"));
+
+await page.click("#ad-music-remove");
+await page.waitForSelector("#ad-confirm-modal:not([hidden])");
+await page.click("#ad-confirm-ok");
+await page.waitForFunction(
+  () => {
+    const el = document.querySelector("#ad-music-state");
+    return el && el.textContent.includes("Aucune musique");
+  },
+  { timeout: 15000 }
+);
+check("retirer la musique (après confirmation) ramène la fiche à « aucune musique »", true);
+
 /* ---------- Forfait et suppléments ---------- */
 
 check("aucun forfait n'est défini par défaut",
@@ -305,6 +346,15 @@ check("les compteurs plateforme (photographes, galeries, ventes…) s'affichent"
       ownerStatsText.indexOf("Suppléments en attente") !== -1,
       ownerStatsText.replace(/\s+/g, " "));
 
+await ownerPage.click("#ad-run-reminders");
+await ownerPage.waitForFunction(() => {
+  const out = document.getElementById("ad-run-reminders-result");
+  return out && out.textContent.includes("examinée");
+}, { timeout: 10000 });
+check("la propriétaire peut lancer la passe de relances et en lire le résultat",
+      (await ownerPage.textContent("#ad-run-reminders-result")).includes("relance"),
+      await ownerPage.textContent("#ad-run-reminders-result"));
+
 const ownerPageText = await ownerPage.textContent("#ad-view");
 // Prénom/nom tels que saisis à l'inscription plus haut — le test de la
 // section Paramètres, qui renomme le prénom en « Julie-Anne », n'a lieu que
@@ -360,6 +410,62 @@ const visiblePhotosWhileFiltered = await page.locator("#ad-photos .ad-photo").ev
 check("filtrer sur la sélection ne laisse apparaître que la photo choisie",
       visiblePhotosWhileFiltered === 1, `${visiblePhotosWhileFiltered} vignette(s) visible(s)`);
 await page.click("#ad-filter-selected"); // on désactive : la suite du test veut voir toutes les photos
+
+/* ---------- Codes couleur et repères annotés ---------- */
+// Le client pose un code couleur et un repère via l'API (comme le ferait sa
+// page) ; le tableau de bord doit les montrer sur la vignette et en grand.
+
+await fetch(`${API}/api/gallery/${gallerySlug}/tag`, {
+  method: "POST",
+  headers: { authorization: `Bearer ${clientSession.token}`, "content-type": "application/json" },
+  body: JSON.stringify({ photoId: firstPhotoId, tag: "yellow" }),
+});
+await fetch(`${API}/api/gallery/${gallerySlug}/marks`, {
+  method: "POST",
+  headers: { authorization: `Bearer ${clientSession.token}`, "content-type": "application/json" },
+  body: JSON.stringify({ photoId: firstPhotoId, marks: [{ x: 0.3, y: 0.6, note: "adoucir ici" }] }),
+});
+
+await page.reload({ waitUntil: "domcontentloaded" });
+await page.waitForSelector("#ad-photos .ad-photo", { timeout: 10000 });
+check("la photo marquée « à retoucher » porte sa pastille jaune sur la vignette",
+      await page.locator(`.ad-photo[data-photo-id="${firstPhotoId}"] .ad-photo-tag-yellow`).count() === 1);
+check("la vignette annonce le nombre de repères posés",
+      ((await page.textContent(`.ad-photo[data-photo-id="${firstPhotoId}"] .ad-photo-marks`)) || "").includes("1"));
+check("la légende des codes couleur résume la galerie",
+      ((await page.textContent("#ad-tag-legend")) || "").includes("1 à retoucher"),
+      await page.textContent("#ad-tag-legend"));
+
+await page.click(`.ad-photo[data-photo-id="${firstPhotoId}"] .ad-photo-frame`);
+await page.waitForSelector("#ad-photo-modal:not([hidden])", { timeout: 5000 });
+check("cliquer sur la vignette ouvre la photo en grand avec le repère posé dessus",
+      await page.locator("#ad-photo-modal .ad-pin").count() === 1);
+check("la note du repère est listée sous la photo",
+      ((await page.textContent("#ad-photo-notes")) || "").includes("adoucir ici"));
+check("le code couleur est rappelé dans la fiche en grand",
+      await page.locator("#ad-photo-modal .ad-badge-tag-yellow").count() === 1);
+await page.click("#ad-photo-modal-close");
+check("la fiche en grand se referme", await page.isHidden("#ad-photo-modal"));
+
+/* ---------- « Valider ma sélection » vue depuis l'admin ---------- */
+
+check("tant que le client n'a pas validé, la fiche le dit et annonce les relances",
+      await page.isVisible("#ad-selection-pending") && (await page.textContent("#ad-selection-pending")).includes("pas encore validée"));
+await fetch(`${API}/api/gallery/${gallerySlug}/validate`, {
+  method: "POST",
+  headers: { authorization: `Bearer ${clientSession.token}`, "content-type": "application/json" },
+  body: "{}",
+});
+await page.reload({ waitUntil: "domcontentloaded" });
+await page.waitForSelector("#ad-selection-validated", { timeout: 10000 });
+check("une fois validée, la fiche affiche la date de validation",
+      (await page.textContent("#ad-selection-validated")).includes("Sélection validée par le client le"));
+await page.click("#ad-back");
+await page.waitForSelector(".ad-card", { timeout: 10000 });
+check("la carte de la galerie porte le badge « Validée »",
+      await page.locator(".ad-card .ad-badge-validated").count() === 1);
+await page.locator(".ad-card").first().click();
+await page.waitForSelector("#ad-photos .ad-photo", { timeout: 10000 });
 
 /* ---------- Historique des paiements ---------- */
 // Un vrai règlement Stripe ne peut pas être rejoué ici (pas de compte Stripe
@@ -520,6 +626,49 @@ await page.reload({ waitUntil: "domcontentloaded" });
 await page.waitForSelector("#ad-name-form", { timeout: 10000 });
 check("le prénom modifié depuis Paramètres est bien relu après rechargement",
       await page.inputValue('#ad-name-form [name="firstName"]') === "Julie-Anne");
+
+/* ---------- Adresse du studio (sous-domaine) ---------- */
+
+check("sans sous-domaine, Paramètres le dit", (await page.textContent("#ad-subdomain-current")).includes("Aucun sous-domaine"));
+const SUBDOMAIN = `julie-${Date.now().toString(36)}`;
+await page.fill('#ad-subdomain-form [name="subdomain"]', SUBDOMAIN);
+await page.click("#ad-subdomain-save");
+await page.waitForFunction((sub) => {
+  const el = document.getElementById("ad-subdomain-current");
+  return el && el.textContent.includes("https://" + sub + ".");
+}, SUBDOMAIN, { timeout: 10000 });
+check("le sous-domaine enregistré est rappelé avec l'adresse complète des liens", true);
+await page.fill('#ad-subdomain-form [name="subdomain"]', "www");
+await page.click("#ad-subdomain-save");
+await page.waitForFunction(() => {
+  const toast = document.querySelector(".ad-toast-visible");
+  return toast && toast.textContent.includes("réservé");
+}, { timeout: 5000 });
+check("un nom réservé est refusé avec un message explicite", true);
+await page.click("#ad-tab-galleries");
+await page.waitForSelector(".ad-card", { timeout: 10000 });
+await page.locator(".ad-card").first().click();
+await page.waitForSelector("#ad-detail-link", { timeout: 10000 });
+check("le lien de la galerie porte désormais l'adresse du studio",
+      (await page.inputValue("#ad-detail-link")).startsWith("https://" + SUBDOMAIN + "."),
+      await page.inputValue("#ad-detail-link"));
+await page.click("#ad-tab-settings");
+await page.waitForSelector("#ad-reminders-toggle", { timeout: 10000 });
+
+check("les relances automatiques sont cochées par défaut", await page.isChecked("#ad-reminders-toggle"));
+await page.uncheck("#ad-reminders-toggle");
+await page.waitForFunction(() => {
+  const toast = document.querySelector(".ad-toast-visible");
+  return toast && toast.textContent.includes("désactivées");
+}, { timeout: 5000 });
+await page.reload({ waitUntil: "domcontentloaded" });
+await page.waitForSelector("#ad-reminders-toggle", { timeout: 10000 });
+check("décocher les relances est enregistré (relu après rechargement)", !(await page.isChecked("#ad-reminders-toggle")));
+await page.check("#ad-reminders-toggle");
+await page.waitForFunction(() => {
+  const toast = document.querySelector(".ad-toast-visible");
+  return toast && toast.textContent.includes("activées");
+}, { timeout: 5000 });
 
 check("la grille est l'option de présentation par défaut active avant tout changement",
       await page.locator('#ad-default-layout-options .ad-layout-option[data-layout="grille"].ad-layout-option-active').count() === 1);

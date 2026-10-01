@@ -2,8 +2,10 @@
 // distribution des tuiles, journal d'accès.
 
 import { json, fail } from "./http.js";
+import { isValidTag, parseMarks, normalizeMarks } from "./marks.js";
 import { verifyPassword, signToken, verifyToken, hashIp, randomBytes, b64url } from "./auth.js";
-import { sendCaptureAlert } from "./notify.js";
+import { sendCaptureAlert, sendSelectionValidated } from "./notify.js";
+import { supplementFor } from "./admin.js";
 import { createCheckoutSession } from "./stripe.js";
 
 const SESSION_TTL_SECONDS = 2 * 60 * 60; // 2 h
@@ -123,14 +125,14 @@ async function handleLogin(request, env, slug) {
   await logAccess(env, { galleryId: gallery.id, viewerId, event: "login", ipHash, userAgent });
 
   const { results: photos } = await env.DB.prepare(
-    `SELECT id, width, height, cols, rows, preview_width, preview_height, selected, comment FROM photos
+    `SELECT id, width, height, cols, rows, preview_width, preview_height, selected, comment, tag, marks FROM photos
      WHERE gallery_id = ? ORDER BY position ASC, created_at ASC`
   )
     .bind(gallery.id)
     .all();
 
   const photographer = await env.DB.prepare(
-    "SELECT stripe_account_id, stripe_charges_enabled FROM photographers WHERE id = ?"
+    "SELECT stripe_account_id, stripe_charges_enabled, studio_name FROM photographers WHERE id = ?"
   )
     .bind(gallery.photographer_id)
     .first();
@@ -150,6 +152,9 @@ async function handleLogin(request, env, slug) {
       watermark: gallery.watermark_text,
       expiresAt: gallery.expires_at,
       layout: gallery.layout || "grille",
+      hasMusic: Boolean(gallery.music_name),
+      selectionDoneAt: gallery.selection_done_at || null,
+      studioName: photographer?.studio_name || "",
       includedPhotos: gallery.included_photos,
       extraPhotoPriceCents: gallery.extra_photo_price_cents || 0,
       paidExtraCount: await paidExtraCount(env, gallery.id),
@@ -171,6 +176,8 @@ async function handleLogin(request, env, slug) {
       previewHeight: p.preview_height,
       selected: !!p.selected,
       comment: p.comment || "",
+      tag: p.tag || "",
+      marks: parseMarks(p.marks),
     })),
   });
 }
@@ -296,6 +303,138 @@ async function handleComment(request, env, slug) {
   });
 
   return json({ ok: true, comment });
+}
+
+// Code couleur posé par le client sur une photo (validée / à retoucher / à
+// écarter). Indépendant du coup de cœur : un client peut marquer « à
+// retoucher » une photo qu'il n'a pas (encore) choisie, ou l'inverse.
+async function handleTag(request, env, slug) {
+  const auth = await authorize(request, env, slug);
+  if (auth.error) return auth.error;
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return fail(400, "Requête invalide");
+  }
+  const photoId = typeof body?.photoId === "string" ? body.photoId : "";
+  if (!photoId) return fail(400, "Photo manquante");
+  const tag = typeof body?.tag === "string" ? body.tag : "";
+  if (!isValidTag(tag)) return fail(400, "Code couleur inconnu");
+
+  const photo = await env.DB.prepare("SELECT id FROM photos WHERE id = ? AND gallery_id = ?")
+    .bind(photoId, auth.gallery.id)
+    .first();
+  if (!photo) return fail(404, "Photo introuvable");
+
+  await env.DB.prepare("UPDATE photos SET tag = ? WHERE id = ?").bind(tag, photoId).run();
+
+  await logAccess(env, {
+    galleryId: auth.gallery.id,
+    viewerId: auth.viewerId,
+    event: "tag",
+    detail: photoId,
+    ipHash: await hashIp(request.headers.get("CF-Connecting-IP") || "", env.TOKEN_SECRET),
+    userAgent: request.headers.get("User-Agent") || "",
+  });
+
+  return json({ ok: true, tag });
+}
+
+// Repères annotés : la liste complète est renvoyée à chaque enregistrement
+// (dernier écrit gagne, comme le commentaire) — bien plus simple à relire
+// qu'une suite d'ajouts/retraits, pour une liste qui ne dépasse jamais
+// quelques éléments.
+async function handleMarks(request, env, slug) {
+  const auth = await authorize(request, env, slug);
+  if (auth.error) return auth.error;
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return fail(400, "Requête invalide");
+  }
+  const photoId = typeof body?.photoId === "string" ? body.photoId : "";
+  if (!photoId) return fail(400, "Photo manquante");
+  const normalized = normalizeMarks(body?.marks);
+  if (normalized.error) return fail(400, normalized.error);
+
+  const photo = await env.DB.prepare("SELECT id FROM photos WHERE id = ? AND gallery_id = ?")
+    .bind(photoId, auth.gallery.id)
+    .first();
+  if (!photo) return fail(404, "Photo introuvable");
+
+  await env.DB.prepare("UPDATE photos SET marks = ? WHERE id = ?")
+    .bind(JSON.stringify(normalized.marks), photoId)
+    .run();
+
+  await logAccess(env, {
+    galleryId: auth.gallery.id,
+    viewerId: auth.viewerId,
+    event: "mark",
+    detail: photoId,
+    ipHash: await hashIp(request.headers.get("CF-Connecting-IP") || "", env.TOKEN_SECRET),
+    userAgent: request.headers.get("User-Agent") || "",
+  });
+
+  return json({ ok: true, marks: normalized.marks });
+}
+
+// « Valider ma sélection » : le client signale que son choix est fait. Le
+// moment est mémorisé (arrête les relances automatiques), consigné au
+// journal, et le photographe est prévenu par e-mail avec le détail. Peut
+// être refait si le client change d'avis ensuite ; l'e-mail, lui, n'est pas
+// renvoyé plus d'une fois par heure pour ne pas noyer le photographe.
+async function handleValidate(request, env, ctx, slug) {
+  const auth = await authorize(request, env, slug);
+  if (auth.error) return auth.error;
+  const gallery = auth.gallery;
+  const ts = now();
+
+  await env.DB.prepare("UPDATE galleries SET selection_done_at = ? WHERE id = ?").bind(ts, gallery.id).run();
+
+  const recent = await env.DB.prepare(
+    "SELECT COUNT(*) AS n FROM access_log WHERE gallery_id = ? AND event = 'validate' AND ts > ?"
+  )
+    .bind(gallery.id, ts - 3600)
+    .first();
+
+  await logAccess(env, {
+    galleryId: gallery.id,
+    viewerId: auth.viewerId,
+    event: "validate",
+    detail: "",
+    ipHash: await hashIp(request.headers.get("CF-Connecting-IP") || "", env.TOKEN_SECRET),
+    userAgent: request.headers.get("User-Agent") || "",
+  });
+
+  const selectedRow = await env.DB.prepare("SELECT COUNT(*) AS n FROM photos WHERE gallery_id = ? AND selected = 1")
+    .bind(gallery.id)
+    .first();
+  const selectedCount = selectedRow?.n || 0;
+  const supplement = supplementFor(gallery.included_photos, gallery.extra_photo_price_cents, selectedCount, await paidExtraCount(env, gallery.id));
+
+  if (!(recent?.n > 0)) {
+    ctx.waitUntil(
+      (async () => {
+        const photographer = await photographerOf(env, gallery.photographer_id);
+        if (!photographer?.email) return;
+        await sendSelectionValidated(env, {
+          to: photographer.email,
+          galleryTitle: gallery.title,
+          clientName: gallery.client_name,
+          selectedCount,
+          dueExtraCount: supplement.dueExtraCount,
+          dueTotalCents: supplement.dueTotalCents,
+          adminUrl: env.ADMIN_URL || "",
+        });
+      })().catch((err) => console.error("E-mail de sélection validée :", err && err.message ? err.message : err))
+    );
+  }
+
+  return json({ ok: true, selectionDoneAt: ts, selectedCount, emailed: !(recent?.n > 0) });
 }
 
 function newPaymentId() {
@@ -514,6 +653,43 @@ async function handleBackgroundImage(env, slug) {
   });
 }
 
+// Musique d'ambiance choisie par le photographe : un décor, pas une
+// livraison — servie publiquement comme l'image d'arrière-plan, et muette
+// sur l'existence de la galerie dans les mêmes conditions (404 identique
+// qu'elle soit inconnue, expirée ou simplement sans musique). Les requêtes
+// partielles (Range) sont honorées : Safari refuse de lire un média sans ça.
+async function handleMusic(request, env, slug) {
+  const gallery = await getGallery(env, slug);
+  if (!gallery || isExpired(gallery) || !gallery.music_name) {
+    return fail(404, "Aucune musique");
+  }
+
+  const key = `music/${gallery.id}.mp3`;
+  const wantsRange = request.headers.has("range");
+  let object;
+  try {
+    object = await env.TILES.get(key, wantsRange ? { range: request.headers } : undefined);
+  } catch {
+    return new Response(null, { status: 416, headers: { "content-range": "bytes */*" } });
+  }
+  if (!object) return fail(404, "Aucune musique");
+
+  const headers = new Headers({
+    "content-type": "audio/mpeg",
+    "accept-ranges": "bytes",
+    "cache-control": "public, max-age=3600",
+  });
+  if (wantsRange && object.range && typeof object.range.offset === "number") {
+    const start = object.range.offset;
+    const length = object.range.length ?? object.size - start;
+    headers.set("content-range", `bytes ${start}-${start + length - 1}/${object.size}`);
+    headers.set("content-length", String(length));
+    return new Response(object.body, { status: 206, headers });
+  }
+  headers.set("content-length", String(object.size));
+  return new Response(object.body, { headers });
+}
+
 export async function handleViewer(request, env, ctx, path) {
   // /api/gallery/<slug>/<action>[/...]
   const parts = path.split("/").filter(Boolean); // api, gallery, slug, action, …
@@ -530,6 +706,9 @@ export async function handleViewer(request, env, ctx, path) {
   if (action === "background-image" && request.method === "GET" && parts.length === 4) {
     return handleBackgroundImage(env, slug);
   }
+  if (action === "music" && request.method === "GET" && parts.length === 4) {
+    return handleMusic(request, env, slug);
+  }
   // /api/gallery/<slug>/tile/<photoId>/<niveau>/<colonne>/<ligne>
   if (action === "tile" && request.method === "GET" && parts.length === 8) {
     return handleTile(
@@ -542,6 +721,15 @@ export async function handleViewer(request, env, ctx, path) {
   }
   if (action === "comment" && request.method === "POST") {
     return handleComment(request, env, slug);
+  }
+  if (action === "tag" && request.method === "POST") {
+    return handleTag(request, env, slug);
+  }
+  if (action === "marks" && request.method === "POST") {
+    return handleMarks(request, env, slug);
+  }
+  if (action === "validate" && request.method === "POST") {
+    return handleValidate(request, env, ctx, slug);
   }
   if (action === "event" && request.method === "POST") {
     return handleEvent(request, env, ctx, slug);

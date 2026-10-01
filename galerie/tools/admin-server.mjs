@@ -38,6 +38,7 @@ const HOST = process.env.GALERIE_ADMIN_HOST || "127.0.0.1";
 // via cette variable plutôt que de laisser le service choisir.
 const PORT = Number(process.env.GALERIE_ADMIN_PORT || process.env.PORT || 4000);
 const MAX_UPLOAD_BYTES = 60 * 1024 * 1024;
+const MAX_MUSIC_BYTES = 15 * 1024 * 1024;
 const SESSION_COOKIE = "galerie_session";
 const SESSION_MAX_AGE = 30 * 24 * 60 * 60; // aligné sur la durée du jeton côté Worker
 
@@ -74,6 +75,9 @@ const config = {
   // URL publique de web/galerie.html, pour reconstituer le lien complet à
   // donner au client. Sans elle, l'interface affiche seulement « ?g=slug ».
   site: (process.env.GALERIE_SITE || "").replace(/\/$/, ""),
+  // Domaine des sous-domaines de studio (julie.<domaine>) — doit valoir la
+  // même chose que STUDIO_DOMAIN côté Worker.
+  studioDomain: (process.env.GALERIE_STUDIO_DOMAIN || "holypixx.com").trim(),
 };
 
 const ENV_NAMES = { api: "GALERIE_API", forensicKey: "GALERIE_FORENSIC_KEY" };
@@ -413,7 +417,7 @@ async function handleApi(req, res, url) {
 
   if (parts.length === 1 && parts[0] === "config" && req.method === "GET") {
     return json(res, 200, {
-      site: config.site, api: config.api,
+      site: config.site, api: config.api, studioDomain: config.studioDomain,
       previewCols: PREVIEW_COLS, previewRows: PREVIEW_ROWS,
     });
   }
@@ -588,6 +592,7 @@ async function handleApi(req, res, url) {
     const body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
     try {
       await client.setStudioName(String(body.studioName || ""));
+      profileCache.delete(client.token);
       return json(res, 200, { ok: true });
     } catch (err) {
       return relayError(res, err, "Impossible d'enregistrer le nom du studio");
@@ -635,6 +640,40 @@ async function handleApi(req, res, url) {
       return json(res, 200, { ok: true });
     } catch (err) {
       return relayError(res, err, "Impossible d'enregistrer la présentation par défaut");
+    }
+  }
+
+  // POST /local/account/subdomain — adresse du studio (julie.holypixx.com).
+  if (parts.length === 2 && parts[0] === "account" && parts[1] === "subdomain" && req.method === "POST") {
+    const body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
+    try {
+      const result = await client.setSubdomain(String(body.subdomain || ""));
+      profileCache.delete(client.token);
+      return json(res, 200, result);
+    } catch (err) {
+      return relayError(res, err, "Impossible d'enregistrer le sous-domaine");
+    }
+  }
+
+  // POST /local/account/reminders — relances automatiques actives ou non.
+  if (parts.length === 2 && parts[0] === "account" && parts[1] === "reminders" && req.method === "POST") {
+    const body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
+    try {
+      await client.setReminders(body.enabled === true);
+      return json(res, 200, { ok: true });
+    } catch (err) {
+      return relayError(res, err, "Impossible d'enregistrer le réglage des relances");
+    }
+  }
+
+  // POST /local/owner/reminders/run — lance la passe de relances tout de
+  // suite (propriétaire seulement, revérifié par le Worker).
+  if (parts.length === 3 && parts[0] === "owner" && parts[1] === "reminders" && parts[2] === "run" && req.method === "POST") {
+    try {
+      const result = await client.ownerRunReminders();
+      return json(res, 200, result);
+    } catch (err) {
+      return relayError(res, err, "Impossible de lancer les relances");
     }
   }
 
@@ -690,7 +729,7 @@ async function handleApi(req, res, url) {
           password, watermarkText, expiresAt,
           includedPhotos: body.includedPhotos, extraPhotoPrice: body.extraPhotoPrice,
         });
-        return json(res, 201, { id: created.id, slug, password, link: linkFor(slug) });
+        return json(res, 201, { id: created.id, slug, password, link: await linkFor(client, slug) });
       } catch (err) {
         return relayError(res, err, "Impossible de créer la galerie");
       }
@@ -708,7 +747,7 @@ async function handleApi(req, res, url) {
           client.getGallery(slug),
           client.galleryLog(slug, 100).catch(() => ({ log: [] })),
         ]);
-        return json(res, 200, { ...detail, log: logResult.log, link: linkFor(slug) });
+        return json(res, 200, { ...detail, log: logResult.log, link: await linkFor(client, slug) });
       } catch (err) {
         return relayError(res, err, "Galerie introuvable");
       }
@@ -730,7 +769,7 @@ async function handleApi(req, res, url) {
     const newPassword = generatePassword();
     try {
       await client.regeneratePassword(slug, newPassword);
-      return json(res, 200, { password: newPassword, link: linkFor(slug) });
+      return json(res, 200, { password: newPassword, link: await linkFor(client, slug) });
     } catch (err) {
       return relayError(res, err, "Impossible de générer un nouveau mot de passe");
     }
@@ -780,6 +819,48 @@ async function handleApi(req, res, url) {
     } catch (err) {
       console.error("Échec du traitement de l'image d'arrière-plan :", err);
       return relayError(res, err, "Échec du traitement de l'image");
+    }
+  }
+
+  // POST /local/galleries/:slug/music — musique d'ambiance (MP3). Un décor,
+  // pas une livraison : aucun traitement, le fichier est stocké tel quel.
+  if (parts.length === 3 && parts[2] === "music" && req.method === "POST") {
+    const contentLength = Number(req.headers["content-length"] || 0);
+    if (contentLength > MAX_MUSIC_BYTES) return json(res, 413, { error: "Fichier trop volumineux (15 Mo maximum)" });
+
+    let form;
+    try {
+      const body = await readBody(req);
+      form = await nodeRequestToWebRequest(req, body).formData();
+    } catch (err) {
+      return json(res, err.status || 400, { error: err.status ? err.message : "Fichier illisible" });
+    }
+    const file = form.get("file");
+    if (!file || typeof file.arrayBuffer !== "function") return json(res, 400, { error: "Aucun fichier reçu" });
+
+    const name = String(file.name || "musique.mp3");
+    const looksLikeMp3 = /\.mp3$/i.test(name) || /^audio\/(mpeg|mp3)$/i.test(file.type || "");
+    if (!looksLikeMp3) return json(res, 400, { error: "Seul le format MP3 est accepté" });
+
+    const buffer = Buffer.from(await file.arrayBuffer());
+    if (buffer.length === 0) return json(res, 400, { error: "Fichier vide" });
+    if (buffer.length > MAX_MUSIC_BYTES) return json(res, 413, { error: "Fichier trop volumineux (15 Mo maximum)" });
+
+    try {
+      const result = await client.setMusic(slug, buffer, name);
+      return json(res, 200, result);
+    } catch (err) {
+      return relayError(res, err, "Impossible d'enregistrer la musique");
+    }
+  }
+
+  // DELETE /local/galleries/:slug/music
+  if (parts.length === 3 && parts[2] === "music" && req.method === "DELETE") {
+    try {
+      await client.deleteMusic(slug);
+      return json(res, 200, { ok: true });
+    } catch (err) {
+      return relayError(res, err, "Impossible de retirer la musique");
     }
   }
 
@@ -879,22 +960,36 @@ async function handleApi(req, res, url) {
   return json(res, 404, { error: "Route inconnue" });
 }
 
-// Marque par défaut du filigrane : celle du studio du compte connecté, avec
-// GALERIE_BRAND comme filet de secours (utile en développement local).
-const brandCache = new Map(); // jeton -> studioName, pour ne pas rappeler /me à chaque photo
-async function brandFor(client) {
-  if (brandCache.has(client.token)) return brandCache.get(client.token) || config.brand;
+// Profil du compte connecté (nom du studio, sous-domaine), mis en cache par
+// jeton pour ne pas rappeler /me à chaque photo ou à chaque lien. Invalidé
+// dès que le compte modifie l'un de ces réglages.
+const profileCache = new Map(); // jeton -> photographer
+async function profileFor(client) {
+  if (profileCache.has(client.token)) return profileCache.get(client.token);
   try {
     const { photographer } = await client.me();
-    const brand = photographer.studioName || config.brand;
-    brandCache.set(client.token, brand);
-    return brand;
+    profileCache.set(client.token, photographer);
+    return photographer;
   } catch {
-    return config.brand;
+    return null;
   }
 }
 
-function linkFor(slug) {
+// Marque par défaut du filigrane : celle du studio du compte connecté, avec
+// GALERIE_BRAND comme filet de secours (utile en développement local).
+async function brandFor(client) {
+  const photographer = await profileFor(client);
+  return (photographer && photographer.studioName) || config.brand;
+}
+
+// Lien à transmettre au client : l'adresse du studio si un sous-domaine est
+// réglé (julie.holypixx.com/?g=…), sinon le site principal (GALERIE_SITE),
+// sinon un lien relatif.
+async function linkFor(client, slug) {
+  const photographer = await profileFor(client);
+  if (photographer && photographer.subdomain && config.studioDomain) {
+    return `https://${photographer.subdomain}.${config.studioDomain}/?g=${encodeURIComponent(slug)}`;
+  }
   return config.site ? `${config.site}?g=${encodeURIComponent(slug)}` : `?g=${encodeURIComponent(slug)}`;
 }
 

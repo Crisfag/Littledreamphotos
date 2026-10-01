@@ -239,6 +239,67 @@ export function buildInvoiceEmail({ galleryTitle, number, amountCents }) {
 // Encodage base64 par blocs : `String.fromCharCode(...bytes)` déborderait la
 // pile d'appels sur un fichier de plusieurs dizaines de Ko (peu probable ici,
 // une facture d'une page, mais autant rester correct dans tous les cas).
+function daysLabel(daysLeft) {
+  if (daysLeft <= 1) return "demain";
+  return `dans ${daysLeft} jours`;
+}
+
+// Relance au client : sa galerie expire bientôt et il n'a pas encore validé
+// sa sélection. Fonction pure, testée sans réseau.
+export function buildClientReminderEmail({ studioName, galleryTitle, clientName, daysLeft, selectedCount, galleryUrl }) {
+  const when = daysLabel(daysLeft);
+  const subject = `Votre galerie « ${galleryTitle} » se ferme ${when}`;
+  const selectionLine = selectedCount > 0
+    ? `Vous avez déjà ${selectedCount} coup${selectedCount > 1 ? "s" : ""} de cœur — il ne reste qu'à confirmer votre choix avec le bouton « Valider ma sélection » en haut de la galerie.`
+    : "Vous n'avez pas encore choisi de photos : prenez un moment pour les parcourir et cocher vos coups de cœur, puis confirmez avec le bouton « Valider ma sélection ».";
+  const bodyHtml =
+    eyebrow(studioName || "Votre galerie") +
+    heading(`Votre galerie se ferme ${escapeHtml(when)}`) +
+    paragraph(`${clientName ? escapeHtml(clientName) + ", v" : "V"}os photos de « <strong>${escapeHtml(galleryTitle)}</strong> » restent visibles ${escapeHtml(when)}.`) +
+    paragraph(escapeHtml(selectionLine)) +
+    (galleryUrl ? emailButton(galleryUrl, "Revoir ma galerie") : "") +
+    paragraph("Vous recevez ce message parce qu'une sélection est attendue sur cette galerie. Une fois validée, plus aucune relance ne vous sera envoyée.", { small: true });
+  const text = [
+    `Votre galerie « ${galleryTitle} » se ferme ${when}.`,
+    "",
+    selectionLine,
+    galleryUrl ? `\nRevoir ma galerie : ${galleryUrl}` : "",
+  ].join("\n");
+  return { subject, html: emailShell({ preheader: subject, bodyHtml }), text };
+}
+
+// Relance au photographe : la galerie expire dans deux jours et le client
+// n'a toujours pas validé — de quoi le contacter directement.
+export function buildPhotographerReminderEmail({ galleryTitle, clientName, daysLeft, selectedCount, adminUrl }) {
+  const when = daysLabel(daysLeft);
+  const subject = `Sélection toujours en attente sur « ${galleryTitle} » (expire ${when})`;
+  const bodyHtml =
+    eyebrow("Relance automatique") +
+    heading(`« ${escapeHtml(galleryTitle)} » expire ${escapeHtml(when)}`) +
+    paragraph(`${clientName ? escapeHtml(clientName) : "Votre client"} n'a pas encore validé sa sélection (${selectedCount} coup${selectedCount > 1 ? "s" : ""} de cœur pour l'instant). Les relances automatiques lui ont été envoyées ; un mot de votre part fera peut-être la différence.`) +
+    (adminUrl ? emailButton(adminUrl, "Ouvrir le tableau de bord") : "") +
+    paragraph("Vous pouvez désactiver ces relances dans Paramètres.", { small: true });
+  const text = `« ${galleryTitle} » expire ${when} et ${clientName || "votre client"} n'a pas encore validé sa sélection (${selectedCount} coup(s) de cœur).${adminUrl ? `\n\nTableau de bord : ${adminUrl}` : ""}`;
+  return { subject, html: emailShell({ preheader: subject, bodyHtml }), text };
+}
+
+// Le client vient de cliquer « Valider ma sélection » : le photographe est
+// prévenu tout de suite, avec le compte des photos et le supplément dû.
+export function buildSelectionValidatedEmail({ galleryTitle, clientName, selectedCount, dueExtraCount, dueTotalCents, adminUrl }) {
+  const subject = `Sélection validée sur « ${galleryTitle} »`;
+  const dueLine = dueExtraCount > 0
+    ? `Supplément à régler : ${dueExtraCount} photo${dueExtraCount > 1 ? "s" : ""} au-delà du forfait, soit ${formatEuros(dueTotalCents)}.`
+    : "Aucun supplément à régler.";
+  const bodyHtml =
+    eyebrow("Sélection validée") +
+    heading(`${escapeHtml(clientName || "Votre client")} a validé sa sélection`) +
+    paragraph(`Galerie « <strong>${escapeHtml(galleryTitle)}</strong> » : <strong>${selectedCount} photo${selectedCount > 1 ? "s" : ""}</strong> choisie${selectedCount > 1 ? "s" : ""}.`) +
+    paragraph(escapeHtml(dueLine)) +
+    (adminUrl ? emailButton(adminUrl, "Voir la sélection") : "");
+  const text = `${clientName || "Votre client"} a validé sa sélection sur « ${galleryTitle} » : ${selectedCount} photo(s). ${dueLine}${adminUrl ? `\n\nTableau de bord : ${adminUrl}` : ""}`;
+  return { subject, html: emailShell({ preheader: subject, bodyHtml }), text };
+}
+
 function bytesToBase64(bytes) {
   let binary = "";
   const chunkSize = 0x8000;
@@ -302,4 +363,16 @@ export async function sendPasswordResetEmail(env, params) {
 
 export async function sendEmailChangeConfirmation(env, params) {
   await sendEmail(env, { to: params.to, ...buildEmailChangeConfirmationEmail(params) });
+}
+
+export async function sendClientReminder(env, params) {
+  await sendEmail(env, { to: params.to, ...buildClientReminderEmail(params) });
+}
+
+export async function sendPhotographerReminder(env, params) {
+  await sendEmail(env, { to: params.to, ...buildPhotographerReminderEmail(params) });
+}
+
+export async function sendSelectionValidated(env, params) {
+  await sendEmail(env, { to: params.to, ...buildSelectionValidatedEmail(params) });
 }

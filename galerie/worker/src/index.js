@@ -14,6 +14,8 @@ import { handleViewer } from "./viewer.js";
 import { handleAuth } from "./authPhotographer.js";
 import { handleOwner } from "./owner.js";
 import { handleStripeWebhook } from "./billing.js";
+import { runReminders } from "./reminders.js";
+import { studioSubdomainOf, handleStudioHost } from "./studio.js";
 import { json, fail } from "./http.js";
 
 function corsHeaders(request, env) {
@@ -54,6 +56,18 @@ export default {
       const url = new URL(request.url);
       const path = url.pathname.replace(/\/+$/, "") || "/";
 
+      // Adresse d'un studio (julie.holypixx.com) : la page de galerie et
+      // l'API y sont servies sur une même origine (voir studio.js). Le site
+      // principal et les noms réservés passent tels quels à l'hébergement
+      // habituel — ce Worker ne s'interpose jamais sur eux.
+      const studio = studioSubdomainOf(url.hostname, env);
+      if (studio) {
+        const handled = await handleStudioHost(request, env, url, studio, path);
+        if (handled) return handled;
+      } else if (env.STUDIO_DOMAIN && (url.hostname === env.STUDIO_DOMAIN || url.hostname.endsWith("." + env.STUDIO_DOMAIN))) {
+        return fetch(request);
+      }
+
       if (path === "/" || path === "/health") {
         response = json({ ok: true, service: "galerie-protegee" });
       } else if (path.startsWith("/api/auth/")) {
@@ -83,5 +97,14 @@ export default {
     headers.set("x-content-type-options", "nosniff");
     headers.set("referrer-policy", "no-referrer");
     return new Response(response.body, { status: response.status, headers });
+  },
+
+  // Déclencheur planifié (wrangler.toml, [triggers]) : relances automatiques.
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(
+      runReminders(env).catch((err) => {
+        console.error("Relances : échec de la passe planifiée :", err && err.stack ? err.stack : err);
+      })
+    );
   },
 };

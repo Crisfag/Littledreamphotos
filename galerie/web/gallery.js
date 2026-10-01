@@ -43,6 +43,8 @@
   var el = {};
   var heartButtons = {}; // photoId -> bouton cœur de la grille, pour une mise à jour directe
   var commentBadges = {}; // photoId -> pastille « a un commentaire » de la grille
+  var tagDots = {}; // photoId -> pastille de code couleur de la grille
+  var markBadges = {}; // photoId -> compteur de repères de la grille
   var COMMENT_DEBOUNCE_MS = 700;
   var commentTimer = null;
 
@@ -212,6 +214,63 @@
       el.filterEmpty.hidden = !(state.filterSelected && count === 0);
     }
     if (el.toolbar) el.toolbar.hidden = state.photos.length === 0;
+    updateValidateUI(count);
+  }
+
+  /* ---------- « Valider ma sélection » ---------- */
+
+  function formatDateTime(ts) {
+    return new Date(ts * 1000).toLocaleString("fr-FR", { dateStyle: "long", timeStyle: "short" });
+  }
+
+  // Le bouton reste disponible après validation (le client peut changer
+  // d'avis et revalider) ; le statut rappelle la dernière validation.
+  function updateValidateUI(count) {
+    if (!el.validateBlock) return;
+    el.validateBlock.hidden = state.photos.length === 0;
+    var doneAt = state.gallery && state.gallery.selectionDoneAt;
+    el.validate.disabled = count === 0 || state.validating;
+    el.validateBlock.classList.toggle("gp-validate-done", Boolean(doneAt));
+    if (doneAt) {
+      el.validate.textContent = "Valider à nouveau ma sélection";
+      el.validateStatus.textContent = "Sélection validée le " + formatDateTime(doneAt) + ". Vous pouvez encore la modifier et la valider à nouveau.";
+    } else {
+      el.validate.textContent = "Valider ma sélection";
+      el.validateStatus.textContent = count === 0
+        ? "Cochez d'abord vos coups de cœur."
+        : "Quand votre choix est fait, prévenez-moi d'un clic.";
+    }
+  }
+
+  function validateSelection() {
+    if (!state.gallery || state.validating) return;
+    state.validating = true;
+    updateValidateUI(selectedCount());
+    el.validateStatus.textContent = "Envoi…";
+    fetch(apiUrl("/validate"), {
+      method: "POST",
+      headers: Object.assign({ "content-type": "application/json" }, authHeaders()),
+      body: "{}",
+    })
+      .then(function (response) {
+        if (response.status === 401) throw new Error("session");
+        if (!response.ok) throw new Error("échec");
+        return response.json();
+      })
+      .then(function (data) {
+        state.gallery.selectionDoneAt = data.selectionDoneAt;
+        state.validating = false;
+        updateValidateUI(selectedCount());
+      })
+      .catch(function (err) {
+        state.validating = false;
+        updateValidateUI(selectedCount());
+        if (err.message === "session") {
+          sessionLost("Votre session a expiré. Saisissez à nouveau le mot de passe.");
+        } else {
+          el.validateStatus.textContent = "Impossible d'envoyer la validation pour l'instant. Réessayez dans un instant.";
+        }
+      });
   }
 
   /**
@@ -356,6 +415,317 @@
     return document.getElementById(id);
   }
 
+  /* ---------- Codes couleur (validée / à retoucher / à écarter) ---------- */
+
+  var TAG_LABELS = { green: "Validée", yellow: "À retoucher", red: "À écarter" };
+
+  // Répercute le code couleur d'une photo sur la pastille de la grille et
+  // sur les trois boutons de la visionneuse (si c'est la photo affichée).
+  function reflectTag(photo) {
+    var dot = tagDots[photo.id];
+    if (dot) {
+      dot.hidden = !photo.tag;
+      dot.className = "gp-tag-dot" + (photo.tag ? " gp-tag-dot-" + photo.tag : "");
+      dot.title = photo.tag ? TAG_LABELS[photo.tag] || "" : "";
+    }
+    if (el.tagButtons && currentViewerPhoto() === photo) {
+      el.tagButtons.forEach(function (button) {
+        button.setAttribute("aria-pressed", button.getAttribute("data-tag") === photo.tag ? "true" : "false");
+      });
+    }
+  }
+
+  // Cliquer sur la couleur déjà active la retire : trois boutons, pas de
+  // quatrième « aucun » à expliquer.
+  function setTag(photo, tag) {
+    var previous = photo.tag || "";
+    var next = previous === tag ? "" : tag;
+    photo.tag = next;
+    reflectTag(photo);
+
+    fetch(apiUrl("/tag"), {
+      method: "POST",
+      headers: Object.assign({ "content-type": "application/json" }, authHeaders()),
+      body: JSON.stringify({ photoId: photo.id, tag: next }),
+    })
+      .then(function (response) {
+        if (response.status === 401) throw new Error("session");
+        if (!response.ok) throw new Error("échec");
+      })
+      .catch(function (err) {
+        photo.tag = previous;
+        reflectTag(photo);
+        if (err.message === "session") {
+          sessionLost("Votre session a expiré. Saisissez à nouveau le mot de passe.");
+        }
+      });
+  }
+
+  /* ---------- Repères annotés (un point + une note sur la photo) ---------- */
+
+  var MAX_MARKS = 12;
+  var pinState = { placing: false, editing: -1, isNew: false };
+
+  function marksOf(photo) {
+    if (!photo.marks) photo.marks = [];
+    return photo.marks;
+  }
+
+  function reflectMarks(photo) {
+    var badge = markBadges[photo.id];
+    var count = marksOf(photo).length;
+    if (badge) {
+      badge.hidden = count === 0;
+      badge.textContent = String(count);
+    }
+    if (currentViewerPhoto() === photo) renderPins(photo);
+  }
+
+  // Le calque des repères est calé sur la boîte réelle du canvas : celle-ci
+  // dépend de la fenêtre (largeur ou hauteur limitante), donc on la relit
+  // plutôt que de la deviner en CSS.
+  function syncPinsLayer() {
+    if (!el.pins || !el.viewerCanvas || !el.viewerFrame) return;
+    var canvas = el.viewerCanvas;
+    el.pins.style.left = canvas.offsetLeft + "px";
+    el.pins.style.top = canvas.offsetTop + "px";
+    el.pins.style.width = canvas.offsetWidth + "px";
+    el.pins.style.height = canvas.offsetHeight + "px";
+  }
+
+  function renderPins(photo) {
+    if (!el.pins) return;
+    el.pins.innerHTML = "";
+    marksOf(photo).forEach(function (mark, index) {
+      var pin = document.createElement("button");
+      pin.type = "button";
+      pin.className = "gp-pin" + (pinState.editing === index ? " gp-pin-active" : "");
+      pin.style.left = (mark.x * 100).toFixed(2) + "%";
+      pin.style.top = (mark.y * 100).toFixed(2) + "%";
+      pin.setAttribute("aria-label", "Repère " + (index + 1) + (mark.note ? " : " + mark.note : ""));
+      pin.title = mark.note || "Repère " + (index + 1);
+      var label = document.createElement("span");
+      label.textContent = String(index + 1);
+      pin.appendChild(label);
+      pin.addEventListener("click", function (event) {
+        event.stopPropagation();
+        openPinEditor(index, false);
+      });
+      el.pins.appendChild(pin);
+    });
+    syncPinsLayer();
+  }
+
+  function setPlacing(on) {
+    pinState.placing = on;
+    if (el.pinToggle) el.pinToggle.setAttribute("aria-pressed", on ? "true" : "false");
+    if (el.pins) el.pins.classList.toggle("gp-pins-placing", on);
+    if (el.pinHint) el.pinHint.hidden = !on;
+  }
+
+  function openPinEditor(index, isNew) {
+    var photo = currentViewerPhoto();
+    if (!photo || !el.pinEditor) return;
+    pinState.editing = index;
+    pinState.isNew = isNew;
+    var mark = marksOf(photo)[index];
+    el.pinEditorTitle.textContent = "Repère " + (index + 1) + " — que faut-il signaler ici ?";
+    el.pinNote.value = mark.note || "";
+    el.pinEditor.hidden = false;
+    if (el.commentPanel) el.commentPanel.hidden = true;
+    if (el.commentToggle) el.commentToggle.setAttribute("aria-expanded", "false");
+    renderPins(photo);
+    el.pinNote.focus();
+  }
+
+  function closePinEditor() {
+    pinState.editing = -1;
+    pinState.isNew = false;
+    if (el.pinEditor) el.pinEditor.hidden = true;
+    var photo = currentViewerPhoto();
+    if (photo) renderPins(photo);
+  }
+
+  function saveMarks(photo, previous) {
+    reflectMarks(photo);
+    return fetch(apiUrl("/marks"), {
+      method: "POST",
+      headers: Object.assign({ "content-type": "application/json" }, authHeaders()),
+      body: JSON.stringify({ photoId: photo.id, marks: marksOf(photo) }),
+    })
+      .then(function (response) {
+        if (response.status === 401) throw new Error("session");
+        if (!response.ok) throw new Error("échec");
+        return response.json();
+      })
+      .then(function (data) {
+        if (data && Array.isArray(data.marks)) {
+          photo.marks = data.marks;
+          reflectMarks(photo);
+        }
+      })
+      .catch(function (err) {
+        photo.marks = previous;
+        reflectMarks(photo);
+        if (err.message === "session") {
+          sessionLost("Votre session a expiré. Saisissez à nouveau le mot de passe.");
+        }
+      });
+  }
+
+  function placePin(event) {
+    var photo = currentViewerPhoto();
+    if (!photo || !pinState.placing || !el.pins) return;
+    if (marksOf(photo).length >= MAX_MARKS) {
+      setPlacing(false);
+      return;
+    }
+    var rect = el.pins.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    var x = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
+    var y = Math.min(1, Math.max(0, (event.clientY - rect.top) / rect.height));
+    marksOf(photo).push({ x: x, y: y, note: "" });
+    setPlacing(false);
+    openPinEditor(marksOf(photo).length - 1, true);
+  }
+
+  function wirePins() {
+    if (!el.pinToggle || !el.pins) return;
+    el.pinToggle.addEventListener("click", function () {
+      var photo = currentViewerPhoto();
+      if (!photo) return;
+      if (!pinState.placing && pinState.editing !== -1) cancelPinEdit();
+      setPlacing(!pinState.placing);
+    });
+    el.pins.addEventListener("click", placePin);
+    el.pinSave.addEventListener("click", function () {
+      var photo = currentViewerPhoto();
+      if (!photo || pinState.editing === -1) return;
+      var previous = marksOf(photo).slice();
+      marksOf(photo)[pinState.editing].note = el.pinNote.value.trim().slice(0, 200);
+      closePinEditor();
+      saveMarks(photo, previous);
+    });
+    el.pinDelete.addEventListener("click", function () {
+      var photo = currentViewerPhoto();
+      if (!photo || pinState.editing === -1) return;
+      var previous = marksOf(photo).slice();
+      var wasNew = pinState.isNew;
+      marksOf(photo).splice(pinState.editing, 1);
+      closePinEditor();
+      if (wasNew) reflectMarks(photo); // jamais envoyé au serveur : rien à retirer
+      else saveMarks(photo, previous);
+    });
+    el.pinCancel.addEventListener("click", cancelPinEdit);
+    el.pinNote.addEventListener("keydown", function (event) {
+      if (event.key === "Escape") {
+        event.stopPropagation();
+        cancelPinEdit();
+      }
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        el.pinSave.click();
+      }
+    });
+    window.addEventListener("resize", syncPinsLayer);
+  }
+
+  // Annuler sur un repère tout juste posé le retire ; sur un repère
+  // existant, on referme simplement sans toucher à sa note.
+  function cancelPinEdit() {
+    var photo = currentViewerPhoto();
+    if (photo && pinState.isNew && pinState.editing !== -1) {
+      marksOf(photo).splice(pinState.editing, 1);
+      closePinEditor();
+      reflectMarks(photo);
+      return;
+    }
+    closePinEditor();
+  }
+
+  /* ---------- Musique d'ambiance ---------- */
+  // Un décor choisi par le photographe, jamais imposé : lancée d'elle-même
+  // seulement en mise en page « défilement » (le rendu éditorial, pensé pour
+  // ça), proposée en pause ailleurs — et le client garde toujours la main.
+  // Les navigateurs peuvent refuser un démarrage automatique sans geste
+  // récent ; dans ce cas le bouton reste simplement sur « Lancer la musique ».
+
+  var music = { audio: null };
+
+  function musicPrefKey() {
+    return "gp-music-" + state.slug;
+  }
+
+  function rememberMusicPref(value) {
+    try {
+      sessionStorage.setItem(musicPrefKey(), value);
+    } catch (err) {
+      /* stockage indisponible : sans conséquence */
+    }
+  }
+
+  function readMusicPref() {
+    try {
+      return sessionStorage.getItem(musicPrefKey());
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function setMusicUI(playing) {
+    if (!el.music) return;
+    el.music.setAttribute("aria-pressed", playing ? "true" : "false");
+    if (el.musicLabel) el.musicLabel.textContent = playing ? "Musique en lecture" : "Lancer la musique";
+  }
+
+  function startMusic() {
+    if (!music.audio) return Promise.resolve(false);
+    return music.audio
+      .play()
+      .then(function () {
+        setMusicUI(true);
+        rememberMusicPref("on");
+        return true;
+      })
+      .catch(function () {
+        setMusicUI(false);
+        return false;
+      });
+  }
+
+  function stopMusic(remember) {
+    if (!music.audio) return;
+    music.audio.pause();
+    setMusicUI(false);
+    if (remember) rememberMusicPref("off");
+  }
+
+  function setupMusic() {
+    if (!el.music) return;
+    if (!(state.gallery && state.gallery.hasMusic)) {
+      el.music.hidden = true;
+      return;
+    }
+    if (!music.audio) {
+      music.audio = new Audio();
+      music.audio.loop = true;
+      music.audio.preload = "auto";
+      music.audio.addEventListener("pause", function () {
+        setMusicUI(false);
+      });
+      music.audio.addEventListener("play", function () {
+        setMusicUI(true);
+      });
+    }
+    music.audio.src = apiUrl("/music");
+    el.music.hidden = false;
+    setMusicUI(false);
+
+    var pref = readMusicPref();
+    var autoplay = state.gallery.layout === "defilement" && pref !== "off";
+    if (pref === "on" || autoplay) startMusic();
+  }
+
   /* ---------- Réseau ---------- */
 
   function apiUrl(path) {
@@ -380,6 +750,7 @@
   function sessionLost(message) {
     state.token = null;
     state.drawn = {};
+    stopMusic(false);
     closeViewer();
     show(el.login);
     hide(el.gallery);
@@ -489,6 +860,8 @@
     el.grid.innerHTML = "";
     heartButtons = {};
     commentBadges = {};
+    tagDots = {};
+    markBadges = {};
     // La grille contient toujours toutes les photos ; le filtre « ma
     // sélection » les masque par CSS (.gp-grid-filtered), pour ne jamais
     // retélécharger de tuile au seul geste de cocher un cœur.
@@ -534,6 +907,19 @@
       figure.appendChild(commentBadge);
       commentBadges[photo.id] = commentBadge;
 
+      var tagDot = document.createElement("span");
+      tagDot.setAttribute("aria-hidden", "true");
+      figure.appendChild(tagDot);
+      tagDots[photo.id] = tagDot;
+      reflectTag(photo);
+
+      var markBadge = document.createElement("span");
+      markBadge.className = "gp-mark-badge";
+      markBadge.setAttribute("aria-hidden", "true");
+      figure.appendChild(markBadge);
+      markBadges[photo.id] = markBadge;
+      reflectMarks(photo);
+
       el.grid.appendChild(figure);
       paint(canvas, photo, LEVEL_PREVIEW);
     });
@@ -556,6 +942,7 @@
     var list = state.viewerList;
     if (!list || index < 0 || index >= list.length) return;
     flushPendingComment(); // sauvegarde ce qui était en cours de frappe sur la photo précédente
+    if (pinState.isNew) cancelPinEdit();
     state.current = index;
     var photo = list[index];
 
@@ -568,22 +955,34 @@
     if (el.commentInput) el.commentInput.value = photo.comment || "";
     setCommentStatus("");
     reflectComment(photo);
+    closePinEditor();
+    setPlacing(false);
     el.closeBtn.focus();
 
     var canvas = el.viewerCanvas;
     canvas.style.aspectRatio = photo.width + " / " + photo.height;
     paint(canvas, photo, LEVEL_FULL);
+    reflectTag(photo);
+    renderPins(photo);
+    // Une seconde passe une fois la mise en page stabilisée : la boîte du
+    // canvas peut encore bouger juste après le changement de dimensions.
+    requestAnimationFrame(syncPinsLayer);
     logEvent("view", photo.id);
   }
 
   function closeViewer() {
     flushPendingComment();
+    if (pinState.isNew) cancelPinEdit(); // un repère tout juste posé, jamais enregistré, ne reste pas
     el.viewer.hidden = true;
     document.body.classList.remove("gp-locked");
     state.current = -1;
     state.viewerList = null;
     if (el.commentPanel) el.commentPanel.hidden = true;
     if (el.commentToggle) el.commentToggle.setAttribute("aria-expanded", "false");
+    if (el.pinEditor) el.pinEditor.hidden = true;
+    pinState.editing = -1;
+    pinState.isNew = false;
+    setPlacing(false);
   }
 
   function step(delta) {
@@ -792,6 +1191,10 @@
         state.photos = result.data.photos;
 
         el.title.textContent = state.gallery.title;
+        if (state.gallery.studioName) {
+          var eyebrows = document.querySelectorAll("#gp-gallery .gp-eyebrow");
+          for (var e = 0; e < eyebrows.length; e++) eyebrows[e].textContent = state.gallery.studioName;
+        }
         el.subtitle.textContent = state.gallery.clientName
           ? "Galerie de " + state.gallery.clientName
           : "";
@@ -811,6 +1214,7 @@
         } else {
           buildGrid();
         }
+        setupMusic();
 
         // La session expire : on prévient avant que les tuiles cessent d'arriver.
         setTimeout(function () {
@@ -889,11 +1293,27 @@
       payError: $("gp-pay-error"),
       invoiceButton: $("gp-download-invoice"),
       filterCheckbox: $("gp-filter-selected"),
+      validateBlock: $("gp-validate-block"),
+      validate: $("gp-validate"),
+      validateStatus: $("gp-validate-status"),
       filterEmpty: $("gp-filter-empty"),
       commentToggle: $("gp-comment-toggle"),
       commentPanel: $("gp-comment-panel"),
       commentInput: $("gp-comment-input"),
       commentStatus: $("gp-comment-status"),
+      music: $("gp-music"),
+      musicLabel: $("gp-music-label"),
+      viewerFrame: $("gp-viewer-frame"),
+      pins: $("gp-pins"),
+      pinToggle: $("gp-pin-toggle"),
+      pinHint: $("gp-pin-hint"),
+      pinEditor: $("gp-pin-editor"),
+      pinEditorTitle: $("gp-pin-editor-title"),
+      pinNote: $("gp-pin-note"),
+      pinSave: $("gp-pin-save"),
+      pinDelete: $("gp-pin-delete"),
+      pinCancel: $("gp-pin-cancel"),
+      tagButtons: Array.prototype.slice.call(document.querySelectorAll(".gp-tag[data-tag]")),
     };
 
     state.slug = readSlug();
@@ -943,10 +1363,26 @@
     if (el.invoiceButton) {
       el.invoiceButton.addEventListener("click", downloadInvoice);
     }
+    if (el.validate) {
+      el.validate.addEventListener("click", validateSelection);
+    }
     if (el.commentToggle) {
       el.commentToggle.addEventListener("click", toggleCommentPanel);
     }
+    if (el.music) {
+      el.music.addEventListener("click", function () {
+        if (music.audio && !music.audio.paused) stopMusic(true);
+        else startMusic();
+      });
+    }
     wireCommentInput();
+    el.tagButtons.forEach(function (button) {
+      button.addEventListener("click", function () {
+        var photo = currentViewerPhoto();
+        if (photo) setTag(photo, button.getAttribute("data-tag"));
+      });
+    });
+    wirePins();
 
     installGuards();
     el.password.focus();

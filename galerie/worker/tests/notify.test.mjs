@@ -3,7 +3,10 @@
 //
 //   node tests/notify.test.mjs
 
-import { buildCaptureAlertEmail, buildPasswordResetEmail, buildEmailChangeConfirmationEmail } from "../src/notify.js";
+import {
+  buildCaptureAlertEmail, buildPasswordResetEmail, buildEmailChangeConfirmationEmail,
+  buildClientReminderEmail, buildPhotographerReminderEmail, buildSelectionValidatedEmail,
+} from "../src/notify.js";
 
 const checks = [];
 function check(label, ok, detail) {
@@ -100,6 +103,51 @@ const hostileEmailChange = buildEmailChangeConfirmationEmail({
   ts: 1_700_000_000,
 });
 check("le nom du studio est échappé dans l'e-mail de confirmation d'adresse", !hostileEmailChange.html.includes("<img"));
+
+/* ---------- Relances et sélection validée ---------- */
+
+const clientReminder = buildClientReminderEmail({
+  studioName: "Studio Test", galleryTitle: "Séance Bambin", clientName: "Julie Peters",
+  daysLeft: 7, selectedCount: 3, galleryUrl: "https://www.holypixx.com/galerie.html?g=seance-bambin",
+});
+check("la relance client annonce l'échéance en jours et nomme la galerie",
+      clientReminder.subject.includes("dans 7 jours") && clientReminder.subject.includes("Séance Bambin"));
+check("la relance client rappelle le nombre de coups de cœur déjà posés et le bouton à cliquer",
+      clientReminder.html.includes("3 coups de cœur") && clientReminder.html.includes("Valider ma sélection"));
+check("la relance client contient le lien vers la galerie (HTML et texte)",
+      clientReminder.html.includes("galerie.html?g=seance-bambin") && clientReminder.text.includes("galerie.html?g=seance-bambin"));
+
+const clientReminderTomorrow = buildClientReminderEmail({
+  studioName: "Studio Test", galleryTitle: "Séance Bambin", clientName: "", daysLeft: 1, selectedCount: 0, galleryUrl: "",
+});
+check("à J-1 la relance dit « demain » et, sans coup de cœur, invite à choisir",
+      clientReminderTomorrow.subject.includes("demain") && clientReminderTomorrow.html.includes("pas encore choisi"));
+check("sans adresse publique configurée, aucun bouton n'est inséré plutôt qu'un lien cassé",
+      !clientReminderTomorrow.html.includes("href="));
+
+const hostileReminder = buildClientReminderEmail({
+  studioName: "<script>alert(1)</script>", galleryTitle: "<b>x</b>", clientName: "<i>y</i>", daysLeft: 2, selectedCount: 1, galleryUrl: "",
+});
+check("nom du studio, titre et nom du client sont échappés dans la relance client",
+      !hostileReminder.html.includes("<script>") && !hostileReminder.html.includes("<b>") && !hostileReminder.html.includes("<i>"));
+
+const photographerReminder = buildPhotographerReminderEmail({
+  galleryTitle: "Séance Bambin", clientName: "Julie Peters", daysLeft: 2, selectedCount: 4, adminUrl: "https://holypixx-admin.onrender.com",
+});
+check("la relance photographe nomme le client, l'échéance et le tableau de bord",
+      photographerReminder.subject.includes("Séance Bambin") && photographerReminder.html.includes("Julie Peters") &&
+      photographerReminder.html.includes("dans 2 jours") && photographerReminder.html.includes("holypixx-admin.onrender.com"));
+
+const validated = buildSelectionValidatedEmail({
+  galleryTitle: "Séance Bambin", clientName: "Julie Peters", selectedCount: 12, dueExtraCount: 2, dueTotalCents: 3000, adminUrl: "",
+});
+check("l'e-mail de sélection validée donne le nombre de photos et le supplément dû",
+      validated.subject.includes("Sélection validée") && validated.html.includes("12 photos") && validated.html.includes("2 photos au-delà") && validated.html.includes("30,00"));
+const validatedNoDue = buildSelectionValidatedEmail({
+  galleryTitle: "Séance Bambin", clientName: "", selectedCount: 1, dueExtraCount: 0, dueTotalCents: 0, adminUrl: "",
+});
+check("sans supplément, l'e-mail le dit explicitement et s'adresse à « votre client »",
+      validatedNoDue.html.includes("Aucun supplément") && validatedNoDue.html.includes("Votre client"));
 
 const failed = checks.filter((c) => !c.ok);
 console.log(failed.length ? `\n${failed.length} vérification(s) en échec.` : `\n${checks.length} vérifications, toutes passent.`);

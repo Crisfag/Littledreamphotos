@@ -11,6 +11,7 @@
 import { json, fail } from "./http.js";
 import { authenticatePhotographer } from "./authPhotographer.js";
 import { supplementFor } from "./admin.js";
+import { runReminders } from "./reminders.js";
 
 async function requireOwner(env, photographerId) {
   if (!env.OWNER_EMAIL) return null;
@@ -120,6 +121,13 @@ export async function handleOwner(request, env, path) {
   }
   if (action === "stats" && parts.length === 3 && request.method === "GET") {
     return platformStats(env, photographerId);
+  }
+  // Lance la passe de relances tout de suite, sans attendre le déclencheur
+  // quotidien — même passe, mêmes garde-fous (jamais deux fois la même).
+  if (action === "reminders" && parts[3] === "run" && parts.length === 4 && request.method === "POST") {
+    const owner = await requireOwner(env, photographerId);
+    if (!owner) return fail(403, "Accès réservé");
+    return json(await runReminders(env));
   }
   return fail(404, "Route inconnue");
 }

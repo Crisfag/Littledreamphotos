@@ -38,8 +38,20 @@ CREATE TABLE IF NOT EXISTS photographers (
   -- nom de studio ci-dessus (voir admin-server.mjs, brandFor) : pas besoin
   -- d'un réglage séparé qui ferait doublon.
   default_layout          TEXT NOT NULL DEFAULT 'grille',
+  -- Relances automatiques (client à J-7 et J-2 de l'expiration, photographe
+  -- à J-2) tant que la sélection n'est pas validée. 1 = actives (défaut).
+  reminders_enabled INTEGER NOT NULL DEFAULT 1,
+  -- Sous-domaine du studio (ex. « julie » pour julie.holypixx.com) : les
+  -- liens de galerie envoyés aux clients portent alors l'adresse du studio.
+  -- Vide = pas de sous-domaine (liens sur le site principal). Unique entre
+  -- comptes quand renseigné (voir l'index partiel ci-dessous) ; les noms
+  -- réservés (www, api, admin…) sont refusés côté Worker (studio.js).
+  subdomain      TEXT NOT NULL DEFAULT '',
   created_at     INTEGER NOT NULL
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_photographers_subdomain
+  ON photographers(subdomain) WHERE subdomain != '';
 
 CREATE TABLE IF NOT EXISTS galleries (
   id                     TEXT PRIMARY KEY,
@@ -74,6 +86,14 @@ CREATE TABLE IF NOT EXISTS galleries (
   -- ligne le jour où il sera branché). 0 tant que le photographe n'a rien
   -- réglé.
   extra_photo_price_cents INTEGER NOT NULL DEFAULT 0,
+  -- Musique d'ambiance importée par le photographe (nom du fichier d'origine,
+  -- juste pour l'affichage) ; vide = aucune. Le fichier lui-même vit dans R2
+  -- sous music/{id}.mp3. Jouée côté client en mise en page « défilement »,
+  -- proposée en pause dans les autres — jamais imposée.
+  music_name             TEXT NOT NULL DEFAULT '',
+  -- Moment où le client a cliqué « Valider ma sélection » (epoch secondes) ;
+  -- NULL tant qu'il ne l'a pas fait. Arrête les relances automatiques.
+  selection_done_at      INTEGER,
   created_at             INTEGER NOT NULL
 );
 
@@ -94,6 +114,8 @@ CREATE TABLE IF NOT EXISTS photos (
   selected_at  INTEGER,                     -- epoch secondes ; NULL = pas sélectionnée
   comment      TEXT NOT NULL DEFAULT '',    -- note laissée par le client sur cette photo
   comment_at   INTEGER,                     -- epoch secondes ; NULL = pas de commentaire
+  tag          TEXT NOT NULL DEFAULT '',    -- code couleur posé par le client : '' | green | yellow | red
+  marks        TEXT NOT NULL DEFAULT '[]',  -- repères annotés : JSON [{x, y, note}], x/y entre 0 et 1
   created_at   INTEGER NOT NULL
 );
 
@@ -102,6 +124,8 @@ CREATE TABLE IF NOT EXISTS photos (
 --   ALTER TABLE photos ADD COLUMN selected_at INTEGER;
 --   ALTER TABLE photos ADD COLUMN comment TEXT NOT NULL DEFAULT '';
 --   ALTER TABLE photos ADD COLUMN comment_at INTEGER;
+--   ALTER TABLE photos ADD COLUMN tag TEXT NOT NULL DEFAULT '';
+--   ALTER TABLE photos ADD COLUMN marks TEXT NOT NULL DEFAULT '[]';
 
 -- Migration vers les comptes photographes (bases créées avant cette
 -- fonctionnalité, où `galleries` n'a pas encore `photographer_id`) :
@@ -152,7 +176,7 @@ CREATE TABLE IF NOT EXISTS access_log (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
   gallery_id TEXT NOT NULL,
   viewer_id  TEXT NOT NULL DEFAULT '',
-  event      TEXT NOT NULL,   -- login, login_failed, view, select, deselect, comment, capture_suspected, blur, print
+  event      TEXT NOT NULL,   -- login, login_failed, view, select, deselect, comment, tag, mark, validate, capture_suspected, blur, print
   detail     TEXT NOT NULL DEFAULT '',
   -- Photo affichée au moment de l'évènement (capture_suspected, print,
   -- devtools) : permet d'alerter le photographe sur LA photo concernée,
@@ -344,3 +368,21 @@ CREATE INDEX IF NOT EXISTS idx_email_changes_photographer ON email_changes(photo
 -- Migration vers la page propriétaire (prénom/nom des comptes) — bases créées avant :
 --   ALTER TABLE photographers ADD COLUMN first_name TEXT NOT NULL DEFAULT '';
 --   ALTER TABLE photographers ADD COLUMN last_name TEXT NOT NULL DEFAULT '';
+
+-- Migration vers la musique d'ambiance (bases créées avant) :
+--   ALTER TABLE galleries ADD COLUMN music_name TEXT NOT NULL DEFAULT '';
+--   ALTER TABLE galleries ADD COLUMN selection_done_at INTEGER;
+--   ALTER TABLE photographers ADD COLUMN reminders_enabled INTEGER NOT NULL DEFAULT 1;
+--   ALTER TABLE photographers ADD COLUMN subdomain TEXT NOT NULL DEFAULT '';
+--   CREATE UNIQUE INDEX IF NOT EXISTS idx_photographers_subdomain ON photographers(subdomain) WHERE subdomain != '';
+
+-- Relances déjà envoyées, pour ne jamais relancer deux fois pour la même
+-- échéance : une ligne par galerie et par type (client_j7, client_j2,
+-- photographer_j2). Alimentée par le déclencheur planifié (voir
+-- worker/src/reminders.js) ; purgée avec la galerie.
+CREATE TABLE IF NOT EXISTS reminders_sent (
+  gallery_id TEXT NOT NULL REFERENCES galleries(id) ON DELETE CASCADE,
+  kind       TEXT NOT NULL,
+  sent_at    INTEGER NOT NULL,
+  PRIMARY KEY (gallery_id, kind)
+);

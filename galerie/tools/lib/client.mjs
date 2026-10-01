@@ -116,6 +116,14 @@ export class WorkerClient {
     return this.request("POST", "/api/admin/account/defaults", { defaultLayout });
   }
 
+  setSubdomain(subdomain) {
+    return this.request("POST", "/api/admin/account/subdomain", { subdomain });
+  }
+
+  setReminders(enabled) {
+    return this.request("POST", "/api/admin/account/reminders", { enabled: Boolean(enabled) });
+  }
+
   listInvoices() {
     return this.request("GET", "/api/admin/invoices");
   }
@@ -126,6 +134,10 @@ export class WorkerClient {
 
   ownerPhotographers() {
     return this.request("GET", "/api/owner/photographers");
+  }
+
+  ownerRunReminders() {
+    return this.request("POST", "/api/owner/reminders/run");
   }
 
   ownerStats() {
@@ -166,6 +178,19 @@ export class WorkerClient {
 
   setLayout(slug, layout) {
     return this.request("POST", `/api/admin/galleries/${encodeURIComponent(slug)}/layout`, { layout });
+  }
+
+  setMusic(slug, buffer, name) {
+    return this.request(
+      "PUT",
+      `/api/admin/galleries/${encodeURIComponent(slug)}/music?name=${encodeURIComponent(name)}`,
+      buffer,
+      true
+    );
+  }
+
+  deleteMusic(slug) {
+    return this.request("DELETE", `/api/admin/galleries/${encodeURIComponent(slug)}/music`);
   }
 
   setQuota(slug, includedPhotos, extraPhotoPrice) {

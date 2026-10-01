@@ -6,10 +6,11 @@
 // autre compte.
 
 import { json, fail } from "./http.js";
+import { parseMarks } from "./marks.js";
 import { hashPassword, randomBytes, b64url } from "./auth.js";
 import { authenticatePhotographer } from "./authPhotographer.js";
 import { connectStripe, refreshStripeStatus, setBillingProfile } from "./billing.js";
-import { updateStudioName, updateName, changePassword, requestEmailChange, updateDefaults } from "./account.js";
+import { updateStudioName, updateName, changePassword, requestEmailChange, updateDefaults, updateReminders, updateSubdomain } from "./account.js";
 
 function now() {
   return Math.floor(Date.now() / 1000);
@@ -157,7 +158,7 @@ async function createGallery(request, env, photographerId) {
 async function listGalleries(env, photographerId) {
   const { results } = await env.DB.prepare(
     `SELECT g.id, g.slug, g.title, g.client_name, g.expires_at, g.created_at,
-            g.included_photos, g.extra_photo_price_cents,
+            g.included_photos, g.extra_photo_price_cents, g.selection_done_at,
             (SELECT COUNT(*) FROM photos p WHERE p.gallery_id = g.id) AS photo_count,
             (SELECT COUNT(*) FROM photos p WHERE p.gallery_id = g.id AND p.selected = 1) AS selected_count,
             (SELECT COUNT(*) FROM photos p WHERE p.gallery_id = g.id AND p.comment != '') AS comment_count,
@@ -186,11 +187,15 @@ async function getGallery(env, photographerId, slug) {
 
   const { results: photos } = await env.DB.prepare(
     `SELECT id, position, width, height, cols, rows, preview_width, preview_height,
-            forensic_id, selected, selected_at, comment, comment_at, created_at
+            forensic_id, selected, selected_at, comment, comment_at, tag, marks, created_at
      FROM photos WHERE gallery_id = ? ORDER BY position ASC, created_at ASC`
   )
     .bind(gallery.id)
     .all();
+  for (const photo of photos) {
+    photo.tag = photo.tag || "";
+    photo.marks = parseMarks(photo.marks);
+  }
 
   const selectedCount = photos.filter((p) => p.selected).length;
 
@@ -222,6 +227,8 @@ async function getGallery(env, photographerId, slug) {
       login_background_type: gallery.login_background_type,
       login_background_color: gallery.login_background_color,
       layout: gallery.layout,
+      music_name: gallery.music_name || "",
+      selection_done_at: gallery.selection_done_at,
       included_photos: gallery.included_photos,
       extra_photo_price_cents: gallery.extra_photo_price_cents,
       selected_count: selectedCount,
@@ -323,6 +330,44 @@ async function resetBackground(env, photographerId, slug) {
   return json({ ok: true });
 }
 
+// Musique d'ambiance : un seul fichier par galerie, remplacé à chaque envoi.
+// L'appelant (admin-server.mjs) a déjà vérifié le type et la taille ; ici on
+// se contente de stocker, avec un garde-fou sur la taille annoncée pour ne
+// jamais remplir R2 avec un fichier aberrant.
+const MAX_MUSIC_BYTES = 15 * 1024 * 1024;
+
+async function setMusic(request, env, photographerId, slug) {
+  const gallery = await ownedGallery(env, photographerId, slug);
+  if (!gallery) return fail(404, "Galerie introuvable");
+
+  const declared = Number(request.headers.get("content-length") || 0);
+  if (declared > MAX_MUSIC_BYTES) return fail(413, "Fichier trop volumineux (15 Mo maximum)");
+
+  const url = new URL(request.url);
+  const name = (url.searchParams.get("name") || "musique.mp3").slice(0, 120);
+
+  await env.TILES.put(`music/${gallery.id}.mp3`, request.body, {
+    httpMetadata: { contentType: "audio/mpeg" },
+  });
+  await env.DB.prepare("UPDATE galleries SET music_name = ? WHERE id = ?")
+    .bind(name, gallery.id)
+    .run();
+
+  return json({ ok: true, musicName: name });
+}
+
+async function deleteMusic(env, photographerId, slug) {
+  const gallery = await ownedGallery(env, photographerId, slug);
+  if (!gallery) return fail(404, "Galerie introuvable");
+
+  await env.TILES.delete(`music/${gallery.id}.mp3`);
+  await env.DB.prepare("UPDATE galleries SET music_name = '' WHERE id = ?")
+    .bind(gallery.id)
+    .run();
+
+  return json({ ok: true });
+}
+
 // Mise en page proposée au client — purement visuel (voir schema.sql) :
 // n'affecte ni les tuiles servies, ni leur niveau de définition.
 async function setLayout(request, env, photographerId, slug) {
@@ -388,9 +433,10 @@ async function deleteGallery(env, photographerId, slug) {
     }
     cursor = listed.truncated ? listed.cursor : undefined;
   } while (cursor);
-  // Sous un préfixe distinct des tuiles (backgrounds/, pas ${gallery.id}/) :
-  // la boucle ci-dessus ne le voit pas, il faut l'effacer explicitement.
-  await env.TILES.delete(`backgrounds/${gallery.id}.jpg`);
+  // Sous des préfixes distincts des tuiles (backgrounds/, music/ — pas
+  // ${gallery.id}/) : la boucle ci-dessus ne les voit pas, il faut les
+  // effacer explicitement.
+  await env.TILES.delete([`backgrounds/${gallery.id}.jpg`, `music/${gallery.id}.mp3`]);
 
   await env.DB.batch([
     env.DB.prepare("DELETE FROM photos WHERE gallery_id = ?").bind(gallery.id),
@@ -653,6 +699,12 @@ export async function handleAdmin(request, env, ctx, path) {
     if (parts.length === 5 && parts[4] === "layout" && request.method === "POST") {
       return setLayout(request, env, photographerId, slug);
     }
+    if (parts.length === 5 && parts[4] === "music" && request.method === "PUT") {
+      return setMusic(request, env, photographerId, slug);
+    }
+    if (parts.length === 5 && parts[4] === "music" && request.method === "DELETE") {
+      return deleteMusic(env, photographerId, slug);
+    }
     if (parts.length === 5 && parts[4] === "quota" && request.method === "POST") {
       return setQuota(request, env, photographerId, slug);
     }
@@ -723,6 +775,12 @@ export async function handleAdmin(request, env, ctx, path) {
   }
   if (section === "account" && parts[3] === "email" && parts.length === 4 && request.method === "POST") {
     return requestEmailChange(request, env, ctx, photographerId);
+  }
+  if (section === "account" && parts[3] === "subdomain" && parts.length === 4 && request.method === "POST") {
+    return updateSubdomain(request, env, photographerId);
+  }
+  if (section === "account" && parts[3] === "reminders" && parts.length === 4 && request.method === "POST") {
+    return updateReminders(request, env, photographerId);
   }
   if (section === "account" && parts[3] === "defaults" && parts.length === 4 && request.method === "POST") {
     return updateDefaults(request, env, photographerId);

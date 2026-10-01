@@ -147,6 +147,30 @@ h1 { font-family: var(--serif); font-weight: 500; font-size: clamp(1.9rem, 4vw, 
   color: var(--rose);
 }
 
+/* ---------- Musique d'ambiance ---------- */
+
+.gp-music {
+  display: inline-flex;
+  align-items: center;
+  gap: .45rem;
+  margin-top: 1.1rem;
+  font-family: var(--sans);
+  font-size: .78rem;
+  letter-spacing: .08em;
+  color: var(--rose-deep);
+  background: transparent;
+  border: 1px solid var(--rose);
+  border-radius: 999px;
+  padding: .45rem 1rem;
+  cursor: pointer;
+  transition: background .2s var(--ease), color .2s var(--ease), transform .2s var(--ease);
+}
+.gp-music:hover { background: var(--cream); transform: translateY(-1px); }
+.gp-music[aria-pressed="true"] { background: var(--rose); border-color: var(--rose); color: #fff; }
+.gp-music-icon { font-size: 1rem; line-height: 1; }
+@keyframes gp-music-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.25); } }
+.gp-music[aria-pressed="true"] .gp-music-icon { animation: gp-music-pulse 1.6s var(--ease) infinite; }
+
 .gp-notice {
   max-width: 760px;
   margin: 0 auto 2.5rem;
@@ -209,6 +233,26 @@ h1 { font-family: var(--serif); font-weight: 500; font-size: clamp(1.9rem, 4vw, 
 }
 .gp-invoice-btn:hover:not(:disabled) { background: var(--cream); transform: translateY(-1px); }
 .gp-invoice-btn:disabled { opacity: .6; cursor: default; }
+
+/* « Valider ma sélection » : le client signale que son choix est fait. */
+.gp-validate { margin-top: .6rem; }
+.gp-validate-btn {
+  font-family: var(--sans);
+  font-size: .8rem;
+  font-weight: 500;
+  letter-spacing: .07em;
+  color: var(--cream);
+  background: var(--ink);
+  border: 1px solid var(--ink);
+  border-radius: 999px;
+  padding: .55rem 1.2rem;
+  cursor: pointer;
+  transition: background .2s var(--ease), transform .2s var(--ease), opacity .2s var(--ease);
+}
+.gp-validate-btn:hover:not(:disabled) { background: var(--charcoal); transform: translateY(-1px); }
+.gp-validate-btn:disabled { opacity: .45; cursor: default; }
+.gp-validate-status { font-size: .8rem; color: var(--muted); margin-top: .35rem; min-height: 1em; }
+.gp-validate-done .gp-validate-status { color: var(--rose-deep); font-weight: 500; }
 .gp-toolbar-filter {
   display: flex;
   align-items: center;
@@ -505,6 +549,168 @@ h1 { font-family: var(--serif); font-weight: 500; font-size: clamp(1.9rem, 4vw, 
 }
 .gp-viewer-heart:hover { background: rgba(253, 251, 248, .24); }
 .gp-viewer-heart.gp-heart-active { background: rgba(253, 251, 248, .92); }
+
+/* ---------- Codes couleur et repères annotés ---------- */
+
+/* Le cadre épouse la boîte exacte du canvas (calé en JS) pour que les
+   repères, exprimés en pourcentage, tombent toujours au bon endroit. */
+.gp-viewer-frame {
+  position: relative;
+  display: grid;
+  place-items: center;
+  max-width: 100%;
+  min-width: 0;
+}
+.gp-pins {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.gp-pins-placing { cursor: crosshair; pointer-events: auto; }
+.gp-pin {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  width: 1.7rem;
+  height: 1.7rem;
+  border: 2px solid var(--cream);
+  border-radius: 50% 50% 50% 0;
+  rotate: -45deg;
+  background: var(--rose-deep);
+  color: var(--cream);
+  font-family: var(--sans);
+  font-size: .78rem;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+  pointer-events: auto;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 6px 16px -6px rgba(0, 0, 0, .7);
+  transition: transform .15s var(--ease);
+}
+.gp-pin > span { rotate: 45deg; }
+.gp-pin:hover, .gp-pin-active { transform: translate(-50%, -100%) scale(1.15); }
+.gp-pin-active { background: var(--ink); }
+
+.gp-pin-editor {
+  position: absolute;
+  bottom: calc(clamp(.6rem, 2.5vw, 1.25rem) + 3.6rem);
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(420px, calc(100vw - 2.5rem));
+  background: rgba(253, 251, 248, .97);
+  border-radius: 12px;
+  padding: .85rem 1rem;
+  box-shadow: 0 20px 50px -20px rgba(0, 0, 0, .6);
+  z-index: 3;
+}
+.gp-pin-editor-actions { display: flex; align-items: center; gap: .5rem; margin-top: .6rem; }
+.gp-pin-editor-spacer { flex: 1; }
+.gp-pin-btn {
+  border: 1px solid var(--line);
+  background: var(--ivory);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: .82rem;
+  padding: .4rem .8rem;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.gp-pin-btn-primary { background: var(--rose); border-color: var(--rose); color: var(--cream); }
+.gp-pin-btn-danger { color: #b3564a; }
+.gp-pin-hint {
+  position: absolute;
+  top: clamp(.75rem, 3vw, 1.5rem);
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0;
+  padding: .4rem .9rem;
+  border-radius: 999px;
+  background: rgba(253, 251, 248, .92);
+  color: var(--ink);
+  font-size: .82rem;
+  z-index: 3;
+}
+
+.gp-tags { display: flex; align-items: center; gap: .4rem; }
+.gp-tag {
+  width: 1.55rem;
+  height: 1.55rem;
+  border-radius: 999px;
+  border: 2px solid rgba(253, 251, 248, .35);
+  background: transparent;
+  cursor: pointer;
+  position: relative;
+  transition: transform .15s var(--ease), border-color .15s var(--ease);
+}
+.gp-tag::before {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  border-radius: 999px;
+  background: var(--tag);
+  opacity: .55;
+}
+.gp-tag:hover { transform: scale(1.1); }
+.gp-tag[aria-pressed="true"] { border-color: var(--cream); }
+.gp-tag[aria-pressed="true"]::before { opacity: 1; }
+.gp-tag-green { --tag: #6fbf73; }
+.gp-tag-yellow { --tag: #f2c94c; }
+.gp-tag-red { --tag: #e0665a; }
+
+.gp-pin-toggle {
+  width: 2.3rem;
+  height: 2.3rem;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(253, 251, 248, .12);
+  color: var(--cream);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background .2s var(--ease), transform .15s var(--ease);
+}
+.gp-pin-toggle::before { content: "\1F4CD"; } /* 📍 */
+.gp-pin-toggle:hover { background: rgba(253, 251, 248, .24); transform: scale(1.06); }
+.gp-pin-toggle[aria-pressed="true"] { background: rgba(253, 251, 248, .92); }
+
+/* Dans la grille : pastille de couleur en haut à gauche, compteur de
+   repères à côté de la pastille de commentaire. Informatifs seulement. */
+.gp-tag-dot {
+  position: absolute;
+  top: .6rem;
+  left: .6rem;
+  width: .9rem;
+  height: .9rem;
+  border-radius: 999px;
+  border: 2px solid rgba(253, 251, 248, .9);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .3);
+  pointer-events: none;
+  z-index: 1;
+}
+.gp-tag-dot-green { background: #6fbf73; }
+.gp-tag-dot-yellow { background: #f2c94c; }
+.gp-tag-dot-red { background: #e0665a; }
+.gp-mark-badge {
+  position: absolute;
+  left: 2.4rem;
+  bottom: .5rem;
+  height: 1.6rem;
+  padding: 0 .5rem 0 .4rem;
+  border-radius: 999px;
+  background: rgba(43, 37, 33, .55);
+  color: var(--cream);
+  display: flex;
+  align-items: center;
+  gap: .15rem;
+  font-size: .78rem;
+  pointer-events: none;
+  z-index: 1;
+}
+.gp-mark-badge::before { content: "\1F4CD"; font-size: .8rem; }
 
 /* ---------- Voile de dissuasion ---------- */
 

@@ -98,6 +98,45 @@ Et **laisser une remarque photo par photo** — « celle-ci plutôt en noir et
 blanc », « peut-on la recadrer un peu ? » — depuis la visionneuse, sauvegardée
 automatiquement pendant la frappe (pas de bouton « valider » à chercher).
 
+Pour aller plus loin que le texte, la visionneuse propose aussi un **code
+couleur** à trois valeurs — vert *validée*, jaune *à retoucher*, rouge *à
+écarter* — indépendant du coup de cœur (c'est le cœur, et lui seul, qui
+compte pour le forfait), et des **repères annotés** : le client touche la
+photo à l'endroit précis à signaler, un repère numéroté s'y pose, et il
+écrit en une ligne ce qu'il attend (« retirer ce reflet », « adoucir ici »).
+Pas de dessin libre : un point et une note se relisent sans ambiguïté sur
+n'importe quel écran, puisque les positions sont relatives à la photo. Le
+photographe retrouve tout cela sur la fiche de la galerie, repères posés
+sur la photo en grand.
+
+Quand son choix est fait, le client le dit d'un clic : **« Valider ma
+sélection »**, en tête de galerie. Le photographe reçoit aussitôt un e-mail
+avec le nombre de photos choisies et le supplément éventuel, la fiche de la
+galerie affiche la date de validation, et les relances automatiques
+s'arrêtent. Le client peut encore changer d'avis et valider à nouveau
+(l'e-mail n'est pas renvoyé plus d'une fois par heure).
+
+**Une adresse au nom du studio** : chaque photographe peut choisir un
+sous-domaine dans Paramètres (`julie` → `julie.holypixx.com`), et tous ses
+liens de galerie le portent aussitôt : `https://julie.holypixx.com/?g=…`.
+Sous cette adresse, le Worker sert la page de galerie (relue depuis le site
+principal, l'adresse d'API réécrite en « //julie.holypixx.com » pour suivre
+le schéma de la page) et son API sur une même origine, affiche le nom du studio en
+tête de galerie à la place de la marque de la plateforme, et ne connaît que
+les galeries de ce studio — un lien vers la galerie d'un autre compte y
+reste « introuvable ». Les noms réservés (`www`, `api`, `admin`…) sont
+refusés, un sous-domaine ne peut appartenir qu'à un compte, et le vider
+ramène les liens sur le site principal.
+
+**Relances automatiques** : tant que la sélection n'est pas validée, une
+passe quotidienne sur le Worker (déclencheur planifié, 08:00 UTC) envoie au
+client un rappel à 7 jours puis à 2 jours de l'expiration de sa galerie
+(s'il a un e-mail renseigné, avec le lien pour y revenir), et au
+photographe un rappel à 2 jours. Chaque relance ne part qu'une fois, une
+galerie sans date d'expiration n'en déclenche jamais, et le photographe
+peut tout désactiver dans Paramètres. La propriétaire peut lancer la passe
+à la demande depuis l'onglet Admin.
+
 ### Comptes photographes
 
 La plateforme est pensée pour plusieurs photographes, chacun avec son propre
@@ -160,6 +199,23 @@ photographe qui doit y avoir accès (jamais un secret : elle ne fait que
 désigner quel compte a ce droit, chaque route `/api/owner/*` revérifiant
 elle-même l'identité de l'appelant côté serveur). Sans cette variable,
 l'onglet reste simplement invisible pour tout le monde.
+
+Pour les relances automatiques (voir plus bas), `PUBLIC_SITE_ORIGIN` doit
+pointer vers le site qui héberge `galerie.html` (le lien « Revoir ma
+galerie » des e-mails en dépend), et le déclencheur planifié déclaré sous
+`[triggers]` est créé au déploiement — rien d'autre à faire côté Cloudflare.
+Sans `RESEND_API_KEY`, la passe quotidienne tourne mais n'envoie rien.
+
+Pour le sous-domaine par studio (`julie.holypixx.com`, voir plus bas), trois
+choses : `STUDIO_DOMAIN` dans `wrangler.toml` (déjà `holypixx.com`), la
+route `*.holypixx.com/*` déclarée sous `routes` (créée au déploiement — la
+zone doit être sur le même compte Cloudflare, sinon commentez le bloc), et
+un enregistrement DNS joker dans la zone : **DNS → Add record → type
+`AAAA`, nom `*`, valeur `100::`, proxy activé (nuage orange)**. Cette
+adresse « bidon » ne sert qu'à faire passer `*.holypixx.com` par Cloudflare,
+où la route confie la requête au Worker. `www` et l'apex gardent leurs
+enregistrements et leur hébergement : le Worker les laisse passer sans y
+toucher.
 
 ### 2. La page client
 
@@ -274,6 +330,13 @@ Le tableau de bord s'organise en trois onglets, chacun avec son propre lien
   *Défilement* (une photo à la fois, en grand — rendu éditorial, pour
   raconter une séance plutôt que la survoler). Purement visuel : les trois
   rendus s'appuient sur les mêmes tuiles, protégées de la même façon.
+- **Musique d'ambiance** : un MP3 (15 Mo maximum) importé depuis la fiche
+  de la galerie, stocké à côté des tuiles et servi au client avec lecture
+  progressive. Côté client, un bouton « Lancer la musique » apparaît dans
+  l'en-tête dès qu'une piste existe ; en mise en page *Défilement* la lecture
+  démarre d'elle-même quand le navigateur l'autorise, et le choix du client
+  (coupée ou non) est retenu le temps de sa visite. Une galerie sans piste
+  ne montre rien de plus qu'avant.
 - **Forfait et suppléments** : le nombre de photos déjà payées par le
   client (optionnel — sans forfait défini, aucun supplément n'est jamais
   calculé) et le prix de chaque photo au-delà. Le supplément se calcule
@@ -295,9 +358,18 @@ Le tableau de bord s'organise en trois onglets, chacun avec son propre lien
   séance compte beaucoup de photos. Un bouton « Copier les notes du
   client » colle dans le presse-papiers la liste des photos choisies et
   commentées, par numéro (voir *Retrouver l'origine d'une fuite* pour la
-  même convention).
+  même convention), codes couleur et repères compris.
+- **Codes couleur et repères annotés du client** : pastille verte, jaune ou
+  rouge sur la vignette, compteur 📍 N de repères, et une légende qui résume
+  la galerie (« 3 validées · 1 à retoucher · 2 à écarter »). Un clic sur une
+  vignette ouvre la photo en grand avec les repères numérotés posés dessus
+  et leurs notes listées en dessous — ce que le client a voulu dire se lit
+  d'un coup d'œil, à l'endroit exact où il l'a dit.
 - **Journal d'accès** intégré à la fiche de chaque galerie, coups de cœur et
   remarques compris.
+- **Sélection validée** : badge « ✓ Validée » sur la carte de la galerie et
+  date de validation sur sa fiche ; tant que le client n'a pas validé, la
+  fiche rappelle où en sont les relances automatiques.
 - **Suppression** d'une photo isolée ou de la galerie entière, avec
   confirmation.
 
@@ -598,7 +670,7 @@ des tuiles, refus du mauvais mot de passe, absence de toute balise `<img>`,
 neutralisation du menu contextuel et de la copie, voile sur « Impr. écran » et
 sur perte de focus, consignation au journal.
 
-**API du Worker** — 198 vérifications contre le vrai moteur Cloudflare (D1 et R2
+**API du Worker** — 262 vérifications contre le vrai moteur Cloudflare (D1 et R2
 émulés localement par `wrangler dev`) : comptes photographes (inscription,
 connexion, session, mot de passe oublié — même réponse générique qu'un
 compte existe ou non), cloisonnement strict entre comptes (un photographe ne
@@ -606,7 +678,10 @@ peut ni lister, ni lire, ni modifier, ni même deviner l'existence des
 galeries, photos et tuiles d'un autre compte), création et cloisonnement des
 galeries d'un même compte, authentification client, expiration, limitation
 des tentatives de mot de passe, suppression en cascade (galerie et photo
-isolée), sélection et commentaire posés et retirés, régénération du mot de
+isolée), sélection et commentaire posés et retirés, code couleur et repères
+annotés (valeurs et positions hors bornes refusées, au plus 12 repères par
+photo, notes nettoyées et bornées, relus côté administration et à la
+reconnexion du client, consignés au journal), régénération du mot de
 passe d'une galerie (l'ancien cesse aussitôt de fonctionner), arrière-plan
 personnalisé de l'écran de connexion (couleur ou image, cloisonné par
 compte, et une galerie inconnue ne se distingue jamais d'une galerie sans
@@ -651,16 +726,36 @@ second compte, pour confirmer que ce n'est pas un cas particulier du
 premier —, le compte dont l'e-mail correspond à `OWNER_EMAIL` s'y voit
 reconnaître `isOwner`, peut lire les compteurs plateforme et la liste
 complète des comptes (avec le prénom/nom de chacun, jamais leur mot de
-passe).
+passe). Musique d'ambiance : dépôt refusé depuis un autre compte, piste
+annoncée au client à la connexion puis servie octet pour octet en
+`audio/mpeg`, lecture progressive par morceaux (`Range` → 206), retrait
+refusé depuis un autre compte, et plus rien de servi ni d'annoncé une fois
+la piste retirée. « Valider ma sélection » : refusé sans jeton, horodaté et
+e-mail au photographe à la première validation mais pas à une seconde dans
+l'heure, relu sur la fiche, dans la liste, au journal et à la reconnexion
+du client. Relances automatiques (passe lancée par la propriétaire, refusée
+à un compte ordinaire) : première relance client à J-5, seconde relance
+client et relance photographe à J-1, rien sans e-mail client, sans date
+d'expiration ou une fois la sélection validée, jamais deux fois la même
+relance d'une passe à l'autre, plus rien pour un compte qui a désactivé les
+relances. Sous-domaine par studio : caractères, longueur et noms réservés
+refusés, mis en minuscules, relu dans le profil, refusé à un autre compte
+(409), et — en rejouant les requêtes avec l'en-tête `Host` du studio, tel
+que le Worker le reçoit en production — 404 lisible pour un studio inconnu,
+galerie du studio ouverte avec son nom, même galerie introuvable sous
+l'adresse d'un autre studio, page de galerie servie avec l'API pointée sur
+ce même hôte, sans schéma (feuille de style comprise, rien d'autre), plus
+rien une fois le sous-domaine retiré.
 Le trajet complet de réinitialisation de mot de passe (jeton reçu par
 e-mail → nouveau mot de passe → ancien mot de passe rejeté → lien à usage
 unique) est vérifié manuellement plutôt qu'automatiquement : le jeton ne
 transite jamais par l'API, seulement par l'e-mail, et l'y exposer pour les
 tests reviendrait à affaiblir la sécurité qu'il apporte.
 
-**Alertes e-mail** — 21 vérifications sans réseau ni `wrangler dev`
-(`buildCaptureAlertEmail`, `buildPasswordResetEmail` et
-`buildEmailChangeConfirmationEmail` sont des fonctions pures) : sujet et
+**Alertes e-mail** — 30 vérifications sans réseau ni `wrangler dev`
+(`buildCaptureAlertEmail`, `buildPasswordResetEmail`,
+`buildEmailChangeConfirmationEmail` et les trois bâtisseurs de relances et
+de sélection validée sont des fonctions pures) : sujet et
 corps référençant la bonne galerie et la bonne photo, message générique
 quand aucune photo n'est identifiée, raisons connues traduites en texte
 lisible, lien et durée de validité présents dans l'e-mail de réinitialisation
@@ -668,6 +763,18 @@ comme dans celui de confirmation d'un changement d'adresse (envoyé
 exclusivement à la nouvelle adresse), et surtout échappement HTML du nom de
 studio, du titre de galerie et du nom de client — autant de champs saisis
 par le photographe, jamais dignes de confiance tels quels dans un e-mail.
+Relances : échéance en jours (« demain » à J-1), coups de cœur déjà posés
+ou invitation à choisir, lien vers la galerie présent dans le HTML et le
+texte — ou aucun bouton du tout sans adresse publique configurée —, e-mail
+de sélection validée avec nombre de photos et supplément dû.
+
+**Décision des relances** — 11 vérifications sans réseau ni D1
+(`remindersDue` est une fonction pure) : rien à 10 jours, première relance
+client de J-7 à J-3, seconde relance client et relance photographe à J-2 et
+J-1, plus rien une fois expirée, seule la relance photographe sans e-mail
+client, jamais deux fois la même relance, pas de rattrapage d'une relance
+manquée le jour d'une autre, et lien de galerie construit (slug encodé)
+seulement si `PUBLIC_SITE_ORIGIN` est renseigné.
 
 **Signature de webhook Stripe et sessions de paiement** — 16 vérifications
 sans réseau (fetch intercepté, jamais appelé pour de vrai) :
@@ -690,7 +797,7 @@ appliqué sinon, HT + TVA se recomposant exactement au centime près en TTC
 même sur un montant qui ne se divise pas rond, et un vrai PDF valide généré
 aussi bien avec des coordonnées complètes qu'avec des champs vides.
 
-**Interface d'administration** — 69 vérifications dans un vrai navigateur,
+**Interface d'administration** — 91 vérifications dans un vrai navigateur,
 contre le vrai Worker local : demande de lien de réinitialisation de mot de
 passe (message générique affiché), création de compte et connexion depuis
 le formulaire (pas de session présupposée), barre d'onglets Galeries /
@@ -732,6 +839,21 @@ correspond à `OWNER_EMAIL` : onglet visible et accessible (avec son propre
 lien dans l'URL), compteurs plateforme affichés, le compte créé plus tôt
 dans ce test apparaît dans la liste complète avec son prénom et son nom, et
 la section trafic explique comment brancher Cloudflare Web Analytics.
+Musique d'ambiance sur la fiche galerie : « aucune musique » au départ,
+import d'un MP3 qui devient la piste actuelle, refus d'un fichier qui n'en
+est pas un (la piste existante est conservée), retrait après confirmation.
+Codes couleur et repères posés par le client (via l'API, comme le ferait sa
+page) : pastille jaune et compteur de repères sur la vignette, légende de
+la galerie, photo ouverte en grand avec le repère dessus, sa note listée et
+le code couleur rappelé, fermeture de la fiche. Sélection validée : fiche
+qui rappelle d'abord que rien n'est validé, puis date de validation après
+le clic du client (via l'API), badge « Validée » sur la carte ; case des
+relances automatiques cochée par défaut dans Paramètres, décochée et relue
+après rechargement ; passe de relances lancée depuis l'onglet Admin par la
+propriétaire, avec son résumé. Adresse du studio : « aucun sous-domaine »
+au départ, sous-domaine enregistré et rappelé avec l'adresse complète, nom
+réservé refusé avec son message, lien de la galerie qui porte aussitôt
+l'adresse du studio.
 
 **Vérifier une photo (empreinte invisible)** — 8 vérifications contre le vrai
 Worker local : une image reconstituée tuile par tuile — exactement comme le
@@ -741,12 +863,14 @@ comme une correspondance ; un second compte ne peut jamais identifier une
 photo d'un autre (l'outil ne corrèle qu'avec les empreintes du compte
 connecté) ; refusé sans session.
 
-**Sélection client** — 15 vérifications dans un vrai navigateur, contre le
+**Sélection client** — 18 vérifications dans un vrai navigateur, contre le
 vrai Worker local (galerie créée par le test lui-même, nettoyée à la fin) :
 coup de cœur posé depuis la grille et depuis la visionneuse, compteur à jour,
 filtre « ma sélection » qui masque sans retélécharger et borne la navigation
 de la visionneuse, sélection qui survit à une reconnexion complète, cohérence
-entre ce que voit le client et ce que lit l'administration.
+entre ce que voit le client et ce que lit l'administration, bouton
+« Valider ma sélection » proposé dès qu'il y a des coups de cœur, validation
+confirmée à l'écran avec sa date et enregistrée côté Worker.
 
 **Commentaires client** — 16 vérifications dans un vrai navigateur, même
 principe (galerie autonome, nettoyée à la fin) : remarque laissée depuis la
@@ -754,6 +878,25 @@ visionneuse, sauvegarde automatique après un court délai de frappe, texte en
 cours de saisie jamais perdu si on change de photo avant que ce délai
 s'écoule, remarque effacée qui retire bien sa pastille, cohérence avec ce que
 lit l'administration.
+
+**Codes couleur et repères client** — 22 vérifications dans un vrai
+navigateur, même principe (galerie autonome, nettoyée à la fin) : couleur
+posée, retirée en re-cliquant dessus, remplacée par une autre ; mode
+« placer un repère » qui pose un point là où le client touche la photo
+(position relative vérifiée au centre, à 5 % près) et ouvre aussitôt la
+note ; note relue en cliquant sur le repère ; « Annuler » qui conserve un
+repère existant mais retire un repère tout juste posé sans rien envoyer ;
+pastille et compteur dans la grille ; tout retrouvé après une reconnexion
+complète ; suppression répercutée côté Worker.
+
+**Sous-domaine par studio** — 8 vérifications dans un vrai navigateur, où
+Playwright rejoue toute requête vers `<studio>.holypixx.com` sur le Worker
+local avec l'en-tête `Host` du studio (ce que le Worker recevra derrière la
+route de production) : page de galerie affichée à l'adresse du studio, API
+inscrite dans la page sur cette même origine, feuille de style et script
+servis par elle, connexion et tuiles passées par l'API du studio, nom du
+studio en tête de galerie, galerie d'un autre studio introuvable, aucune
+exception.
 
 ```bash
 cd tools
@@ -765,9 +908,12 @@ node tests/admin.test.mjs             # interface d'administration, admin-server
 node tests/detect.test.mjs            # vérifier une photo, autonome (crée ses propres comptes)
 node tests/selection.test.mjs         # sélection client, autonome (crée sa propre galerie)
 node tests/comments.test.mjs          # commentaires client, autonome (crée sa propre galerie)
+node tests/marks.test.mjs             # codes couleur + repères client, autonome (crée sa propre galerie)
+node tests/subdomain.test.mjs         # sous-domaine par studio, autonome (PUBLIC_SITE_ORIGIN=http://localhost:8000 dans worker/.dev.vars)
 
 cd ../worker
-node tests/notify.test.mjs            # e-mail d'alerte de capture, sans réseau
+node tests/notify.test.mjs            # e-mails (alerte de capture, relances…), sans réseau
+node tests/reminders.test.mjs         # décision des relances automatiques, sans réseau
 node tests/stripe.test.mjs            # signature de webhook + encodage des sessions Stripe, sans réseau
 node tests/invoices.test.mjs          # calcul de TVA + génération du PDF de facture, sans réseau
 npx wrangler dev --local --port 8788  # dans un autre terminal

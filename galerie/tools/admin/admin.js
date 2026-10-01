@@ -17,6 +17,9 @@
     select: "Coup de cœur",
     deselect: "Coup de cœur retiré",
     comment: "Remarque laissée",
+    tag: "Code couleur posé",
+    mark: "Repères annotés",
+    validate: "Sélection validée par le client",
     capture_suspected: "Capture suspectée",
     blur: "Photo floutée",
     print: "Tentative d'impression",
@@ -331,6 +334,9 @@
         (g.due_extra_count > 0
           ? '<span class="ad-badge ad-badge-due">💶 ' + formatEuros(g.due_total_cents) + "</span>"
           : "") +
+        (g.selection_done_at
+          ? '<span class="ad-badge ad-badge-validated" title="Sélection validée le ' + formatDate(g.selection_done_at) + '">✓ Validée</span>'
+          : "") +
         (status.label ? '<span class="ad-badge ' + status.cls + '">' + esc(status.label) + "</span>" : "") +
         "</div>" +
         "</article>"
@@ -551,6 +557,25 @@
       layoutOptionsHtml({ layout: photographer.defaultLayout }) +
       "</div></section>" +
 
+      '<section><div class="ad-section-header"><h3>Adresse de votre studio</h3></div>' +
+      '<p class="ad-hint">Vos clients ouvrent leurs galeries à une adresse à votre nom — <strong>votre-studio.' + esc(state.config.studioDomain || "holypixx.com") + '</strong> — plutôt que sur le site de la plateforme. Lettres minuscules, chiffres et tirets, 3 à 30 caractères. Laissez vide pour revenir au site principal.</p>' +
+      '<form id="ad-subdomain-form"><label class="ad-field"><span>Sous-domaine</span>' +
+      '<div class="ad-subdomain-row"><input type="text" name="subdomain" value="' + esc(photographer.subdomain || "") + '" placeholder="votre-studio" autocapitalize="off" autocomplete="off" spellcheck="false" maxlength="30" />' +
+      '<span class="ad-subdomain-suffix">.' + esc(state.config.studioDomain || "holypixx.com") + "</span></div></label>" +
+      '<p class="ad-hint" id="ad-subdomain-current">' +
+      (photographer.subdomain
+        ? "Vos liens de galerie commencent par <strong>https://" + esc(photographer.subdomain) + "." + esc(state.config.studioDomain || "holypixx.com") + "/</strong>."
+        : "Aucun sous-domaine pour l'instant : vos liens pointent vers le site principal.") +
+      "</p>" +
+      '<button type="submit" class="ad-btn ad-btn-primary" id="ad-subdomain-save">Enregistrer</button>' +
+      "</form></section>" +
+
+      '<section><div class="ad-section-header"><h3>Relances automatiques</h3></div>' +
+      '<p class="ad-hint">Tant qu\'un client n\'a pas cliqué « Valider ma sélection », il reçoit un rappel à 7 jours puis à 2 jours de l\'expiration de sa galerie (s\'il a un e-mail renseigné), et vous en recevez un à 2 jours. Rien n\'est envoyé pour une galerie sans date d\'expiration.</p>' +
+      '<label class="ad-toggle"><input type="checkbox" id="ad-reminders-toggle"' + (photographer.remindersEnabled ? " checked" : "") + " />" +
+      "<span>Envoyer les relances automatiques</span></label>" +
+      "</section>" +
+
       '<section><div class="ad-section-header"><h3>Coordonnées fiscales</h3></div>' +
       '<p class="ad-hint">Ces informations apparaissent sur les factures émises pour vos clients.</p>' +
       '<form id="ad-billing-form">' +
@@ -617,6 +642,33 @@
         toast(err.message, true);
       } finally {
         btn.disabled = false;
+      }
+    });
+
+    document.getElementById("ad-subdomain-form").addEventListener("submit", async function (event) {
+      event.preventDefault();
+      var form = event.target;
+      var btn = document.getElementById("ad-subdomain-save");
+      btn.disabled = true;
+      try {
+        var result = await api("POST", "/account/subdomain", { subdomain: form.subdomain.value.trim().toLowerCase() });
+        toast(result.subdomain ? "Adresse du studio enregistrée." : "Sous-domaine retiré.");
+        renderSettings(true);
+      } catch (err) {
+        toast(err.message, true);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    document.getElementById("ad-reminders-toggle").addEventListener("change", async function (event) {
+      var box = event.target;
+      try {
+        await api("POST", "/account/reminders", { enabled: box.checked });
+        toast(box.checked ? "Relances automatiques activées." : "Relances automatiques désactivées.");
+      } catch (err) {
+        box.checked = !box.checked;
+        toast(err.message, true);
       }
     });
 
@@ -825,9 +877,35 @@
       photographersTableHtml(photographersData.photographers) +
       "</section>" +
 
+      '<section><div class="ad-section-header"><h3>Relances automatiques</h3></div>' +
+      '<p class="ad-hint">Une passe tourne chaque jour sur le Worker (08:00 UTC) : rappel au client à J-7 et J-2 de l\'expiration tant que sa sélection n\'est pas validée, rappel au photographe à J-2. ' +
+      "Chaque relance ne part qu'une fois. Vous pouvez lancer la passe tout de suite :</p>" +
+      '<button type="button" class="ad-btn" id="ad-run-reminders">Lancer les relances maintenant</button>' +
+      '<p class="ad-hint" id="ad-run-reminders-result"></p>' +
+      "</section>" +
+
       '<section><div class="ad-section-header"><h3>Trafic du site &amp; sources de visiteurs</h3></div>' +
       trafficSectionHtml() +
       "</section>";
+
+    document.getElementById("ad-run-reminders").addEventListener("click", async function () {
+      var btn = this;
+      var out = document.getElementById("ad-run-reminders-result");
+      btn.disabled = true;
+      try {
+        var result = await api("POST", "/owner/reminders/run");
+        var n = result.sent.length;
+        out.textContent =
+          result.examined + " galerie" + (result.examined > 1 ? "s" : "") + " examinée" + (result.examined > 1 ? "s" : "") +
+          " · " + n + " relance" + (n > 1 ? "s" : "") + " envoyée" + (n > 1 ? "s" : "") +
+          (n ? " : " + result.sent.map(function (r) { return r.slug + " (" + r.kind + ")"; }).join(", ") : ".");
+        toast("Passe de relances terminée.");
+      } catch (err) {
+        toast(err.message, true);
+      } finally {
+        btn.disabled = false;
+      }
+    });
   }
 
   /* ---------- Vue : vérifier une photo suspecte ---------- */
@@ -940,6 +1018,67 @@
     return Boolean(photo.comment && photo.comment.trim());
   }
 
+  var TAG_LABELS = { green: "Validée", yellow: "À retoucher", red: "À écarter" };
+
+  function marksOf(photo) {
+    return Array.isArray(photo.marks) ? photo.marks : [];
+  }
+
+  function hasClientNotes(photo) {
+    return isSelected(photo) || hasComment(photo) || Boolean(photo.tag) || marksOf(photo).length > 0;
+  }
+
+  // Légende des codes couleur posés par le client sur cette galerie —
+  // seulement s'il en a posé au moins un.
+  function tagLegendHtml(photos) {
+    var counts = { green: 0, yellow: 0, red: 0 };
+    photos.forEach(function (p) {
+      if (counts.hasOwnProperty(p.tag)) counts[p.tag]++;
+    });
+    if (!counts.green && !counts.yellow && !counts.red) return "";
+    return (
+      '<p class="ad-tag-legend" id="ad-tag-legend">' +
+      ["green", "yellow", "red"].map(function (tag) {
+        return '<span class="ad-tag-legend-' + tag + '">' + counts[tag] + " " + TAG_LABELS[tag].toLowerCase() + (counts[tag] > 1 && tag !== "yellow" && tag !== "red" ? "s" : "") + "</span>";
+      }).join("") +
+      "</p>"
+    );
+  }
+
+  // Photo en grand (tuiles plein écran, lues via le serveur d'administration)
+  // avec les repères du client posés par-dessus et leurs notes numérotées.
+  function openPhotoModal(photo) {
+    var modal = document.getElementById("ad-photo-modal");
+    var body = document.getElementById("ad-photo-modal-body");
+    var cells = "";
+    for (var row = 0; row < photo.rows; row++) {
+      for (var col = 0; col < photo.cols; col++) {
+        cells += '<img src="/local/tiles/' + esc(photo.id) + "/1/" + col + "/" + row + '" alt="" />';
+      }
+    }
+    var marks = marksOf(photo);
+    var pins = marks.map(function (m, i) {
+      return '<span class="ad-pin" style="left:' + (Number(m.x) * 100).toFixed(2) + "%;top:" + (Number(m.y) * 100).toFixed(2) + '%" title="' + esc(m.note || "") + '"><span>' + (i + 1) + "</span></span>";
+    }).join("");
+    document.getElementById("ad-photo-modal-title").textContent = "Photo n° " + (photo.position + 1);
+    body.innerHTML =
+      '<div class="ad-photo-meta">' +
+      (isSelected(photo) ? '<span class="ad-badge ad-badge-selected">♥ Sélectionnée</span>' : "") +
+      (photo.tag ? '<span class="ad-badge ad-badge-tag-' + photo.tag + '">' + TAG_LABELS[photo.tag] + "</span>" : "") +
+      "<span>" + photo.width + " × " + photo.height + "</span>" +
+      "</div>" +
+      '<div class="ad-photo-large" style="aspect-ratio:' + photo.width + "/" + photo.height +
+      ";grid-template-columns:repeat(" + photo.cols + ",1fr);grid-template-rows:repeat(" + photo.rows + ',1fr)">' +
+      cells + '<div class="ad-photo-large-pins">' + pins + "</div></div>" +
+      (hasComment(photo) ? "<p><strong>Remarque :</strong> « " + esc(photo.comment.trim()) + " »</p>" : "") +
+      (marks.length
+        ? '<ol class="ad-photo-notes" id="ad-photo-notes">' +
+          marks.map(function (m) { return "<li>" + (m.note ? esc(m.note) : "<em>Sans note</em>") + "</li>"; }).join("") +
+          "</ol>"
+        : '<p class="ad-hint">Aucun repère posé par le client sur cette photo.</p>');
+    openModal("ad-photo-modal");
+  }
+
   function photoThumb(photo) {
     var cols = state.config.previewCols || 2;
     var rows = state.config.previewRows || 2;
@@ -951,14 +1090,19 @@
     }
     var selected = isSelected(photo);
     var commented = hasComment(photo);
+    var markCount = marksOf(photo).length;
     return (
       '<div class="ad-photo' + (selected ? " ad-photo-selected" : "") + '" data-photo-id="' + esc(photo.id) + '">' +
-      '<div class="ad-photo-frame" style="aspect-ratio:' + photo.width + "/" + photo.height +
+      '<div class="ad-photo-frame" title="Voir en grand" style="aspect-ratio:' + photo.width + "/" + photo.height +
       ";grid-template-columns:repeat(" + cols + ",1fr);grid-template-rows:repeat(" + rows + ',1fr)">' +
       cells +
       '<span class="ad-photo-dims">n° ' + (photo.position + 1) + " · " + photo.width + "×" + photo.height + "</span>" +
       (selected ? '<span class="ad-photo-heart" title="Sélectionnée par le client">♥</span>' : "") +
       (commented ? '<span class="ad-photo-comment" title="' + esc(photo.comment) + '">💬</span>' : "") +
+      (photo.tag && TAG_LABELS[photo.tag]
+        ? '<span class="ad-photo-tag ad-photo-tag-' + photo.tag + '" title="' + TAG_LABELS[photo.tag] + '"></span>'
+        : "") +
+      (markCount ? '<span class="ad-photo-marks" title="' + markCount + " repère" + (markCount > 1 ? "s" : "") + ' annoté(s)">📍 ' + markCount + "</span>" : "") +
       "</div>" +
       '<button type="button" class="ad-photo-remove" title="Supprimer cette photo" aria-label="Supprimer cette photo">&times;</button>' +
       "</div>"
@@ -968,7 +1112,7 @@
   // Pour les évènements « view », « select », « deselect » et « comment », le
   // détail consigné est l'identifiant technique de la photo — on l'affiche
   // plutôt sous la forme lisible « Photo n° X » quand on peut la retrouver.
-  var PHOTO_ID_EVENTS = new Set(["view", "select", "deselect", "comment"]);
+  var PHOTO_ID_EVENTS = new Set(["view", "select", "deselect", "comment", "tag", "mark"]);
 
   // Pour « capture_suspected », « print » et « devtools », le détail est la
   // raison technique du déclenchement, et la photo (si une était ouverte)
@@ -1123,6 +1267,14 @@
       "<div>" +
       "<h2>" + esc(data.gallery.title) + "</h2>" +
       '<p class="ad-card-sub">' + (data.gallery.client_name ? esc(data.gallery.client_name) + " · " : "") + esc(data.gallery.slug) + "</p>" +
+      (data.gallery.selection_done_at
+        ? '<p class="ad-validated" id="ad-selection-validated">✓ Sélection validée par le client le ' + formatDateTime(data.gallery.selection_done_at) + "</p>"
+        : '<p class="ad-hint" id="ad-selection-pending">Sélection pas encore validée par le client' +
+          (data.gallery.expires_at
+            ? " — relances automatiques à J-7 et J-2 de l\'expiration" +
+              (data.gallery.client_email ? "" : " (aucun e-mail client renseigné : seule la relance qui vous est destinée à J-2 partira)")
+            : " — sans date d\'expiration, aucune relance automatique ne part") +
+          ".</p>") +
       "</div>" +
       (status.label ? '<span class="ad-badge ' + status.cls + '">' + esc(status.label) + "</span>" : "") +
       "</header>" +
@@ -1170,6 +1322,22 @@
       '<p class="ad-hint">Comment les photos s\'affichent chez le client — à choisir selon le type de séance.</p>' +
       '<div class="ad-layout-options" id="ad-layout-options">' + layoutOptionsHtml(data.gallery) + "</div>" +
       "</section>" +
+      '<section class="ad-music">' +
+      '<div class="ad-section-header"><h3>Musique d\'ambiance</h3></div>' +
+      '<p class="ad-hint">Un morceau (MP3, 15 Mo maximum) joué en boucle chez le client. Lancé automatiquement en mise en page « Défilement », proposé en pause dans les autres — le client garde toujours la main.</p>' +
+      '<p class="ad-music-state" id="ad-music-state">' +
+      (data.gallery.music_name
+        ? "Piste actuelle : <strong>" + esc(data.gallery.music_name) + "</strong>"
+        : '<span class="ad-hint">Aucune musique pour cette galerie.</span>') +
+      "</p>" +
+      '<div class="ad-bg-custom">' +
+      '<label class="ad-btn">' + (data.gallery.music_name ? "Remplacer le MP3" : "Importer un MP3") +
+      '<input type="file" id="ad-music-file-input" accept="audio/mpeg,.mp3" hidden /></label>' +
+      (data.gallery.music_name
+        ? '<button type="button" class="ad-btn" id="ad-music-remove">Retirer la musique</button>'
+        : "") +
+      "</div>" +
+      "</section>" +
       '<section class="ad-dropzone" id="ad-dropzone">' +
       '<p><strong>Glissez vos photos ici</strong>, ou</p>' +
       '<label class="ad-btn ad-btn-primary">Choisir des fichiers<input type="file" id="ad-file-input" accept="image/*" multiple hidden /></label>' +
@@ -1182,11 +1350,12 @@
         ? '<label class="ad-photos-filter"><input type="checkbox" id="ad-filter-selected" />' +
           '<span>Afficher uniquement la sélection du client (' + data.photos.filter(isSelected).length + ")</span></label>"
         : "") +
-      (data.photos.some(function (p) { return isSelected(p) || hasComment(p); })
+      (data.photos.some(hasClientNotes)
         ? '<button type="button" class="ad-btn" id="ad-copy-notes">Copier les notes du client</button>'
         : "") +
       "</div>" +
       "</div>" +
+      tagLegendHtml(data.photos) +
       '<div class="ad-photos" id="ad-photos">' + data.photos.map(photoThumb).join("") + "</div>" +
       "</section>" +
       '<section><h3>Journal d\'accès</h3>' +
@@ -1213,10 +1382,14 @@
     if (copyNotesBtn) {
       copyNotesBtn.addEventListener("click", function () {
         var selectedCount = data.photos.filter(isSelected).length;
-        var noted = data.photos.filter(function (p) { return isSelected(p) || hasComment(p); });
+        var noted = data.photos.filter(hasClientNotes);
         var lines = noted.map(function (p) {
           var line = "Photo n° " + (p.position + 1) + (isSelected(p) ? " (sélectionnée)" : "");
+          if (p.tag && TAG_LABELS[p.tag]) line += " [" + TAG_LABELS[p.tag] + "]";
           if (hasComment(p)) line += " — « " + p.comment.trim() + " »";
+          marksOf(p).forEach(function (m, i) {
+            line += "\n    Repère " + (i + 1) + " (" + Math.round(Number(m.x) * 100) + " % / " + Math.round(Number(m.y) * 100) + " %)" + (m.note ? " : " + m.note : "");
+          });
           return line;
         });
         var text =
@@ -1312,6 +1485,42 @@
         toast(err.message, true);
       }
     });
+    document.getElementById("ad-music-file-input").addEventListener("change", async function (event) {
+      var file = event.target.files[0];
+      event.target.value = "";
+      if (!file) return;
+      var stateBox = document.getElementById("ad-music-state");
+      stateBox.textContent = "Envoi de « " + file.name + " »…";
+      var form = new FormData();
+      form.append("file", file, file.name);
+      try {
+        var response = await fetch("/local/galleries/" + encodeURIComponent(slug) + "/music", {
+          method: "POST",
+          body: form,
+        });
+        var result = await response.json().catch(function () { return {}; });
+        if (!response.ok) throw new Error(result.error || "Échec de l'envoi");
+        toast("Musique enregistrée.");
+        renderDetail(slug, true);
+      } catch (err) {
+        toast(err.message, true);
+        renderDetail(slug, true);
+      }
+    });
+    var musicRemove = document.getElementById("ad-music-remove");
+    if (musicRemove) {
+      musicRemove.addEventListener("click", function () {
+        confirmAction("Retirer la musique de cette galerie ?", async function () {
+          try {
+            await api("DELETE", "/galleries/" + encodeURIComponent(slug) + "/music");
+            toast("Musique retirée.");
+            renderDetail(slug, true);
+          } catch (err) {
+            toast(err.message, true);
+          }
+        });
+      });
+    }
     document.getElementById("ad-new-password").addEventListener("click", function () {
       confirmAction("Générer un nouveau mot de passe ? L'ancien cessera aussitôt de fonctionner.", async function () {
         try {
@@ -1325,11 +1534,18 @@
     });
 
     wireUploads(slug, data.photos.length);
-    wirePhotoRemoval(slug);
+    wirePhotoRemoval(slug, data.photos);
   }
 
-  function wirePhotoRemoval(slug) {
+  function wirePhotoRemoval(slug, photos) {
     document.getElementById("ad-photos").addEventListener("click", function (event) {
+      var frame = event.target.closest(".ad-photo-frame");
+      if (frame) {
+        var id = frame.closest(".ad-photo").getAttribute("data-photo-id");
+        var photo = photos.find(function (p) { return p.id === id; });
+        if (photo) openPhotoModal(photo);
+        return;
+      }
       var btn = event.target.closest(".ad-photo-remove");
       if (!btn) return;
       var card = btn.closest(".ad-photo");

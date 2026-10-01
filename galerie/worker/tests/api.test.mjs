@@ -476,6 +476,119 @@ const clearedPhoto = detailAfterClear.photos.find((p) => p.id === photoId);
 check("effacer un commentaire efface aussi sa date",
       clearedPhoto?.comment === "" && clearedPhoto?.comment_at == null, JSON.stringify(clearedPhoto));
 
+/* ---------- Codes couleur et repères annotés ---------- */
+
+check("une photo n'a ni code couleur ni repère au départ",
+      detailAfterClear.photos[0]?.tag === "" && Array.isArray(detailAfterClear.photos[0]?.marks) && detailAfterClear.photos[0].marks.length === 0,
+      JSON.stringify({ tag: detailAfterClear.photos[0]?.tag, marks: detailAfterClear.photos[0]?.marks }));
+
+const tagNoAuth = await fetch(`${BASE}/api/gallery/${SLUG}/tag`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ photoId, tag: "green" }),
+});
+check("poser un code couleur sans jeton est refusé", tagNoAuth.status === 401);
+
+const tagUnknown = await fetch(`${BASE}/api/gallery/${SLUG}/tag`, {
+  method: "POST",
+  headers: { ...bearer, "content-type": "application/json" },
+  body: JSON.stringify({ photoId, tag: "bleu" }),
+});
+check("un code couleur inconnu est refusé", tagUnknown.status === 400);
+
+const tagSet = await fetch(`${BASE}/api/gallery/${SLUG}/tag`, {
+  method: "POST",
+  headers: { ...bearer, "content-type": "application/json" },
+  body: JSON.stringify({ photoId, tag: "yellow" }),
+});
+const tagSetBody = await tagSet.json();
+check("le client peut marquer une photo « à retoucher »", tagSet.ok && tagSetBody.tag === "yellow", JSON.stringify(tagSetBody));
+
+const detailAfterTag = await (await admin("GET", `/api/admin/galleries/${SLUG}`)).json();
+check("le code couleur apparaît côté administration, indépendamment du coup de cœur",
+      detailAfterTag.photos.find((p) => p.id === photoId)?.tag === "yellow",
+      JSON.stringify(detailAfterTag.photos.find((p) => p.id === photoId)?.tag));
+
+const marksNoAuth = await fetch(`${BASE}/api/gallery/${SLUG}/marks`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ photoId, marks: [] }),
+});
+check("poser des repères sans jeton est refusé", marksNoAuth.status === 401);
+
+const marksOutOfBounds = await fetch(`${BASE}/api/gallery/${SLUG}/marks`, {
+  method: "POST",
+  headers: { ...bearer, "content-type": "application/json" },
+  body: JSON.stringify({ photoId, marks: [{ x: 1.4, y: 0.2, note: "hors cadre" }] }),
+});
+check("un repère hors de la photo est refusé", marksOutOfBounds.status === 400);
+
+const tooManyMarks = Array.from({ length: 13 }, (_, i) => ({ x: i / 20, y: 0.5, note: "" }));
+const marksTooMany = await fetch(`${BASE}/api/gallery/${SLUG}/marks`, {
+  method: "POST",
+  headers: { ...bearer, "content-type": "application/json" },
+  body: JSON.stringify({ photoId, marks: tooManyMarks }),
+});
+check("plus de 12 repères sur une même photo est refusé", marksTooMany.status === 400);
+
+const marksSet = await fetch(`${BASE}/api/gallery/${SLUG}/marks`, {
+  method: "POST",
+  headers: { ...bearer, "content-type": "application/json" },
+  body: JSON.stringify({ photoId, marks: [
+    { x: 0.25, y: 0.5, note: "  retirer ce reflet  " },
+    { x: 0.8, y: 0.1, note: "x".repeat(300) },
+  ] }),
+});
+const marksSetBody = await marksSet.json();
+check("le client peut poser des repères annotés (notes nettoyées et bornées)",
+      marksSet.ok && marksSetBody.marks?.length === 2 &&
+      marksSetBody.marks[0].note === "retirer ce reflet" && marksSetBody.marks[0].x === 0.25 &&
+      marksSetBody.marks[1].note.length === 200,
+      JSON.stringify(marksSetBody));
+
+const detailAfterMarks = await (await admin("GET", `/api/admin/galleries/${SLUG}`)).json();
+const markedPhoto = detailAfterMarks.photos.find((p) => p.id === photoId);
+check("les repères apparaissent côté administration, avec leurs coordonnées relatives",
+      markedPhoto?.marks?.length === 2 && markedPhoto.marks[0].y === 0.5 && markedPhoto.marks[0].note === "retirer ce reflet",
+      JSON.stringify(markedPhoto?.marks));
+
+const reLoginAfterMarks = await (await fetch(`${BASE}/api/gallery/${SLUG}/login`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ password: "mot-de-passe-solide" }),
+})).json();
+const reLoggedPhoto = reLoginAfterMarks.photos?.find((p) => p.id === photoId);
+check("code couleur et repères sont visibles à la reconnexion du client",
+      reLoggedPhoto?.tag === "yellow" && reLoggedPhoto?.marks?.length === 2, JSON.stringify(reLoggedPhoto));
+
+const logAfterMarks = await (await admin("GET", `/api/admin/galleries/${SLUG}/log`)).json();
+check("code couleur et repères sont consignés au journal",
+      logAfterMarks.log.some((e) => e.event === "tag" && e.detail === photoId) &&
+      logAfterMarks.log.some((e) => e.event === "mark" && e.detail === photoId));
+
+const marksMissingPhoto = await fetch(`${BASE}/api/gallery/${SLUG}/marks`, {
+  method: "POST",
+  headers: { ...bearer, "content-type": "application/json" },
+  body: JSON.stringify({ photoId: "pho_NExistePas000", marks: [] }),
+});
+check("poser un repère sur une photo inconnue est refusé", marksMissingPhoto.status === 404);
+
+const tagCleared = await fetch(`${BASE}/api/gallery/${SLUG}/tag`, {
+  method: "POST",
+  headers: { ...bearer, "content-type": "application/json" },
+  body: JSON.stringify({ photoId, tag: "" }),
+});
+const marksCleared = await fetch(`${BASE}/api/gallery/${SLUG}/marks`, {
+  method: "POST",
+  headers: { ...bearer, "content-type": "application/json" },
+  body: JSON.stringify({ photoId, marks: [] }),
+});
+const detailAfterReset = await (await admin("GET", `/api/admin/galleries/${SLUG}`)).json();
+const resetPhoto = detailAfterReset.photos.find((p) => p.id === photoId);
+check("retirer le code couleur et les repères remet la photo à neuf",
+      tagCleared.ok && marksCleared.ok && resetPhoto?.tag === "" && resetPhoto?.marks?.length === 0,
+      JSON.stringify({ tag: resetPhoto?.tag, marks: resetPhoto?.marks }));
+
 const commentMissingPhoto = await fetch(`${BASE}/api/gallery/${SLUG}/comment`, {
   method: "POST",
   headers: { ...bearer, "content-type": "application/json" },
@@ -719,6 +832,66 @@ check("la mise en page choisie est bien transmise au client",
 
 const layoutBackToGrille = await admin("POST", `/api/admin/galleries/${SLUG}/layout`, { layout: "defilement" });
 check("le photographe peut basculer vers le défilement", layoutBackToGrille.ok);
+
+/* ---------- Musique d'ambiance ---------- */
+
+const MUSIC = new Uint8Array(20000);
+for (let i = 0; i < MUSIC.length; i++) MUSIC[i] = (i * 31 + 7) & 0xff;
+
+const foreignMusicSet = await peerAdmin("PUT", `/api/admin/galleries/${SLUG}/music?name=pirate.mp3`, MUSIC, true);
+check("un photographe ne peut pas déposer une musique sur une galerie d'un autre compte", foreignMusicSet.status === 404);
+
+const musicBefore = await (await fetch(`${BASE}/api/gallery/${SLUG}/music`)).ok;
+check("sans musique déposée, la piste n'existe pas pour le client", musicBefore === false);
+
+const musicSet = await admin("PUT", `/api/admin/galleries/${SLUG}/music?name=ambiance.mp3`, MUSIC, true);
+const musicSetData = await musicSet.json();
+check("le photographe peut déposer une musique d'ambiance", musicSet.ok && musicSetData.musicName === "ambiance.mp3",
+      JSON.stringify(musicSetData));
+
+const galleryAfterMusic = await (await admin("GET", `/api/admin/galleries/${SLUG}`)).json();
+check("le nom de la piste est bien renvoyé au tableau de bord",
+      galleryAfterMusic.gallery?.music_name === "ambiance.mp3", JSON.stringify(galleryAfterMusic.gallery?.music_name));
+
+const clientLoginWithMusic = await (await fetch(`${BASE}/api/gallery/${SLUG}/login`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ password: NEW_PASSWORD }),
+})).json();
+check("le client est prévenu qu'une musique accompagne la galerie",
+      clientLoginWithMusic.gallery?.hasMusic === true, JSON.stringify(clientLoginWithMusic.gallery?.hasMusic));
+
+const musicGet = await fetch(`${BASE}/api/gallery/${SLUG}/music`);
+const musicBytes = new Uint8Array(await musicGet.arrayBuffer());
+check("la piste est servie au client en audio/mpeg, octet pour octet",
+      musicGet.status === 200 &&
+      (musicGet.headers.get("content-type") || "").startsWith("audio/mpeg") &&
+      musicBytes.length === MUSIC.length && musicBytes.every((b, i) => b === MUSIC[i]),
+      `status ${musicGet.status}, ${musicBytes.length} octets`);
+
+const musicRange = await fetch(`${BASE}/api/gallery/${SLUG}/music`, { headers: { range: "bytes=0-99" } });
+const musicRangeBytes = new Uint8Array(await musicRange.arrayBuffer());
+check("le navigateur peut demander un morceau de la piste (lecture progressive)",
+      musicRange.status === 206 &&
+      musicRange.headers.get("content-range") === `bytes 0-99/${MUSIC.length}` &&
+      musicRangeBytes.length === 100 && musicRangeBytes.every((b, i) => b === MUSIC[i]),
+      `status ${musicRange.status}, content-range ${musicRange.headers.get("content-range")}`);
+
+const foreignMusicDelete = await peerAdmin("DELETE", `/api/admin/galleries/${SLUG}/music`);
+check("un photographe ne peut pas retirer la musique d'une galerie d'un autre compte", foreignMusicDelete.status === 404);
+
+const musicDelete = await admin("DELETE", `/api/admin/galleries/${SLUG}/music`);
+check("le photographe peut retirer la musique", musicDelete.ok);
+
+const musicAfterDelete = await fetch(`${BASE}/api/gallery/${SLUG}/music`);
+const clientLoginNoMusic = await (await fetch(`${BASE}/api/gallery/${SLUG}/login`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ password: NEW_PASSWORD }),
+})).json();
+check("une fois retirée, la piste n'est plus servie et le client n'en est plus informé",
+      musicAfterDelete.status === 404 && clientLoginNoMusic.gallery?.hasMusic === false,
+      `status ${musicAfterDelete.status}, hasMusic ${JSON.stringify(clientLoginNoMusic.gallery?.hasMusic)}`);
 
 /* ---------- Forfait et suppléments ---------- */
 
@@ -1271,6 +1444,241 @@ check("un compte créé plus haut dans ce test apparaît dans la liste, avec son
       adminRow?.firstName === "Camille" && adminRow?.lastName === "Durand", JSON.stringify(adminRow));
 check("les mots de passe ne figurent jamais dans la liste",
       !JSON.stringify(ownerPhotographers).toLowerCase().includes("password"));
+
+/* ---------- « Valider ma sélection » ---------- */
+
+const validateSlug = `${SLUG}-validation`;
+const validateCreated = await (await admin("POST", "/api/admin/galleries", {
+  slug: validateSlug, password: "mot-de-passe-solide", title: "Séance à valider", clientName: "Famille Valide",
+  expiresAt: Math.floor(Date.now() / 1000) + 10 * 86400,
+})).json();
+const validateSession = await (await fetch(`${BASE}/api/gallery/${validateSlug}/login`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ password: "mot-de-passe-solide" }),
+})).json();
+check("une galerie neuve n'a pas de sélection validée",
+      validateSession.gallery?.selectionDoneAt === null, JSON.stringify(validateSession.gallery?.selectionDoneAt));
+
+const validateNoAuth = await fetch(`${BASE}/api/gallery/${validateSlug}/validate`, { method: "POST" });
+check("valider sa sélection sans jeton est refusé", validateNoAuth.status === 401);
+
+const validateBearer = { authorization: `Bearer ${validateSession.token}` };
+const validateResponse = await fetch(`${BASE}/api/gallery/${validateSlug}/validate`, {
+  method: "POST", headers: { ...validateBearer, "content-type": "application/json" }, body: "{}",
+});
+const validateBody = await validateResponse.json();
+check("le client peut valider sa sélection (horodatée, photographe prévenu)",
+      validateResponse.ok && Number.isInteger(validateBody.selectionDoneAt) && validateBody.emailed === true, JSON.stringify(validateBody));
+
+const validateAgain = await (await fetch(`${BASE}/api/gallery/${validateSlug}/validate`, {
+  method: "POST", headers: { ...validateBearer, "content-type": "application/json" }, body: "{}",
+})).json();
+check("revalider dans l'heure met l'horodatage à jour mais ne renvoie pas d'e-mail",
+      Number.isInteger(validateAgain.selectionDoneAt) && validateAgain.emailed === false, JSON.stringify(validateAgain));
+
+const validateDetail = await (await admin("GET", `/api/admin/galleries/${validateSlug}`)).json();
+check("la validation apparaît sur la fiche de la galerie côté administration",
+      validateDetail.gallery?.selection_done_at === validateAgain.selectionDoneAt, JSON.stringify(validateDetail.gallery?.selection_done_at));
+const validateList = await (await admin("GET", "/api/admin/galleries")).json();
+check("… et dans la liste des galeries",
+      validateList.galleries.find((g) => g.slug === validateSlug)?.selection_done_at === validateAgain.selectionDoneAt);
+const validateLog = await (await admin("GET", `/api/admin/galleries/${validateSlug}/log`)).json();
+check("chaque validation est consignée au journal", validateLog.log.filter((e) => e.event === "validate").length === 2);
+const validateRelogin = await (await fetch(`${BASE}/api/gallery/${validateSlug}/login`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ password: "mot-de-passe-solide" }),
+})).json();
+check("le client retrouve sa validation à la reconnexion",
+      validateRelogin.gallery?.selectionDoneAt === validateAgain.selectionDoneAt);
+
+/* ---------- Relances automatiques ---------- */
+
+const meBeforeReminders = await (await admin("GET", "/api/auth/me")).json();
+check("les relances automatiques sont actives par défaut sur un compte", meBeforeReminders.photographer?.remindersEnabled === true);
+
+const DAY = 86400;
+const nowSec = Math.floor(Date.now() / 1000);
+async function reminderGallery(suffix, extra) {
+  const slug = `${SLUG}-rel-${suffix}`;
+  const response = await admin("POST", "/api/admin/galleries", { slug, password: "mot-de-passe-solide", title: `Relance ${suffix}`, ...extra });
+  check(`galerie de relance « ${suffix} » créée`, response.status === 201);
+  return slug;
+}
+const relJ5 = await reminderGallery("j5", { clientEmail: "client-j5@example.com", expiresAt: nowSec + 5 * DAY });
+const relJ1 = await reminderGallery("j1", { clientEmail: "client-j1@example.com", expiresAt: nowSec + 1 * DAY });
+const relNoEmail = await reminderGallery("sans-email", { expiresAt: nowSec + 5 * DAY });
+const relNoExpiry = await reminderGallery("sans-expiration", { clientEmail: "client-x@example.com" });
+const relValidated = await reminderGallery("validee", { clientEmail: "client-v@example.com", expiresAt: nowSec + 1 * DAY });
+const relValidatedSession = await (await fetch(`${BASE}/api/gallery/${relValidated}/login`, {
+  method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ password: "mot-de-passe-solide" }),
+})).json();
+await fetch(`${BASE}/api/gallery/${relValidated}/validate`, {
+  method: "POST", headers: { authorization: `Bearer ${relValidatedSession.token}`, "content-type": "application/json" }, body: "{}",
+});
+
+const remindersForbidden = await admin("POST", "/api/owner/reminders/run");
+check("un compte ordinaire ne peut pas lancer la passe de relances (403)", remindersForbidden.status === 403);
+
+const firstPass = await (await ownerClient("POST", "/api/owner/reminders/run")).json();
+const sentFor = (slug) => firstPass.sent.filter((r) => r.slug === slug).map((r) => r.kind).sort();
+check("à J-5, le client reçoit la première relance (et seulement elle)",
+      JSON.stringify(sentFor(relJ5)) === '["client_j7"]' && firstPass.sent.find((r) => r.slug === relJ5)?.to === "client-j5@example.com",
+      JSON.stringify(sentFor(relJ5)));
+check("à J-1, le client reçoit la seconde relance et le photographe la sienne",
+      JSON.stringify(sentFor(relJ1)) === '["client_j2","photographer_j2"]' &&
+      firstPass.sent.find((r) => r.slug === relJ1 && r.kind === "photographer_j2")?.to === EMAIL,
+      JSON.stringify(sentFor(relJ1)));
+check("sans e-mail client à J-5, rien ne part", sentFor(relNoEmail).length === 0);
+check("sans date d'expiration, rien ne part jamais", sentFor(relNoExpiry).length === 0);
+check("une sélection déjà validée n'est plus relancée", sentFor(relValidated).length === 0);
+
+const secondPass = await (await ownerClient("POST", "/api/owner/reminders/run")).json();
+check("relancer la passe ne renvoie aucune relance déjà envoyée", secondPass.sent.length === 0, JSON.stringify(secondPass.sent));
+
+const remindersOff = await admin("POST", "/api/admin/account/reminders", { enabled: false });
+const meAfterReminders = await (await admin("GET", "/api/auth/me")).json();
+check("le photographe peut désactiver les relances automatiques",
+      remindersOff.ok && meAfterReminders.photographer?.remindersEnabled === false);
+const relDisabled = await reminderGallery("desactivee", { clientEmail: "client-d@example.com", expiresAt: nowSec + 1 * DAY });
+const thirdPass = await (await ownerClient("POST", "/api/owner/reminders/run")).json();
+check("relances désactivées : plus rien ne part pour ce compte, ni au client ni au photographe",
+      thirdPass.sent.filter((r) => r.slug === relDisabled).length === 0, JSON.stringify(thirdPass.sent));
+await admin("POST", "/api/admin/account/reminders", { enabled: true });
+
+/* ---------- Sous-domaine par studio ---------- */
+
+const meBeforeSub = await (await admin("GET", "/api/auth/me")).json();
+check("sans sous-domaine réglé, le profil le dit et annonce le domaine des studios",
+      meBeforeSub.photographer?.subdomain === "" && meBeforeSub.photographer?.studioDomain === "holypixx.com",
+      "STUDIO_DOMAIN (wrangler.toml ou .dev.vars) doit valoir holypixx.com pour ce test — reçu " + JSON.stringify(meBeforeSub.photographer?.studioDomain));
+
+const subBad = await admin("POST", "/api/admin/account/subdomain", { subdomain: "Mon Studio!" });
+check("un sous-domaine avec espaces ou caractères spéciaux est refusé", subBad.status === 400);
+const subShort = await admin("POST", "/api/admin/account/subdomain", { subdomain: "ab" });
+check("un sous-domaine trop court est refusé", subShort.status === 400);
+const subReserved = await admin("POST", "/api/admin/account/subdomain", { subdomain: "www" });
+const subReserved2 = await admin("POST", "/api/admin/account/subdomain", { subdomain: "api" });
+check("les noms réservés (www, api…) sont refusés", subReserved.status === 400 && subReserved2.status === 400);
+
+const SUB = `studio-${RUN}`;
+const subSet = await admin("POST", "/api/admin/account/subdomain", { subdomain: SUB.toUpperCase() });
+const subSetBody = await subSet.json();
+check("le photographe peut choisir son sous-domaine (mis en minuscules)", subSet.ok && subSetBody.subdomain === SUB, JSON.stringify(subSetBody));
+const meAfterSub = await (await admin("GET", "/api/auth/me")).json();
+check("le sous-domaine est relu dans le profil", meAfterSub.photographer?.subdomain === SUB);
+
+const subTaken = await peerAdmin("POST", "/api/admin/account/subdomain", { subdomain: SUB });
+check("un autre compte ne peut pas prendre le même sous-domaine (409)", subTaken.status === 409);
+const subPeer = await peerAdmin("POST", "/api/admin/account/subdomain", { subdomain: `${SUB}-bis` });
+check("un autre compte peut en choisir un autre", subPeer.ok);
+
+// Requêtes « comme depuis le sous-domaine » : même Worker, en-tête Host
+// différent — exactement ce qu'il recevra en production derrière la route
+// *.holypixx.com. `fetch` de Node ignore un Host fourni à la main : on passe
+// par node:http, qui l'envoie tel quel.
+const { request: httpRequest } = await import("node:http");
+function asStudio(sub, path, init = {}) {
+  return new Promise((resolve, reject) => {
+    const u = new URL(`${BASE}${path}`);
+    const req = httpRequest(
+      { hostname: u.hostname, port: u.port, path: u.pathname + u.search, method: init.method || "GET",
+        headers: { ...(init.headers || {}), host: `${sub}.holypixx.com` } },
+      (res) => {
+        const chunks = [];
+        res.on("data", (c) => chunks.push(c));
+        res.on("end", () => {
+          const buf = Buffer.concat(chunks);
+          resolve({
+            status: res.statusCode,
+            ok: res.statusCode >= 200 && res.statusCode < 300,
+            headers: { get: (k) => (res.headers[k.toLowerCase()] === undefined ? null : String(res.headers[k.toLowerCase()])) },
+            text: async () => buf.toString("utf8"),
+            json: async () => JSON.parse(buf.toString("utf8")),
+          });
+        });
+      }
+    );
+    req.on("error", reject);
+    if (init.body) req.write(init.body);
+    req.end();
+  });
+}
+
+const unknownStudio = await asStudio("studio-inexistant-" + RUN, "/");
+check("un sous-domaine qui ne correspond à aucun studio renvoie une page 404 lisible",
+      unknownStudio.status === 404 && (unknownStudio.headers.get("content-type") || "").includes("text/html"));
+
+// La galerie principale du test a été supprimée plus haut (suppression en
+// cascade) : on se sert de celle de la section « Valider ma sélection ».
+const loginOnStudio = await asStudio(SUB, `/api/gallery/${validateSlug}/login`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ password: "mot-de-passe-solide" }),
+});
+const loginOnStudioBody = await loginOnStudio.json();
+check("une galerie du studio s'ouvre sous l'adresse du studio, avec le nom du studio pour le client",
+      loginOnStudio.ok && loginOnStudioBody.gallery?.studioName === "Nouveau nom de studio",
+      `HTTP ${loginOnStudio.status} — ${JSON.stringify(loginOnStudioBody.gallery?.studioName ?? loginOnStudioBody)}`);
+
+const loginOnOtherStudio = await asStudio(`${SUB}-bis`, `/api/gallery/${validateSlug}/login`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ password: "mot-de-passe-solide" }),
+});
+check("la même galerie n'existe pas sous l'adresse d'un autre studio (404)", loginOnOtherStudio.status === 404);
+
+// La page elle-même est relue depuis PUBLIC_SITE_ORIGIN : en local, un petit
+// serveur statique sur web/ (PUBLIC_SITE_ORIGIN=http://localhost:8000 dans
+// .dev.vars). Si le port est déjà pris ou la variable absente, on le dit
+// plutôt que d'échouer pour une raison étrangère au Worker.
+{
+  const { createServer } = await import("node:http");
+  const { readFile } = await import("node:fs/promises");
+  const { fileURLToPath } = await import("node:url");
+  const { dirname, join } = await import("node:path");
+  const webDir = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "web");
+  const types = { html: "text/html; charset=utf-8", css: "text/css; charset=utf-8", js: "text/javascript; charset=utf-8" };
+  const site = createServer(async (req, res) => {
+    const pathname = req.url.split("?")[0] === "/" ? "/galerie.html" : req.url.split("?")[0];
+    try {
+      const body = await readFile(join(webDir, pathname));
+      res.writeHead(200, { "content-type": types[pathname.split(".").pop()] || "application/octet-stream" });
+      res.end(body);
+    } catch {
+      res.writeHead(404).end();
+    }
+  });
+  const listening = await new Promise((resolve) => {
+    site.once("error", () => resolve(false));
+    site.listen(8000, "localhost", () => resolve(true));
+  });
+  if (listening) {
+    const pageOnStudio = await asStudio(SUB, "/?g=" + validateSlug);
+    const pageHtml = await pageOnStudio.text();
+    check("la page de galerie est servie sous l'adresse du studio, l'API pointée sur ce même hôte (sans schéma)",
+          pageOnStudio.status === 200 && (pageOnStudio.headers.get("content-type") || "").includes("text/html") &&
+          pageHtml.includes(`api: "//${SUB}.holypixx.com"`),
+          pageOnStudio.status === 200 ? (pageHtml.match(/api: "[^"]*"/) || [])[0] : `HTTP ${pageOnStudio.status} — PUBLIC_SITE_ORIGIN=http://localhost:8000 attendu dans worker/.dev.vars`);
+    const cssOnStudio = await asStudio(SUB, "/gallery.css");
+    check("la feuille de style suit, avec son bon type",
+          cssOnStudio.status === 200 && (cssOnStudio.headers.get("content-type") || "").includes("text/css"));
+    const otherOnStudio = await asStudio(SUB, "/autre-chose.html");
+    check("rien d'autre que la page de galerie n'est servi sous l'adresse du studio", otherOnStudio.status === 404);
+    site.close();
+  } else {
+    console.log("  (port 8000 déjà pris : page sous sous-domaine non vérifiée ici)");
+  }
+}
+
+const subCleared = await admin("POST", "/api/admin/account/subdomain", { subdomain: "" });
+const meAfterClear = await (await admin("GET", "/api/auth/me")).json();
+check("vider le champ retire le sous-domaine", subCleared.ok && meAfterClear.photographer?.subdomain === "");
+const loginAfterClear = await asStudio(SUB, `/api/gallery/${validateSlug}/login`, {
+  method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ password: "mot-de-passe-solide" }),
+});
+check("une fois retiré, l'ancien sous-domaine ne mène plus nulle part", loginAfterClear.status === 404);
 
 const failed = checks.filter((c) => !c.ok);
 console.log(failed.length ? `\n${failed.length} vérification(s) en échec.` : `\n${checks.length} vérifications, toutes passent.`);
