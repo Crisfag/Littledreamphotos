@@ -100,6 +100,10 @@ export class WorkerClient {
     return this.request("POST", "/api/admin/account", { studioName });
   }
 
+  setName(firstName, lastName) {
+    return this.request("POST", "/api/admin/account/name", { firstName, lastName });
+  }
+
   changePassword(currentPassword, newPassword) {
     return this.request("POST", "/api/admin/account/password", { currentPassword, newPassword });
   }
@@ -118,6 +122,14 @@ export class WorkerClient {
 
   stats() {
     return this.request("GET", "/api/admin/stats");
+  }
+
+  ownerPhotographers() {
+    return this.request("GET", "/api/owner/photographers");
+  }
+
+  ownerStats() {
+    return this.request("GET", "/api/owner/stats");
   }
 
   listGalleries() {

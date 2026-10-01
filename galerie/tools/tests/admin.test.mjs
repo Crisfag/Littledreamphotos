@@ -73,6 +73,8 @@ check("le lien « retour » ramène bien au formulaire de connexion", await page
 
 await page.click("#ad-show-signup");
 await page.waitForSelector("#ad-signup-card", { state: "visible", timeout: 5000 });
+await page.fill('#ad-signup-form [name="firstName"]', "Julie");
+await page.fill('#ad-signup-form [name="lastName"]', "Testeuse");
 await page.fill('#ad-signup-form [name="studioName"]', "Studio de test");
 await page.fill('#ad-signup-form [name="email"]', email);
 await page.fill('#ad-signup-form [name="password"]', password);
@@ -80,6 +82,8 @@ await page.click("#ad-signup-submit");
 await page.waitForSelector("#ad-new-gallery", { timeout: 10000 });
 check("créer un compte depuis le formulaire connecte automatiquement au tableau de bord",
       await page.isVisible("#ad-new-gallery"));
+check("l'onglet Admin est masqué pour un compte qui n'est pas la propriétaire",
+      await page.isHidden("#ad-tab-owner"));
 check("le nom du studio renseigné à l'inscription apparaît dans la barre supérieure",
       (await page.textContent("#ad-current-account")).indexOf("Studio de test") === 0);
 check("la barre d'onglets Galeries / Facturation / Paramètres est visible",
@@ -254,6 +258,69 @@ const peerSeesForeignGallery = await peerPage.locator(`.ad-card:has-text("${titl
 check("un compte ne voit jamais les galeries d'un autre compte dans son tableau de bord",
       peerSeesForeignGallery === 0);
 await peerContext.close();
+
+/* ---------- Page Admin (propriétaire uniquement) ---------- */
+// Un compte dont l'e-mail correspond à OWNER_EMAIL (voir worker/wrangler.toml
+// et worker/src/owner.js) — ici, comme côté API, ce test est forcément couplé
+// à cette adresse précise, créée à la demande (ou retrouvée si un précédent
+// run l'a déjà créée dans cette même base locale, auquel cas on se connecte
+// avec le même mot de passe fixe plutôt que d'échouer sur un conflit).
+
+const OWNER_EMAIL = "fagnantchristine@gmail.com";
+const OWNER_PASSWORD = "mot-de-passe-de-la-proprietaire-1234";
+
+const ownerSignup = await fetch(`${API}/api/auth/signup`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({
+    email: OWNER_EMAIL, password: OWNER_PASSWORD,
+    studioName: "Holypixx", firstName: "Christine", lastName: "Fagnant",
+  }),
+});
+if (ownerSignup.status !== 201 && ownerSignup.status !== 409) {
+  throw new Error(`Impossible de préparer le compte propriétaire pour ce test : HTTP ${ownerSignup.status}`);
+}
+
+const ownerContext = await browser.newContext();
+const ownerPage = await ownerContext.newPage();
+await ownerPage.goto(BASE, { waitUntil: "domcontentloaded" });
+await ownerPage.waitForSelector("#ad-login-form", { timeout: 10000 });
+await ownerPage.fill('#ad-login-form [name="email"]', OWNER_EMAIL);
+await ownerPage.fill('#ad-login-form [name="password"]', OWNER_PASSWORD);
+await ownerPage.click("#ad-login-submit");
+await ownerPage.waitForSelector("#ad-tabs", { timeout: 10000 });
+check("l'onglet Admin est visible pour le compte dont l'e-mail correspond à OWNER_EMAIL",
+      await ownerPage.isVisible("#ad-tab-owner"),
+      "OWNER_EMAIL (wrangler.toml) doit valoir exactement " + OWNER_EMAIL + " pour ce test");
+
+await ownerPage.click("#ad-tab-owner");
+await ownerPage.waitForSelector(".ad-stats", { timeout: 10000 });
+check("l'onglet Admin ouvre bien cet écran, avec son propre lien dans l'URL",
+      await ownerPage.evaluate(() => location.hash) === "#/proprietaire");
+
+const ownerStatsText = await ownerPage.textContent(".ad-stats");
+check("les compteurs plateforme (photographes, galeries, ventes…) s'affichent",
+      ownerStatsText.indexOf("Photographes inscrits") !== -1 &&
+      ownerStatsText.indexOf("Galeries créées") !== -1 &&
+      ownerStatsText.indexOf("Suppléments en attente") !== -1,
+      ownerStatsText.replace(/\s+/g, " "));
+
+const ownerPageText = await ownerPage.textContent("#ad-view");
+// Prénom/nom tels que saisis à l'inscription plus haut — le test de la
+// section Paramètres, qui renomme le prénom en « Julie-Anne », n'a lieu que
+// plus tard dans ce même fichier.
+check("le compte créé plus haut dans ce test apparaît dans la liste, avec son prénom/nom",
+      ownerPageText.indexOf("Julie Testeuse") !== -1 && ownerPageText.indexOf(email) !== -1,
+      ownerPageText.indexOf(email) !== -1 ? "e-mail présent" : "e-mail absent");
+check("la section trafic & sources explique comment brancher Cloudflare Web Analytics",
+      ownerPageText.indexOf("Cloudflare Web Analytics") !== -1);
+
+// Reconnexion avec le compte normal créé au tout début de ce test : l'onglet
+// Admin ne doit jamais apparaître pour lui, même après tout ce qui précède.
+check("l'onglet Admin reste masqué pour le compte normal de ce test, même après coup",
+      await page.isHidden("#ad-tab-owner"));
+
+await ownerContext.close();
 
 /* ---------- Le lien créé fonctionne vraiment côté client ---------- */
 
@@ -442,6 +509,17 @@ await page.click("#ad-studio-save");
 await page.waitForSelector(".ad-toast-visible", { timeout: 5000 });
 check("le nom du studio modifié apparaît aussitôt dans la barre supérieure",
       (await page.textContent("#ad-current-account")).indexOf("Studio de test — renommé") === 0);
+
+check("le prénom et le nom saisis à l'inscription sont bien relus dans Paramètres",
+      await page.inputValue('#ad-name-form [name="firstName"]') === "Julie" &&
+      await page.inputValue('#ad-name-form [name="lastName"]') === "Testeuse");
+await page.fill('#ad-name-form [name="firstName"]', "Julie-Anne");
+await page.click("#ad-name-save");
+await page.waitForSelector(".ad-toast-visible", { timeout: 5000 });
+await page.reload({ waitUntil: "domcontentloaded" });
+await page.waitForSelector("#ad-name-form", { timeout: 10000 });
+check("le prénom modifié depuis Paramètres est bien relu après rechargement",
+      await page.inputValue('#ad-name-form [name="firstName"]') === "Julie-Anne");
 
 check("la grille est l'option de présentation par défaut active avant tout changement",
       await page.locator('#ad-default-layout-options .ad-layout-option[data-layout="grille"].ad-layout-option-active').count() === 1);

@@ -7,6 +7,13 @@ CREATE TABLE IF NOT EXISTS photographers (
   password_hash  TEXT NOT NULL,
   password_salt  TEXT NOT NULL,
   studio_name    TEXT NOT NULL DEFAULT '',
+  -- Identité de la personne (jamais affichée au client, contrairement au nom
+  -- de studio) — sert à la page propriétaire (voir owner.js) pour identifier
+  -- qui est derrière chaque compte. Facultatif, jamais exigé à l'inscription :
+  -- les comptes créés avant cette fonctionnalité restent vides tant que le
+  -- photographe ne les renseigne pas depuis Paramètres.
+  first_name     TEXT NOT NULL DEFAULT '',
+  last_name      TEXT NOT NULL DEFAULT '',
   -- Paiement en ligne des suppléments (Stripe Connect, comptes « Express ») :
   -- chaque photographe connecte son propre compte, l'argent lui arrive
   -- directement, jamais via un compte pivot. stripe_charges_enabled reflète
@@ -333,3 +340,7 @@ CREATE INDEX IF NOT EXISTS idx_email_changes_photographer ON email_changes(photo
 --   );
 --   CREATE INDEX IF NOT EXISTS idx_email_changes_token ON email_changes(token_hash);
 --   CREATE INDEX IF NOT EXISTS idx_email_changes_photographer ON email_changes(photographer_id, created_at);
+
+-- Migration vers la page propriétaire (prénom/nom des comptes) — bases créées avant :
+--   ALTER TABLE photographers ADD COLUMN first_name TEXT NOT NULL DEFAULT '';
+--   ALTER TABLE photographers ADD COLUMN last_name TEXT NOT NULL DEFAULT '';

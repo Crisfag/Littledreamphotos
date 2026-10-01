@@ -12,6 +12,7 @@
 import { handleAdmin } from "./admin.js";
 import { handleViewer } from "./viewer.js";
 import { handleAuth } from "./authPhotographer.js";
+import { handleOwner } from "./owner.js";
 import { handleStripeWebhook } from "./billing.js";
 import { json, fail } from "./http.js";
 
@@ -59,6 +60,8 @@ export default {
         response = await handleAuth(request, env, ctx, path);
       } else if (path.startsWith("/api/admin/")) {
         response = await handleAdmin(request, env, ctx, path);
+      } else if (path.startsWith("/api/owner/")) {
+        response = await handleOwner(request, env, path);
       } else if (path.startsWith("/api/gallery/")) {
         response = await handleViewer(request, env, ctx, path);
       } else if (path === "/api/stripe/webhook") {

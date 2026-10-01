@@ -110,6 +110,7 @@ h3 { font-size: 1.15rem; margin-bottom: .9rem; }
 /* ---------- Boutons ---------- */
 
 .ad-btn {
+  display: inline-block;
   font-family: var(--sans);
   font-size: .86rem;
   font-weight: 500;
@@ -119,6 +120,7 @@ h3 { font-size: 1.15rem; margin-bottom: .9rem; }
   border-radius: 999px;
   padding: .55rem 1.1rem;
   cursor: pointer;
+  text-decoration: none;
   transition: background .15s var(--ease), border-color .15s var(--ease), transform .15s var(--ease);
 }
 .ad-btn:hover { border-color: var(--rose); transform: translateY(-1px); }
@@ -442,6 +444,9 @@ h3 { font-size: 1.15rem; margin-bottom: .9rem; }
 
 .ad-table-wrap { overflow-x: auto; }
 .ad-table { width: 100%; border-collapse: collapse; font-size: .84rem; }
+
+.ad-owner-steps { margin: .9rem 0; padding-left: 1.3rem; }
+.ad-owner-steps li { margin-bottom: .5rem; font-size: .88rem; color: var(--charcoal); }
 .ad-table th { text-align: left; color: var(--muted); font-weight: 500; padding: .4rem .6rem; border-bottom: 1px solid var(--line); white-space: nowrap; }
 .ad-table td { padding: .45rem .6rem; border-bottom: 1px solid var(--line); }
 .ad-table tr:last-child td { border-bottom: 0; }

@@ -66,10 +66,12 @@ function issueSession(env, photographer) {
   });
 }
 
-function profileOf(photographer) {
+function profileOf(photographer, env) {
   return {
     id: photographer.id,
     email: photographer.email,
+    firstName: photographer.first_name || "",
+    lastName: photographer.last_name || "",
     studioName: photographer.studio_name || "",
     stripeConnected: Boolean(photographer.stripe_account_id),
     stripeChargesEnabled: Boolean(photographer.stripe_charges_enabled),
@@ -77,6 +79,11 @@ function profileOf(photographer) {
     billingAddress: photographer.billing_address || "",
     billingVatNumber: photographer.billing_vat_number || "",
     defaultLayout: photographer.default_layout || "grille",
+    // Donne droit à l'onglet Admin (toutes galeries/comptes confondus, voir
+    // owner.js) côté interface — purement indicatif ici : chaque route
+    // /api/owner/* revérifie elle-même l'e-mail côté serveur, jamais sur la
+    // seule foi de ce champ renvoyé au client.
+    isOwner: Boolean(env?.OWNER_EMAIL) && photographer.email === env.OWNER_EMAIL,
   };
 }
 
@@ -91,6 +98,8 @@ async function signup(request, env) {
   const email = String(body.email || "").trim().toLowerCase();
   const password = String(body.password || "");
   const studioName = String(body.studioName || "").slice(0, 120);
+  const firstName = String(body.firstName || "").slice(0, 80);
+  const lastName = String(body.lastName || "").slice(0, 80);
 
   if (!EMAIL_RE.test(email)) return fail(400, "Adresse e-mail invalide");
   if (password.length < 10) return fail(400, "Mot de passe trop court (10 caractères minimum)");
@@ -104,16 +113,16 @@ async function signup(request, env) {
   const id = newId();
 
   await env.DB.prepare(
-    `INSERT INTO photographers (id, email, password_hash, password_salt, studio_name, created_at)
-     VALUES (?, ?, ?, ?, ?, ?)`
+    `INSERT INTO photographers (id, email, password_hash, password_salt, studio_name, first_name, last_name, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
   )
-    .bind(id, email, hash, salt, studioName, now())
+    .bind(id, email, hash, salt, studioName, firstName, lastName, now())
     .run();
 
-  const photographer = { id, email, studio_name: studioName };
+  const photographer = { id, email, studio_name: studioName, first_name: firstName, last_name: lastName };
   const token = await issueSession(env, photographer);
   return json(
-    { token, expiresIn: SESSION_TTL_SECONDS, photographer: profileOf(photographer) },
+    { token, expiresIn: SESSION_TTL_SECONDS, photographer: profileOf(photographer, env) },
     { status: 201 }
   );
 }
@@ -153,7 +162,7 @@ async function login(request, env) {
 
   await logAuth(env, { emailHash, event: "login", ipHash });
   const token = await issueSession(env, photographer);
-  return json({ token, expiresIn: SESSION_TTL_SECONDS, photographer: profileOf(photographer) });
+  return json({ token, expiresIn: SESSION_TTL_SECONDS, photographer: profileOf(photographer, env) });
 }
 
 // Utilisé par admin.js pour vérifier une requête et en extraire le
@@ -173,7 +182,7 @@ async function me(request, env) {
     .bind(photographerId)
     .first();
   if (!photographer) return fail(401, "Session invalide");
-  return json({ photographer: profileOf(photographer) });
+  return json({ photographer: profileOf(photographer, env) });
 }
 
 // Comme pour le mot de passe d'une galerie : jamais de confirmation ou
@@ -266,7 +275,7 @@ async function resetPassword(request, env) {
   // `p.*`) : pas besoin d'un objet à part, et ça reste correct sans y penser
   // à chaque nouvelle colonne ajoutée à la table.
   const sessionToken = await issueSession(env, reset);
-  return json({ token: sessionToken, expiresIn: SESSION_TTL_SECONDS, photographer: profileOf(reset) });
+  return json({ token: sessionToken, expiresIn: SESSION_TTL_SECONDS, photographer: profileOf(reset, env) });
 }
 
 export async function handleAuth(request, env, ctx, path) {

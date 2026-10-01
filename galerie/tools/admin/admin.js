@@ -46,6 +46,7 @@
     app: document.getElementById("ad-app"),
     account: document.getElementById("ad-current-account"),
     tabs: document.getElementById("ad-tabs"),
+    tabOwner: document.getElementById("ad-tab-owner"),
   };
 
   /* ---------- Onglets (Galeries / Facturation / Paramètres) ---------- */
@@ -68,6 +69,7 @@
       if (tab === "galleries") renderList();
       else if (tab === "billing") renderBilling();
       else if (tab === "settings") renderSettings();
+      else if (tab === "owner") renderOwner();
     });
   }
 
@@ -93,6 +95,8 @@
     if (el.account) {
       el.account.textContent = (photographer.studioName || photographer.email) + " · Galeries protégées";
     }
+    state.isOwner = Boolean(photographer.isOwner);
+    if (el.tabOwner) el.tabOwner.hidden = !state.isOwner;
   }
 
   /* ---------- Requêtes ---------- */
@@ -531,6 +535,16 @@
       '<button type="submit" class="ad-btn ad-btn-primary" id="ad-studio-save">Enregistrer</button>' +
       "</form></section>" +
 
+      '<section><div class="ad-section-header"><h3>Votre identité</h3></div>' +
+      '<p class="ad-hint">Jamais affichée à vos clients — contrairement au nom du studio ci-dessus.</p>' +
+      '<form id="ad-name-form" class="ad-field-row">' +
+      '<label class="ad-field"><span>Prénom</span>' +
+      '<input type="text" name="firstName" value="' + esc(photographer.firstName) + '" placeholder="Christine" /></label>' +
+      '<label class="ad-field"><span>Nom</span>' +
+      '<input type="text" name="lastName" value="' + esc(photographer.lastName) + '" placeholder="Fagnant" /></label>' +
+      '<button type="submit" class="ad-btn ad-btn-primary" id="ad-name-save">Enregistrer</button>' +
+      "</form></section>" +
+
       '<section><div class="ad-section-header"><h3>Présentation par défaut</h3></div>' +
       '<p class="ad-hint">Proposée à la création d\'une nouvelle galerie — modifiable au cas par cas ensuite, comme pour n\'importe quelle galerie déjà créée.</p>' +
       '<div class="ad-layout-options" id="ad-default-layout-options">' +
@@ -581,6 +595,24 @@
         await api("POST", "/account", { studioName: studioName });
         toast("Nom du studio enregistré.");
         if (el.account) el.account.textContent = (studioName || photographer.email) + " · Galeries protégées";
+      } catch (err) {
+        toast(err.message, true);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    document.getElementById("ad-name-form").addEventListener("submit", async function (event) {
+      event.preventDefault();
+      var form = event.target;
+      var btn = document.getElementById("ad-name-save");
+      btn.disabled = true;
+      try {
+        await api("POST", "/account/name", {
+          firstName: form.firstName.value.trim(),
+          lastName: form.lastName.value.trim(),
+        });
+        toast("Identité enregistrée.");
       } catch (err) {
         toast(err.message, true);
       } finally {
@@ -666,6 +698,136 @@
         btn.disabled = false;
       }
     });
+  }
+
+  /* ---------- Vue : Admin (toutes galeries et tous comptes confondus) ---------- */
+  // Onglet masqué pour tout le monde sauf la propriétaire (voir showApp) —
+  // et même masqué, ce n'est qu'un confort d'affichage : chaque appel
+  // /owner/* est revérifié côté serveur (voir worker/src/owner.js), jamais
+  // sur la seule foi de ce qui est affiché ici.
+
+  function formatMonthLabel(month) {
+    var parts = month.split("-");
+    var date = new Date(Number(parts[0]), Number(parts[1]) - 1, 1);
+    return date.toLocaleDateString("fr-BE", { month: "long", year: "numeric" });
+  }
+
+  function ownerStatsHtml(stats) {
+    return (
+      '<div class="ad-stats">' +
+      statTile("Photographes inscrits", stats.photographersCount) +
+      statTile("Galeries créées", stats.galleriesCount) +
+      statTile("Photos envoyées", stats.photosCount) +
+      statTile("Ventes effectuées", stats.salesCount) +
+      statTile("Montant total encaissé", formatEuros(stats.salesAmountCents)) +
+      statTile("Suppléments en ordre", stats.extrasPaidCount, "", stats.extrasPaidCount > 0 ? "ad-stat-success" : "") +
+      statTile(
+        "Suppléments en attente",
+        stats.extrasDueCount,
+        stats.extrasDueCount > 0 ? formatEuros(stats.extrasDueAmountCents) + " à régler" : "",
+        stats.extrasDueCount > 0 ? "ad-stat-warn" : ""
+      ) +
+      "</div>"
+    );
+  }
+
+  function signupsTableHtml(signupsByMonth) {
+    if (!signupsByMonth.length) return '<p class="ad-hint">Aucune inscription pour l\'instant.</p>';
+    var rows = signupsByMonth.map(function (row) {
+      return "<tr><td>" + esc(formatMonthLabel(row.month)) + "</td><td>" + row.count + "</td></tr>";
+    });
+    return (
+      '<div class="ad-table-wrap"><table class="ad-table"><thead><tr><th>Mois</th><th>Nouveaux comptes</th></tr></thead><tbody>' +
+      rows.join("") + "</tbody></table></div>"
+    );
+  }
+
+  function photographersTableHtml(photographers) {
+    if (!photographers.length) return '<p class="ad-hint">Aucun compte pour l\'instant.</p>';
+    var rows = photographers.map(function (p) {
+      var name = [p.firstName, p.lastName].filter(Boolean).join(" ");
+      return (
+        "<tr>" +
+        "<td>" + (name ? esc(name) : '<span class="ad-hint">—</span>') + "</td>" +
+        "<td>" + (p.studioName ? esc(p.studioName) : '<span class="ad-hint">—</span>') + "</td>" +
+        "<td>" + esc(p.email) + "</td>" +
+        "<td>" + esc(formatDate(p.createdAt)) + "</td>" +
+        "<td>" + p.galleriesCount + "</td>" +
+        "<td>" + p.photosCount + "</td>" +
+        "<td>" + (p.stripeChargesEnabled
+          ? '<span class="ad-stripe-badge ad-stripe-badge-ok">✓ Actif</span>'
+          : '<span class="ad-hint">—</span>') + "</td>" +
+        "</tr>"
+      );
+    });
+    return (
+      '<div class="ad-table-wrap"><table class="ad-table"><thead><tr>' +
+      "<th>Nom</th><th>Studio</th><th>E-mail</th><th>Inscrit le</th><th>Galeries</th><th>Photos</th><th>Stripe</th>" +
+      "</tr></thead><tbody>" + rows.join("") + "</tbody></table></div>"
+    );
+  }
+
+  // Le trafic du site (visites, pages vues) et les sources de visiteurs
+  // (Google, réseaux sociaux, direct…) ne sont pas suivis par ce Worker — ce
+  // n'est pas son rôle, et un système maison referait moins bien ce que
+  // Cloudflare Web Analytics fait déjà gratuitement pour un site déjà
+  // hébergé chez Cloudflare. Tant que ce n'est pas branché, on explique
+  // comment faire plutôt que d'inventer des chiffres.
+  function trafficSectionHtml() {
+    return (
+      '<p class="ad-hint">Pas encore branché. Le trafic du site (visites, pages vues) et les sources de ' +
+      'visiteurs (Google, réseaux sociaux, accès direct…) viennent de ' +
+      '<strong>Cloudflare Web Analytics</strong> — gratuit, et déjà disponible sur votre compte Cloudflare ' +
+      "puisque le site y est hébergé.</p>" +
+      '<ol class="ad-owner-steps">' +
+      '<li>Dashboard Cloudflare → <strong>Analytics &amp; Logs → Web Analytics</strong> → <strong>Add a site</strong>, ' +
+      "choisissez holypixx.com.</li>" +
+      "<li>Cloudflare donne une balise JavaScript à coller sur chaque page du site — transmettez-la, elle sera " +
+      "intégrée au code.</li>" +
+      "<li>Les statistiques (visiteurs, pages vues, pays, et les sources de trafic) apparaissent ensuite " +
+      "directement dans le dashboard Cloudflare, généralement sous 24h.</li>" +
+      "</ol>" +
+      '<a class="ad-btn" href="https://dash.cloudflare.com/" target="_blank" rel="noopener">Ouvrir le dashboard Cloudflare →</a>' +
+      '<p class="ad-hint" style="margin-top:1rem;">Pour le référencement (mots-clés, position sur Google…), ' +
+      "même logique avec <strong>Google Search Console</strong> (gratuit) — à connecter séparément avec votre " +
+      "propre compte Google, ça aussi je ne peux pas le faire à votre place.</p>"
+    );
+  }
+
+  async function renderOwner(skipHash) {
+    if (!skipHash && location.hash !== "#/proprietaire") history.pushState(null, "", "#/proprietaire");
+    setActiveTab("owner");
+    el.view.innerHTML = '<p class="ad-loading">Chargement…</p>';
+
+    var statsData, photographersData;
+    try {
+      statsData = await api("GET", "/owner/stats");
+      photographersData = await api("GET", "/owner/photographers");
+    } catch (err) {
+      toast(err.message, true);
+      return renderList();
+    }
+
+    el.view.innerHTML =
+      '<header class="ad-detail-header"><div><h2>Admin</h2>' +
+      '<p class="ad-hint">Vue d\'ensemble de toute la plateforme, tous comptes et galeries confondus. ' +
+      "Visible uniquement par vous.</p>" +
+      "</div></header>" +
+
+      ownerStatsHtml(statsData) +
+
+      '<section><div class="ad-section-header"><h3>Inscriptions par mois</h3></div>' +
+      signupsTableHtml(statsData.signupsByMonth) +
+      "</section>" +
+
+      '<section><div class="ad-section-header"><h3>Comptes photographes (' +
+      photographersData.photographers.length + ")</h3></div>" +
+      photographersTableHtml(photographersData.photographers) +
+      "</section>" +
+
+      '<section><div class="ad-section-header"><h3>Trafic du site &amp; sources de visiteurs</h3></div>' +
+      trafficSectionHtml() +
+      "</section>";
   }
 
   /* ---------- Vue : vérifier une photo suspecte ---------- */
@@ -1358,6 +1520,8 @@
           email: form.email.value.trim(),
           password: form.password.value,
           studioName: form.studioName.value.trim(),
+          firstName: form.firstName.value.trim(),
+          lastName: form.lastName.value.trim(),
         }),
       });
       var data = await response.json().catch(function () { return {}; });
@@ -1483,6 +1647,7 @@
     else if (location.hash === "#/detect") renderDetect(true);
     else if (location.hash.indexOf("#/facturation") === 0) renderBilling(true);
     else if (location.hash === "#/parametres") renderSettings(true);
+    else if (location.hash === "#/proprietaire") renderOwner(true);
     else renderList(true);
   }
 

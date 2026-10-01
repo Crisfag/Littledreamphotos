@@ -283,6 +283,8 @@ async function handleAuth(req, res, parts) {
     const email = String(body.email || "").trim();
     const password = String(body.password || "");
     const studioName = String(body.studioName || "").trim();
+    const firstName = String(body.firstName || "").trim();
+    const lastName = String(body.lastName || "").trim();
     if (!email || !password) return json(res, 400, { error: "E-mail et mot de passe requis" });
 
     let signupRes;
@@ -290,7 +292,7 @@ async function handleAuth(req, res, parts) {
       signupRes = await fetch(`${config.api}/api/auth/signup`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email, password, studioName }),
+        body: JSON.stringify({ email, password, studioName, firstName, lastName }),
       });
     } catch {
       return json(res, 502, { error: "Worker injoignable" });
@@ -592,6 +594,17 @@ async function handleApi(req, res, url) {
     }
   }
 
+  // POST /local/account/name — prénom/nom de la personne derrière le compte.
+  if (parts.length === 2 && parts[0] === "account" && parts[1] === "name" && req.method === "POST") {
+    const body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
+    try {
+      await client.setName(String(body.firstName || ""), String(body.lastName || ""));
+      return json(res, 200, { ok: true });
+    } catch (err) {
+      return relayError(res, err, "Impossible d'enregistrer le nom");
+    }
+  }
+
   // POST /local/account/password — mot de passe de connexion, en session.
   if (parts.length === 2 && parts[0] === "account" && parts[1] === "password" && req.method === "POST") {
     const body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
@@ -622,6 +635,26 @@ async function handleApi(req, res, url) {
       return json(res, 200, { ok: true });
     } catch (err) {
       return relayError(res, err, "Impossible d'enregistrer la présentation par défaut");
+    }
+  }
+
+  // GET /local/owner/photographers, GET /local/owner/stats — page Admin,
+  // réservée à la propriétaire (voir worker/src/owner.js : le Worker
+  // revérifie lui-même l'identité, un 403 est relayé tel quel ici).
+  if (parts.length === 2 && parts[0] === "owner" && parts[1] === "photographers" && req.method === "GET") {
+    try {
+      const result = await client.ownerPhotographers();
+      return json(res, 200, result);
+    } catch (err) {
+      return relayError(res, err, "Impossible de lire la liste des photographes");
+    }
+  }
+  if (parts.length === 2 && parts[0] === "owner" && parts[1] === "stats" && req.method === "GET") {
+    try {
+      const result = await client.ownerStats();
+      return json(res, 200, result);
+    } catch (err) {
+      return relayError(res, err, "Impossible de lire les compteurs plateforme");
     }
   }
 

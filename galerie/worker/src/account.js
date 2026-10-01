@@ -35,6 +35,25 @@ export async function updateStudioName(request, env, photographerId) {
   return json({ ok: true });
 }
 
+// Identité de la personne derrière le compte — jamais affichée au client,
+// contrairement au nom de studio : utile à la page propriétaire pour
+// identifier qui est qui. Facultatif, contrairement au nom de studio.
+export async function updateName(request, env, photographerId) {
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return fail(400, "Requête invalide");
+  }
+  const firstName = String(body.firstName || "").trim().slice(0, 80);
+  const lastName = String(body.lastName || "").trim().slice(0, 80);
+
+  await env.DB.prepare("UPDATE photographers SET first_name = ?, last_name = ? WHERE id = ?")
+    .bind(firstName, lastName, photographerId)
+    .run();
+  return json({ ok: true });
+}
+
 // Contrairement à la réinitialisation (compte perdu), ici le photographe est
 // déjà connecté : on redemande son mot de passe ACTUEL plutôt que de se fier
 // à la seule session, pour qu'un jeton de session volé ne suffise jamais à
