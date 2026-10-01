@@ -38,6 +38,7 @@ const HOST = process.env.GALERIE_ADMIN_HOST || "127.0.0.1";
 // via cette variable plutôt que de laisser le service choisir.
 const PORT = Number(process.env.GALERIE_ADMIN_PORT || process.env.PORT || 4000);
 const MAX_UPLOAD_BYTES = 60 * 1024 * 1024;
+const MAX_MUSIC_BYTES = 15 * 1024 * 1024;
 const SESSION_COOKIE = "galerie_session";
 const SESSION_MAX_AGE = 30 * 24 * 60 * 60; // aligné sur la durée du jeton côté Worker
 
@@ -780,6 +781,48 @@ async function handleApi(req, res, url) {
     } catch (err) {
       console.error("Échec du traitement de l'image d'arrière-plan :", err);
       return relayError(res, err, "Échec du traitement de l'image");
+    }
+  }
+
+  // POST /local/galleries/:slug/music — musique d'ambiance (MP3). Un décor,
+  // pas une livraison : aucun traitement, le fichier est stocké tel quel.
+  if (parts.length === 3 && parts[2] === "music" && req.method === "POST") {
+    const contentLength = Number(req.headers["content-length"] || 0);
+    if (contentLength > MAX_MUSIC_BYTES) return json(res, 413, { error: "Fichier trop volumineux (15 Mo maximum)" });
+
+    let form;
+    try {
+      const body = await readBody(req);
+      form = await nodeRequestToWebRequest(req, body).formData();
+    } catch (err) {
+      return json(res, err.status || 400, { error: err.status ? err.message : "Fichier illisible" });
+    }
+    const file = form.get("file");
+    if (!file || typeof file.arrayBuffer !== "function") return json(res, 400, { error: "Aucun fichier reçu" });
+
+    const name = String(file.name || "musique.mp3");
+    const looksLikeMp3 = /\.mp3$/i.test(name) || /^audio\/(mpeg|mp3)$/i.test(file.type || "");
+    if (!looksLikeMp3) return json(res, 400, { error: "Seul le format MP3 est accepté" });
+
+    const buffer = Buffer.from(await file.arrayBuffer());
+    if (buffer.length === 0) return json(res, 400, { error: "Fichier vide" });
+    if (buffer.length > MAX_MUSIC_BYTES) return json(res, 413, { error: "Fichier trop volumineux (15 Mo maximum)" });
+
+    try {
+      const result = await client.setMusic(slug, buffer, name);
+      return json(res, 200, result);
+    } catch (err) {
+      return relayError(res, err, "Impossible d'enregistrer la musique");
+    }
+  }
+
+  // DELETE /local/galleries/:slug/music
+  if (parts.length === 3 && parts[2] === "music" && req.method === "DELETE") {
+    try {
+      await client.deleteMusic(slug);
+      return json(res, 200, { ok: true });
+    } catch (err) {
+      return relayError(res, err, "Impossible de retirer la musique");
     }
   }
 

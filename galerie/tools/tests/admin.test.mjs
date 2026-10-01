@@ -169,6 +169,47 @@ await page.waitForFunction(
 );
 check("choisir « Mosaïque » dans l'admin l'enregistre (confirmé après rechargement des données)", true);
 
+/* ---------- Musique d'ambiance ---------- */
+
+check("sans piste déposée, la fiche indique qu'il n'y a aucune musique",
+      ((await page.textContent("#ad-music-state")) || "").includes("Aucune musique"));
+
+const musicBuffer = Buffer.alloc(4096);
+for (let i = 0; i < musicBuffer.length; i++) musicBuffer[i] = (i * 13 + 5) & 0xff;
+await page.setInputFiles("#ad-music-file-input", { name: "balade.mp3", mimeType: "audio/mpeg", buffer: musicBuffer });
+await page.waitForFunction(
+  () => {
+    const el = document.querySelector("#ad-music-state");
+    return el && el.textContent.includes("Piste actuelle") && el.textContent.includes("balade.mp3");
+  },
+  { timeout: 15000 }
+);
+check("un MP3 importé devient la piste actuelle de la galerie (confirmé après rechargement des données)", true);
+
+await page.setInputFiles("#ad-music-file-input", PHOTOS[0]);
+await page.waitForFunction(
+  () => {
+    const toast = document.querySelector(".ad-toast-visible");
+    return toast && toast.textContent.includes("MP3");
+  },
+  { timeout: 10000 }
+);
+check("un fichier qui n'est pas un MP3 est refusé avec un message explicite", true);
+check("la piste existante est conservée après un import refusé",
+      ((await page.textContent("#ad-music-state")) || "").includes("balade.mp3"));
+
+await page.click("#ad-music-remove");
+await page.waitForSelector("#ad-confirm-modal:not([hidden])");
+await page.click("#ad-confirm-ok");
+await page.waitForFunction(
+  () => {
+    const el = document.querySelector("#ad-music-state");
+    return el && el.textContent.includes("Aucune musique");
+  },
+  { timeout: 15000 }
+);
+check("retirer la musique (après confirmation) ramène la fiche à « aucune musique »", true);
+
 /* ---------- Forfait et suppléments ---------- */
 
 check("aucun forfait n'est défini par défaut",

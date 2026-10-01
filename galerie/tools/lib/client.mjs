@@ -168,6 +168,19 @@ export class WorkerClient {
     return this.request("POST", `/api/admin/galleries/${encodeURIComponent(slug)}/layout`, { layout });
   }
 
+  setMusic(slug, buffer, name) {
+    return this.request(
+      "PUT",
+      `/api/admin/galleries/${encodeURIComponent(slug)}/music?name=${encodeURIComponent(name)}`,
+      buffer,
+      true
+    );
+  }
+
+  deleteMusic(slug) {
+    return this.request("DELETE", `/api/admin/galleries/${encodeURIComponent(slug)}/music`);
+  }
+
   setQuota(slug, includedPhotos, extraPhotoPrice) {
     return this.request("POST", `/api/admin/galleries/${encodeURIComponent(slug)}/quota`, { includedPhotos, extraPhotoPrice });
   }

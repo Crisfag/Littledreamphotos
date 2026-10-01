@@ -262,6 +262,8 @@ h3 { font-size: 1.15rem; margin-bottom: .9rem; }
 .ad-bg-color-label input[type="color"] { width: 2.2rem; height: 2.2rem; border: 1px solid var(--line); border-radius: 6px; padding: 2px; cursor: pointer; }
 .ad-bg-preview { display: block; width: 100%; max-width: 320px; border-radius: 8px; border: 1px solid var(--line); }
 
+.ad-music-state { font-size: .88rem; color: var(--charcoal); margin: .8rem 0; }
+
 /* ---------- Mise en page de la galerie ---------- */
 
 .ad-layout-options { display: flex; flex-wrap: wrap; gap: .7rem; margin-top: .9rem; }

@@ -1170,6 +1170,22 @@
       '<p class="ad-hint">Comment les photos s\'affichent chez le client — à choisir selon le type de séance.</p>' +
       '<div class="ad-layout-options" id="ad-layout-options">' + layoutOptionsHtml(data.gallery) + "</div>" +
       "</section>" +
+      '<section class="ad-music">' +
+      '<div class="ad-section-header"><h3>Musique d\'ambiance</h3></div>' +
+      '<p class="ad-hint">Un morceau (MP3, 15 Mo maximum) joué en boucle chez le client. Lancé automatiquement en mise en page « Défilement », proposé en pause dans les autres — le client garde toujours la main.</p>' +
+      '<p class="ad-music-state" id="ad-music-state">' +
+      (data.gallery.music_name
+        ? "Piste actuelle : <strong>" + esc(data.gallery.music_name) + "</strong>"
+        : '<span class="ad-hint">Aucune musique pour cette galerie.</span>') +
+      "</p>" +
+      '<div class="ad-bg-custom">' +
+      '<label class="ad-btn">' + (data.gallery.music_name ? "Remplacer le MP3" : "Importer un MP3") +
+      '<input type="file" id="ad-music-file-input" accept="audio/mpeg,.mp3" hidden /></label>' +
+      (data.gallery.music_name
+        ? '<button type="button" class="ad-btn" id="ad-music-remove">Retirer la musique</button>'
+        : "") +
+      "</div>" +
+      "</section>" +
       '<section class="ad-dropzone" id="ad-dropzone">' +
       '<p><strong>Glissez vos photos ici</strong>, ou</p>' +
       '<label class="ad-btn ad-btn-primary">Choisir des fichiers<input type="file" id="ad-file-input" accept="image/*" multiple hidden /></label>' +
@@ -1312,6 +1328,42 @@
         toast(err.message, true);
       }
     });
+    document.getElementById("ad-music-file-input").addEventListener("change", async function (event) {
+      var file = event.target.files[0];
+      event.target.value = "";
+      if (!file) return;
+      var stateBox = document.getElementById("ad-music-state");
+      stateBox.textContent = "Envoi de « " + file.name + " »…";
+      var form = new FormData();
+      form.append("file", file, file.name);
+      try {
+        var response = await fetch("/local/galleries/" + encodeURIComponent(slug) + "/music", {
+          method: "POST",
+          body: form,
+        });
+        var result = await response.json().catch(function () { return {}; });
+        if (!response.ok) throw new Error(result.error || "Échec de l'envoi");
+        toast("Musique enregistrée.");
+        renderDetail(slug, true);
+      } catch (err) {
+        toast(err.message, true);
+        renderDetail(slug, true);
+      }
+    });
+    var musicRemove = document.getElementById("ad-music-remove");
+    if (musicRemove) {
+      musicRemove.addEventListener("click", function () {
+        confirmAction("Retirer la musique de cette galerie ?", async function () {
+          try {
+            await api("DELETE", "/galleries/" + encodeURIComponent(slug) + "/music");
+            toast("Musique retirée.");
+            renderDetail(slug, true);
+          } catch (err) {
+            toast(err.message, true);
+          }
+        });
+      });
+    }
     document.getElementById("ad-new-password").addEventListener("click", function () {
       confirmAction("Générer un nouveau mot de passe ? L'ancien cessera aussitôt de fonctionner.", async function () {
         try {

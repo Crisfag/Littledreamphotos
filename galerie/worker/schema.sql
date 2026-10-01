@@ -74,6 +74,11 @@ CREATE TABLE IF NOT EXISTS galleries (
   -- ligne le jour où il sera branché). 0 tant que le photographe n'a rien
   -- réglé.
   extra_photo_price_cents INTEGER NOT NULL DEFAULT 0,
+  -- Musique d'ambiance importée par le photographe (nom du fichier d'origine,
+  -- juste pour l'affichage) ; vide = aucune. Le fichier lui-même vit dans R2
+  -- sous music/{id}.mp3. Jouée côté client en mise en page « défilement »,
+  -- proposée en pause dans les autres — jamais imposée.
+  music_name             TEXT NOT NULL DEFAULT '',
   created_at             INTEGER NOT NULL
 );
 
@@ -344,3 +349,6 @@ CREATE INDEX IF NOT EXISTS idx_email_changes_photographer ON email_changes(photo
 -- Migration vers la page propriétaire (prénom/nom des comptes) — bases créées avant :
 --   ALTER TABLE photographers ADD COLUMN first_name TEXT NOT NULL DEFAULT '';
 --   ALTER TABLE photographers ADD COLUMN last_name TEXT NOT NULL DEFAULT '';
+
+-- Migration vers la musique d'ambiance (bases créées avant) :
+--   ALTER TABLE galleries ADD COLUMN music_name TEXT NOT NULL DEFAULT '';

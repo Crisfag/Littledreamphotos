@@ -274,6 +274,13 @@ Le tableau de bord s'organise en trois onglets, chacun avec son propre lien
   *Défilement* (une photo à la fois, en grand — rendu éditorial, pour
   raconter une séance plutôt que la survoler). Purement visuel : les trois
   rendus s'appuient sur les mêmes tuiles, protégées de la même façon.
+- **Musique d'ambiance** : un MP3 (15 Mo maximum) importé depuis la fiche
+  de la galerie, stocké à côté des tuiles et servi au client avec lecture
+  progressive. Côté client, un bouton « Lancer la musique » apparaît dans
+  l'en-tête dès qu'une piste existe ; en mise en page *Défilement* la lecture
+  démarre d'elle-même quand le navigateur l'autorise, et le choix du client
+  (coupée ou non) est retenu le temps de sa visite. Une galerie sans piste
+  ne montre rien de plus qu'avant.
 - **Forfait et suppléments** : le nombre de photos déjà payées par le
   client (optionnel — sans forfait défini, aucun supplément n'est jamais
   calculé) et le prix de chaque photo au-delà. Le supplément se calcule
@@ -598,7 +605,7 @@ des tuiles, refus du mauvais mot de passe, absence de toute balise `<img>`,
 neutralisation du menu contextuel et de la copie, voile sur « Impr. écran » et
 sur perte de focus, consignation au journal.
 
-**API du Worker** — 198 vérifications contre le vrai moteur Cloudflare (D1 et R2
+**API du Worker** — 208 vérifications contre le vrai moteur Cloudflare (D1 et R2
 émulés localement par `wrangler dev`) : comptes photographes (inscription,
 connexion, session, mot de passe oublié — même réponse générique qu'un
 compte existe ou non), cloisonnement strict entre comptes (un photographe ne
@@ -651,7 +658,11 @@ second compte, pour confirmer que ce n'est pas un cas particulier du
 premier —, le compte dont l'e-mail correspond à `OWNER_EMAIL` s'y voit
 reconnaître `isOwner`, peut lire les compteurs plateforme et la liste
 complète des comptes (avec le prénom/nom de chacun, jamais leur mot de
-passe).
+passe). Musique d'ambiance : dépôt refusé depuis un autre compte, piste
+annoncée au client à la connexion puis servie octet pour octet en
+`audio/mpeg`, lecture progressive par morceaux (`Range` → 206), retrait
+refusé depuis un autre compte, et plus rien de servi ni d'annoncé une fois
+la piste retirée.
 Le trajet complet de réinitialisation de mot de passe (jeton reçu par
 e-mail → nouveau mot de passe → ancien mot de passe rejeté → lien à usage
 unique) est vérifié manuellement plutôt qu'automatiquement : le jeton ne
@@ -690,7 +701,7 @@ appliqué sinon, HT + TVA se recomposant exactement au centime près en TTC
 même sur un montant qui ne se divise pas rond, et un vrai PDF valide généré
 aussi bien avec des coordonnées complètes qu'avec des champs vides.
 
-**Interface d'administration** — 69 vérifications dans un vrai navigateur,
+**Interface d'administration** — 74 vérifications dans un vrai navigateur,
 contre le vrai Worker local : demande de lien de réinitialisation de mot de
 passe (message générique affiché), création de compte et connexion depuis
 le formulaire (pas de session présupposée), barre d'onglets Galeries /
@@ -732,6 +743,9 @@ correspond à `OWNER_EMAIL` : onglet visible et accessible (avec son propre
 lien dans l'URL), compteurs plateforme affichés, le compte créé plus tôt
 dans ce test apparaît dans la liste complète avec son prénom et son nom, et
 la section trafic explique comment brancher Cloudflare Web Analytics.
+Musique d'ambiance sur la fiche galerie : « aucune musique » au départ,
+import d'un MP3 qui devient la piste actuelle, refus d'un fichier qui n'en
+est pas un (la piste existante est conservée), retrait après confirmation.
 
 **Vérifier une photo (empreinte invisible)** — 8 vérifications contre le vrai
 Worker local : une image reconstituée tuile par tuile — exactement comme le

@@ -720,6 +720,66 @@ check("la mise en page choisie est bien transmise au client",
 const layoutBackToGrille = await admin("POST", `/api/admin/galleries/${SLUG}/layout`, { layout: "defilement" });
 check("le photographe peut basculer vers le défilement", layoutBackToGrille.ok);
 
+/* ---------- Musique d'ambiance ---------- */
+
+const MUSIC = new Uint8Array(20000);
+for (let i = 0; i < MUSIC.length; i++) MUSIC[i] = (i * 31 + 7) & 0xff;
+
+const foreignMusicSet = await peerAdmin("PUT", `/api/admin/galleries/${SLUG}/music?name=pirate.mp3`, MUSIC, true);
+check("un photographe ne peut pas déposer une musique sur une galerie d'un autre compte", foreignMusicSet.status === 404);
+
+const musicBefore = await (await fetch(`${BASE}/api/gallery/${SLUG}/music`)).ok;
+check("sans musique déposée, la piste n'existe pas pour le client", musicBefore === false);
+
+const musicSet = await admin("PUT", `/api/admin/galleries/${SLUG}/music?name=ambiance.mp3`, MUSIC, true);
+const musicSetData = await musicSet.json();
+check("le photographe peut déposer une musique d'ambiance", musicSet.ok && musicSetData.musicName === "ambiance.mp3",
+      JSON.stringify(musicSetData));
+
+const galleryAfterMusic = await (await admin("GET", `/api/admin/galleries/${SLUG}`)).json();
+check("le nom de la piste est bien renvoyé au tableau de bord",
+      galleryAfterMusic.gallery?.music_name === "ambiance.mp3", JSON.stringify(galleryAfterMusic.gallery?.music_name));
+
+const clientLoginWithMusic = await (await fetch(`${BASE}/api/gallery/${SLUG}/login`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ password: NEW_PASSWORD }),
+})).json();
+check("le client est prévenu qu'une musique accompagne la galerie",
+      clientLoginWithMusic.gallery?.hasMusic === true, JSON.stringify(clientLoginWithMusic.gallery?.hasMusic));
+
+const musicGet = await fetch(`${BASE}/api/gallery/${SLUG}/music`);
+const musicBytes = new Uint8Array(await musicGet.arrayBuffer());
+check("la piste est servie au client en audio/mpeg, octet pour octet",
+      musicGet.status === 200 &&
+      (musicGet.headers.get("content-type") || "").startsWith("audio/mpeg") &&
+      musicBytes.length === MUSIC.length && musicBytes.every((b, i) => b === MUSIC[i]),
+      `status ${musicGet.status}, ${musicBytes.length} octets`);
+
+const musicRange = await fetch(`${BASE}/api/gallery/${SLUG}/music`, { headers: { range: "bytes=0-99" } });
+const musicRangeBytes = new Uint8Array(await musicRange.arrayBuffer());
+check("le navigateur peut demander un morceau de la piste (lecture progressive)",
+      musicRange.status === 206 &&
+      musicRange.headers.get("content-range") === `bytes 0-99/${MUSIC.length}` &&
+      musicRangeBytes.length === 100 && musicRangeBytes.every((b, i) => b === MUSIC[i]),
+      `status ${musicRange.status}, content-range ${musicRange.headers.get("content-range")}`);
+
+const foreignMusicDelete = await peerAdmin("DELETE", `/api/admin/galleries/${SLUG}/music`);
+check("un photographe ne peut pas retirer la musique d'une galerie d'un autre compte", foreignMusicDelete.status === 404);
+
+const musicDelete = await admin("DELETE", `/api/admin/galleries/${SLUG}/music`);
+check("le photographe peut retirer la musique", musicDelete.ok);
+
+const musicAfterDelete = await fetch(`${BASE}/api/gallery/${SLUG}/music`);
+const clientLoginNoMusic = await (await fetch(`${BASE}/api/gallery/${SLUG}/login`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ password: NEW_PASSWORD }),
+})).json();
+check("une fois retirée, la piste n'est plus servie et le client n'en est plus informé",
+      musicAfterDelete.status === 404 && clientLoginNoMusic.gallery?.hasMusic === false,
+      `status ${musicAfterDelete.status}, hasMusic ${JSON.stringify(clientLoginNoMusic.gallery?.hasMusic)}`);
+
 /* ---------- Forfait et suppléments ---------- */
 
 check("par défaut, une galerie n'a pas de forfait défini",

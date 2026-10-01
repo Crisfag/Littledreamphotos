@@ -150,6 +150,7 @@ async function handleLogin(request, env, slug) {
       watermark: gallery.watermark_text,
       expiresAt: gallery.expires_at,
       layout: gallery.layout || "grille",
+      hasMusic: Boolean(gallery.music_name),
       includedPhotos: gallery.included_photos,
       extraPhotoPriceCents: gallery.extra_photo_price_cents || 0,
       paidExtraCount: await paidExtraCount(env, gallery.id),
@@ -514,6 +515,43 @@ async function handleBackgroundImage(env, slug) {
   });
 }
 
+// Musique d'ambiance choisie par le photographe : un décor, pas une
+// livraison — servie publiquement comme l'image d'arrière-plan, et muette
+// sur l'existence de la galerie dans les mêmes conditions (404 identique
+// qu'elle soit inconnue, expirée ou simplement sans musique). Les requêtes
+// partielles (Range) sont honorées : Safari refuse de lire un média sans ça.
+async function handleMusic(request, env, slug) {
+  const gallery = await getGallery(env, slug);
+  if (!gallery || isExpired(gallery) || !gallery.music_name) {
+    return fail(404, "Aucune musique");
+  }
+
+  const key = `music/${gallery.id}.mp3`;
+  const wantsRange = request.headers.has("range");
+  let object;
+  try {
+    object = await env.TILES.get(key, wantsRange ? { range: request.headers } : undefined);
+  } catch {
+    return new Response(null, { status: 416, headers: { "content-range": "bytes */*" } });
+  }
+  if (!object) return fail(404, "Aucune musique");
+
+  const headers = new Headers({
+    "content-type": "audio/mpeg",
+    "accept-ranges": "bytes",
+    "cache-control": "public, max-age=3600",
+  });
+  if (wantsRange && object.range && typeof object.range.offset === "number") {
+    const start = object.range.offset;
+    const length = object.range.length ?? object.size - start;
+    headers.set("content-range", `bytes ${start}-${start + length - 1}/${object.size}`);
+    headers.set("content-length", String(length));
+    return new Response(object.body, { status: 206, headers });
+  }
+  headers.set("content-length", String(object.size));
+  return new Response(object.body, { headers });
+}
+
 export async function handleViewer(request, env, ctx, path) {
   // /api/gallery/<slug>/<action>[/...]
   const parts = path.split("/").filter(Boolean); // api, gallery, slug, action, …
@@ -529,6 +567,9 @@ export async function handleViewer(request, env, ctx, path) {
   }
   if (action === "background-image" && request.method === "GET" && parts.length === 4) {
     return handleBackgroundImage(env, slug);
+  }
+  if (action === "music" && request.method === "GET" && parts.length === 4) {
+    return handleMusic(request, env, slug);
   }
   // /api/gallery/<slug>/tile/<photoId>/<niveau>/<colonne>/<ligne>
   if (action === "tile" && request.method === "GET" && parts.length === 8) {

@@ -222,6 +222,7 @@ async function getGallery(env, photographerId, slug) {
       login_background_type: gallery.login_background_type,
       login_background_color: gallery.login_background_color,
       layout: gallery.layout,
+      music_name: gallery.music_name || "",
       included_photos: gallery.included_photos,
       extra_photo_price_cents: gallery.extra_photo_price_cents,
       selected_count: selectedCount,
@@ -323,6 +324,44 @@ async function resetBackground(env, photographerId, slug) {
   return json({ ok: true });
 }
 
+// Musique d'ambiance : un seul fichier par galerie, remplacé à chaque envoi.
+// L'appelant (admin-server.mjs) a déjà vérifié le type et la taille ; ici on
+// se contente de stocker, avec un garde-fou sur la taille annoncée pour ne
+// jamais remplir R2 avec un fichier aberrant.
+const MAX_MUSIC_BYTES = 15 * 1024 * 1024;
+
+async function setMusic(request, env, photographerId, slug) {
+  const gallery = await ownedGallery(env, photographerId, slug);
+  if (!gallery) return fail(404, "Galerie introuvable");
+
+  const declared = Number(request.headers.get("content-length") || 0);
+  if (declared > MAX_MUSIC_BYTES) return fail(413, "Fichier trop volumineux (15 Mo maximum)");
+
+  const url = new URL(request.url);
+  const name = (url.searchParams.get("name") || "musique.mp3").slice(0, 120);
+
+  await env.TILES.put(`music/${gallery.id}.mp3`, request.body, {
+    httpMetadata: { contentType: "audio/mpeg" },
+  });
+  await env.DB.prepare("UPDATE galleries SET music_name = ? WHERE id = ?")
+    .bind(name, gallery.id)
+    .run();
+
+  return json({ ok: true, musicName: name });
+}
+
+async function deleteMusic(env, photographerId, slug) {
+  const gallery = await ownedGallery(env, photographerId, slug);
+  if (!gallery) return fail(404, "Galerie introuvable");
+
+  await env.TILES.delete(`music/${gallery.id}.mp3`);
+  await env.DB.prepare("UPDATE galleries SET music_name = '' WHERE id = ?")
+    .bind(gallery.id)
+    .run();
+
+  return json({ ok: true });
+}
+
 // Mise en page proposée au client — purement visuel (voir schema.sql) :
 // n'affecte ni les tuiles servies, ni leur niveau de définition.
 async function setLayout(request, env, photographerId, slug) {
@@ -388,9 +427,10 @@ async function deleteGallery(env, photographerId, slug) {
     }
     cursor = listed.truncated ? listed.cursor : undefined;
   } while (cursor);
-  // Sous un préfixe distinct des tuiles (backgrounds/, pas ${gallery.id}/) :
-  // la boucle ci-dessus ne le voit pas, il faut l'effacer explicitement.
-  await env.TILES.delete(`backgrounds/${gallery.id}.jpg`);
+  // Sous des préfixes distincts des tuiles (backgrounds/, music/ — pas
+  // ${gallery.id}/) : la boucle ci-dessus ne les voit pas, il faut les
+  // effacer explicitement.
+  await env.TILES.delete([`backgrounds/${gallery.id}.jpg`, `music/${gallery.id}.mp3`]);
 
   await env.DB.batch([
     env.DB.prepare("DELETE FROM photos WHERE gallery_id = ?").bind(gallery.id),
@@ -652,6 +692,12 @@ export async function handleAdmin(request, env, ctx, path) {
     }
     if (parts.length === 5 && parts[4] === "layout" && request.method === "POST") {
       return setLayout(request, env, photographerId, slug);
+    }
+    if (parts.length === 5 && parts[4] === "music" && request.method === "PUT") {
+      return setMusic(request, env, photographerId, slug);
+    }
+    if (parts.length === 5 && parts[4] === "music" && request.method === "DELETE") {
+      return deleteMusic(env, photographerId, slug);
     }
     if (parts.length === 5 && parts[4] === "quota" && request.method === "POST") {
       return setQuota(request, env, photographerId, slug);

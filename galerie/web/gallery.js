@@ -356,6 +356,89 @@
     return document.getElementById(id);
   }
 
+  /* ---------- Musique d'ambiance ---------- */
+  // Un décor choisi par le photographe, jamais imposé : lancée d'elle-même
+  // seulement en mise en page « défilement » (le rendu éditorial, pensé pour
+  // ça), proposée en pause ailleurs — et le client garde toujours la main.
+  // Les navigateurs peuvent refuser un démarrage automatique sans geste
+  // récent ; dans ce cas le bouton reste simplement sur « Lancer la musique ».
+
+  var music = { audio: null };
+
+  function musicPrefKey() {
+    return "gp-music-" + state.slug;
+  }
+
+  function rememberMusicPref(value) {
+    try {
+      sessionStorage.setItem(musicPrefKey(), value);
+    } catch (err) {
+      /* stockage indisponible : sans conséquence */
+    }
+  }
+
+  function readMusicPref() {
+    try {
+      return sessionStorage.getItem(musicPrefKey());
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function setMusicUI(playing) {
+    if (!el.music) return;
+    el.music.setAttribute("aria-pressed", playing ? "true" : "false");
+    if (el.musicLabel) el.musicLabel.textContent = playing ? "Musique en lecture" : "Lancer la musique";
+  }
+
+  function startMusic() {
+    if (!music.audio) return Promise.resolve(false);
+    return music.audio
+      .play()
+      .then(function () {
+        setMusicUI(true);
+        rememberMusicPref("on");
+        return true;
+      })
+      .catch(function () {
+        setMusicUI(false);
+        return false;
+      });
+  }
+
+  function stopMusic(remember) {
+    if (!music.audio) return;
+    music.audio.pause();
+    setMusicUI(false);
+    if (remember) rememberMusicPref("off");
+  }
+
+  function setupMusic() {
+    if (!el.music) return;
+    if (!(state.gallery && state.gallery.hasMusic)) {
+      el.music.hidden = true;
+      return;
+    }
+    if (!music.audio) {
+      music.audio = new Audio();
+      music.audio.loop = true;
+      music.audio.preload = "auto";
+      music.audio.addEventListener("pause", function () {
+        setMusicUI(false);
+      });
+      music.audio.addEventListener("play", function () {
+        setMusicUI(true);
+      });
+    }
+    music.audio.src = apiUrl("/music");
+    el.music.hidden = false;
+    setMusicUI(false);
+
+    var pref = readMusicPref();
+    var autoplay = state.gallery.layout === "defilement" && pref !== "off";
+    if (pref === "on" || autoplay) startMusic();
+  }
+
   /* ---------- Réseau ---------- */
 
   function apiUrl(path) {
@@ -380,6 +463,7 @@
   function sessionLost(message) {
     state.token = null;
     state.drawn = {};
+    stopMusic(false);
     closeViewer();
     show(el.login);
     hide(el.gallery);
@@ -811,6 +895,7 @@
         } else {
           buildGrid();
         }
+        setupMusic();
 
         // La session expire : on prévient avant que les tuiles cessent d'arriver.
         setTimeout(function () {
@@ -894,6 +979,8 @@
       commentPanel: $("gp-comment-panel"),
       commentInput: $("gp-comment-input"),
       commentStatus: $("gp-comment-status"),
+      music: $("gp-music"),
+      musicLabel: $("gp-music-label"),
     };
 
     state.slug = readSlug();
@@ -945,6 +1032,12 @@
     }
     if (el.commentToggle) {
       el.commentToggle.addEventListener("click", toggleCommentPanel);
+    }
+    if (el.music) {
+      el.music.addEventListener("click", function () {
+        if (music.audio && !music.audio.paused) stopMusic(true);
+        else startMusic();
+      });
     }
     wireCommentInput();
 
