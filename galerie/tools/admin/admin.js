@@ -1060,8 +1060,8 @@
       '<section><div class="ad-section-header"><h3>Compte Prodigi</h3></div>' +
       '<ol class="ad-owner-steps">' +
       '<li>Créez un compte gratuit sur <a href="https://dashboard.prodigi.com/register" target="_blank" rel="noopener">dashboard.prodigi.com</a>.</li>' +
-      "<li>Commencez en <strong>mode test</strong> : Settings → Integrations → API, copiez la clé <em>Sandbox</em>. Rien n'est imprimé ni facturé.</li>" +
-      "<li>Quand tout est prêt, ajoutez un moyen de paiement chez Prodigi, collez la clé <em>Live</em> et passez en production.</li>" +
+      "<li>Commencez en <strong>mode test</strong> avec la clé <em>Sandbox</em> : elle figure dans l'e-mail de bienvenue de Prodigi, ou sur le tableau de bord de test <a href=\"https://sandbox-beta-dashboard.pwinty.com\" target=\"_blank\" rel=\"noopener\">sandbox-beta-dashboard.pwinty.com</a> (mêmes identifiants) → Settings → Integrations → API. Rien n'est imprimé ni facturé.</li>" +
+      "<li>Attention : la clé affichée sur dashboard.prodigi.com est la clé <em>Live</em>, refusée en mode test. Quand tout est prêt, ajoutez un moyen de paiement chez Prodigi, collez cette clé Live et passez en production.</li>" +
       "</ol>" +
       '<form id="ad-shop-settings">' +
       '<label class="ad-field"><span>Clé d\'API Prodigi</span>' +

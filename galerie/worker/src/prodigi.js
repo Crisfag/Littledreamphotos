@@ -207,6 +207,11 @@ export function buildQuotePayload({ sku, attributes, countryCode }) {
 
 // Message d'erreur lisible à partir d'une réponse d'erreur Prodigi.
 export function prodigiErrorMessage(data, status) {
+  // Cas le plus fréquent à la mise en route : une clé « Live » utilisée en
+  // mode test (ou l'inverse) — Prodigi a deux clés distinctes.
+  if (status === 401 || data?.statusText === "NotAuthenticated") {
+    return "Clé refusée par Prodigi : en mode test il faut la clé Sandbox, en production la clé Live (ce sont deux clés différentes)";
+  }
   const details = (data?.data?.errors || data?.failures || [])
     .map((e) => [e.property || e.field || e.key, e.message || e.description].filter(Boolean).join(" : "))
     .filter(Boolean);

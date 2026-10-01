@@ -120,6 +120,8 @@ check("les erreurs Prodigi deviennent un message lisible, détail compris",
       prodigiErrorMessage({ statusText: "ValidationFailed", data: { errors: [{ property: "items[0].sku", message: "Unknown SKU" }] } }, 400)
         === "ValidationFailed — items[0].sku : Unknown SKU");
 
+check("une clé refusée (mauvais environnement) donne une explication claire",
+      prodigiErrorMessage({ statusText: "NotAuthenticated", statusCode: 401 }, 401).includes("clé Sandbox"));
 check("l'environnement choisit l'adresse de Prodigi (test ou production)",
       prodigiBase({}, "sandbox") === "https://api.sandbox.prodigi.com/v4.0" && prodigiBase({}, "live") === "https://api.prodigi.com/v4.0");
 check("les formats suggérés ont tous un SKU et un prix", SUGGESTED_PRODUCTS.every((p) => p.sku && p.priceCents > 0));

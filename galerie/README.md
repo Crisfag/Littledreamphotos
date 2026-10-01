@@ -822,7 +822,7 @@ ou invitation à choisir, lien vers la galerie présent dans le HTML et le
 texte — ou aucun bouton du tout sans adresse publique configurée —, e-mail
 de sélection validée avec nombre de photos et supplément dû.
 
-**Boutique de tirages (logique)** — 31 vérifications sans réseau ni D1 :
+**Boutique de tirages (logique)** — 32 vérifications sans réseau ni D1 :
 clé Prodigi chiffrée (jamais en clair, illisible avec un autre secret, IV
 aléatoire), URLs signées propres à une commande et une photo, adresse de
 livraison nettoyée et validée (e-mail, ville, pays proposé), lignes figées
@@ -831,7 +831,8 @@ fichier d'impression, format désactivé ou quantité hors limites refusés,
 commande et devis au format exact de l'API Prodigi v4 (référence,
 idempotence par tentative, `postalOrZipCode`, `fillPrintArea`, options),
 coût d'un devis lu en centimes, statuts Prodigi traduits (en fabrication,
-expédiée avec suivi, annulée), erreurs Prodigi rendues lisibles.
+expédiée avec suivi, annulée), erreurs Prodigi rendues lisibles (clé du
+mauvais environnement expliquée).
 
 **Boutique de tirages (page client)** — 17 vérifications dans un vrai
 navigateur, contre le faux laboratoire : boutique annoncée, bouton
