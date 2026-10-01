@@ -2,6 +2,15 @@ name = "galerie-protegee"
 main = "src/index.js"
 compatibility_date = "2025-01-01"
 
+# Route du sous-domaine par studio (clé de premier niveau : placée après
+# [triggers], elle était lue comme une option de [triggers] et ignorée).
+# Toute adresse « *.holypixx.com » arrive
+# ici (les studios sont servis, www et les noms réservés passent tels quels).
+# Commentez ce bloc si la zone n'est pas encore sur ce compte Cloudflare.
+routes = [
+  { pattern = "*.holypixx.com/*", zone_name = "holypixx.com" },
+]
+
 # Origines autorisées à appeler l'API (le site qui héberge la page galerie).
 [vars]
 ALLOWED_ORIGINS = "https://www.holypixx.com,https://holypixx.com,https://holypixx-web.pages.dev,https://www.littledreamphotos.com,http://localhost:8000"
@@ -30,13 +39,6 @@ STUDIO_DOMAIN = "holypixx.com"
 # mais n'envoie rien.
 [triggers]
 crons = ["0 8 * * *"]
-
-# Route du sous-domaine par studio : toute adresse « *.holypixx.com » arrive
-# ici (les studios sont servis, www et les noms réservés passent tels quels).
-# Commentez ce bloc si la zone n'est pas encore sur ce compte Cloudflare.
-routes = [
-  { pattern = "*.holypixx.com/*", zone_name = "holypixx.com" },
-]
 
 # Base de métadonnées : galeries, photos, journal d'accès.
 # Créer avec :  npx wrangler d1 create galerie-protegee
