@@ -4,6 +4,7 @@
 // (jamais de session applicative : la signature en tient lieu).
 
 import { json, fail } from "./http.js";
+import { handlePrintPaymentConfirmed } from "./shop.js";
 import { createConnectAccount, createAccountLink, retrieveAccount, verifyStripeSignature } from "./stripe.js";
 import { createInvoiceForPayment } from "./invoices.js";
 import { sendInvoiceEmail } from "./notify.js";
@@ -147,7 +148,15 @@ export async function handleStripeWebhook(request, env) {
       // redélivre parfois le même évènement, et une facture ne doit jamais
       // être émise deux fois pour le même règlement.
       if (result.meta && result.meta.changes > 0) {
-        await issueInvoice(env, session.id);
+        const payment = await env.DB.prepare("SELECT * FROM payments WHERE stripe_checkout_session_id = ?")
+          .bind(session.id)
+          .first();
+        if (payment?.kind === "print") {
+          // Commande de tirages : envoi au labo, facture et e-mails (shop.js).
+          await handlePrintPaymentConfirmed(env, payment, new URL(request.url).origin);
+        } else {
+          await issueInvoice(env, session.id);
+        }
       }
     }
   }

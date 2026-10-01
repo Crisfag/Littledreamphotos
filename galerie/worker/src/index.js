@@ -16,6 +16,7 @@ import { handleOwner } from "./owner.js";
 import { handleStripeWebhook } from "./billing.js";
 import { runReminders } from "./reminders.js";
 import { studioSubdomainOf, handleStudioHost } from "./studio.js";
+import { handlePrintAsset, handleProdigiCallback } from "./shop.js";
 import { json, fail } from "./http.js";
 
 function corsHeaders(request, env) {
@@ -78,6 +79,14 @@ export default {
         response = await handleOwner(request, env, path);
       } else if (path.startsWith("/api/gallery/")) {
         response = await handleViewer(request, env, ctx, path);
+      } else if (path.startsWith("/api/print-assets/") && request.method === "GET") {
+        // Fichier d'impression, téléchargé par le labo via une URL signée.
+        const [, , , orderId, photoId] = path.split("/");
+        response = await handlePrintAsset(request, env, decodeURIComponent(orderId || ""), decodeURIComponent(photoId || ""));
+      } else if (path.startsWith("/api/prodigi/callback/") && request.method === "POST") {
+        // Notification de Prodigi (URL signée, contenu relu chez Prodigi).
+        const orderId = decodeURIComponent(path.split("/")[4] || "");
+        response = await handleProdigiCallback(request, env, orderId);
       } else if (path === "/api/stripe/webhook") {
         // Appelé par les serveurs Stripe, jamais par un navigateur : pas de
         // session applicative, l'authenticité vient de la signature.

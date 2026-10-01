@@ -6,6 +6,7 @@ import { isValidTag, parseMarks, normalizeMarks } from "./marks.js";
 import { verifyPassword, signToken, verifyToken, hashIp, randomBytes, b64url } from "./auth.js";
 import { sendCaptureAlert, sendSelectionValidated } from "./notify.js";
 import { supplementFor } from "./admin.js";
+import { shopForClient, handlePrintOrder } from "./shop.js";
 import { createCheckoutSession } from "./stripe.js";
 
 const SESSION_TTL_SECONDS = 2 * 60 * 60; // 2 h
@@ -125,7 +126,7 @@ async function handleLogin(request, env, slug) {
   await logAccess(env, { galleryId: gallery.id, viewerId, event: "login", ipHash, userAgent });
 
   const { results: photos } = await env.DB.prepare(
-    `SELECT id, width, height, cols, rows, preview_width, preview_height, selected, comment, tag, marks FROM photos
+    `SELECT id, width, height, cols, rows, preview_width, preview_height, selected, comment, tag, marks, has_original FROM photos
      WHERE gallery_id = ? ORDER BY position ASC, created_at ASC`
   )
     .bind(gallery.id)
@@ -143,10 +144,14 @@ async function handleLogin(request, env, slug) {
     .bind(gallery.id)
     .all();
 
+  const { shop, printOrders } = await shopForClient(env, gallery);
+
   return json({
     token,
     expiresIn: SESSION_TTL_SECONDS,
     gallery: {
+      shop,
+      printOrders,
       title: gallery.title,
       clientName: gallery.client_name,
       watermark: gallery.watermark_text,
@@ -178,6 +183,7 @@ async function handleLogin(request, env, slug) {
       comment: p.comment || "",
       tag: p.tag || "",
       marks: parseMarks(p.marks),
+      printable: Boolean(shop) && Boolean(p.has_original),
     })),
   });
 }
@@ -730,6 +736,11 @@ export async function handleViewer(request, env, ctx, path) {
   }
   if (action === "validate" && request.method === "POST") {
     return handleValidate(request, env, ctx, slug);
+  }
+  if (action === "print-order" && request.method === "POST" && parts.length === 4) {
+    const auth = await authorize(request, env, slug);
+    if (auth.error) return auth.error;
+    return handlePrintOrder(request, env, auth.gallery);
   }
   if (action === "event" && request.method === "POST") {
     return handleEvent(request, env, ctx, slug);

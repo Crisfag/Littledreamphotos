@@ -428,6 +428,32 @@ async function handleApi(req, res, url) {
   const client = await requireSession(req, res);
   if (!client) return;
 
+  // Boutique de tirages : /local/shop… et /local/print-orders… relayés tels
+  // quels vers /api/admin/… (le Worker valide, cloisonne et répond).
+  if ((parts[0] === "shop" || parts[0] === "print-orders") && ["GET", "POST", "PUT", "DELETE"].includes(req.method)) {
+    let body;
+    if (req.method === "POST" || req.method === "PUT") {
+      body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
+    }
+    try {
+      const result = await client.shopRequest(req.method, parts.map((p) => encodeURIComponent(decodeURIComponent(p))).join("/"), body);
+      return json(res, 200, result);
+    } catch (err) {
+      return relayError(res, err, "La boutique n'a pas pu traiter la demande");
+    }
+  }
+
+  // POST /local/galleries/:slug/shop — ouvre ou ferme la boutique d'une galerie.
+  if (parts[0] === "galleries" && parts.length === 3 && parts[2] === "shop" && req.method === "POST") {
+    const body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
+    try {
+      await client.setGalleryShop(decodeURIComponent(parts[1]), body.enabled === true);
+      return json(res, 200, { ok: true, enabled: body.enabled === true });
+    } catch (err) {
+      return relayError(res, err, "Impossible de modifier la boutique de cette galerie");
+    }
+  }
+
   // GET /local/tiles/:photoId/:level/:col/:row — relais vers le Worker.
   if (parts[0] === "tiles" && parts.length === 5 && req.method === "GET") {
     try {
@@ -939,6 +965,13 @@ async function handleApi(req, res, url) {
       for (const tile of tiles) {
         await client.putTile(photo.id, tile.level, tile.col, tile.row, tile.buffer);
       }
+      // Boutique de tirages ouverte : on garde aussi un fichier d'impression
+      // (pleine définition, sans filigrane ni empreinte), jamais montré au
+      // client — seul le labo le reçoit, pour une commande payée.
+      if (galleryInfo.gallery.shop_enabled) {
+        const printMaster = await withProcessingSlot(() => makePrintMaster(input));
+        await client.putOriginal(photo.id, printMaster);
+      }
 
       return json(res, 201, { photo, blocks: stats.blocks, name: file.name || "" });
     } catch (err) {
@@ -973,6 +1006,19 @@ async function profileFor(client) {
   } catch {
     return null;
   }
+}
+
+// Fichier d'impression : orientation corrigée, sRGB, au plus 7200 px de
+// côté (≈ 60 × 90 cm à 200 ppp, de quoi couvrir tous les formats proposés),
+// JPEG de haute qualité. Les métadonnées (GPS, appareil…) sont retirées.
+const PRINT_MASTER_MAX = 7200;
+async function makePrintMaster(input) {
+  return sharp(input)
+    .rotate()
+    .resize({ width: PRINT_MASTER_MAX, height: PRINT_MASTER_MAX, fit: "inside", withoutEnlargement: true })
+    .toColourspace("srgb")
+    .jpeg({ quality: 92, chromaSubsampling: "4:4:4" })
+    .toBuffer();
 }
 
 // Marque par défaut du filigrane : celle du studio du compte connecté, avec

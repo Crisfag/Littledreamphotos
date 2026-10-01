@@ -607,3 +607,25 @@ h3 { font-size: 1.15rem; margin-bottom: .9rem; }
 .ad-subdomain-row { display: flex; align-items: center; gap: .4rem; }
 .ad-subdomain-row input { flex: 1; min-width: 0; }
 .ad-subdomain-suffix { color: var(--muted); font-size: .92rem; white-space: nowrap; }
+
+/* ---------- Boutique de tirages ---------- */
+
+.ad-shop-steps { list-style: none; margin: .4rem 0; padding: 0; }
+.ad-shop-steps li { margin-bottom: .4rem; font-size: .9rem; }
+.ad-step-ok { color: var(--success, #4b7a5c); }
+.ad-step-todo { color: var(--muted); }
+.ad-shop-quote-bar { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; margin: .6rem 0 .9rem; font-size: .9rem; }
+.ad-shop-products .ad-input {
+  width: 100%; min-width: 6rem;
+  font-family: var(--sans); font-size: .85rem;
+  padding: .35rem .5rem;
+  border: 1px solid var(--line); border-radius: 6px; background: var(--ivory, #fdfbf8); color: var(--ink);
+}
+.ad-input-mono { font-family: ui-monospace, Menlo, monospace !important; font-size: .78rem !important; }
+.ad-input-price { max-width: 6rem; }
+.ad-row-actions { white-space: nowrap; }
+.ad-btn-small { padding: .3rem .7rem; font-size: .78rem; }
+.ad-quote-cell { font-size: .82rem; min-width: 9rem; }
+.ad-margin-ok { color: var(--success, #4b7a5c); }
+.ad-order-error { color: var(--danger, #b3564a); font-size: .8rem; }
+.ad-gallery-shop h4 { margin: 1.1rem 0 .5rem; font-size: .95rem; }

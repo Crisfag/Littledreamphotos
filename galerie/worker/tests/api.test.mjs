@@ -1547,6 +1547,227 @@ check("relances désactivées : plus rien ne part pour ce compte, ni au client n
       thirdPass.sent.filter((r) => r.slug === relDisabled).length === 0, JSON.stringify(thirdPass.sent));
 await admin("POST", "/api/admin/account/reminders", { enabled: true });
 
+/* ---------- Boutique de tirages (Prodigi) ---------- */
+// Le Worker local parle à un faux laboratoire (PRODIGI_API_BASE dans
+// worker/.dev.vars → tests/lib/fakeProdigi.mjs) : même format de requêtes
+// et de réponses que Prodigi, rien n'est jamais imprimé. Stripe n'étant pas
+// configuré en local, la commande payée est posée directement en base (comme
+// le ferait le webhook), puis envoyée au labo par la route de relance.
+
+const { startFakeProdigi } = await import("./lib/fakeProdigi.mjs");
+const { execFileSync } = await import("node:child_process");
+const { fileURLToPath: toPath } = await import("node:url");
+const { dirname: dirOf, join: joinPath } = await import("node:path");
+const WORKER_DIR = joinPath(dirOf(toPath(import.meta.url)), "..");
+// Écriture directe dans la base locale. Juste après, le Worker local coupe
+// parfois les connexions déjà ouvertes : on attend qu'il réponde à nouveau.
+const d1 = async (sql) => {
+  execFileSync("npx", ["wrangler", "d1", "execute", "galerie-protegee", "--local", "--command", sql], {
+    cwd: WORKER_DIR, stdio: "pipe",
+  });
+  for (let i = 0; i < 20; i++) {
+    try {
+      if ((await fetch(`${BASE}/health`, { headers: { connection: "close" } })).ok) return;
+    } catch { /* pas encore prêt */ }
+    await new Promise((r) => setTimeout(r, 500));
+  }
+};
+const lab = await startFakeProdigi();
+
+const shopBefore = await (await admin("GET", "/api/admin/shop")).json();
+check("sans réglage, la boutique n'a ni clé Prodigi ni format, mais propose des formats suggérés",
+      shopBefore.settings?.connected === false && shopBefore.products?.length === 0 && shopBefore.suggested?.length === 5,
+      JSON.stringify(shopBefore.settings));
+
+const badShipping = await admin("POST", "/api/admin/shop/settings", { environment: "sandbox", shippingCents: -1 });
+check("des frais de port négatifs sont refusés", badShipping.status === 400);
+const shopSaved = await admin("POST", "/api/admin/shop/settings", { apiKey: "test-key-abcd1234", environment: "sandbox", shippingCents: 590 });
+const shopAfter = await (await admin("GET", "/api/admin/shop")).json();
+check("la clé Prodigi est enregistrée et seule sa fin est jamais renvoyée",
+      shopSaved.ok && shopAfter.settings.connected === true && shopAfter.settings.keyHint === "…1234" &&
+      shopAfter.settings.shippingCents === 590 && !JSON.stringify(shopAfter).includes("test-key-abcd1234"),
+      JSON.stringify(shopAfter.settings));
+const peerShop = await (await peerAdmin("GET", "/api/admin/shop")).json();
+check("les réglages de boutique d'un compte n'apparaissent jamais chez un autre", peerShop.settings?.connected === false);
+
+const suggestedAdded = await (await admin("POST", "/api/admin/shop/products/suggested")).json();
+const suggestedAgain = await (await admin("POST", "/api/admin/shop/products/suggested")).json();
+check("les formats suggérés s'ajoutent en un clic, sans doublon au second clic",
+      suggestedAdded.added === 5 && suggestedAgain.added === 0, JSON.stringify([suggestedAdded, suggestedAgain]));
+
+const badSku = await admin("POST", "/api/admin/shop/products", { label: "X", sku: "x", priceCents: 500 });
+const badAttrs = await admin("POST", "/api/admin/shop/products", { label: "X", sku: "GLOBAL-PHO-5x7", priceCents: 500, attributes: [1] });
+const badProductPrice = await admin("POST", "/api/admin/shop/products", { label: "X", sku: "GLOBAL-PHO-5x7", priceCents: 0 });
+check("un format avec SKU, options ou prix invalides est refusé",
+      badSku.status === 400 && badAttrs.status === 400 && badProductPrice.status === 400);
+const invalidProduct = await admin("POST", "/api/admin/shop/products", { label: "Format inconnu du labo", sku: "GLOBAL-INVALID-1", priceCents: 500 });
+const invalidProductId = (await invalidProduct.json()).id;
+check("un format personnalisé peut être ajouté", invalidProduct.status === 201 && Boolean(invalidProductId));
+
+const shopProducts = (await (await admin("GET", "/api/admin/shop")).json()).products;
+const tirage = shopProducts.find((p) => p.sku === "GLOBAL-PHO-4x6");
+const peerUpdate = await peerAdmin("PUT", `/api/admin/shop/products/${tirage.id}`, { priceCents: 1 });
+const peerDelete = await peerAdmin("DELETE", `/api/admin/shop/products/${tirage.id}`);
+check("un autre compte ne peut ni modifier ni supprimer un format (404)", peerUpdate.status === 404 && peerDelete.status === 404);
+const priceUpdate = await admin("PUT", `/api/admin/shop/products/${tirage.id}`, { priceCents: 450 });
+check("le photographe peut changer le prix d'un format", priceUpdate.ok &&
+      (await (await admin("GET", "/api/admin/shop")).json()).products.find((p) => p.id === tirage.id).priceCents === 450);
+
+const quote = await (await admin("POST", "/api/admin/shop/quote", { countryCode: "FR" })).json();
+const tirageQuote = quote.quotes?.find((q) => q.productId === tirage.id);
+const invalidQuote = quote.quotes?.find((q) => q.productId === invalidProductId);
+check("le devis Prodigi donne le coût réel (produit + port) et la marge de chaque format",
+      quote.countryCode === "FR" && tirageQuote?.totalCostCents === 1745 && tirageQuote?.marginCents === 450 + 590 - 1745 &&
+      lab.quotes.at(-1)?.destinationCountryCode === "FR",
+      JSON.stringify(tirageQuote));
+check("un format refusé par le labo est signalé avec la raison donnée par Prodigi",
+      /Unknown SKU/.test(invalidQuote?.error || ""), JSON.stringify(invalidQuote));
+
+// Galerie et photos de la boutique.
+const shopSlug = `${SLUG}-boutique`;
+await admin("POST", "/api/admin/galleries", { slug: shopSlug, password: "mot-de-passe-solide", title: "Séance boutique", clientName: "Famille Boutique" });
+const shopPhoto = `pho_ShopA${RUN}`;
+const shopPhoto2 = `pho_ShopB${RUN}`;
+for (const [id, position] of [[shopPhoto, 0], [shopPhoto2, 1]]) {
+  await admin("POST", `/api/admin/galleries/${shopSlug}/photos`, {
+    id, position, width: 1600, height: 1067, cols: 4, rows: 3, previewWidth: 500, previewHeight: 334, forensicId: "1",
+  });
+}
+const shopLogin = async () => (await fetch(`${BASE}/api/gallery/${shopSlug}/login`, {
+  method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ password: "mot-de-passe-solide" }),
+})).json();
+
+let shopSession = await shopLogin();
+check("tant que la boutique n'est pas ouverte sur la galerie, le client n'en voit rien",
+      shopSession.gallery?.shop === null && shopSession.photos?.every((p) => p.printable === false));
+
+const peerOpen = await peerAdmin("POST", `/api/admin/galleries/${shopSlug}/shop`, { enabled: true });
+check("un autre compte ne peut pas ouvrir la boutique d'une galerie (404)", peerOpen.status === 404);
+const openShop = await admin("POST", `/api/admin/galleries/${shopSlug}/shop`, { enabled: true });
+check("le photographe ouvre la boutique sur la galerie", openShop.ok);
+
+shopSession = await shopLogin();
+check("sans paiement en ligne Stripe actif, la boutique reste fermée côté client", shopSession.gallery?.shop === null);
+
+const meShop = await (await admin("GET", "/api/auth/me")).json();
+await d1(`UPDATE photographers SET stripe_account_id = 'acct_test_boutique', stripe_charges_enabled = 1 WHERE id = '${meShop.photographer.id}'`);
+shopSession = await shopLogin();
+check("clé Prodigi + Stripe actif + formats : le client voit les formats actifs, prix et frais de port",
+      shopSession.gallery?.shop?.products?.length === 6 && shopSession.gallery.shop.shippingCents === 590 &&
+      shopSession.gallery.shop.products.find((p) => p.id === tirage.id)?.priceCents === 450 &&
+      !JSON.stringify(shopSession.gallery.shop).includes("GLOBAL-"),
+      JSON.stringify(shopSession.gallery?.shop?.products?.[0]));
+check("une photo sans fichier d'impression n'est pas proposée en tirage", shopSession.photos.every((p) => p.printable === false));
+
+const ORIGINAL = new Uint8Array(50000);
+for (let i = 0; i < ORIGINAL.length; i++) ORIGINAL[i] = (i * 7 + 3) & 0xff;
+const peerOriginal = await peerAdmin("PUT", `/api/admin/photos/${shopPhoto}/original`, ORIGINAL, true);
+check("un autre compte ne peut pas déposer de fichier d'impression (404)", peerOriginal.status === 404);
+const putOriginal = await admin("PUT", `/api/admin/photos/${shopPhoto}/original`, ORIGINAL, true);
+check("le fichier d'impression d'une photo est enregistré", putOriginal.ok);
+shopSession = await shopLogin();
+check("seule la photo qui a un fichier d'impression devient commandable",
+      shopSession.photos.find((p) => p.id === shopPhoto)?.printable === true && shopSession.photos.find((p) => p.id === shopPhoto2)?.printable === false);
+const tileRouteOriginal = await fetch(`${BASE}/api/gallery/${shopSlug}/tile/${shopPhoto}/1/original/x`, {
+  headers: { authorization: `Bearer ${shopSession.token}` },
+});
+check("le fichier d'impression n'est jamais atteignable par la route des tuiles du client", !tileRouteOriginal.ok);
+
+const shopBearer = { authorization: `Bearer ${shopSession.token}`, "content-type": "application/json" };
+const RECIPIENT = { name: "Julie Peters", email: "julie@example.com", line1: "Rue de la Paix 1", postalCode: "1000", city: "Bruxelles", countryCode: "BE" };
+const orderBody = (extra) => JSON.stringify({
+  lines: [{ photoId: shopPhoto, productId: tirage.id, copies: 2 }],
+  recipient: RECIPIENT,
+  successUrl: "http://localhost:8000/galerie.html?g=x&tirages=succes",
+  cancelUrl: "http://localhost:8000/galerie.html?g=x&tirages=annule",
+  ...extra,
+});
+const orderNoAuth = await fetch(`${BASE}/api/gallery/${shopSlug}/print-order`, { method: "POST", headers: { "content-type": "application/json" }, body: orderBody() });
+check("commander sans session client est refusé", orderNoAuth.status === 401);
+const orderBadAddress = await fetch(`${BASE}/api/gallery/${shopSlug}/print-order`, { method: "POST", headers: shopBearer, body: orderBody({ recipient: { ...RECIPIENT, email: "nope" } }) });
+const orderEmpty = await fetch(`${BASE}/api/gallery/${shopSlug}/print-order`, { method: "POST", headers: shopBearer, body: orderBody({ lines: [] }) });
+const orderNoOriginal = await fetch(`${BASE}/api/gallery/${shopSlug}/print-order`, { method: "POST", headers: shopBearer, body: orderBody({ lines: [{ photoId: shopPhoto2, productId: tirage.id, copies: 1 }] }) });
+check("une commande avec adresse invalide, panier vide ou photo non disponible est refusée (400)",
+      orderBadAddress.status === 400 && orderEmpty.status === 400 && orderNoOriginal.status === 400);
+const orderNoStripe = await fetch(`${BASE}/api/gallery/${shopSlug}/print-order`, { method: "POST", headers: shopBearer, body: orderBody() });
+const galleryNoOrder = await (await admin("GET", `/api/admin/galleries/${shopSlug}`)).json();
+check("une commande valide part vers le paiement Stripe — sans Stripe configuré, refus net et rien d'enregistré",
+      orderNoStripe.status === 503 && galleryNoOrder.printOrders?.length === 0, `HTTP ${orderNoStripe.status}`);
+
+// Commande payée, posée comme le ferait le webhook Stripe.
+const shopGalleryId = galleryNoOrder.gallery.id;
+const nowS = Math.floor(Date.now() / 1000);
+const paidLines = JSON.stringify([{ photoId: shopPhoto, photoNumber: 1, productId: tirage.id, label: tirage.label, sku: "GLOBAL-PHO-4x6", attributes: {}, copies: 2, unitCents: 450, lineCents: 900 }]);
+const insertPaidOrder = (orderId, paymentId, lines) => d1(
+  `INSERT INTO payments (id, gallery_id, stripe_checkout_session_id, extra_count, amount_cents, status, kind, created_at, paid_at) ` +
+  `VALUES ('${paymentId}', '${shopGalleryId}', 'cs_${paymentId}', 0, 1490, 'paid', 'print', ${nowS}, ${nowS}); ` +
+  `INSERT INTO print_orders (id, gallery_id, photographer_id, payment_id, status, items, recipient, client_email, items_cents, shipping_cents, total_cents, created_at, paid_at, updated_at) ` +
+  `VALUES ('${orderId}', '${shopGalleryId}', '${meShop.photographer.id}', '${paymentId}', 'paid', '${lines}', '${JSON.stringify(RECIPIENT)}', 'julie@example.com', 900, 590, 1490, ${nowS}, ${nowS}, ${nowS});`
+);
+const ORDER_ID = `ord_test_${RUN}`;
+await insertPaidOrder(ORDER_ID, `pay_print_${RUN}`, paidLines);
+
+const galleryWithOrder = await (await admin("GET", `/api/admin/galleries/${shopSlug}`)).json();
+check("la commande payée apparaît sur la fiche de la galerie, avec ses lignes",
+      galleryWithOrder.printOrders?.length === 1 && galleryWithOrder.printOrders[0].status === "paid" &&
+      galleryWithOrder.printOrders[0].lines[0].copies === 2 && galleryWithOrder.payments?.some((p) => p.kind === "print"),
+      JSON.stringify(galleryWithOrder.printOrders?.[0]?.status));
+check("le client retrouve sa commande, avec son statut", (await shopLogin()).gallery?.printOrders?.[0]?.statusLabel === "Payée");
+
+const peerSubmit = await peerAdmin("POST", `/api/admin/print-orders/${ORDER_ID}/submit`);
+check("un autre compte ne peut pas envoyer la commande au labo (404)", peerSubmit.status === 404);
+const submit = await (await admin("POST", `/api/admin/print-orders/${ORDER_ID}/submit`)).json();
+const sent = lab.received.at(-1);
+check("la commande payée est transmise au labo et passe « en fabrication »",
+      submit.ok === true && submit.status === "in_production" && Boolean(submit.prodigiOrderId), JSON.stringify(submit));
+check("le labo reçoit la clé du photographe, notre référence, le SKU, la quantité et l'adresse au format Prodigi",
+      sent?.key === "test-key-abcd1234" && sent.body.merchantReference === ORDER_ID && sent.body.items[0].sku === "GLOBAL-PHO-4x6" &&
+      sent.body.items[0].copies === 2 && sent.body.recipient.address.postalOrZipCode === "1000" && sent.body.recipient.address.countryCode === "BE",
+      JSON.stringify(sent?.body?.recipient));
+const resubmit = await admin("POST", `/api/admin/print-orders/${ORDER_ID}/submit`);
+check("une commande déjà transmise ne peut pas partir une seconde fois (409)", resubmit.status === 409);
+
+const assetUrl = sent.body.items[0].assets[0].url;
+const asset = await fetch(assetUrl);
+const assetBytes = new Uint8Array(await asset.arrayBuffer());
+check("le labo télécharge le fichier d'impression par son URL signée, octet pour octet",
+      asset.status === 200 && assetBytes.length === ORIGINAL.length && assetBytes.every((b, i) => b === ORIGINAL[i]),
+      `HTTP ${asset.status}, ${assetBytes.length} octets`);
+const tampered = await fetch(assetUrl.replace(/s=[^&]+/, "s=AAAA"));
+const otherPhoto = await fetch(assetUrl.replace(shopPhoto, shopPhoto2));
+check("une URL de fichier falsifiée, ou détournée vers une autre photo, est refusée (403)", tampered.status === 403 && otherPhoto.status === 403);
+
+const callback = sent.body.callbackUrl;
+const callbackBad = await fetch(callback.replace(/s=[^&]+/, "s=AAAA"), { method: "POST", body: "{}" });
+check("une notification de suivi non signée est refusée (403)", callbackBad.status === 403);
+lab.ship(submit.prodigiOrderId, "https://suivi.example/colis/TRK123");
+const callbackOk = await (await fetch(callback, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ type: "com.prodigi.order.status.stage.changed#Complete", data: { order: { id: "ord_mensonge", status: { stage: "Cancelled" } } } }) })).json();
+const afterShip = await (await admin("GET", `/api/admin/galleries/${shopSlug}`)).json();
+check("la notification déclenche une relecture chez Prodigi (jamais son contenu cru) : commande expédiée, lien de suivi",
+      callbackOk.status === "shipped" && afterShip.printOrders[0].status === "shipped" &&
+      afterShip.printOrders[0].trackingUrl === "https://suivi.example/colis/TRK123", JSON.stringify(callbackOk));
+const clientAfterShip = (await shopLogin()).gallery.printOrders[0];
+check("le client voit sa commande expédiée et son lien de suivi",
+      clientAfterShip.status === "shipped" && clientAfterShip.trackingUrl === "https://suivi.example/colis/TRK123");
+
+// Commande refusée par le labo : à relancer, raison visible.
+const FAILED_ID = `ord_fail_${RUN}`;
+await insertPaidOrder(FAILED_ID, `pay_fail_${RUN}`, paidLines.replace("GLOBAL-PHO-4x6", "GLOBAL-INVALID-1"));
+const failedSubmit = await (await admin("POST", `/api/admin/print-orders/${FAILED_ID}/submit`)).json();
+check("un refus du labo passe la commande « à relancer », avec la raison donnée par Prodigi",
+      failedSubmit.ok === false && failedSubmit.status === "failed" && /Unknown SKU/.test(failedSubmit.error), JSON.stringify(failedSubmit));
+const clientFailed = (await shopLogin()).gallery.printOrders.find((o) => o.id === FAILED_ID);
+check("le client ne voit jamais l'erreur technique du labo, seulement « en préparation »", clientFailed?.statusLabel === "En préparation");
+const allOrders = await (await admin("GET", "/api/admin/print-orders")).json();
+const peerOrders = await (await peerAdmin("GET", "/api/admin/print-orders")).json();
+check("toutes les commandes du compte sont listées avec leur galerie, jamais chez un autre compte",
+      allOrders.orders?.length === 2 && allOrders.orders.every((o) => o.galleryTitle === "Séance boutique") && peerOrders.orders?.length === 0);
+
+await admin("DELETE", `/api/admin/galleries/${shopSlug}`);
+const assetAfterDelete = await fetch(assetUrl);
+check("supprimer la galerie rend le fichier d'impression inaccessible", assetAfterDelete.status === 404);
+await lab.close();
+
 /* ---------- Sous-domaine par studio ---------- */
 
 const meBeforeSub = await (await admin("GET", "/api/auth/me")).json();

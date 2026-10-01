@@ -7,6 +7,7 @@
 
 import { json, fail } from "./http.js";
 import { parseMarks } from "./marks.js";
+import { handleShopAdmin, listPrintOrders } from "./shop.js";
 import { hashPassword, randomBytes, b64url } from "./auth.js";
 import { authenticatePhotographer } from "./authPhotographer.js";
 import { connectStripe, refreshStripeStatus, setBillingProfile } from "./billing.js";
@@ -187,7 +188,7 @@ async function getGallery(env, photographerId, slug) {
 
   const { results: photos } = await env.DB.prepare(
     `SELECT id, position, width, height, cols, rows, preview_width, preview_height,
-            forensic_id, selected, selected_at, comment, comment_at, tag, marks, created_at
+            forensic_id, selected, selected_at, comment, comment_at, tag, marks, has_original, created_at
      FROM photos WHERE gallery_id = ? ORDER BY position ASC, created_at ASC`
   )
     .bind(gallery.id)
@@ -200,7 +201,7 @@ async function getGallery(env, photographerId, slug) {
   const selectedCount = photos.filter((p) => p.selected).length;
 
   const { results: payments } = await env.DB.prepare(
-    `SELECT payments.id, payments.extra_count, payments.amount_cents, payments.status,
+    `SELECT payments.id, payments.extra_count, payments.amount_cents, payments.status, payments.kind,
             payments.created_at, payments.paid_at,
             invoices.id AS invoice_id, invoices.number AS invoice_number, invoices.emailed_to AS invoice_emailed_to
      FROM payments LEFT JOIN invoices ON invoices.payment_id = payments.id
@@ -229,6 +230,7 @@ async function getGallery(env, photographerId, slug) {
       layout: gallery.layout,
       music_name: gallery.music_name || "",
       selection_done_at: gallery.selection_done_at,
+      shop_enabled: Boolean(gallery.shop_enabled),
       included_photos: gallery.included_photos,
       extra_photo_price_cents: gallery.extra_photo_price_cents,
       selected_count: selectedCount,
@@ -240,6 +242,7 @@ async function getGallery(env, photographerId, slug) {
     },
     photos,
     payments,
+    printOrders: await listPrintOrders(env, { galleryId: gallery.id }),
   });
 }
 
@@ -666,6 +669,9 @@ export async function handleAdmin(request, env, ctx, path) {
 
   const parts = path.split("/").filter(Boolean); // api, admin, …
   const section = parts[2];
+
+  const shopResponse = await handleShopAdmin(request, env, photographerId, parts, { ownedGallery, ownedPhoto });
+  if (shopResponse) return shopResponse;
 
   if (section === "galleries") {
     if (parts.length === 3) {

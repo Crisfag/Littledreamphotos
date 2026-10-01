@@ -670,6 +670,64 @@ await page.waitForFunction(() => {
   return toast && toast.textContent.includes("activées");
 }, { timeout: 5000 });
 
+/* ---------- Boutique de tirages (onglet Boutique + fiche galerie) ---------- */
+// Le Worker local parle au faux laboratoire Prodigi (worker/.dev.vars).
+
+const { startFakeProdigi } = await import("../../worker/tests/lib/fakeProdigi.mjs");
+const shopLab = await startFakeProdigi();
+
+await page.click("#ad-tab-shop");
+await page.waitForSelector("#ad-shop-settings", { timeout: 10000 });
+check("l'onglet Boutique ouvre son écran, avec son propre lien dans l'URL",
+      (await page.evaluate(() => location.hash)) === "#/boutique");
+check("la liste de préparation signale la clé Prodigi encore à renseigner",
+      (await page.textContent("#ad-shop-steps li:first-child")).includes("○"));
+await page.fill('#ad-shop-settings [name="apiKey"]', "test-key-admin-ui-9876");
+await page.fill('#ad-shop-settings [name="shipping"]', "5,90");
+await page.click("#ad-shop-settings-save");
+await page.waitForFunction(() => (document.querySelector("#ad-shop-steps li") || {}).textContent?.includes("✓"), { timeout: 10000 });
+check("enregistrer la clé coche l'étape, sans jamais réafficher la clé elle-même",
+      (await page.textContent("#ad-shop-steps li:first-child")).includes("…9876") && !(await page.content()).includes("test-key-admin-ui-9876"));
+check("les frais de port sont relus en euros", (await page.inputValue('#ad-shop-settings [name="shipping"]')) === "5.90");
+
+await page.click("#ad-shop-suggested");
+await page.waitForFunction(() => document.querySelectorAll("#ad-shop-products tr[data-product-id]").length === 5, { timeout: 10000 });
+check("« Ajouter les formats suggérés » remplit le catalogue (5 formats)", true);
+await page.fill('#ad-shop-new [data-field="label"]', "Format inconnu du labo");
+await page.fill('#ad-shop-new [data-field="sku"]', "GLOBAL-INVALID-9");
+await page.fill('#ad-shop-new [data-field="price"]', "3");
+await page.click("#ad-shop-add");
+await page.waitForFunction(() => document.querySelectorAll("#ad-shop-products tr[data-product-id]").length === 6, { timeout: 10000 });
+check("un format personnalisé s'ajoute au catalogue", true);
+
+await page.click("#ad-shop-quote");
+await page.waitForFunction(() => Array.from(document.querySelectorAll(".ad-quote-cell")).every((c) => c.textContent.trim() !== "—"), { timeout: 15000 });
+const firstQuote = await page.textContent("#ad-shop-products tr[data-product-id] .ad-quote-cell");
+const lastQuote = await page.locator("#ad-shop-products tr[data-product-id] .ad-quote-cell").last().textContent();
+check("le devis affiche, pour chaque format, le coût du labo et la marge", firstQuote.includes("17,45") && firstQuote.includes("marge"), firstQuote);
+check("un format refusé par le labo affiche la raison donnée par Prodigi", lastQuote.includes("Unknown SKU"), lastQuote);
+
+const firstRow = page.locator("#ad-shop-products tr[data-product-id]").first();
+await firstRow.locator('[data-field="price"]').fill("4.50");
+await firstRow.locator("[data-save-product]").click();
+await page.waitForFunction(() => document.querySelector('#ad-shop-products tr[data-product-id] [data-field="price"]')?.value === "4.50", { timeout: 10000 });
+check("modifier le prix d'un format l'enregistre (relu après rechargement de l'écran)", true);
+check("aucune commande n'est encore listée", await page.isVisible("#ad-print-orders-empty"));
+
+await page.click("#ad-tab-galleries");
+await page.waitForSelector(".ad-card", { timeout: 10000 });
+await page.locator(".ad-card").first().click();
+await page.waitForSelector("#ad-gallery-shop-toggle", { timeout: 10000 });
+check("la fiche galerie propose d'ouvrir la boutique, fermée par défaut", !(await page.isChecked("#ad-gallery-shop-toggle")));
+await page.check("#ad-gallery-shop-toggle");
+await page.waitForFunction(() => (document.getElementById("ad-shop-printable") || {}).textContent?.includes("tant que la boutique est ouverte"), { timeout: 10000 });
+check("ouvrir la boutique l'enregistre et explique quelles photos sont commandables",
+      await page.isChecked("#ad-gallery-shop-toggle") && (await page.textContent("#ad-shop-printable")).includes("disponible"));
+await shopLab.close();
+
+await page.click("#ad-tab-settings");
+await page.waitForSelector("#ad-studio-form", { timeout: 10000 });
+
 check("la grille est l'option de présentation par défaut active avant tout changement",
       await page.locator('#ad-default-layout-options .ad-layout-option[data-layout="grille"].ad-layout-option-active').count() === 1);
 await page.click('#ad-default-layout-options .ad-layout-option[data-layout="mosaique"]');
