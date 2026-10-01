@@ -97,6 +97,11 @@
         <button type="button" class="gp-pay-btn" id="gp-pay-supplement" hidden>Régler le supplément</button>
         <p class="gp-pay-error" id="gp-pay-error" hidden></p>
         <button type="button" class="gp-invoice-btn" id="gp-download-invoice" hidden>Télécharger ma facture</button>
+        <div class="gp-shop-bar" id="gp-shop-bar" hidden>
+          <button type="button" class="gp-cart-btn" id="gp-cart-btn">Mes tirages <span id="gp-cart-count">(0)</span></button>
+          <span class="gp-shop-hint">Ouvrez une photo puis « Tirages ».</span>
+        </div>
+        <ul class="gp-print-orders" id="gp-print-orders" hidden></ul>
         <div class="gp-validate" id="gp-validate-block" hidden>
           <button type="button" class="gp-validate-btn" id="gp-validate">Valider ma sélection</button>
           <p class="gp-validate-status" id="gp-validate-status" aria-live="polite"></p>
@@ -130,6 +135,11 @@
         <div class="gp-pins" id="gp-pins"></div>
       </div>
     </div>
+    <div class="gp-print-panel" id="gp-print-panel" hidden>
+      <p class="gp-comment-label">Commander un tirage de cette photo</p>
+      <ul class="gp-print-products" id="gp-print-products"></ul>
+      <p class="gp-comment-status" id="gp-print-status" aria-live="polite"></p>
+    </div>
     <div class="gp-pin-editor" id="gp-pin-editor" hidden>
       <label class="gp-comment-label" for="gp-pin-note" id="gp-pin-editor-title">Repère</label>
       <textarea id="gp-pin-note" class="gp-comment-input" rows="2" maxlength="200"
@@ -162,9 +172,41 @@
         <button type="button" class="gp-tag gp-tag-red" data-tag="red" aria-pressed="false"
                 aria-label="À écarter" title="À écarter"></button>
       </div>
+      <button type="button" class="gp-print-toggle" id="gp-print-toggle" hidden aria-expanded="false"
+              title="Commander un tirage de cette photo">Tirages</button>
       <button type="button" class="gp-pin-toggle" id="gp-pin-toggle" aria-pressed="false"
               aria-label="Placer un repère sur la photo" title="Placer un repère sur la photo"></button>
       <p class="gp-viewer-counter" id="gp-counter"></p>
+    </div>
+  </div>
+
+  <!-- ============ Panier de tirages ============ -->
+  <div class="gp-cart" id="gp-cart" hidden role="dialog" aria-modal="true" aria-labelledby="gp-cart-title">
+    <div class="gp-cart-card">
+      <button type="button" class="gp-cart-close" id="gp-cart-close" aria-label="Fermer">&times;</button>
+      <h2 id="gp-cart-title">Mes tirages</h2>
+      <ul class="gp-cart-lines" id="gp-cart-lines"></ul>
+      <p class="gp-cart-empty" id="gp-cart-empty" hidden>Votre panier est vide — ouvrez une photo puis « Tirages ».</p>
+      <dl class="gp-cart-totals" id="gp-cart-totals">
+        <dt>Tirages</dt><dd id="gp-cart-items">0,00 €</dd>
+        <dt>Livraison</dt><dd id="gp-cart-shipping">0,00 €</dd>
+        <dt class="gp-cart-total-label">Total</dt><dd class="gp-cart-total" id="gp-cart-total">0,00 €</dd>
+      </dl>
+      <form id="gp-cart-form" class="gp-cart-form" autocomplete="on">
+        <p class="gp-comment-label">Adresse de livraison</p>
+        <label class="gp-field"><span>Nom complet</span><input name="name" autocomplete="name" required maxlength="100" /></label>
+        <label class="gp-field"><span>E-mail (confirmation et suivi)</span><input name="email" type="email" autocomplete="email" required maxlength="200" /></label>
+        <label class="gp-field"><span>Adresse</span><input name="line1" autocomplete="address-line1" required maxlength="120" /></label>
+        <label class="gp-field"><span>Complément d'adresse <em>(facultatif)</em></span><input name="line2" autocomplete="address-line2" maxlength="120" /></label>
+        <div class="gp-field-row">
+          <label class="gp-field"><span>Code postal</span><input name="postalCode" autocomplete="postal-code" required maxlength="20" /></label>
+          <label class="gp-field"><span>Ville</span><input name="city" autocomplete="address-level2" required maxlength="80" /></label>
+        </div>
+        <label class="gp-field"><span>Pays</span><select name="countryCode" id="gp-cart-country" autocomplete="country"></select></label>
+        <p class="gp-error" id="gp-cart-error" hidden></p>
+        <button type="submit" class="gp-btn" id="gp-cart-pay">Payer</button>
+        <p class="gp-cart-note">Paiement sécurisé par Stripe. Vos tirages sont fabriqués par notre laboratoire partenaire et livrés chez vous ; la photo est recadrée au format choisi.</p>
+      </form>
     </div>
   </div>
 

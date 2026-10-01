@@ -71,6 +71,7 @@
       var tab = btn.getAttribute("data-tab");
       if (tab === "galleries") renderList();
       else if (tab === "billing") renderBilling();
+      else if (tab === "shop") renderShop();
       else if (tab === "settings") renderSettings();
       else if (tab === "owner") renderOwner();
     });
@@ -908,6 +909,312 @@
     });
   }
 
+  /* ---------- Boutique de tirages (Prodigi) ---------- */
+
+  var ORDER_STATUS_CLS = {
+    paid: "ad-badge-soon", submitted: "ad-badge-soon", in_production: "ad-badge-soon",
+    shipped: "ad-badge-selected", cancelled: "ad-badge-expired", failed: "ad-badge-due",
+  };
+
+  function centsFromEuros(value) {
+    var n = parseFloat(String(value || "").replace(",", "."));
+    return isFinite(n) ? Math.round(n * 100) : NaN;
+  }
+
+  function eurosInput(cents) {
+    return ((cents || 0) / 100).toFixed(2);
+  }
+
+  function printOrdersTableHtml(orders, withGallery) {
+    if (!orders || !orders.length) return '<p class="ad-hint" id="ad-print-orders-empty">Aucune commande de tirages pour l\'instant.</p>';
+    var rows = orders.map(function (o) {
+      var count = o.lines.reduce(function (n, l) { return n + l.copies; }, 0);
+      var detail = o.lines.map(function (l) { return l.copies + " × " + l.label + " (photo n° " + l.photoNumber + ")"; }).join(", ");
+      return (
+        '<tr data-order-id="' + esc(o.id) + '">' +
+        "<td>" + esc(formatDateTime(o.paidAt || o.createdAt)) + "</td>" +
+        (withGallery ? '<td><button type="button" class="ad-link-btn" data-slug="' + esc(o.gallerySlug) + '">' + esc(o.galleryTitle) + "</button></td>" : "") +
+        "<td>" + esc(o.recipient.name || "") + '<br /><span class="ad-hint">' + esc(o.clientEmail) + "</span></td>" +
+        '<td title="' + esc(detail) + '">' + count + " article" + (count > 1 ? "s" : "") + "</td>" +
+        "<td>" + formatEuros(o.totalCents) + "</td>" +
+        '<td><span class="ad-badge ' + (ORDER_STATUS_CLS[o.status] || "") + '">' + esc(o.statusLabel) + "</span>" +
+        (o.error ? '<br /><span class="ad-hint ad-order-error">' + esc(o.error) + "</span>" : "") + "</td>" +
+        "<td>" + (o.trackingUrl ? '<a href="' + esc(o.trackingUrl) + '" target="_blank" rel="noopener">Suivi</a>' : "—") +
+        (o.status === "failed" || o.status === "paid"
+          ? ' <button type="button" class="ad-btn ad-btn-small" data-resubmit="' + esc(o.id) + '">Relancer au labo</button>'
+          : "") +
+        "</td>" +
+        "</tr>"
+      );
+    });
+    return (
+      '<div class="ad-table-wrap"><table class="ad-table" id="ad-print-orders"><thead><tr>' +
+      "<th>Quand</th>" + (withGallery ? "<th>Galerie</th>" : "") + "<th>Client</th><th>Articles</th><th>Total</th><th>Statut</th><th>Expédition</th>" +
+      "</tr></thead><tbody>" + rows.join("") + "</tbody></table></div>"
+    );
+  }
+
+  function wireOrderResubmit(onDone) {
+    document.querySelectorAll("[data-resubmit]").forEach(function (btn) {
+      btn.addEventListener("click", async function () {
+        btn.disabled = true;
+        try {
+          var result = await api("POST", "/print-orders/" + encodeURIComponent(btn.getAttribute("data-resubmit")) + "/submit");
+          if (result.ok) toast("Commande transmise au laboratoire.");
+          else toast("Le laboratoire a encore refusé la commande : " + (result.error || "raison inconnue"), true);
+          onDone();
+        } catch (err) {
+          toast(err.message, true);
+          btn.disabled = false;
+        }
+      });
+    });
+  }
+
+  function gallerySectionShopHtml(data) {
+    var photos = data.photos || [];
+    var printable = photos.filter(function (p) { return Number(p.has_original) === 1; }).length;
+    var on = Boolean(data.gallery.shop_enabled);
+    return (
+      '<section class="ad-gallery-shop"><div class="ad-section-header"><h3>Boutique de tirages</h3></div>' +
+      '<p class="ad-hint">Le client commande tirages, toiles ou cadres depuis sa galerie ; le paiement arrive sur votre compte Stripe et la commande part automatiquement au laboratoire Prodigi. Réglages et formats dans l\'onglet <button type="button" class="ad-link-btn" id="ad-goto-shop">Boutique</button>.</p>' +
+      '<label class="ad-toggle"><input type="checkbox" id="ad-gallery-shop-toggle"' + (on ? " checked" : "") + " />" +
+      "<span>Proposer des tirages sur cette galerie</span></label>" +
+      '<p class="ad-hint" id="ad-shop-printable">' + printable + " photo" + (printable > 1 ? "s" : "") + " sur " + photos.length +
+      " disponible" + (printable > 1 ? "s" : "") + " en tirage. " +
+      (on
+        ? "Les photos importées tant que la boutique est ouverte gardent un fichier d'impression en pleine définition (jamais montré au client) ; réimportez les plus anciennes pour les proposer aussi."
+        : "Ouvrez la boutique avant d'importer les photos : seules celles importées ensuite pourront être commandées.") +
+      "</p>" +
+      "<h4>Commandes de cette galerie</h4>" +
+      printOrdersTableHtml(data.printOrders, false) +
+      "</section>"
+    );
+  }
+
+  function productRowHtml(p) {
+    return (
+      '<tr data-product-id="' + esc(p.id) + '">' +
+      '<td><input type="text" class="ad-input" data-field="label" value="' + esc(p.label) + '" maxlength="100" /></td>' +
+      '<td><input type="text" class="ad-input ad-input-mono" data-field="sku" value="' + esc(p.sku) + '" maxlength="80" /></td>' +
+      '<td><input type="text" class="ad-input ad-input-mono" data-field="attributes" value="' + esc(JSON.stringify(p.attributes || {})) + '" /></td>' +
+      '<td><input type="text" class="ad-input ad-input-price" data-field="price" value="' + eurosInput(p.priceCents) + '" inputmode="decimal" /></td>' +
+      '<td><input type="checkbox" data-field="active"' + (p.active ? " checked" : "") + ' aria-label="Proposé aux clients" /></td>' +
+      '<td class="ad-quote-cell" id="ad-quote-' + esc(p.id) + '">—</td>' +
+      '<td class="ad-row-actions"><button type="button" class="ad-btn ad-btn-small" data-save-product>Enregistrer</button>' +
+      ' <button type="button" class="ad-btn ad-btn-small ad-btn-danger" data-delete-product>Supprimer</button></td>' +
+      "</tr>"
+    );
+  }
+
+  function readProductRow(row) {
+    var get = function (f) { return row.querySelector('[data-field="' + f + '"]'); };
+    var attributes;
+    try {
+      attributes = JSON.parse(get("attributes").value.trim() || "{}");
+    } catch (e) {
+      throw new Error("Options : JSON invalide (ex. {\"wrap\": \"MirrorWrap\"})");
+    }
+    return {
+      label: get("label").value.trim(),
+      sku: get("sku").value.trim(),
+      attributes: attributes,
+      priceCents: centsFromEuros(get("price").value),
+      active: get("active") ? get("active").checked : true,
+    };
+  }
+
+  async function renderShop(skipHash) {
+    if (!skipHash && location.hash !== "#/boutique") history.pushState(null, "", "#/boutique");
+    setActiveTab("shop");
+    el.view.innerHTML = '<p class="ad-loading">Chargement…</p>';
+
+    var data, ordersData;
+    try {
+      data = await api("GET", "/shop");
+      ordersData = await api("GET", "/print-orders");
+    } catch (err) {
+      toast(err.message, true);
+      return renderList();
+    }
+    var s = data.settings;
+    var activeCount = data.products.filter(function (p) { return p.active; }).length;
+    var check = function (ok, text) { return '<li class="' + (ok ? "ad-step-ok" : "ad-step-todo") + '">' + (ok ? "✓ " : "○ ") + text + "</li>"; };
+    var countryOptions = Object.keys(data.countries).map(function (code) {
+      return '<option value="' + code + '"' + (code === "BE" ? " selected" : "") + ">" + esc(data.countries[code]) + "</option>";
+    }).join("");
+
+    el.view.innerHTML =
+      '<header class="ad-detail-header"><div><h2>Boutique de tirages</h2>' +
+      '<p class="ad-hint">Vos clients commandent tirages, toiles et cadres directement depuis leur galerie. Le paiement arrive sur votre compte Stripe, la commande part automatiquement chez <strong>Prodigi</strong>, qui imprime et expédie. Prodigi vous facture son prix ; la différence avec votre prix de vente est votre marge.</p>' +
+      "</div></header>" +
+
+      '<section><div class="ad-section-header"><h3>Avant d\'ouvrir la boutique</h3></div>' +
+      '<ul class="ad-shop-steps" id="ad-shop-steps">' +
+      check(s.connected, "Clé d'API Prodigi enregistrée" + (s.connected ? " (" + esc(s.keyHint) + ", " + (s.environment === "live" ? "production" : "mode test") + ")" : "")) +
+      check(s.stripeReady, 'Paiement en ligne Stripe actif — <button type="button" class="ad-link-btn" id="ad-goto-billing">onglet Facturation</button>') +
+      check(activeCount > 0, "Au moins un format proposé (" + activeCount + " actif" + (activeCount > 1 ? "s" : "") + ")") +
+      check(false, "Puis, sur chaque galerie : « Proposer des tirages sur cette galerie »") +
+      "</ul></section>" +
+
+      '<section><div class="ad-section-header"><h3>Compte Prodigi</h3></div>' +
+      '<ol class="ad-owner-steps">' +
+      '<li>Créez un compte gratuit sur <a href="https://dashboard.prodigi.com/register" target="_blank" rel="noopener">dashboard.prodigi.com</a>.</li>' +
+      "<li>Commencez en <strong>mode test</strong> : Settings → Integrations → API, copiez la clé <em>Sandbox</em>. Rien n'est imprimé ni facturé.</li>" +
+      "<li>Quand tout est prêt, ajoutez un moyen de paiement chez Prodigi, collez la clé <em>Live</em> et passez en production.</li>" +
+      "</ol>" +
+      '<form id="ad-shop-settings">' +
+      '<label class="ad-field"><span>Clé d\'API Prodigi</span>' +
+      '<input type="password" name="apiKey" autocomplete="off" placeholder="' +
+      (s.connected ? "Clé enregistrée (" + esc(s.keyHint) + ") — laissez vide pour la garder" : "Collez votre clé d'API Prodigi") + '" /></label>' +
+      '<div class="ad-field-row">' +
+      '<label class="ad-field"><span>Environnement</span><select name="environment">' +
+      '<option value="sandbox"' + (s.environment !== "live" ? " selected" : "") + ">Test (sandbox) — rien n'est imprimé</option>" +
+      '<option value="live"' + (s.environment === "live" ? " selected" : "") + ">Production — commandes réelles</option>" +
+      "</select></label>" +
+      '<label class="ad-field"><span>Frais de port facturés au client (€)</span>' +
+      '<input type="text" name="shipping" inputmode="decimal" value="' + eurosInput(s.shippingCents) + '" /></label>' +
+      "</div>" +
+      '<button type="submit" class="ad-btn ad-btn-primary" id="ad-shop-settings-save">Enregistrer</button>' +
+      (s.connected ? ' <button type="button" class="ad-btn" id="ad-shop-clear-key">Retirer la clé</button>' : "") +
+      "</form></section>" +
+
+      '<section><div class="ad-section-header"><h3>Formats proposés</h3>' +
+      '<button type="button" class="ad-btn" id="ad-shop-suggested">Ajouter les formats suggérés</button></div>' +
+      '<p class="ad-hint">Prix TTC payé par le client, frais de port en plus. La référence (SKU) et les options sont celles du <a href="https://www.prodigi.com/products/" target="_blank" rel="noopener">catalogue Prodigi</a>. Le labo recadre la photo au format choisi. « Estimer » interroge Prodigi pour chaque format actif : son coût réel (produit + port) et votre marge.</p>' +
+      '<div class="ad-shop-quote-bar"><label>Livraison en <select id="ad-shop-country">' + countryOptions + "</select></label>" +
+      ' <button type="button" class="ad-btn" id="ad-shop-quote"' + (s.connected ? "" : " disabled") + ">Estimer coûts et marges</button></div>" +
+      '<div class="ad-table-wrap"><table class="ad-table ad-shop-products" id="ad-shop-products"><thead><tr>' +
+      "<th>Libellé</th><th>SKU Prodigi</th><th>Options</th><th>Prix (€)</th><th>Actif</th><th>Coût labo · marge</th><th></th>" +
+      "</tr></thead><tbody>" +
+      data.products.map(productRowHtml).join("") +
+      '<tr id="ad-shop-new">' +
+      '<td><input type="text" class="ad-input" data-field="label" placeholder="Ex. Tirage 13 × 18 cm" maxlength="100" /></td>' +
+      '<td><input type="text" class="ad-input ad-input-mono" data-field="sku" placeholder="GLOBAL-PHO-5x7" maxlength="80" /></td>' +
+      '<td><input type="text" class="ad-input ad-input-mono" data-field="attributes" placeholder="{}" /></td>' +
+      '<td><input type="text" class="ad-input ad-input-price" data-field="price" placeholder="9.00" inputmode="decimal" /></td>' +
+      "<td></td><td></td>" +
+      '<td><button type="button" class="ad-btn ad-btn-small ad-btn-primary" id="ad-shop-add">Ajouter</button></td>' +
+      "</tr>" +
+      "</tbody></table></div></section>" +
+
+      '<section><div class="ad-section-header"><h3>Commandes</h3></div>' +
+      printOrdersTableHtml(ordersData.orders, true) +
+      "</section>";
+
+    document.getElementById("ad-goto-billing").addEventListener("click", function () { renderBilling(); });
+
+    document.getElementById("ad-shop-settings").addEventListener("submit", async function (event) {
+      event.preventDefault();
+      var form = event.target;
+      var shipping = centsFromEuros(form.shipping.value);
+      if (isNaN(shipping) || shipping < 0) return toast("Frais de port invalides.", true);
+      try {
+        await api("POST", "/shop/settings", {
+          apiKey: form.apiKey.value.trim(),
+          environment: form.environment.value,
+          shippingCents: shipping,
+        });
+        toast("Réglages de la boutique enregistrés.");
+        renderShop(true);
+      } catch (err) {
+        toast(err.message, true);
+      }
+    });
+
+    var clearKey = document.getElementById("ad-shop-clear-key");
+    if (clearKey) {
+      clearKey.addEventListener("click", function () {
+        confirmAction("Retirer la clé Prodigi ? La boutique sera fermée sur toutes vos galeries tant qu'aucune clé n'est enregistrée.", async function () {
+          try {
+            await api("POST", "/shop/settings", { clearKey: true, environment: s.environment, shippingCents: s.shippingCents });
+            toast("Clé Prodigi retirée.");
+            renderShop(true);
+          } catch (err) {
+            toast(err.message, true);
+          }
+        });
+      });
+    }
+
+    document.getElementById("ad-shop-suggested").addEventListener("click", async function () {
+      try {
+        var result = await api("POST", "/shop/products/suggested");
+        toast(result.added ? result.added + " format(s) ajouté(s) — vérifiez les prix." : "Tous les formats suggérés sont déjà là.");
+        renderShop(true);
+      } catch (err) {
+        toast(err.message, true);
+      }
+    });
+
+    document.getElementById("ad-shop-add").addEventListener("click", async function () {
+      try {
+        var product = readProductRow(document.getElementById("ad-shop-new"));
+        if (isNaN(product.priceCents)) throw new Error("Prix invalide.");
+        await api("POST", "/shop/products", product);
+        toast("Format ajouté.");
+        renderShop(true);
+      } catch (err) {
+        toast(err.message, true);
+      }
+    });
+
+    document.getElementById("ad-shop-products").addEventListener("click", async function (event) {
+      var row = event.target.closest("tr[data-product-id]");
+      if (!row) return;
+      var id = row.getAttribute("data-product-id");
+      if (event.target.closest("[data-save-product]")) {
+        try {
+          var product = readProductRow(row);
+          if (isNaN(product.priceCents)) throw new Error("Prix invalide.");
+          await api("PUT", "/shop/products/" + encodeURIComponent(id), product);
+          toast("Format enregistré.");
+          renderShop(true);
+        } catch (err) {
+          toast(err.message, true);
+        }
+      }
+      if (event.target.closest("[data-delete-product]")) {
+        confirmAction("Supprimer ce format ? Les commandes déjà passées ne changent pas.", async function () {
+          try {
+            await api("DELETE", "/shop/products/" + encodeURIComponent(id));
+            toast("Format supprimé.");
+            renderShop(true);
+          } catch (err) {
+            toast(err.message, true);
+          }
+        });
+      }
+    });
+
+    document.getElementById("ad-shop-quote").addEventListener("click", async function () {
+      var btn = this;
+      btn.disabled = true;
+      btn.textContent = "Estimation…";
+      try {
+        var result = await api("POST", "/shop/quote", { countryCode: document.getElementById("ad-shop-country").value });
+        result.quotes.forEach(function (q) {
+          var cell = document.getElementById("ad-quote-" + q.productId);
+          if (!cell) return;
+          if (q.error) {
+            cell.innerHTML = '<span class="ad-order-error">' + esc(q.error) + "</span>";
+          } else {
+            cell.innerHTML = formatEuros(q.totalCostCents) + ' <span class="ad-hint">(dont port ' + formatEuros(q.shippingCents) + ")</span><br />" +
+              '<strong class="' + (q.marginCents > 0 ? "ad-margin-ok" : "ad-order-error") + '">marge ' + formatEuros(q.marginCents) + "</strong>";
+          }
+        });
+        toast("Estimation terminée.");
+      } catch (err) {
+        toast(err.message, true);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Estimer coûts et marges";
+      }
+    });
+
+    wireOrderResubmit(function () { renderShop(true); });
+  }
+
   /* ---------- Vue : vérifier une photo suspecte ---------- */
   // Compare une image retrouvée ailleurs (réseaux sociaux, un site…) aux
   // empreintes invisibles de toutes les galeries du compte, sans savoir à
@@ -1213,7 +1520,7 @@
       return (
         "<tr>" +
         "<td>" + esc(formatDateTime(p.paid_at || p.created_at)) + "</td>" +
-        "<td>" + p.extra_count + " photo" + (p.extra_count > 1 ? "s" : "") + "</td>" +
+        "<td>" + (p.kind === "print" ? "Tirages" : p.extra_count + " photo" + (p.extra_count > 1 ? "s" : "")) + "</td>" +
         "<td>" + formatEuros(p.amount_cents) + "</td>" +
         "<td><span class=\"ad-badge " + statusCls + "\">" + statusLabel + "</span></td>" +
         "<td>" + invoiceCell + "</td>" +
@@ -1222,7 +1529,7 @@
     });
     return (
       '<div class="ad-table-wrap"><table class="ad-table"><thead><tr>' +
-      "<th>Quand</th><th>Suppléments</th><th>Montant</th><th>Statut</th><th>Facture</th>" +
+      "<th>Quand</th><th>Objet</th><th>Montant</th><th>Statut</th><th>Facture</th>" +
       "</tr></thead><tbody>" + rows.join("") + "</tbody></table></div>"
     );
   }
@@ -1338,6 +1645,7 @@
         : "") +
       "</div>" +
       "</section>" +
+      gallerySectionShopHtml(data) +
       '<section class="ad-dropzone" id="ad-dropzone">' +
       '<p><strong>Glissez vos photos ici</strong>, ou</p>' +
       '<label class="ad-btn ad-btn-primary">Choisir des fichiers<input type="file" id="ad-file-input" accept="image/*" multiple hidden /></label>' +
@@ -1507,6 +1815,22 @@
         renderDetail(slug, true);
       }
     });
+    var shopToggle = document.getElementById("ad-gallery-shop-toggle");
+    if (shopToggle) {
+      shopToggle.addEventListener("change", async function () {
+        try {
+          await api("POST", "/galleries/" + encodeURIComponent(slug) + "/shop", { enabled: shopToggle.checked });
+          toast(shopToggle.checked ? "Boutique de tirages ouverte sur cette galerie." : "Boutique de tirages fermée sur cette galerie.");
+          renderDetail(slug, true);
+        } catch (err) {
+          shopToggle.checked = !shopToggle.checked;
+          toast(err.message, true);
+        }
+      });
+    }
+    wireOrderResubmit(function () { renderDetail(slug, true); });
+    var gotoShop = document.getElementById("ad-goto-shop");
+    if (gotoShop) gotoShop.addEventListener("click", function () { renderShop(); });
     var musicRemove = document.getElementById("ad-music-remove");
     if (musicRemove) {
       musicRemove.addEventListener("click", function () {
@@ -1863,6 +2187,7 @@
     else if (location.hash === "#/detect") renderDetect(true);
     else if (location.hash.indexOf("#/facturation") === 0) renderBilling(true);
     else if (location.hash === "#/parametres") renderSettings(true);
+    else if (location.hash === "#/boutique") renderShop(true);
     else if (location.hash === "#/proprietaire") renderOwner(true);
     else renderList(true);
   }

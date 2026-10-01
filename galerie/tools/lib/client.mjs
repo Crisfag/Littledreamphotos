@@ -205,6 +205,22 @@ export class WorkerClient {
     return this.request("DELETE", `/api/admin/galleries/${encodeURIComponent(slug)}/photos/${encodeURIComponent(photoId)}`);
   }
 
+  // Fichier d'impression (boutique de tirages) : pleine définition, jamais
+  // servi au client — seul le labo le télécharge, pour une commande payée.
+  putOriginal(photoId, buffer) {
+    return this.request("PUT", `/api/admin/photos/${encodeURIComponent(photoId)}/original`, buffer, true);
+  }
+
+  // Boutique : appels JSON génériques sous /api/admin/shop… et
+  // /api/admin/print-orders… (le Worker valide et cloisonne tout).
+  shopRequest(method, subPath, body) {
+    return this.request(method, `/api/admin/${subPath}`, body);
+  }
+
+  setGalleryShop(slug, enabled) {
+    return this.request("POST", `/api/admin/galleries/${encodeURIComponent(slug)}/shop`, { enabled: Boolean(enabled) });
+  }
+
   putTile(photoId, level, col, row, buffer) {
     return this.request("PUT", `/api/admin/tiles/${photoId}/${level}/${col}/${row}`, buffer, true);
   }

@@ -112,6 +112,10 @@ export async function buildInvoicePdf(data) {
   text(formatEuros(data.netCents), right - 230, { size: 10 });
   text(data.vatRate > 0 ? `${data.vatRate}%` : "—", right - 130, { size: 10 });
   text(formatEuros(data.amountCents), right - 60, { size: 10 });
+  for (const detail of data.details || []) {
+    y -= 13;
+    text(detail, left + 10, { size: 9, color: MUTED });
+  }
   y -= 30;
   line();
   y -= 24;
@@ -138,7 +142,7 @@ export async function buildInvoicePdf(data) {
 // la ligne. `seller_*` fige les coordonnées de facturation du photographe
 // telles qu'elles sont AU MOMENT de l'émission : une facture déjà émise ne
 // doit jamais changer si le photographe modifie ensuite son profil.
-export async function createInvoiceForPayment(env, { payment, gallery, photographer }) {
+export async function createInvoiceForPayment(env, { payment, gallery, photographer, description, details, clientName }) {
   const { ratePercent, vatCents, netCents } = computeVat(photographer, payment.amount_cents);
   const number = await nextInvoiceNumber(env, photographer.id);
   const issuedAt = Math.floor(Date.now() / 1000);
@@ -149,8 +153,9 @@ export async function createInvoiceForPayment(env, { payment, gallery, photograp
     number,
     issuedAt,
     seller: { name: sellerName, address: photographer.billing_address, vatNumber: photographer.billing_vat_number },
-    clientName: gallery.client_name || "Client",
-    description: `${extraCount} photo${extraCount > 1 ? "s" : ""} supplémentaire${extraCount > 1 ? "s" : ""} — ${gallery.title}`,
+    clientName: clientName || gallery.client_name || "Client",
+    description: description || `${extraCount} photo${extraCount > 1 ? "s" : ""} supplémentaire${extraCount > 1 ? "s" : ""} — ${gallery.title}`,
+    details: details || [],
     amountCents: payment.amount_cents,
     netCents,
     vatCents,
@@ -180,7 +185,7 @@ export async function createInvoiceForPayment(env, { payment, gallery, photograp
       ratePercent,
       vatCents,
       netCents,
-      gallery.client_name || "",
+      clientName || gallery.client_name || "",
       sellerName,
       photographer.billing_address,
       photographer.billing_vat_number,

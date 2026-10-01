@@ -47,6 +47,14 @@ CREATE TABLE IF NOT EXISTS photographers (
   -- comptes quand renseigné (voir l'index partiel ci-dessous) ; les noms
   -- réservés (www, api, admin…) sont refusés côté Worker (studio.js).
   subdomain      TEXT NOT NULL DEFAULT '',
+  -- Boutique de tirages (Prodigi) : clé d'API du compte Prodigi DU
+  -- photographe (c'est lui qui est facturé par le labo), chiffrée avec une
+  -- clé dérivée d'AUTH_SECRET — jamais renvoyée en clair, ni au client ni à
+  -- l'admin. Environnement « sandbox » (tests, rien n'est imprimé) ou
+  -- « live ». Frais de port forfaitaires facturés au client, en centimes.
+  prodigi_api_key_enc  TEXT NOT NULL DEFAULT '',
+  prodigi_environment  TEXT NOT NULL DEFAULT 'sandbox',
+  shop_shipping_cents  INTEGER NOT NULL DEFAULT 0,
   created_at     INTEGER NOT NULL
 );
 
@@ -94,6 +102,10 @@ CREATE TABLE IF NOT EXISTS galleries (
   -- Moment où le client a cliqué « Valider ma sélection » (epoch secondes) ;
   -- NULL tant qu'il ne l'a pas fait. Arrête les relances automatiques.
   selection_done_at      INTEGER,
+  -- Boutique de tirages ouverte au client sur cette galerie (0/1). Les
+  -- photos importées tant qu'elle est ouverte gardent un fichier
+  -- d'impression (R2, originals/{photoId}.jpg), jamais servi au client.
+  shop_enabled           INTEGER NOT NULL DEFAULT 0,
   created_at             INTEGER NOT NULL
 );
 
@@ -116,6 +128,7 @@ CREATE TABLE IF NOT EXISTS photos (
   comment_at   INTEGER,                     -- epoch secondes ; NULL = pas de commentaire
   tag          TEXT NOT NULL DEFAULT '',    -- code couleur posé par le client : '' | green | yellow | red
   marks        TEXT NOT NULL DEFAULT '[]',  -- repères annotés : JSON [{x, y, note}], x/y entre 0 et 1
+  has_original INTEGER NOT NULL DEFAULT 0,  -- 1 = fichier d'impression en R2 (originals/{id}.jpg)
   created_at   INTEGER NOT NULL
 );
 
@@ -251,6 +264,10 @@ CREATE TABLE IF NOT EXISTS payments (
   extra_count                 INTEGER NOT NULL,
   amount_cents                INTEGER NOT NULL,
   status                      TEXT NOT NULL DEFAULT 'pending', -- pending, paid
+  -- 'supplement' (photos au-delà du forfait) ou 'print' (commande de
+  -- tirages, détaillée dans print_orders). extra_count vaut 0 pour 'print' :
+  -- une commande de tirages ne change jamais le décompte des suppléments.
+  kind                        TEXT NOT NULL DEFAULT 'supplement',
   created_at                  INTEGER NOT NULL,
   paid_at                     INTEGER
 );
@@ -374,6 +391,13 @@ CREATE INDEX IF NOT EXISTS idx_email_changes_photographer ON email_changes(photo
 --   ALTER TABLE galleries ADD COLUMN selection_done_at INTEGER;
 --   ALTER TABLE photographers ADD COLUMN reminders_enabled INTEGER NOT NULL DEFAULT 1;
 --   ALTER TABLE photographers ADD COLUMN subdomain TEXT NOT NULL DEFAULT '';
+--   ALTER TABLE photographers ADD COLUMN prodigi_api_key_enc TEXT NOT NULL DEFAULT '';
+--   ALTER TABLE photographers ADD COLUMN prodigi_environment TEXT NOT NULL DEFAULT 'sandbox';
+--   ALTER TABLE photographers ADD COLUMN shop_shipping_cents INTEGER NOT NULL DEFAULT 0;
+--   ALTER TABLE galleries ADD COLUMN shop_enabled INTEGER NOT NULL DEFAULT 0;
+--   ALTER TABLE photos ADD COLUMN has_original INTEGER NOT NULL DEFAULT 0;
+--   ALTER TABLE payments ADD COLUMN kind TEXT NOT NULL DEFAULT 'supplement';
+--   puis les tables print_products et print_orders (fin de ce fichier).
 --   CREATE UNIQUE INDEX IF NOT EXISTS idx_photographers_subdomain ON photographers(subdomain) WHERE subdomain != '';
 
 -- Relances déjà envoyées, pour ne jamais relancer deux fois pour la même
@@ -386,3 +410,53 @@ CREATE TABLE IF NOT EXISTS reminders_sent (
   sent_at    INTEGER NOT NULL,
   PRIMARY KEY (gallery_id, kind)
 );
+
+-- Boutique de tirages : catalogue propre à chaque photographe. `sku` et
+-- `attributes` (JSON) sont ceux du catalogue Prodigi ; `price_cents` est le
+-- prix TTC payé par le client (la marge du photographe = ce prix moins le
+-- coût facturé par Prodigi, que l'admin permet d'estimer par un devis).
+CREATE TABLE IF NOT EXISTS print_products (
+  id              TEXT PRIMARY KEY,
+  photographer_id TEXT NOT NULL REFERENCES photographers(id) ON DELETE CASCADE,
+  label           TEXT NOT NULL,
+  sku             TEXT NOT NULL,
+  attributes      TEXT NOT NULL DEFAULT '{}',
+  price_cents     INTEGER NOT NULL,
+  active          INTEGER NOT NULL DEFAULT 1,
+  position        INTEGER NOT NULL DEFAULT 0,
+  created_at      INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_print_products_photographer ON print_products(photographer_id, position);
+
+-- Commandes de tirages. Le paiement passe par `payments` (kind = 'print') :
+-- même session Stripe, même webhook, même facture que les suppléments. Les
+-- lignes commandées sont figées en JSON au moment de la commande (libellé,
+-- SKU, prix) : changer ensuite le catalogue ne modifie jamais une commande.
+-- status : pending_payment, paid, submitted, in_production, shipped,
+--          cancelled, failed (envoi au labo refusé — à relancer depuis l'admin).
+CREATE TABLE IF NOT EXISTS print_orders (
+  id                 TEXT PRIMARY KEY,
+  gallery_id         TEXT NOT NULL REFERENCES galleries(id) ON DELETE CASCADE,
+  photographer_id    TEXT NOT NULL REFERENCES photographers(id) ON DELETE CASCADE,
+  payment_id         TEXT NOT NULL UNIQUE,
+  status             TEXT NOT NULL DEFAULT 'pending_payment',
+  items              TEXT NOT NULL,
+  recipient          TEXT NOT NULL,
+  client_email       TEXT NOT NULL,
+  items_cents        INTEGER NOT NULL,
+  shipping_cents     INTEGER NOT NULL,
+  total_cents        INTEGER NOT NULL,
+  prodigi_order_id   TEXT NOT NULL DEFAULT '',
+  prodigi_stage      TEXT NOT NULL DEFAULT '',
+  tracking_url       TEXT NOT NULL DEFAULT '',
+  error              TEXT NOT NULL DEFAULT '',
+  submit_attempts    INTEGER NOT NULL DEFAULT 0,
+  created_at         INTEGER NOT NULL,
+  paid_at            INTEGER,
+  submitted_at       INTEGER,
+  updated_at         INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_print_orders_gallery ON print_orders(gallery_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_print_orders_photographer ON print_orders(photographer_id, created_at);

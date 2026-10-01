@@ -300,6 +300,75 @@ export function buildSelectionValidatedEmail({ galleryTitle, clientName, selecte
   return { subject, html: emailShell({ preheader: subject, bodyHtml }), text };
 }
 
+// Lignes d'une commande de tirages, en HTML et en texte, pour les e-mails.
+function printLinesHtml(lines) {
+  return `<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;margin:6px 0 16px;font-family:${SANS};font-size:14px;color:${CHARCOAL};">` +
+    lines.map((l) =>
+      `<tr><td style="padding:4px 0;">${l.copies} × ${escapeHtml(l.label)} <span style="color:${MUTED};">— photo n° ${l.photoNumber}</span></td>` +
+      `<td style="padding:4px 0;text-align:right;white-space:nowrap;">${formatEuros(l.lineCents)}</td></tr>`
+    ).join("") +
+    `</table>`;
+}
+
+function printLinesText(lines) {
+  return lines.map((l) => `- ${l.copies} × ${l.label} (photo n° ${l.photoNumber}) : ${formatEuros(l.lineCents)}`).join("\n");
+}
+
+// Confirmation au client après paiement d'une commande de tirages (la
+// facture est jointe par l'appelant).
+export function buildPrintOrderConfirmationEmail({ studioName, galleryTitle, recipientName, lines, shippingCents, totalCents, invoiceNumber }) {
+  const subject = `Votre commande de tirages est confirmée — ${galleryTitle}`;
+  const bodyHtml =
+    eyebrow(studioName || "Commande de tirages") +
+    heading("Merci pour votre commande !") +
+    paragraph(`${recipientName ? escapeHtml(recipientName) + ", v" : "V"}otre paiement est bien reçu. Vos tirages de « <strong>${escapeHtml(galleryTitle)}</strong> » partent en fabrication chez notre laboratoire, puis directement chez vous.`) +
+    printLinesHtml(lines) +
+    paragraph(`Frais de port : ${formatEuros(shippingCents)}<br /><strong>Total réglé : ${formatEuros(totalCents)}</strong>`) +
+    paragraph(`Vous recevrez un e-mail avec le lien de suivi dès l'expédition.${invoiceNumber ? ` Votre facture n° ${escapeHtml(invoiceNumber)} est jointe à ce message.` : ""}`, { small: true });
+  const text = [
+    `Votre commande de tirages pour « ${galleryTitle} » est confirmée.`,
+    "",
+    printLinesText(lines),
+    `Frais de port : ${formatEuros(shippingCents)}`,
+    `Total réglé : ${formatEuros(totalCents)}`,
+    "",
+    "Vous recevrez un e-mail avec le lien de suivi dès l'expédition.",
+  ].join("\n");
+  return { subject, html: emailShell({ preheader: subject, bodyHtml }), text };
+}
+
+// Au photographe : nouvelle commande payée, et ce qu'il en est côté labo.
+export function buildPrintOrderPhotographerEmail({ galleryTitle, recipientName, lines, totalCents, labStatus, labError, adminUrl }) {
+  const failed = labStatus === "failed";
+  const subject = failed
+    ? `⚠️ Commande de tirages à relancer — ${galleryTitle}`
+    : `Nouvelle commande de tirages — ${galleryTitle}`;
+  const bodyHtml =
+    eyebrow(failed ? "Action requise" : "Nouvelle commande") +
+    heading(`${escapeHtml(recipientName || "Un client")} a commandé des tirages`) +
+    paragraph(`Galerie « <strong>${escapeHtml(galleryTitle)}</strong> », ${formatEuros(totalCents)} réglés en ligne.`) +
+    printLinesHtml(lines) +
+    paragraph(failed
+      ? `<strong>Le laboratoire a refusé la commande :</strong> ${escapeHtml(labError || "raison inconnue")}. Corrigez le format en cause dans Paramètres → Boutique, puis relancez la commande depuis la fiche de la galerie.`
+      : "La commande a été transmise automatiquement au laboratoire. Rien à faire de votre côté : le client recevra le suivi à l'expédition.") +
+    (adminUrl ? emailButton(adminUrl, "Ouvrir le tableau de bord") : "");
+  const text = `${recipientName || "Un client"} a commandé des tirages sur « ${galleryTitle} » (${formatEuros(totalCents)}).\n\n${printLinesText(lines)}\n\n` +
+    (failed ? `Le laboratoire a refusé la commande : ${labError || "raison inconnue"}. Relancez-la depuis la fiche de la galerie.` : "Commande transmise automatiquement au laboratoire.");
+  return { subject, html: emailShell({ preheader: subject, bodyHtml }), text };
+}
+
+// Au client : ses tirages sont expédiés.
+export function buildPrintOrderShippedEmail({ studioName, galleryTitle, recipientName, trackingUrl }) {
+  const subject = `Vos tirages sont en route — ${galleryTitle}`;
+  const bodyHtml =
+    eyebrow(studioName || "Commande de tirages") +
+    heading("Vos tirages sont en route") +
+    paragraph(`${recipientName ? escapeHtml(recipientName) + ", v" : "V"}os tirages de « <strong>${escapeHtml(galleryTitle)}</strong> » viennent d'être expédiés.`) +
+    (trackingUrl ? emailButton(trackingUrl, "Suivre mon colis") : paragraph("Le transporteur ne fournit pas de lien de suivi pour cet envoi.", { small: true }));
+  const text = `Vos tirages de « ${galleryTitle} » viennent d'être expédiés.${trackingUrl ? `\n\nSuivi : ${trackingUrl}` : ""}`;
+  return { subject, html: emailShell({ preheader: subject, bodyHtml }), text };
+}
+
 function bytesToBase64(bytes) {
   let binary = "";
   const chunkSize = 0x8000;
@@ -375,4 +444,20 @@ export async function sendPhotographerReminder(env, params) {
 
 export async function sendSelectionValidated(env, params) {
   await sendEmail(env, { to: params.to, ...buildSelectionValidatedEmail(params) });
+}
+
+export async function sendPrintOrderConfirmation(env, params) {
+  await sendEmail(env, {
+    to: params.to,
+    ...buildPrintOrderConfirmationEmail(params),
+    ...(params.pdfBytes ? { attachments: [{ filename: `facture-${params.invoiceNumber}.pdf`, content: bytesToBase64(params.pdfBytes) }] } : {}),
+  });
+}
+
+export async function sendPrintOrderPhotographer(env, params) {
+  await sendEmail(env, { to: params.to, ...buildPrintOrderPhotographerEmail(params) });
+}
+
+export async function sendPrintOrderShipped(env, params) {
+  await sendEmail(env, { to: params.to, ...buildPrintOrderShippedEmail(params) });
 }

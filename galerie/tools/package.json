@@ -23,6 +23,7 @@
     "test:selection": "node tests/selection.test.mjs",
     "test:comments": "node tests/comments.test.mjs",
     "test:marks": "node tests/marks.test.mjs",
-    "test:subdomain": "node tests/subdomain.test.mjs"
+    "test:subdomain": "node tests/subdomain.test.mjs",
+    "test:shop": "node tests/shop.test.mjs"
   }
 }

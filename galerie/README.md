@@ -116,6 +116,19 @@ galerie affiche la date de validation, et les relances automatiques
 s'arrêtent. Le client peut encore changer d'avis et valider à nouveau
 (l'e-mail n'est pas renvoyé plus d'une fois par heure).
 
+**Boutique de tirages** : depuis la visionneuse, le bouton « Tirages »
+propose les formats choisis par le photographe (tirages, tirages d'art,
+toiles, cadres…) avec leur prix. Le client remplit son panier photo par
+photo, indique son adresse et paie en ligne (Stripe, sur le compte du
+photographe, comme les suppléments). La commande part alors toute seule au
+laboratoire **Prodigi**, qui imprime et expédie directement chez le client ;
+celui-ci reçoit un e-mail de confirmation avec sa facture, puis un autre
+avec le lien de suivi à l'expédition, et retrouve ses commandes et leur
+statut en tête de galerie. Le labo ne reçoit jamais les épreuves
+filigranées : il télécharge, par un lien signé valable pour cette seule
+commande, un fichier d'impression en pleine définition conservé à part et
+jamais montré au client.
+
 **Une adresse au nom du studio** : chaque photographe peut choisir un
 sous-domaine dans Paramètres (`julie` → `julie.holypixx.com`), et tous ses
 liens de galerie le portent aussitôt : `https://julie.holypixx.com/?g=…`.
@@ -216,6 +229,14 @@ adresse « bidon » ne sert qu'à faire passer `*.holypixx.com` par Cloudflare,
 où la route confie la requête au Worker. `www` et l'apex gardent leurs
 enregistrements et leur hébergement : le Worker les laisse passer sans y
 toucher.
+
+La boutique de tirages ne demande rien de plus côté Cloudflare : chaque
+photographe colle sa propre clé d'API Prodigi dans l'onglet Boutique (elle
+est stockée chiffrée, avec une clé dérivée d'`AUTH_SECRET`), et c'est son
+compte Prodigi qui est facturé par le labo. Le paiement réutilise Stripe
+Connect et le webhook déjà en place. `PRODIGI_API_BASE` ne sert qu'aux tests
+locaux (faux laboratoire, voir *Fiabilité mesurée*) : ne la définissez
+jamais en production.
 
 ### 2. La page client
 
@@ -367,6 +388,21 @@ Le tableau de bord s'organise en trois onglets, chacun avec son propre lien
   d'un coup d'œil, à l'endroit exact où il l'a dit.
 - **Journal d'accès** intégré à la fiche de chaque galerie, coups de cœur et
   remarques compris.
+- **Onglet Boutique** : la liste de ce qui manque avant d'ouvrir la
+  boutique (clé Prodigi, paiement Stripe actif, au moins un format), la clé
+  d'API Prodigi (mode test « sandbox » où rien n'est imprimé, puis
+  production), les frais de port facturés au client, et le catalogue :
+  libellé, référence Prodigi (SKU), options (bord de toile, couleur de
+  cadre…), prix de vente TTC, actif ou non. « Ajouter les formats
+  suggérés » en pose cinq d'un clic ; « Estimer coûts et marges » interroge
+  Prodigi pour chaque format (coût réel du produit et du port vers le pays
+  choisi) et affiche la marge — un format que le labo refuse affiche sa
+  raison. En bas, toutes les commandes, leur statut, le lien de suivi, et
+  « Relancer au labo » pour une commande que le labo a refusée.
+- **Boutique sur la fiche galerie** : « Proposer des tirages sur cette
+  galerie », le nombre de photos commandables, et les commandes de cette
+  galerie. Seules les photos importées pendant que la boutique est ouverte
+  gardent un fichier d'impression : ouvrez-la avant l'import.
 - **Sélection validée** : badge « ✓ Validée » sur la carte de la galerie et
   date de validation sur sa fiche ; tant que le client n'a pas validé, la
   fiche rappelle où en sont les relances automatiques.
@@ -670,7 +706,7 @@ des tuiles, refus du mauvais mot de passe, absence de toute balise `<img>`,
 neutralisation du menu contextuel et de la copie, voile sur « Impr. écran » et
 sur perte de focus, consignation au journal.
 
-**API du Worker** — 262 vérifications contre le vrai moteur Cloudflare (D1 et R2
+**API du Worker** — 301 vérifications contre le vrai moteur Cloudflare (D1 et R2
 émulés localement par `wrangler dev`) : comptes photographes (inscription,
 connexion, session, mot de passe oublié — même réponse générique qu'un
 compte existe ou non), cloisonnement strict entre comptes (un photographe ne
@@ -738,7 +774,25 @@ du client. Relances automatiques (passe lancée par la propriétaire, refusée
 client et relance photographe à J-1, rien sans e-mail client, sans date
 d'expiration ou une fois la sélection validée, jamais deux fois la même
 relance d'une passe à l'autre, plus rien pour un compte qui a désactivé les
-relances. Sous-domaine par studio : caractères, longueur et noms réservés
+relances. Boutique de tirages, contre un faux laboratoire Prodigi local :
+clé Prodigi enregistrée mais jamais renvoyée (seuls ses quatre derniers
+caractères), réglages et catalogue cloisonnés par compte, formats suggérés
+sans doublon, SKU, options et prix invalides refusés, devis avec coût réel
+et marge, format refusé par le labo avec sa raison ; côté client, boutique
+invisible tant qu'elle n'est pas ouverte sur la galerie, que Stripe n'est
+pas actif ou que la photo n'a pas de fichier d'impression, références
+Prodigi jamais exposées, fichier d'impression inatteignable par la route
+des tuiles ; commande refusée sans session, avec une adresse invalide, un
+panier vide ou une photo indisponible, et refus net sans rien enregistrer
+quand Stripe n'est pas configuré ; commande payée transmise au labo avec la
+clé du photographe, notre référence, le SKU, la quantité et l'adresse au
+format Prodigi, jamais deux fois ; fichier d'impression téléchargé octet
+pour octet par son URL signée, URL falsifiée ou détournée vers une autre
+photo refusée ; notification de suivi non signée refusée, notification
+signée suivie d'une relecture chez Prodigi (son contenu n'est jamais cru) :
+commande expédiée avec son lien de suivi, visible du client ; refus du labo
+passé « à relancer » avec la raison, présenté au client comme « en
+préparation » ; fichier inaccessible une fois la galerie supprimée. Sous-domaine par studio : caractères, longueur et noms réservés
 refusés, mis en minuscules, relu dans le profil, refusé à un autre compte
 (409), et — en rejouant les requêtes avec l'en-tête `Host` du studio, tel
 que le Worker le reçoit en production — 404 lisible pour un studio inconnu,
@@ -767,6 +821,26 @@ Relances : échéance en jours (« demain » à J-1), coups de cœur déjà pos�
 ou invitation à choisir, lien vers la galerie présent dans le HTML et le
 texte — ou aucun bouton du tout sans adresse publique configurée —, e-mail
 de sélection validée avec nombre de photos et supplément dû.
+
+**Boutique de tirages (logique)** — 31 vérifications sans réseau ni D1 :
+clé Prodigi chiffrée (jamais en clair, illisible avec un autre secret, IV
+aléatoire), URLs signées propres à une commande et une photo, adresse de
+livraison nettoyée et validée (e-mail, ville, pays proposé), lignes figées
+au prix du catalogue et jamais à celui envoyé par la page, photo sans
+fichier d'impression, format désactivé ou quantité hors limites refusés,
+commande et devis au format exact de l'API Prodigi v4 (référence,
+idempotence par tentative, `postalOrZipCode`, `fillPrintArea`, options),
+coût d'un devis lu en centimes, statuts Prodigi traduits (en fabrication,
+expédiée avec suivi, annulée), erreurs Prodigi rendues lisibles.
+
+**Boutique de tirages (page client)** — 17 vérifications dans un vrai
+navigateur, contre le faux laboratoire : boutique annoncée, bouton
+« Tirages » seulement sur une photo commandable, formats et prix,
+ajout au panier confirmé, compteur, détail du panier, total tirages +
+livraison, quantité modifiée et ligne retirée, Belgique par défaut, refus
+propre sans Stripe local avec panier conservé, panier qui survit à un
+rechargement, message de confirmation au retour du paiement (panier vidé,
+paramètre retiré de l'adresse), commandes passées avec statut et suivi.
 
 **Décision des relances** — 11 vérifications sans réseau ni D1
 (`remindersDue` est une fonction pure) : rien à 10 jours, première relance
@@ -797,7 +871,7 @@ appliqué sinon, HT + TVA se recomposant exactement au centime près en TTC
 même sur un montant qui ne se divise pas rond, et un vrai PDF valide généré
 aussi bien avec des coordonnées complètes qu'avec des champs vides.
 
-**Interface d'administration** — 91 vérifications dans un vrai navigateur,
+**Interface d'administration** — 103 vérifications dans un vrai navigateur,
 contre le vrai Worker local : demande de lien de réinitialisation de mot de
 passe (message générique affiché), création de compte et connexion depuis
 le formulaire (pas de session présupposée), barre d'onglets Galeries /
@@ -853,7 +927,12 @@ après rechargement ; passe de relances lancée depuis l'onglet Admin par la
 propriétaire, avec son résumé. Adresse du studio : « aucun sous-domaine »
 au départ, sous-domaine enregistré et rappelé avec l'adresse complète, nom
 réservé refusé avec son message, lien de la galerie qui porte aussitôt
-l'adresse du studio.
+l'adresse du studio. Boutique : onglet avec son propre lien, étape « clé
+Prodigi » à faire puis cochée après enregistrement (clé jamais réaffichée),
+frais de port relus, formats suggérés et format personnalisé ajoutés,
+estimation des coûts et marges avec la raison d'un refus du labo, prix
+modifié et relu, aucune commande au départ, et boutique ouverte depuis la
+fiche galerie avec l'explication des photos commandables.
 
 **Vérifier une photo (empreinte invisible)** — 8 vérifications contre le vrai
 Worker local : une image reconstituée tuile par tuile — exactement comme le
@@ -910,10 +989,12 @@ node tests/selection.test.mjs         # sélection client, autonome (crée sa pr
 node tests/comments.test.mjs          # commentaires client, autonome (crée sa propre galerie)
 node tests/marks.test.mjs             # codes couleur + repères client, autonome (crée sa propre galerie)
 node tests/subdomain.test.mjs         # sous-domaine par studio, autonome (PUBLIC_SITE_ORIGIN=http://localhost:8000 dans worker/.dev.vars)
+node tests/shop.test.mjs              # boutique de tirages côté client, autonome (PRODIGI_API_BASE=http://127.0.0.1:8790/v4.0 dans worker/.dev.vars)
 
 cd ../worker
 node tests/notify.test.mjs            # e-mails (alerte de capture, relances…), sans réseau
 node tests/reminders.test.mjs         # décision des relances automatiques, sans réseau
+node tests/prodigi.test.mjs           # boutique de tirages (Prodigi), sans réseau
 node tests/stripe.test.mjs            # signature de webhook + encodage des sessions Stripe, sans réseau
 node tests/invoices.test.mjs          # calcul de TVA + génération du PDF de facture, sans réseau
 npx wrangler dev --local --port 8788  # dans un autre terminal
