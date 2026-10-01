@@ -402,6 +402,42 @@ check("filtrer sur la sélection ne laisse apparaître que la photo choisie",
       visiblePhotosWhileFiltered === 1, `${visiblePhotosWhileFiltered} vignette(s) visible(s)`);
 await page.click("#ad-filter-selected"); // on désactive : la suite du test veut voir toutes les photos
 
+/* ---------- Codes couleur et repères annotés ---------- */
+// Le client pose un code couleur et un repère via l'API (comme le ferait sa
+// page) ; le tableau de bord doit les montrer sur la vignette et en grand.
+
+await fetch(`${API}/api/gallery/${gallerySlug}/tag`, {
+  method: "POST",
+  headers: { authorization: `Bearer ${clientSession.token}`, "content-type": "application/json" },
+  body: JSON.stringify({ photoId: firstPhotoId, tag: "yellow" }),
+});
+await fetch(`${API}/api/gallery/${gallerySlug}/marks`, {
+  method: "POST",
+  headers: { authorization: `Bearer ${clientSession.token}`, "content-type": "application/json" },
+  body: JSON.stringify({ photoId: firstPhotoId, marks: [{ x: 0.3, y: 0.6, note: "adoucir ici" }] }),
+});
+
+await page.reload({ waitUntil: "domcontentloaded" });
+await page.waitForSelector("#ad-photos .ad-photo", { timeout: 10000 });
+check("la photo marquée « à retoucher » porte sa pastille jaune sur la vignette",
+      await page.locator(`.ad-photo[data-photo-id="${firstPhotoId}"] .ad-photo-tag-yellow`).count() === 1);
+check("la vignette annonce le nombre de repères posés",
+      ((await page.textContent(`.ad-photo[data-photo-id="${firstPhotoId}"] .ad-photo-marks`)) || "").includes("1"));
+check("la légende des codes couleur résume la galerie",
+      ((await page.textContent("#ad-tag-legend")) || "").includes("1 à retoucher"),
+      await page.textContent("#ad-tag-legend"));
+
+await page.click(`.ad-photo[data-photo-id="${firstPhotoId}"] .ad-photo-frame`);
+await page.waitForSelector("#ad-photo-modal:not([hidden])", { timeout: 5000 });
+check("cliquer sur la vignette ouvre la photo en grand avec le repère posé dessus",
+      await page.locator("#ad-photo-modal .ad-pin").count() === 1);
+check("la note du repère est listée sous la photo",
+      ((await page.textContent("#ad-photo-notes")) || "").includes("adoucir ici"));
+check("le code couleur est rappelé dans la fiche en grand",
+      await page.locator("#ad-photo-modal .ad-badge-tag-yellow").count() === 1);
+await page.click("#ad-photo-modal-close");
+check("la fiche en grand se referme", await page.isHidden("#ad-photo-modal"));
+
 /* ---------- Historique des paiements ---------- */
 // Un vrai règlement Stripe ne peut pas être rejoué ici (pas de compte Stripe
 // réel en local — voir stripe.test.mjs pour le câblage de la session de

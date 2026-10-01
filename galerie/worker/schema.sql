@@ -99,6 +99,8 @@ CREATE TABLE IF NOT EXISTS photos (
   selected_at  INTEGER,                     -- epoch secondes ; NULL = pas sélectionnée
   comment      TEXT NOT NULL DEFAULT '',    -- note laissée par le client sur cette photo
   comment_at   INTEGER,                     -- epoch secondes ; NULL = pas de commentaire
+  tag          TEXT NOT NULL DEFAULT '',    -- code couleur posé par le client : '' | green | yellow | red
+  marks        TEXT NOT NULL DEFAULT '[]',  -- repères annotés : JSON [{x, y, note}], x/y entre 0 et 1
   created_at   INTEGER NOT NULL
 );
 
@@ -107,6 +109,8 @@ CREATE TABLE IF NOT EXISTS photos (
 --   ALTER TABLE photos ADD COLUMN selected_at INTEGER;
 --   ALTER TABLE photos ADD COLUMN comment TEXT NOT NULL DEFAULT '';
 --   ALTER TABLE photos ADD COLUMN comment_at INTEGER;
+--   ALTER TABLE photos ADD COLUMN tag TEXT NOT NULL DEFAULT '';
+--   ALTER TABLE photos ADD COLUMN marks TEXT NOT NULL DEFAULT '[]';
 
 -- Migration vers les comptes photographes (bases créées avant cette
 -- fonctionnalité, où `galleries` n'a pas encore `photographer_id`) :
@@ -157,7 +161,7 @@ CREATE TABLE IF NOT EXISTS access_log (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
   gallery_id TEXT NOT NULL,
   viewer_id  TEXT NOT NULL DEFAULT '',
-  event      TEXT NOT NULL,   -- login, login_failed, view, select, deselect, comment, capture_suspected, blur, print
+  event      TEXT NOT NULL,   -- login, login_failed, view, select, deselect, comment, tag, mark, capture_suspected, blur, print
   detail     TEXT NOT NULL DEFAULT '',
   -- Photo affichée au moment de l'évènement (capture_suspected, print,
   -- devtools) : permet d'alerter le photographe sur LA photo concernée,

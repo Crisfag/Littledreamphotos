@@ -2,6 +2,7 @@
 // distribution des tuiles, journal d'accès.
 
 import { json, fail } from "./http.js";
+import { isValidTag, parseMarks, normalizeMarks } from "./marks.js";
 import { verifyPassword, signToken, verifyToken, hashIp, randomBytes, b64url } from "./auth.js";
 import { sendCaptureAlert } from "./notify.js";
 import { createCheckoutSession } from "./stripe.js";
@@ -123,7 +124,7 @@ async function handleLogin(request, env, slug) {
   await logAccess(env, { galleryId: gallery.id, viewerId, event: "login", ipHash, userAgent });
 
   const { results: photos } = await env.DB.prepare(
-    `SELECT id, width, height, cols, rows, preview_width, preview_height, selected, comment FROM photos
+    `SELECT id, width, height, cols, rows, preview_width, preview_height, selected, comment, tag, marks FROM photos
      WHERE gallery_id = ? ORDER BY position ASC, created_at ASC`
   )
     .bind(gallery.id)
@@ -172,6 +173,8 @@ async function handleLogin(request, env, slug) {
       previewHeight: p.preview_height,
       selected: !!p.selected,
       comment: p.comment || "",
+      tag: p.tag || "",
+      marks: parseMarks(p.marks),
     })),
   });
 }
@@ -297,6 +300,83 @@ async function handleComment(request, env, slug) {
   });
 
   return json({ ok: true, comment });
+}
+
+// Code couleur posé par le client sur une photo (validée / à retoucher / à
+// écarter). Indépendant du coup de cœur : un client peut marquer « à
+// retoucher » une photo qu'il n'a pas (encore) choisie, ou l'inverse.
+async function handleTag(request, env, slug) {
+  const auth = await authorize(request, env, slug);
+  if (auth.error) return auth.error;
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return fail(400, "Requête invalide");
+  }
+  const photoId = typeof body?.photoId === "string" ? body.photoId : "";
+  if (!photoId) return fail(400, "Photo manquante");
+  const tag = typeof body?.tag === "string" ? body.tag : "";
+  if (!isValidTag(tag)) return fail(400, "Code couleur inconnu");
+
+  const photo = await env.DB.prepare("SELECT id FROM photos WHERE id = ? AND gallery_id = ?")
+    .bind(photoId, auth.gallery.id)
+    .first();
+  if (!photo) return fail(404, "Photo introuvable");
+
+  await env.DB.prepare("UPDATE photos SET tag = ? WHERE id = ?").bind(tag, photoId).run();
+
+  await logAccess(env, {
+    galleryId: auth.gallery.id,
+    viewerId: auth.viewerId,
+    event: "tag",
+    detail: photoId,
+    ipHash: await hashIp(request.headers.get("CF-Connecting-IP") || "", env.TOKEN_SECRET),
+    userAgent: request.headers.get("User-Agent") || "",
+  });
+
+  return json({ ok: true, tag });
+}
+
+// Repères annotés : la liste complète est renvoyée à chaque enregistrement
+// (dernier écrit gagne, comme le commentaire) — bien plus simple à relire
+// qu'une suite d'ajouts/retraits, pour une liste qui ne dépasse jamais
+// quelques éléments.
+async function handleMarks(request, env, slug) {
+  const auth = await authorize(request, env, slug);
+  if (auth.error) return auth.error;
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return fail(400, "Requête invalide");
+  }
+  const photoId = typeof body?.photoId === "string" ? body.photoId : "";
+  if (!photoId) return fail(400, "Photo manquante");
+  const normalized = normalizeMarks(body?.marks);
+  if (normalized.error) return fail(400, normalized.error);
+
+  const photo = await env.DB.prepare("SELECT id FROM photos WHERE id = ? AND gallery_id = ?")
+    .bind(photoId, auth.gallery.id)
+    .first();
+  if (!photo) return fail(404, "Photo introuvable");
+
+  await env.DB.prepare("UPDATE photos SET marks = ? WHERE id = ?")
+    .bind(JSON.stringify(normalized.marks), photoId)
+    .run();
+
+  await logAccess(env, {
+    galleryId: auth.gallery.id,
+    viewerId: auth.viewerId,
+    event: "mark",
+    detail: photoId,
+    ipHash: await hashIp(request.headers.get("CF-Connecting-IP") || "", env.TOKEN_SECRET),
+    userAgent: request.headers.get("User-Agent") || "",
+  });
+
+  return json({ ok: true, marks: normalized.marks });
 }
 
 function newPaymentId() {
@@ -583,6 +663,12 @@ export async function handleViewer(request, env, ctx, path) {
   }
   if (action === "comment" && request.method === "POST") {
     return handleComment(request, env, slug);
+  }
+  if (action === "tag" && request.method === "POST") {
+    return handleTag(request, env, slug);
+  }
+  if (action === "marks" && request.method === "POST") {
+    return handleMarks(request, env, slug);
   }
   if (action === "event" && request.method === "POST") {
     return handleEvent(request, env, ctx, slug);

@@ -6,6 +6,7 @@
 // autre compte.
 
 import { json, fail } from "./http.js";
+import { parseMarks } from "./marks.js";
 import { hashPassword, randomBytes, b64url } from "./auth.js";
 import { authenticatePhotographer } from "./authPhotographer.js";
 import { connectStripe, refreshStripeStatus, setBillingProfile } from "./billing.js";
@@ -186,11 +187,15 @@ async function getGallery(env, photographerId, slug) {
 
   const { results: photos } = await env.DB.prepare(
     `SELECT id, position, width, height, cols, rows, preview_width, preview_height,
-            forensic_id, selected, selected_at, comment, comment_at, created_at
+            forensic_id, selected, selected_at, comment, comment_at, tag, marks, created_at
      FROM photos WHERE gallery_id = ? ORDER BY position ASC, created_at ASC`
   )
     .bind(gallery.id)
     .all();
+  for (const photo of photos) {
+    photo.tag = photo.tag || "";
+    photo.marks = parseMarks(photo.marks);
+  }
 
   const selectedCount = photos.filter((p) => p.selected).length;
 

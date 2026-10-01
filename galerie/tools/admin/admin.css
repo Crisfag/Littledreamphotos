@@ -442,6 +442,74 @@ h3 { font-size: 1.15rem; margin-bottom: .9rem; }
   cursor: help;
 }
 
+/* Codes couleur et repères annotés par le client */
+.ad-photo-tag {
+  position: absolute; top: .35rem; left: 1.75rem;
+  width: 20px; height: 20px;
+  border-radius: 999px;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .25);
+}
+.ad-photo-tag-green { background: #6fbf73; }
+.ad-photo-tag-yellow { background: #f2c94c; }
+.ad-photo-tag-red { background: #e0665a; }
+.ad-photo-marks {
+  position: absolute; right: .35rem; bottom: .35rem;
+  height: 20px; padding: 0 .4rem;
+  display: flex; align-items: center; gap: .15rem;
+  border-radius: 999px;
+  background: #fff;
+  font-size: .68rem;
+  line-height: 1;
+}
+.ad-photo-frame { cursor: zoom-in; }
+.ad-tag-legend {
+  display: flex; flex-wrap: wrap; gap: .4rem 1rem;
+  margin: .4rem 0 .9rem;
+  font-size: .84rem; color: var(--muted);
+}
+.ad-tag-legend span::before {
+  content: ""; display: inline-block; width: 10px; height: 10px;
+  border-radius: 999px; margin-right: .4rem; vertical-align: middle;
+  background: var(--legend);
+}
+.ad-tag-legend-green { --legend: #6fbf73; }
+.ad-tag-legend-yellow { --legend: #f2c94c; }
+.ad-tag-legend-red { --legend: #e0665a; }
+
+.ad-photo-large {
+  position: relative;
+  display: grid;
+  width: 100%;
+  max-height: 65vh;
+  margin: 0 auto .9rem;
+  background: var(--sand);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.ad-photo-large img { display: block; width: 100%; height: 100%; object-fit: cover; -webkit-user-drag: none; }
+.ad-photo-large-pins { position: absolute; inset: 0; pointer-events: none; }
+.ad-pin {
+  position: absolute;
+  transform: translate(-50%, -100%) rotate(-45deg);
+  width: 26px; height: 26px;
+  border: 2px solid #fff;
+  border-radius: 50% 50% 50% 0;
+  background: var(--rose-deep);
+  color: #fff;
+  font-size: .75rem; font-weight: 600;
+  display: grid; place-items: center;
+  box-shadow: 0 6px 16px -6px rgba(0, 0, 0, .6);
+}
+.ad-pin > span { transform: rotate(45deg); }
+.ad-badge-tag-green { background: #6fbf73; color: #fff; }
+.ad-badge-tag-yellow { background: #f2c94c; color: var(--ink); }
+.ad-badge-tag-red { background: #e0665a; color: #fff; }
+.ad-photo-meta { display: flex; flex-wrap: wrap; gap: .5rem 1rem; align-items: center; margin-bottom: .7rem; font-size: .9rem; }
+.ad-photo-notes { margin: 0; padding-left: 1.3rem; }
+.ad-photo-notes li { margin-bottom: .35rem; }
+.ad-photo-notes em { font-style: normal; color: var(--muted); }
+
 /* ---------- Journal ---------- */
 
 .ad-table-wrap { overflow-x: auto; }
@@ -473,6 +541,7 @@ h3 { font-size: 1.15rem; margin-bottom: .9rem; }
   overflow-y: auto;
 }
 .ad-modal-narrow { width: min(400px, 100%); }
+.ad-modal-wide { width: min(960px, 100%); }
 .ad-modal h2 { margin-bottom: .6rem; }
 .ad-lede { color: var(--muted); font-size: .9rem; margin-bottom: 1.2rem; }
 

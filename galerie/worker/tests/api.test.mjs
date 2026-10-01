@@ -476,6 +476,119 @@ const clearedPhoto = detailAfterClear.photos.find((p) => p.id === photoId);
 check("effacer un commentaire efface aussi sa date",
       clearedPhoto?.comment === "" && clearedPhoto?.comment_at == null, JSON.stringify(clearedPhoto));
 
+/* ---------- Codes couleur et repères annotés ---------- */
+
+check("une photo n'a ni code couleur ni repère au départ",
+      detailAfterClear.photos[0]?.tag === "" && Array.isArray(detailAfterClear.photos[0]?.marks) && detailAfterClear.photos[0].marks.length === 0,
+      JSON.stringify({ tag: detailAfterClear.photos[0]?.tag, marks: detailAfterClear.photos[0]?.marks }));
+
+const tagNoAuth = await fetch(`${BASE}/api/gallery/${SLUG}/tag`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ photoId, tag: "green" }),
+});
+check("poser un code couleur sans jeton est refusé", tagNoAuth.status === 401);
+
+const tagUnknown = await fetch(`${BASE}/api/gallery/${SLUG}/tag`, {
+  method: "POST",
+  headers: { ...bearer, "content-type": "application/json" },
+  body: JSON.stringify({ photoId, tag: "bleu" }),
+});
+check("un code couleur inconnu est refusé", tagUnknown.status === 400);
+
+const tagSet = await fetch(`${BASE}/api/gallery/${SLUG}/tag`, {
+  method: "POST",
+  headers: { ...bearer, "content-type": "application/json" },
+  body: JSON.stringify({ photoId, tag: "yellow" }),
+});
+const tagSetBody = await tagSet.json();
+check("le client peut marquer une photo « à retoucher »", tagSet.ok && tagSetBody.tag === "yellow", JSON.stringify(tagSetBody));
+
+const detailAfterTag = await (await admin("GET", `/api/admin/galleries/${SLUG}`)).json();
+check("le code couleur apparaît côté administration, indépendamment du coup de cœur",
+      detailAfterTag.photos.find((p) => p.id === photoId)?.tag === "yellow",
+      JSON.stringify(detailAfterTag.photos.find((p) => p.id === photoId)?.tag));
+
+const marksNoAuth = await fetch(`${BASE}/api/gallery/${SLUG}/marks`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ photoId, marks: [] }),
+});
+check("poser des repères sans jeton est refusé", marksNoAuth.status === 401);
+
+const marksOutOfBounds = await fetch(`${BASE}/api/gallery/${SLUG}/marks`, {
+  method: "POST",
+  headers: { ...bearer, "content-type": "application/json" },
+  body: JSON.stringify({ photoId, marks: [{ x: 1.4, y: 0.2, note: "hors cadre" }] }),
+});
+check("un repère hors de la photo est refusé", marksOutOfBounds.status === 400);
+
+const tooManyMarks = Array.from({ length: 13 }, (_, i) => ({ x: i / 20, y: 0.5, note: "" }));
+const marksTooMany = await fetch(`${BASE}/api/gallery/${SLUG}/marks`, {
+  method: "POST",
+  headers: { ...bearer, "content-type": "application/json" },
+  body: JSON.stringify({ photoId, marks: tooManyMarks }),
+});
+check("plus de 12 repères sur une même photo est refusé", marksTooMany.status === 400);
+
+const marksSet = await fetch(`${BASE}/api/gallery/${SLUG}/marks`, {
+  method: "POST",
+  headers: { ...bearer, "content-type": "application/json" },
+  body: JSON.stringify({ photoId, marks: [
+    { x: 0.25, y: 0.5, note: "  retirer ce reflet  " },
+    { x: 0.8, y: 0.1, note: "x".repeat(300) },
+  ] }),
+});
+const marksSetBody = await marksSet.json();
+check("le client peut poser des repères annotés (notes nettoyées et bornées)",
+      marksSet.ok && marksSetBody.marks?.length === 2 &&
+      marksSetBody.marks[0].note === "retirer ce reflet" && marksSetBody.marks[0].x === 0.25 &&
+      marksSetBody.marks[1].note.length === 200,
+      JSON.stringify(marksSetBody));
+
+const detailAfterMarks = await (await admin("GET", `/api/admin/galleries/${SLUG}`)).json();
+const markedPhoto = detailAfterMarks.photos.find((p) => p.id === photoId);
+check("les repères apparaissent côté administration, avec leurs coordonnées relatives",
+      markedPhoto?.marks?.length === 2 && markedPhoto.marks[0].y === 0.5 && markedPhoto.marks[0].note === "retirer ce reflet",
+      JSON.stringify(markedPhoto?.marks));
+
+const reLoginAfterMarks = await (await fetch(`${BASE}/api/gallery/${SLUG}/login`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ password: "mot-de-passe-solide" }),
+})).json();
+const reLoggedPhoto = reLoginAfterMarks.photos?.find((p) => p.id === photoId);
+check("code couleur et repères sont visibles à la reconnexion du client",
+      reLoggedPhoto?.tag === "yellow" && reLoggedPhoto?.marks?.length === 2, JSON.stringify(reLoggedPhoto));
+
+const logAfterMarks = await (await admin("GET", `/api/admin/galleries/${SLUG}/log`)).json();
+check("code couleur et repères sont consignés au journal",
+      logAfterMarks.log.some((e) => e.event === "tag" && e.detail === photoId) &&
+      logAfterMarks.log.some((e) => e.event === "mark" && e.detail === photoId));
+
+const marksMissingPhoto = await fetch(`${BASE}/api/gallery/${SLUG}/marks`, {
+  method: "POST",
+  headers: { ...bearer, "content-type": "application/json" },
+  body: JSON.stringify({ photoId: "pho_NExistePas000", marks: [] }),
+});
+check("poser un repère sur une photo inconnue est refusé", marksMissingPhoto.status === 404);
+
+const tagCleared = await fetch(`${BASE}/api/gallery/${SLUG}/tag`, {
+  method: "POST",
+  headers: { ...bearer, "content-type": "application/json" },
+  body: JSON.stringify({ photoId, tag: "" }),
+});
+const marksCleared = await fetch(`${BASE}/api/gallery/${SLUG}/marks`, {
+  method: "POST",
+  headers: { ...bearer, "content-type": "application/json" },
+  body: JSON.stringify({ photoId, marks: [] }),
+});
+const detailAfterReset = await (await admin("GET", `/api/admin/galleries/${SLUG}`)).json();
+const resetPhoto = detailAfterReset.photos.find((p) => p.id === photoId);
+check("retirer le code couleur et les repères remet la photo à neuf",
+      tagCleared.ok && marksCleared.ok && resetPhoto?.tag === "" && resetPhoto?.marks?.length === 0,
+      JSON.stringify({ tag: resetPhoto?.tag, marks: resetPhoto?.marks }));
+
 const commentMissingPhoto = await fetch(`${BASE}/api/gallery/${SLUG}/comment`, {
   method: "POST",
   headers: { ...bearer, "content-type": "application/json" },

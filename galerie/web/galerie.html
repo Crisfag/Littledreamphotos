@@ -120,8 +120,24 @@
     <button type="button" class="gp-viewer-close" id="gp-close" aria-label="Fermer">&times;</button>
     <button type="button" class="gp-viewer-nav gp-viewer-prev" id="gp-prev" aria-label="Photo précédente">&#8249;</button>
     <div class="gp-viewer-stage">
-      <canvas id="gp-viewer-canvas" role="img" aria-label="Photo agrandie"></canvas>
+      <div class="gp-viewer-frame" id="gp-viewer-frame">
+        <canvas id="gp-viewer-canvas" role="img" aria-label="Photo agrandie"></canvas>
+        <!-- Repères annotés : calé en JS sur la boîte exacte du canvas -->
+        <div class="gp-pins" id="gp-pins"></div>
+      </div>
     </div>
+    <div class="gp-pin-editor" id="gp-pin-editor" hidden>
+      <label class="gp-comment-label" for="gp-pin-note" id="gp-pin-editor-title">Repère</label>
+      <textarea id="gp-pin-note" class="gp-comment-input" rows="2" maxlength="200"
+                placeholder="« Retirer ce reflet », « adoucir ici »…"></textarea>
+      <div class="gp-pin-editor-actions">
+        <button type="button" class="gp-pin-btn gp-pin-btn-danger" id="gp-pin-delete">Supprimer</button>
+        <span class="gp-pin-editor-spacer"></span>
+        <button type="button" class="gp-pin-btn" id="gp-pin-cancel">Annuler</button>
+        <button type="button" class="gp-pin-btn gp-pin-btn-primary" id="gp-pin-save">Enregistrer</button>
+      </div>
+    </div>
+    <p class="gp-pin-hint" id="gp-pin-hint" hidden>Touchez la photo à l'endroit à signaler.</p>
     <button type="button" class="gp-viewer-nav gp-viewer-next" id="gp-next" aria-label="Photo suivante">&#8250;</button>
     <div class="gp-comment-panel" id="gp-comment-panel" hidden>
       <label class="gp-comment-label" for="gp-comment-input">Une remarque sur cette photo ?</label>
@@ -134,6 +150,16 @@
               aria-label="Ajouter aux favoris" title="Ajouter aux favoris"></button>
       <button type="button" class="gp-comment-toggle" id="gp-comment-toggle"
               aria-label="Laisser une remarque" title="Laisser une remarque" aria-expanded="false"></button>
+      <div class="gp-tags" role="group" aria-label="Code couleur">
+        <button type="button" class="gp-tag gp-tag-green" data-tag="green" aria-pressed="false"
+                aria-label="Validée" title="Validée"></button>
+        <button type="button" class="gp-tag gp-tag-yellow" data-tag="yellow" aria-pressed="false"
+                aria-label="À retoucher" title="À retoucher"></button>
+        <button type="button" class="gp-tag gp-tag-red" data-tag="red" aria-pressed="false"
+                aria-label="À écarter" title="À écarter"></button>
+      </div>
+      <button type="button" class="gp-pin-toggle" id="gp-pin-toggle" aria-pressed="false"
+              aria-label="Placer un repère sur la photo" title="Placer un repère sur la photo"></button>
       <p class="gp-viewer-counter" id="gp-counter"></p>
     </div>
   </div>

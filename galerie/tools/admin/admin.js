@@ -17,6 +17,8 @@
     select: "Coup de cœur",
     deselect: "Coup de cœur retiré",
     comment: "Remarque laissée",
+    tag: "Code couleur posé",
+    mark: "Repères annotés",
     capture_suspected: "Capture suspectée",
     blur: "Photo floutée",
     print: "Tentative d'impression",
@@ -940,6 +942,67 @@
     return Boolean(photo.comment && photo.comment.trim());
   }
 
+  var TAG_LABELS = { green: "Validée", yellow: "À retoucher", red: "À écarter" };
+
+  function marksOf(photo) {
+    return Array.isArray(photo.marks) ? photo.marks : [];
+  }
+
+  function hasClientNotes(photo) {
+    return isSelected(photo) || hasComment(photo) || Boolean(photo.tag) || marksOf(photo).length > 0;
+  }
+
+  // Légende des codes couleur posés par le client sur cette galerie —
+  // seulement s'il en a posé au moins un.
+  function tagLegendHtml(photos) {
+    var counts = { green: 0, yellow: 0, red: 0 };
+    photos.forEach(function (p) {
+      if (counts.hasOwnProperty(p.tag)) counts[p.tag]++;
+    });
+    if (!counts.green && !counts.yellow && !counts.red) return "";
+    return (
+      '<p class="ad-tag-legend" id="ad-tag-legend">' +
+      ["green", "yellow", "red"].map(function (tag) {
+        return '<span class="ad-tag-legend-' + tag + '">' + counts[tag] + " " + TAG_LABELS[tag].toLowerCase() + (counts[tag] > 1 && tag !== "yellow" && tag !== "red" ? "s" : "") + "</span>";
+      }).join("") +
+      "</p>"
+    );
+  }
+
+  // Photo en grand (tuiles plein écran, lues via le serveur d'administration)
+  // avec les repères du client posés par-dessus et leurs notes numérotées.
+  function openPhotoModal(photo) {
+    var modal = document.getElementById("ad-photo-modal");
+    var body = document.getElementById("ad-photo-modal-body");
+    var cells = "";
+    for (var row = 0; row < photo.rows; row++) {
+      for (var col = 0; col < photo.cols; col++) {
+        cells += '<img src="/local/tiles/' + esc(photo.id) + "/1/" + col + "/" + row + '" alt="" />';
+      }
+    }
+    var marks = marksOf(photo);
+    var pins = marks.map(function (m, i) {
+      return '<span class="ad-pin" style="left:' + (Number(m.x) * 100).toFixed(2) + "%;top:" + (Number(m.y) * 100).toFixed(2) + '%" title="' + esc(m.note || "") + '"><span>' + (i + 1) + "</span></span>";
+    }).join("");
+    document.getElementById("ad-photo-modal-title").textContent = "Photo n° " + (photo.position + 1);
+    body.innerHTML =
+      '<div class="ad-photo-meta">' +
+      (isSelected(photo) ? '<span class="ad-badge ad-badge-selected">♥ Sélectionnée</span>' : "") +
+      (photo.tag ? '<span class="ad-badge ad-badge-tag-' + photo.tag + '">' + TAG_LABELS[photo.tag] + "</span>" : "") +
+      "<span>" + photo.width + " × " + photo.height + "</span>" +
+      "</div>" +
+      '<div class="ad-photo-large" style="aspect-ratio:' + photo.width + "/" + photo.height +
+      ";grid-template-columns:repeat(" + photo.cols + ",1fr);grid-template-rows:repeat(" + photo.rows + ',1fr)">' +
+      cells + '<div class="ad-photo-large-pins">' + pins + "</div></div>" +
+      (hasComment(photo) ? "<p><strong>Remarque :</strong> « " + esc(photo.comment.trim()) + " »</p>" : "") +
+      (marks.length
+        ? '<ol class="ad-photo-notes" id="ad-photo-notes">' +
+          marks.map(function (m) { return "<li>" + (m.note ? esc(m.note) : "<em>Sans note</em>") + "</li>"; }).join("") +
+          "</ol>"
+        : '<p class="ad-hint">Aucun repère posé par le client sur cette photo.</p>');
+    openModal("ad-photo-modal");
+  }
+
   function photoThumb(photo) {
     var cols = state.config.previewCols || 2;
     var rows = state.config.previewRows || 2;
@@ -951,14 +1014,19 @@
     }
     var selected = isSelected(photo);
     var commented = hasComment(photo);
+    var markCount = marksOf(photo).length;
     return (
       '<div class="ad-photo' + (selected ? " ad-photo-selected" : "") + '" data-photo-id="' + esc(photo.id) + '">' +
-      '<div class="ad-photo-frame" style="aspect-ratio:' + photo.width + "/" + photo.height +
+      '<div class="ad-photo-frame" title="Voir en grand" style="aspect-ratio:' + photo.width + "/" + photo.height +
       ";grid-template-columns:repeat(" + cols + ",1fr);grid-template-rows:repeat(" + rows + ',1fr)">' +
       cells +
       '<span class="ad-photo-dims">n° ' + (photo.position + 1) + " · " + photo.width + "×" + photo.height + "</span>" +
       (selected ? '<span class="ad-photo-heart" title="Sélectionnée par le client">♥</span>' : "") +
       (commented ? '<span class="ad-photo-comment" title="' + esc(photo.comment) + '">💬</span>' : "") +
+      (photo.tag && TAG_LABELS[photo.tag]
+        ? '<span class="ad-photo-tag ad-photo-tag-' + photo.tag + '" title="' + TAG_LABELS[photo.tag] + '"></span>'
+        : "") +
+      (markCount ? '<span class="ad-photo-marks" title="' + markCount + " repère" + (markCount > 1 ? "s" : "") + ' annoté(s)">📍 ' + markCount + "</span>" : "") +
       "</div>" +
       '<button type="button" class="ad-photo-remove" title="Supprimer cette photo" aria-label="Supprimer cette photo">&times;</button>' +
       "</div>"
@@ -968,7 +1036,7 @@
   // Pour les évènements « view », « select », « deselect » et « comment », le
   // détail consigné est l'identifiant technique de la photo — on l'affiche
   // plutôt sous la forme lisible « Photo n° X » quand on peut la retrouver.
-  var PHOTO_ID_EVENTS = new Set(["view", "select", "deselect", "comment"]);
+  var PHOTO_ID_EVENTS = new Set(["view", "select", "deselect", "comment", "tag", "mark"]);
 
   // Pour « capture_suspected », « print » et « devtools », le détail est la
   // raison technique du déclenchement, et la photo (si une était ouverte)
@@ -1198,11 +1266,12 @@
         ? '<label class="ad-photos-filter"><input type="checkbox" id="ad-filter-selected" />' +
           '<span>Afficher uniquement la sélection du client (' + data.photos.filter(isSelected).length + ")</span></label>"
         : "") +
-      (data.photos.some(function (p) { return isSelected(p) || hasComment(p); })
+      (data.photos.some(hasClientNotes)
         ? '<button type="button" class="ad-btn" id="ad-copy-notes">Copier les notes du client</button>'
         : "") +
       "</div>" +
       "</div>" +
+      tagLegendHtml(data.photos) +
       '<div class="ad-photos" id="ad-photos">' + data.photos.map(photoThumb).join("") + "</div>" +
       "</section>" +
       '<section><h3>Journal d\'accès</h3>' +
@@ -1229,10 +1298,14 @@
     if (copyNotesBtn) {
       copyNotesBtn.addEventListener("click", function () {
         var selectedCount = data.photos.filter(isSelected).length;
-        var noted = data.photos.filter(function (p) { return isSelected(p) || hasComment(p); });
+        var noted = data.photos.filter(hasClientNotes);
         var lines = noted.map(function (p) {
           var line = "Photo n° " + (p.position + 1) + (isSelected(p) ? " (sélectionnée)" : "");
+          if (p.tag && TAG_LABELS[p.tag]) line += " [" + TAG_LABELS[p.tag] + "]";
           if (hasComment(p)) line += " — « " + p.comment.trim() + " »";
+          marksOf(p).forEach(function (m, i) {
+            line += "\n    Repère " + (i + 1) + " (" + Math.round(Number(m.x) * 100) + " % / " + Math.round(Number(m.y) * 100) + " %)" + (m.note ? " : " + m.note : "");
+          });
           return line;
         });
         var text =
@@ -1377,11 +1450,18 @@
     });
 
     wireUploads(slug, data.photos.length);
-    wirePhotoRemoval(slug);
+    wirePhotoRemoval(slug, data.photos);
   }
 
-  function wirePhotoRemoval(slug) {
+  function wirePhotoRemoval(slug, photos) {
     document.getElementById("ad-photos").addEventListener("click", function (event) {
+      var frame = event.target.closest(".ad-photo-frame");
+      if (frame) {
+        var id = frame.closest(".ad-photo").getAttribute("data-photo-id");
+        var photo = photos.find(function (p) { return p.id === id; });
+        if (photo) openPhotoModal(photo);
+        return;
+      }
       var btn = event.target.closest(".ad-photo-remove");
       if (!btn) return;
       var card = btn.closest(".ad-photo");

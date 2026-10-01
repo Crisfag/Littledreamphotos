@@ -98,6 +98,17 @@ Et **laisser une remarque photo par photo** — « celle-ci plutôt en noir et
 blanc », « peut-on la recadrer un peu ? » — depuis la visionneuse, sauvegardée
 automatiquement pendant la frappe (pas de bouton « valider » à chercher).
 
+Pour aller plus loin que le texte, la visionneuse propose aussi un **code
+couleur** à trois valeurs — vert *validée*, jaune *à retoucher*, rouge *à
+écarter* — indépendant du coup de cœur (c'est le cœur, et lui seul, qui
+compte pour le forfait), et des **repères annotés** : le client touche la
+photo à l'endroit précis à signaler, un repère numéroté s'y pose, et il
+écrit en une ligne ce qu'il attend (« retirer ce reflet », « adoucir ici »).
+Pas de dessin libre : un point et une note se relisent sans ambiguïté sur
+n'importe quel écran, puisque les positions sont relatives à la photo. Le
+photographe retrouve tout cela sur la fiche de la galerie, repères posés
+sur la photo en grand.
+
 ### Comptes photographes
 
 La plateforme est pensée pour plusieurs photographes, chacun avec son propre
@@ -302,7 +313,13 @@ Le tableau de bord s'organise en trois onglets, chacun avec son propre lien
   séance compte beaucoup de photos. Un bouton « Copier les notes du
   client » colle dans le presse-papiers la liste des photos choisies et
   commentées, par numéro (voir *Retrouver l'origine d'une fuite* pour la
-  même convention).
+  même convention), codes couleur et repères compris.
+- **Codes couleur et repères annotés du client** : pastille verte, jaune ou
+  rouge sur la vignette, compteur 📍 N de repères, et une légende qui résume
+  la galerie (« 3 validées · 1 à retoucher · 2 à écarter »). Un clic sur une
+  vignette ouvre la photo en grand avec les repères numérotés posés dessus
+  et leurs notes listées en dessous — ce que le client a voulu dire se lit
+  d'un coup d'œil, à l'endroit exact où il l'a dit.
 - **Journal d'accès** intégré à la fiche de chaque galerie, coups de cœur et
   remarques compris.
 - **Suppression** d'une photo isolée ou de la galerie entière, avec
@@ -605,7 +622,7 @@ des tuiles, refus du mauvais mot de passe, absence de toute balise `<img>`,
 neutralisation du menu contextuel et de la copie, voile sur « Impr. écran » et
 sur perte de focus, consignation au journal.
 
-**API du Worker** — 208 vérifications contre le vrai moteur Cloudflare (D1 et R2
+**API du Worker** — 222 vérifications contre le vrai moteur Cloudflare (D1 et R2
 émulés localement par `wrangler dev`) : comptes photographes (inscription,
 connexion, session, mot de passe oublié — même réponse générique qu'un
 compte existe ou non), cloisonnement strict entre comptes (un photographe ne
@@ -613,7 +630,10 @@ peut ni lister, ni lire, ni modifier, ni même deviner l'existence des
 galeries, photos et tuiles d'un autre compte), création et cloisonnement des
 galeries d'un même compte, authentification client, expiration, limitation
 des tentatives de mot de passe, suppression en cascade (galerie et photo
-isolée), sélection et commentaire posés et retirés, régénération du mot de
+isolée), sélection et commentaire posés et retirés, code couleur et repères
+annotés (valeurs et positions hors bornes refusées, au plus 12 repères par
+photo, notes nettoyées et bornées, relus côté administration et à la
+reconnexion du client, consignés au journal), régénération du mot de
 passe d'une galerie (l'ancien cesse aussitôt de fonctionner), arrière-plan
 personnalisé de l'écran de connexion (couleur ou image, cloisonné par
 compte, et une galerie inconnue ne se distingue jamais d'une galerie sans
@@ -701,7 +721,7 @@ appliqué sinon, HT + TVA se recomposant exactement au centime près en TTC
 même sur un montant qui ne se divise pas rond, et un vrai PDF valide généré
 aussi bien avec des coordonnées complètes qu'avec des champs vides.
 
-**Interface d'administration** — 74 vérifications dans un vrai navigateur,
+**Interface d'administration** — 81 vérifications dans un vrai navigateur,
 contre le vrai Worker local : demande de lien de réinitialisation de mot de
 passe (message générique affiché), création de compte et connexion depuis
 le formulaire (pas de session présupposée), barre d'onglets Galeries /
@@ -746,6 +766,10 @@ la section trafic explique comment brancher Cloudflare Web Analytics.
 Musique d'ambiance sur la fiche galerie : « aucune musique » au départ,
 import d'un MP3 qui devient la piste actuelle, refus d'un fichier qui n'en
 est pas un (la piste existante est conservée), retrait après confirmation.
+Codes couleur et repères posés par le client (via l'API, comme le ferait sa
+page) : pastille jaune et compteur de repères sur la vignette, légende de
+la galerie, photo ouverte en grand avec le repère dessus, sa note listée et
+le code couleur rappelé, fermeture de la fiche.
 
 **Vérifier une photo (empreinte invisible)** — 8 vérifications contre le vrai
 Worker local : une image reconstituée tuile par tuile — exactement comme le
@@ -769,6 +793,16 @@ cours de saisie jamais perdu si on change de photo avant que ce délai
 s'écoule, remarque effacée qui retire bien sa pastille, cohérence avec ce que
 lit l'administration.
 
+**Codes couleur et repères client** — 22 vérifications dans un vrai
+navigateur, même principe (galerie autonome, nettoyée à la fin) : couleur
+posée, retirée en re-cliquant dessus, remplacée par une autre ; mode
+« placer un repère » qui pose un point là où le client touche la photo
+(position relative vérifiée au centre, à 5 % près) et ouvre aussitôt la
+note ; note relue en cliquant sur le repère ; « Annuler » qui conserve un
+repère existant mais retire un repère tout juste posé sans rien envoyer ;
+pastille et compteur dans la grille ; tout retrouvé après une reconnexion
+complète ; suppression répercutée côté Worker.
+
 ```bash
 cd tools
 node tests/forensic.test.mjs 1600     # robustesse de l'empreinte
@@ -779,6 +813,7 @@ node tests/admin.test.mjs             # interface d'administration, admin-server
 node tests/detect.test.mjs            # vérifier une photo, autonome (crée ses propres comptes)
 node tests/selection.test.mjs         # sélection client, autonome (crée sa propre galerie)
 node tests/comments.test.mjs          # commentaires client, autonome (crée sa propre galerie)
+node tests/marks.test.mjs             # codes couleur + repères client, autonome (crée sa propre galerie)
 
 cd ../worker
 node tests/notify.test.mjs            # e-mail d'alerte de capture, sans réseau
