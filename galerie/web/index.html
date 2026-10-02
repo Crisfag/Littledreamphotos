@@ -2,254 +2,365 @@
 <html lang="fr">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Holypixx — Galeries protégées pour photographes</title>
-  <meta name="description" content="Envoyez vos galeries clients avec mot de passe, filigrane invisible traçable et zéro téléchargement possible. Le client consulte, sélectionne et commente ; vous gardez la main." />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Holypixx — Galeries clients protégées pour photographes</title>
+  <meta name="description" content="Galeries clients protégées pour photographes : filigrane invisible traçable, alerte de capture d'écran, sélection et annotations du client, relances automatiques, boutique de tirages intégrée et adresse à votre nom." />
+  <link rel="canonical" href="https://www.holypixx.com/" />
+  <meta name="theme-color" content="#14100d" />
+  <meta name="color-scheme" content="light" />
+
+  <meta property="og:type" content="website" />
+  <meta property="og:locale" content="fr_BE" />
+  <meta property="og:site_name" content="Holypixx" />
+  <meta property="og:url" content="https://www.holypixx.com/" />
+  <meta property="og:title" content="Holypixx — vos galeries clients, protégées et vendues" />
+  <meta property="og:description" content="Filigrane invisible traçable, alerte de capture, sélection client, relances automatiques et tirages livrés chez vos clients." />
+  <meta property="og:image" content="https://www.holypixx.com/assets/og.jpg" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:image" content="https://www.holypixx.com/assets/og.jpg" />
+
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;600;700;800&family=Jost:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Jost:wght@300;400;500&display=swap" rel="stylesheet" />
+  <link rel="preload" as="image" href="assets/g1.webp" type="image/webp" />
   <link rel="stylesheet" href="home.css" />
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%23b98a7a'/><text y='72' x='50' text-anchor='middle' font-size='60' font-family='Georgia'>H</text></svg>" />
-  <noscript><style>.reveal { opacity: 1 !important; transform: none !important; }</style></noscript>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='26' fill='%23c49380'/><text y='71' x='50' text-anchor='middle' font-size='60' font-family='Georgia' fill='white'>H</text></svg>" />
+  <noscript><style>.rv { opacity: 1 !important; transform: none !important; }</style></noscript>
 
   <script>
     // Adresse de l'interface d'administration (connexion / création de compte).
-    window.HOME_CONFIG = {
-      adminUrl: "https://holypixx-admin.onrender.com/",
-    };
+    window.HOME_CONFIG = { adminUrl: "https://holypixx-admin.onrender.com/" };
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Holypixx",
+    "url": "https://www.holypixx.com/",
+    "applicationCategory": "BusinessApplication",
+    "operatingSystem": "Web",
+    "inLanguage": "fr",
+    "description": "Galeries clients protégées pour photographes : filigrane invisible traçable, alerte de capture d'écran, sélection et annotations du client, relances automatiques, paiement des suppléments, boutique de tirages intégrée et sous-domaine à votre nom.",
+    "image": "https://www.holypixx.com/assets/og.jpg"
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      { "@type": "Question", "name": "Un client peut-il télécharger les photos ?",
+        "acceptedAnswer": { "@type": "Answer", "text": "Non. Les photos sont découpées en tuiles et recomposées à l'écran : aucun fichier n'est jamais téléchargeable. Les fichiers définitifs se livrent en dehors de la galerie, ou sous forme de tirages commandés depuis la galerie." } },
+      { "@type": "Question", "name": "Peut-on empêcher une capture d'écran ?",
+        "acceptedAnswer": { "@type": "Answer", "text": "Aucun site au monde ne le peut. Holypixx rend une capture inutile (basse définition, filigrane dense), vous prévient par e-mail quand une capture est tentée, et retrouve la galerie d'origine d'une image grâce à son empreinte invisible." } },
+      { "@type": "Question", "name": "Mon client doit-il créer un compte ?",
+        "acceptedAnswer": { "@type": "Answer", "text": "Non. Il reçoit un lien et un mot de passe, rien d'autre." } },
+      { "@type": "Question", "name": "Comment fonctionne la boutique de tirages ?",
+        "acceptedAnswer": { "@type": "Answer", "text": "Vous choisissez vos formats en menus déroulants et fixez votre marge. Le client commande depuis sa galerie et paie en ligne sur votre compte Stripe ; le laboratoire Prodigi imprime et livre directement chez lui, avec suivi." } },
+      { "@type": "Question", "name": "Puis-je avoir une adresse à mon nom ?",
+        "acceptedAnswer": { "@type": "Answer", "text": "Oui : choisissez un sous-domaine dans vos paramètres, et vos galeries s'ouvrent sur votre-studio.holypixx.com avec le nom de votre studio." } },
+      { "@type": "Question", "name": "Où sont hébergées les photos ?",
+        "acceptedAnswer": { "@type": "Answer", "text": "Sur l'infrastructure Cloudflare (stockage R2 et base D1). Les mots de passe ne sont jamais stockés en clair et chaque compte est strictement cloisonné." } }
+    ]
+  }
   </script>
 </head>
 <body>
+  <a class="skip" href="#contenu">Aller au contenu</a>
 
-  <nav class="hm-nav">
-    <div class="hm-nav-row">
-      <a class="hm-brand" href="#top">
-        <span class="hm-brand-mark">H</span>
-        <span class="hm-brand-name">Holypixx</span>
+  <!-- ============ Navigation ============ -->
+  <header class="nav" id="nav">
+    <div class="nav-row wrap">
+      <a class="brand" href="#top" aria-label="Holypixx, retour en haut">
+        <span class="brand-mark" aria-hidden="true">H</span>
+        <span class="brand-name">Holypixx</span>
       </a>
-      <div class="hm-nav-links">
+      <nav class="nav-links" aria-label="Sections">
+        <a href="#protection">Protection</a>
         <a href="#fonctionnalites">Fonctionnalités</a>
-        <a href="#comment-ca-marche">Comment ça marche</a>
-        <a href="#securite">Sécurité</a>
-      </div>
-      <div class="hm-nav-actions">
-        <a class="hm-nav-login" id="nav-login" href="#">Connexion</a>
-        <a class="hm-btn hm-btn-primary" id="nav-signup" href="#">Créer un compte</a>
-      </div>
-    </div>
-  </nav>
-
-  <header class="hm-hero" id="top">
-    <div class="hm-hero-grid">
-      <div class="hm-hero-copy">
-        <p class="hm-eyebrow">Galeries protégées pour photographes</p>
-        <h1>Livrez vos galeries sans jamais <span class="hm-accent">perdre la main</span> sur vos photos</h1>
-        <p class="hm-hero-lede">
-          Mot de passe, filigrane invisible traçable jusqu'à la galerie
-          d'origine, aucune image jamais téléchargeable. Votre client
-          consulte, sélectionne ses coups de cœur et laisse ses remarques —
-          vous retrouvez tout dans un tableau de bord pensé pour vous.
-        </p>
-        <div class="hm-hero-actions">
-          <a class="hm-btn hm-btn-primary hm-btn-lg" id="hero-signup" href="#">Créer un compte</a>
-          <a class="hm-btn hm-btn-lg" href="#comment-ca-marche">Voir comment ça marche</a>
-        </div>
-        <div class="hm-hero-checks">
-          <span class="hm-hero-check">Aucune carte bancaire</span>
-          <span class="hm-hero-check">Tout se passe dans le navigateur</span>
-        </div>
-      </div>
-      <div class="hm-mock" aria-hidden="true">
-        <div class="hm-mock-frame">
-          <div class="hm-mock-dots"><span></span><span></span><span></span></div>
-          <div class="hm-mock-card">
-            <div class="hm-mock-lock">🔒</div>
-            <h4>Votre galerie privée</h4>
-            <p>Saisissez le mot de passe transmis par votre photographe.</p>
-            <div class="hm-mock-input"></div>
-            <div class="hm-mock-btn"></div>
-          </div>
-          <div class="hm-mock-grid">
-            <span></span><span></span><span></span><span></span>
-            <span></span><span></span><span></span><span></span>
-          </div>
-        </div>
-        <span class="hm-mock-chip hm-mock-chip--top">🕵️ Empreinte invisible</span>
-        <span class="hm-mock-chip hm-mock-chip--bottom">🔑 Mot de passe régénérable</span>
+        <a href="#boutique">Boutique</a>
+        <a href="#faq">Questions</a>
+      </nav>
+      <div class="nav-actions">
+        <a class="nav-login" data-admin href="#">Connexion</a>
+        <a class="btn btn-light btn-sm" data-signup href="#">Créer un compte</a>
       </div>
     </div>
   </header>
 
-  <section class="hm-section reveal">
-    <div class="hm-why">
-      <h2>Le problème que peu d'outils affrontent honnêtement</h2>
-      <p>
-        Un lien de galerie classique, c'est un lien qu'on peut capturer,
-        partager, retélécharger. <strong>Aucun outil au monde ne peut
-        empêcher une capture d'écran</strong> — pas même les plus gros
-        services de streaming, où c'est le système d'exploitation qui a le
-        dernier mot, jamais le navigateur.
-      </p>
-      <p>
-        Ce qu'on peut faire, en revanche : rendre une fuite <strong>inutile</strong>
-        (qualité réduite, filigrane visible dense) et, si elle survient
-        malgré tout, savoir <strong>immédiatement</strong> de quelle galerie
-        elle vient grâce à une empreinte invisible propre à chaque envoi.
-      </p>
-    </div>
-  </section>
+  <main id="contenu">
 
-  <section class="hm-section hm-section-alt reveal" id="comment-ca-marche">
-    <div class="hm-section-head">
-      <h2>Comment ça marche</h2>
-      <p>Quatre étapes, aucune n'exige de compétence technique.</p>
-    </div>
-    <div class="hm-steps">
-      <div class="hm-step">
-        <div class="hm-step-num">1</div>
-        <h3>Vous envoyez vos photos</h3>
-        <p>Glissez-les dans votre tableau de bord, où que vous soyez.</p>
-      </div>
-      <div class="hm-step">
-        <div class="hm-step-num">2</div>
-        <h3>Elles sont protégées automatiquement</h3>
-        <p>Filigrane, empreinte invisible, découpage en tuiles — sans rien configurer.</p>
-      </div>
-      <div class="hm-step">
-        <div class="hm-step-num">3</div>
-        <h3>Votre client reçoit un lien</h3>
-        <p>Un lien et un mot de passe, rien d'autre — aucune inscription pour lui.</p>
-      </div>
-      <div class="hm-step">
-        <div class="hm-step-num">4</div>
-        <h3>Il consulte, choisit, commente</h3>
-        <p>Vous retrouvez ses coups de cœur et ses remarques dans votre tableau de bord.</p>
-      </div>
-    </div>
-  </section>
+    <!-- ============ Hero ============ -->
+    <section class="hero" id="top">
+      <div class="hero-glow" aria-hidden="true"></div>
+      <div class="hero-grid wrap">
+        <div class="hero-copy">
+          <a class="pill" href="#boutique"><span class="pill-dot"></span>Nouveau : boutique de tirages intégrée <span aria-hidden="true">→</span></a>
+          <h1>Vos galeries clients.<br /><span class="grad">Protégées. Choisies. Vendues.</span></h1>
+          <p class="hero-lede">
+            La plateforme qui livre vos séances sans jamais lâcher vos photos :
+            filigrane invisible traçable, alerte dès qu'une capture est tentée,
+            sélection et retouches annotées par le client — et des tirages
+            livrés chez lui, à vos prix.
+          </p>
+          <div class="hero-actions">
+            <a class="btn btn-rose btn-lg" data-signup href="#">Créer mon compte</a>
+            <a class="btn btn-ghost btn-lg" href="#parcours">Voir le parcours client</a>
+          </div>
+          <ul class="hero-proof">
+            <li>Aucune carte bancaire</li>
+            <li>Prêt en une minute</li>
+            <li>Aucune inscription pour vos clients</li>
+          </ul>
+        </div>
 
-  <section class="hm-section reveal" id="fonctionnalites">
-    <div class="hm-section-head">
-      <h2>Tout ce qu'il faut, rien de superflu</h2>
-      <p>Chaque fonctionnalité répond à un vrai moment du métier de photographe.</p>
-    </div>
-    <div class="hm-features">
-      <div class="hm-feature">
-        <div class="hm-feature-icon">🔒</div>
-        <h3>Aucun téléchargement possible</h3>
-        <p>Les photos sont découpées en tuiles et recomposées à l'écran : jamais un fichier entier à portée de clic droit.</p>
-      </div>
-      <div class="hm-feature hm-feature-spotlight">
-        <span class="hm-feature-badge">Nouveau</span>
-        <div class="hm-feature-icon hm-feature-icon-spotlight">🔔</div>
-        <h3>Alerte e-mail dès qu'une capture est tentée</h3>
-        <p>
-          Raccourci « Impr. écran » ou capture clavier macOS repéré chez un
-          client : vous recevez un e-mail dans la minute, avec la référence
-          exacte de la photo qui était affichée — pas juste « une capture a
-          eu lieu quelque part ».
-        </p>
-        <div class="hm-feature-flow" aria-hidden="true">
-          <span>📸 Capture détectée</span>
-          <span class="hm-feature-flow-arrow">→</span>
-          <span>🖼️ Photo n° 7</span>
-          <span class="hm-feature-flow-arrow">→</span>
-          <span>✉️ Vous êtes averti·e</span>
+        <!-- Maquette produit (décorative) -->
+        <div class="hero-visual" aria-hidden="true">
+          <div class="browser">
+            <div class="browser-bar">
+              <span class="dots"><i></i><i></i><i></i></span>
+              <span class="url"><span class="url-lock">🔒</span>votre-studio.holypixx.com<span class="url-path">/?g=seance-dupont</span></span>
+            </div>
+            <div class="browser-body">
+              <div class="mock-head">
+                <span class="mock-eyebrow">VOTRE STUDIO</span>
+                <span class="mock-title">Séance Dupont</span>
+                <span class="mock-actions"><span class="mock-music">♪ Musique</span><span class="mock-validate">Valider ma sélection</span></span>
+              </div>
+              <div class="mock-grid">
+                <figure class="wm"><img src="assets/g1.webp" width="520" height="347" alt="" fetchpriority="high" /><span class="heart on">♥</span></figure>
+                <figure class="wm tall"><img src="assets/g3.webp" width="520" height="779" alt="" /><span class="dot dot-green"></span></figure>
+                <figure class="wm"><img src="assets/g2.webp" width="520" height="347" alt="" /><span class="heart on">♥</span><span class="pin">1</span></figure>
+                <figure class="wm"><img src="assets/g4.webp" width="520" height="347" alt="" /><span class="dot dot-yellow"></span></figure>
+                <figure class="wm"><img src="assets/g5.webp" width="520" height="347" alt="" /><span class="heart">♡</span></figure>
+              </div>
+            </div>
+          </div>
+          <div class="toast toast-1"><span class="toast-ico">🔔</span><span><strong>Capture tentée</strong><em>Photo n° 7 · e-mail envoyé</em></span></div>
+          <div class="toast toast-2"><span class="toast-ico ok">✓</span><span><strong>Sélection validée</strong><em>14 photos · 2 suppléments</em></span></div>
+          <div class="toast toast-3"><span class="toast-ico">🖼</span><span><strong>Nouvelle commande</strong><em>Toile 40 × 50 · 89 €</em></span></div>
         </div>
       </div>
-      <div class="hm-feature">
-        <div class="hm-feature-icon">🕵️</div>
-        <h3>Empreinte invisible traçable</h3>
-        <p>Chaque galerie porte une empreinte propre, lisible même après capture d'écran, recadrage ou noir et blanc.</p>
-      </div>
-      <div class="hm-feature">
-        <div class="hm-feature-icon">🏷️</div>
-        <h3>Filigrane visible dissuasif</h3>
-        <p>Une trame dense qui traverse toute l'image, coûteuse à retirer proprement, même à l'IA.</p>
-      </div>
-      <div class="hm-feature">
-        <span class="hm-feature-badge">Nouveau</span>
-        <div class="hm-feature-icon">🔍</div>
-        <h3>Vérifiez une photo suspecte</h3>
-        <p>Une image retrouvée ailleurs vous semble venir d'une de vos galeries ? Déposez-la dans votre tableau de bord : elle est comparée à vos empreintes, sans jamais quitter votre compte.</p>
-      </div>
-      <div class="hm-feature">
-        <div class="hm-feature-icon">❤️</div>
-        <h3>Sélection du client</h3>
-        <p>Il marque ses photos préférées d'un cœur ; vous les retrouvez triées, sans échange d'e-mails.</p>
-      </div>
-      <div class="hm-feature">
-        <div class="hm-feature-icon">💬</div>
-        <h3>Remarques par photo</h3>
-        <p>Une note laissée directement sur la photo concernée — plus clair qu'un e-mail à rallonge.</p>
-      </div>
-      <div class="hm-feature">
-        <div class="hm-feature-icon">🔑</div>
-        <h3>Mot de passe régénérable</h3>
-        <p>Perdu, ou galerie à reverrouiller ? Un nouveau mot de passe en un clic, l'ancien cesse aussitôt de fonctionner.</p>
-      </div>
-      <div class="hm-feature">
-        <div class="hm-feature-icon">🔓</div>
-        <h3>Mot de passe de compte oublié</h3>
-        <p>Un lien de réinitialisation envoyé par e-mail, comme pour n'importe quel compte en ligne — pas besoin de nous écrire.</p>
-      </div>
-      <div class="hm-feature">
-        <span class="hm-feature-badge">Nouveau</span>
-        <div class="hm-feature-icon">🖼️</div>
-        <h3>Mise en page au choix</h3>
-        <p>Grille classique, mosaïque façon presse ou défilement éditorial : choisissez le rendu qui convient à chaque séance.</p>
-      </div>
-      <div class="hm-feature">
-        <div class="hm-feature-icon">🎨</div>
-        <h3>Arrière-plan personnalisable</h3>
-        <p>Une couleur ou une image à votre goût sur l'écran d'accueil de vos clients.</p>
-      </div>
-      <div class="hm-feature">
-        <div class="hm-feature-icon">⏳</div>
-        <h3>Expiration automatique</h3>
-        <p>Fixez une date : la galerie se ferme d'elle-même, sans intervention.</p>
-      </div>
-      <div class="hm-feature">
-        <div class="hm-feature-icon">📋</div>
-        <h3>Journal d'accès</h3>
-        <p>Connexions, tentatives, sélections, remarques : tout est consigné et consultable.</p>
-      </div>
-    </div>
-  </section>
 
-  <section class="hm-section hm-security reveal" id="securite">
-    <div class="hm-section-head">
-      <h2>Une sécurité honnête, pas des promesses en l'air</h2>
-    </div>
-    <div class="hm-security-body">
-      <p>
-        Personne ne peut empêcher une capture d'écran. Ce que Holypixx fait
-        vraiment : rendre une fuite inutile, et si elle survient malgré tout,
-        savoir immédiatement d'où elle vient. C'est la différence entre une
-        vraie protection et une case cochée sur une brochure.
-      </p>
-    </div>
-    <ul class="hm-security-list">
-      <li><span class="hm-security-icon">🔐</span><strong>Mots de passe jamais en clair</strong> Ni ceux des galeries, ni ceux des comptes photographes — seulement des empreintes à sens unique.</li>
-      <li><span class="hm-security-icon">🧱</span><strong>Comptes strictement cloisonnés</strong> Un photographe ne peut ni voir, ni deviner l'existence des galeries d'un autre compte — vérifié par nos tests, pas seulement promis.</li>
-      <li><span class="hm-security-icon">🚪</span><strong>Rien à révéler avant le mot de passe</strong> Un lien de galerie ne confirme jamais son existence à qui n'a pas le bon mot de passe.</li>
-    </ul>
-  </section>
-
-  <section class="hm-cta reveal">
-    <h2>Prêt·e à protéger vos prochaines galeries ?</h2>
-    <p>La création de compte se fait en moins d'une minute, depuis votre navigateur.</p>
-    <a class="hm-btn hm-btn-lg hm-btn-on-rose" id="cta-signup" href="#">Créer un compte</a>
-  </section>
-
-  <footer class="hm-footer">
-    <div class="hm-footer-row">
-      <div class="hm-brand">
-        <span class="hm-brand-mark">H</span>
-        <span class="hm-brand-name">Holypixx</span>
+      <div class="ticker" aria-hidden="true">
+        <div class="ticker-track">
+          <span>Empreinte invisible</span><span>Alerte de capture</span><span>Zéro téléchargement</span><span>Coups de cœur</span><span>Repères annotés</span><span>Relances automatiques</span><span>Paiement en ligne</span><span>Factures automatiques</span><span>Tirages & toiles</span><span>votre-studio.holypixx.com</span><span>Musique d'ambiance</span>
+          <span>Empreinte invisible</span><span>Alerte de capture</span><span>Zéro téléchargement</span><span>Coups de cœur</span><span>Repères annotés</span><span>Relances automatiques</span><span>Paiement en ligne</span><span>Factures automatiques</span><span>Tirages & toiles</span><span>votre-studio.holypixx.com</span><span>Musique d'ambiance</span>
+        </div>
       </div>
-      <p class="hm-footer-tagline">La plateforme de galeries protégées pensée pour les photographes.</p>
-      <p class="hm-footer-copy">© <span id="year"></span> Holypixx</p>
+    </section>
+
+    <!-- ============ Protection ============ -->
+    <section class="section" id="protection">
+      <div class="wrap split">
+        <div class="split-copy rv">
+          <p class="kicker">Protection</p>
+          <h2>Une capture d'écran ne s'empêche pas.<br /><span class="grad-dark">Elle se rend inutile — et se trace.</span></h2>
+          <p class="lede">
+            Aucun site au monde ne peut bloquer une capture : c'est le système
+            d'exploitation qui a le dernier mot. Holypixx empile trois couches qui
+            rendent une fuite sans valeur, puis vous dit exactement d'où elle vient.
+          </p>
+          <a class="link-arrow" href="#faq">Ce que nous promettons, et ce que nous ne promettons pas</a>
+        </div>
+        <ol class="layers rv">
+          <li class="layer">
+            <span class="layer-num">01</span>
+            <div><h3>Zéro fichier à télécharger</h3><p>Chaque photo est découpée en tuiles et recomposée à l'écran, en basse définition. Pas de clic droit, pas d'« enregistrer sous ».</p></div>
+          </li>
+          <li class="layer">
+            <span class="layer-num">02</span>
+            <div><h3>Filigrane dense, même face à l'IA</h3><p>Une trame qui traverse tout le sujet, visages compris : coûteuse à effacer proprement.</p></div>
+          </li>
+          <li class="layer">
+            <span class="layer-num">03</span>
+            <div><h3>Empreinte invisible traçable</h3><p>Propre à chaque galerie, elle résiste au recadrage, au noir et blanc et à la capture. Déposez une image retrouvée en ligne : elle vous dit de quelle galerie elle sort.</p></div>
+          </li>
+          <li class="layer layer-alert">
+            <span class="layer-num">!</span>
+            <div><h3>Alerte en direct</h3><p>Impr. écran ou raccourci macOS repéré chez un client : un e-mail dans la minute, avec la photo exacte qui était affichée.</p></div>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- ============ Bento fonctionnalités ============ -->
+    <section class="section section-sand" id="fonctionnalites">
+      <div class="wrap">
+        <div class="head rv">
+          <p class="kicker">Fonctionnalités</p>
+          <h2>Tout le métier de la galerie,<br />dans un seul outil.</h2>
+        </div>
+
+        <div class="bento">
+          <article class="tile tile-xl tile-dark rv">
+            <div class="tile-copy">
+              <h3>Le client choisit, annote, valide</h3>
+              <p>Coups de cœur, codes couleur (validée, à retoucher, à écarter), repères posés à l'endroit précis avec une note — puis « Valider ma sélection » d'un clic. Vous recevez tout, photo par photo.</p>
+            </div>
+            <div class="annot" aria-hidden="true">
+              <img src="assets/note.webp" width="900" height="601" alt="" loading="lazy" />
+              <span class="annot-pin" style="left:38%;top:30%">1</span>
+              <span class="annot-pin" style="left:66%;top:62%">2</span>
+              <span class="annot-note" style="left:44%;top:16%">Adoucir l'ombre ici</span>
+              <span class="annot-tags"><i class="t-g"></i><i class="t-y on"></i><i class="t-r"></i></span>
+            </div>
+          </article>
+
+          <article class="tile rv">
+            <span class="tile-ico">⏰</span>
+            <h3>Relances automatiques</h3>
+            <p>Rappel au client à J-7 et J-2 de l'expiration, à vous à J-2. Chaque relance ne part qu'une fois.</p>
+          </article>
+
+          <article class="tile rv">
+            <span class="tile-ico">💶</span>
+            <h3>Suppléments payés en ligne</h3>
+            <p>Forfait de photos incluses, prix au-delà, paiement Stripe sur votre compte et facture PDF automatique.</p>
+          </article>
+
+          <article class="tile tile-wide tile-rose rv">
+            <span class="tile-ico">🌐</span>
+            <div>
+              <h3>Une adresse à votre nom</h3>
+              <p>Vos galeries s'ouvrent sur <strong>votre-studio.holypixx.com</strong>, avec le nom de votre studio en tête. Vos clients ne voient que vous.</p>
+            </div>
+          </article>
+
+          <article class="tile tile-photo rv">
+            <img src="assets/music.webp" width="900" height="1260" alt="" loading="lazy" />
+            <div class="tile-overlay">
+              <span class="eq" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+              <h3>Musique d'ambiance</h3>
+              <p>Un MP3 par galerie, joué en mode défilement.</p>
+            </div>
+          </article>
+
+          <article class="tile rv">
+            <span class="tile-ico">🖼</span>
+            <h3>Trois mises en page</h3>
+            <p>Grille, mosaïque façon presse ou défilement éditorial, selon la séance.</p>
+          </article>
+
+          <article class="tile rv">
+            <span class="tile-ico">📊</span>
+            <h3>Tableau de bord clair</h3>
+            <p>Galeries, ventes, suppléments en ordre ou en attente, journal d'accès complet.</p>
+          </article>
+
+          <article class="tile rv">
+            <span class="tile-ico">🔑</span>
+            <h3>Accès sous contrôle</h3>
+            <p>Mot de passe régénérable d'un clic, expiration automatique, écran d'accueil à vos couleurs.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ Boutique ============ -->
+    <section class="section section-dark" id="boutique">
+      <div class="wrap split split-reverse">
+        <div class="shop-visual rv" aria-hidden="true">
+          <div class="frame"><img src="assets/frame.webp" width="900" height="1348" alt="" loading="lazy" /></div>
+          <div class="price-card">
+            <span class="pc-row"><span>Cadre 40 × 50 cm · noir</span></span>
+            <span class="pc-row muted"><span>Coût labo</span><span>48,00 €</span></span>
+            <span class="pc-row muted"><span>Votre marge</span><span>+ 61,00 €</span></span>
+            <span class="pc-row total"><span>Prix client</span><span>109,00 €</span></span>
+          </div>
+        </div>
+        <div class="split-copy rv">
+          <p class="kicker kicker-light">Boutique de tirages</p>
+          <h2>Vos clients commandent leurs tirages.<br /><span class="grad">Vous encaissez la marge.</span></h2>
+          <p class="lede lede-light">
+            Tirages photo, tirages d'art, toiles, cadres : choisissez vos formats en
+            menus déroulants, voyez le coût réel du laboratoire et fixez votre marge.
+            Le client commande depuis sa galerie, paie sur votre compte Stripe, et
+            notre laboratoire partenaire Prodigi imprime et livre chez lui.
+          </p>
+          <ul class="checks checks-light">
+            <li>Fichier d'impression pleine définition, jamais montré au client</li>
+            <li>Facture et suivi d'expédition envoyés automatiquement</li>
+            <li>Aucun stock, aucun envoi, aucune saisie de commande</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ Parcours client ============ -->
+    <section class="section" id="parcours">
+      <div class="wrap">
+        <div class="head rv">
+          <p class="kicker">Le parcours client</p>
+          <h2>Simple pour eux. Rentable pour vous.</h2>
+        </div>
+        <ol class="journey">
+          <li class="rv"><span class="j-num">1</span><h3>Vous importez</h3><p>Glissez vos photos : filigrane, empreinte et tuiles se font tout seuls.</p></li>
+          <li class="rv"><span class="j-num">2</span><h3>Il reçoit un lien</h3><p>Un lien à votre nom et un mot de passe. Aucun compte à créer.</p></li>
+          <li class="rv"><span class="j-num">3</span><h3>Il choisit et annote</h3><p>Cœurs, couleurs, repères et remarques, puis il valide sa sélection.</p></li>
+          <li class="rv"><span class="j-num">4</span><h3>Il paie et commande</h3><p>Suppléments et tirages réglés en ligne, factures envoyées automatiquement.</p></li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- ============ Engagements ============ -->
+    <section class="section section-sand">
+      <div class="wrap">
+        <div class="head rv">
+          <p class="kicker">Engagements</p>
+          <h2>Une sécurité honnête,<br />pas des promesses de brochure.</h2>
+        </div>
+        <div class="pledges">
+          <div class="pledge rv"><h3>Mots de passe jamais en clair</h3><p>Ni ceux des galeries, ni ceux des comptes : seulement des empreintes à sens unique.</p></div>
+          <div class="pledge rv"><h3>Comptes cloisonnés</h3><p>Un photographe ne peut ni voir ni deviner les galeries d'un autre — vérifié par des centaines de tests automatiques.</p></div>
+          <div class="pledge rv"><h3>Rien avant le mot de passe</h3><p>Un lien de galerie ne confirme jamais son existence à qui n'a pas le bon mot de passe.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ FAQ ============ -->
+    <section class="section" id="faq">
+      <div class="wrap faq-wrap">
+        <div class="head head-left rv">
+          <p class="kicker">Questions</p>
+          <h2>Les bonnes questions,<br />des réponses franches.</h2>
+        </div>
+        <div class="faq rv">
+          <details open><summary>Un client peut-il télécharger les photos ?</summary><p>Non. Les photos sont découpées en tuiles et recomposées à l'écran : aucun fichier n'est jamais téléchargeable. Les fichiers définitifs se livrent en dehors de la galerie, ou sous forme de tirages commandés depuis la galerie.</p></details>
+          <details><summary>Peut-on empêcher une capture d'écran ?</summary><p>Aucun site au monde ne le peut. Holypixx rend une capture inutile (basse définition, filigrane dense), vous prévient par e-mail quand une capture est tentée, et retrouve la galerie d'origine d'une image grâce à son empreinte invisible.</p></details>
+          <details><summary>Mon client doit-il créer un compte ?</summary><p>Non. Il reçoit un lien et un mot de passe, rien d'autre.</p></details>
+          <details><summary>Comment fonctionne la boutique de tirages ?</summary><p>Vous choisissez vos formats en menus déroulants et fixez votre marge. Le client commande depuis sa galerie et paie en ligne sur votre compte Stripe ; le laboratoire Prodigi imprime et livre directement chez lui, avec suivi.</p></details>
+          <details><summary>Puis-je avoir une adresse à mon nom ?</summary><p>Oui : choisissez un sous-domaine dans vos paramètres, et vos galeries s'ouvrent sur votre-studio.holypixx.com avec le nom de votre studio.</p></details>
+          <details><summary>Où sont hébergées les photos ?</summary><p>Sur l'infrastructure Cloudflare (stockage R2 et base D1). Les mots de passe ne sont jamais stockés en clair et chaque compte est strictement cloisonné.</p></details>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ Appel final ============ -->
+    <section class="cta">
+      <div class="cta-glow" aria-hidden="true"></div>
+      <div class="wrap cta-inner rv">
+        <h2>Votre prochaine galerie mérite mieux qu'un simple lien.</h2>
+        <p>Créez votre compte en une minute, depuis votre navigateur.</p>
+        <a class="btn btn-rose btn-lg" data-signup href="#">Créer mon compte</a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="wrap footer-row">
+      <a class="brand" href="#top"><span class="brand-mark" aria-hidden="true">H</span><span class="brand-name">Holypixx</span></a>
+      <nav class="footer-links" aria-label="Pied de page">
+        <a href="#protection">Protection</a>
+        <a href="#fonctionnalites">Fonctionnalités</a>
+        <a href="#boutique">Boutique</a>
+        <a href="#faq">Questions</a>
+        <a data-admin href="#">Connexion</a>
+      </nav>
+      <p class="footer-copy">© <span id="year">2026</span> Holypixx · Galeries protégées pour photographes</p>
     </div>
   </footer>
 
@@ -257,35 +368,30 @@
     (function () {
       "use strict";
       var admin = (window.HOME_CONFIG || {}).adminUrl || "#";
-      ["nav-signup", "hero-signup", "cta-signup"].forEach(function (id) {
-        var el = document.getElementById(id);
-        if (el) el.href = admin;
-      });
-      var login = document.getElementById("nav-login");
-      if (login) login.href = admin;
+      document.querySelectorAll("[data-admin]").forEach(function (a) { a.href = admin; });
+      document.querySelectorAll("[data-signup]").forEach(function (a) { a.href = admin + "#/inscription"; });
       var year = document.getElementById("year");
       if (year) year.textContent = new Date().getFullYear();
 
-      // Fait apparaître les sections en douceur au défilement.
-      var reveals = document.querySelectorAll(".reveal");
-      var reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      if (!reveals.length) return;
-      if (reduceMotion || !("IntersectionObserver" in window)) {
-        reveals.forEach(function (el) { el.classList.add("is-visible"); });
+      // Barre de navigation : fond plein dès qu'on quitte le haut de page.
+      var nav = document.getElementById("nav");
+      var onScroll = function () { nav.classList.toggle("nav-solid", window.scrollY > 24); };
+      window.addEventListener("scroll", onScroll, { passive: true });
+      onScroll();
+
+      // Apparition douce des blocs au défilement.
+      var items = document.querySelectorAll(".rv");
+      var still = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      if (still || !("IntersectionObserver" in window)) {
+        items.forEach(function (el) { el.classList.add("in"); });
         return;
       }
-      var observer = new IntersectionObserver(
-        function (entries) {
-          entries.forEach(function (entry) {
-            if (entry.isIntersecting) {
-              entry.target.classList.add("is-visible");
-              observer.unobserve(entry.target);
-            }
-          });
-        },
-        { threshold: 0.15 }
-      );
-      reveals.forEach(function (el) { observer.observe(el); });
+      var io = new IntersectionObserver(function (entries) {
+        entries.forEach(function (e) {
+          if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); }
+        });
+      }, { threshold: 0.12, rootMargin: "0px 0px -40px 0px" });
+      items.forEach(function (el) { io.observe(el); });
     })();
   </script>
 </body>

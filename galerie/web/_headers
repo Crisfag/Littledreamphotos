@@ -1,0 +1,7 @@
+# Cloudflare Pages : en-têtes par chemin.
+/assets/*
+  Cache-Control: public, max-age=2592000, stale-while-revalidate=86400
+
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
