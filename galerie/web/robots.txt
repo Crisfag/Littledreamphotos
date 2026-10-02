@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Disallow: /galerie.html
+
+Sitemap: https://www.holypixx.com/sitemap.xml

@@ -90,7 +90,8 @@
   }
 
   function showLogin() {
-    showLoginCard("ad-login-card");
+    // Le bouton « Créer un compte » du site mène à #/inscription.
+    showLoginCard(location.hash === "#/inscription" ? "ad-signup-card" : "ad-login-card");
   }
 
   function showApp(photographer) {
