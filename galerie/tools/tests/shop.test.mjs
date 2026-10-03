@@ -118,6 +118,20 @@ await page.click("#gp-print-toggle");
 check("le panneau liste les 5 formats proposés, avec leur prix",
       (await page.locator("#gp-print-products li").count()) === 5 &&
       (await page.textContent("#gp-print-products li:first-child")).includes("4,00"));
+check("chaque format est illustré avec la photo elle-même, et un grand aperçu montre le format survolé",
+      (await page.locator("#gp-print-products li .gp-mock canvas").count()) === 5 &&
+      await page.isVisible("#gp-print-preview .gp-mock canvas"));
+const frameRow = page.locator("#gp-print-products li", { hasText: "passe-partout" });
+await frameRow.hover();
+check("le cadre est dessiné à sa couleur (noir), avec son passe-partout",
+      (await page.textContent(".gp-print-preview-label")).includes("passe-partout") &&
+      (await page.locator("#gp-print-preview .gp-mock-frame .gp-mock-mat").count()) === 1 &&
+      (await page.locator("#gp-print-preview .gp-mock-obj").evaluate((n) => n.style.getPropertyValue("--frame"))) === "#1f1c1a");
+const mockPainted = await page.locator("#gp-print-preview canvas").evaluate((c) => {
+  const d = c.getContext("2d").getImageData(Math.floor(c.width / 2), Math.floor(c.height / 2), 1, 1).data;
+  return !(d[0] === 0xef && d[1] === 0xe6 && d[2] === 0xdb);
+});
+check("l'aperçu contient bien la photo (pas un simple fond)", mockPainted);
 await page.locator("#gp-print-products .gp-print-add").nth(0).click();
 await page.locator("#gp-print-products .gp-print-add").nth(0).click();
 await page.locator("#gp-print-products .gp-print-add").nth(1).click();
@@ -131,8 +145,9 @@ check("le compteur du panier est à jour", (await page.textContent("#gp-cart-cou
 
 await page.click("#gp-cart-btn");
 await page.waitForSelector("#gp-cart:not([hidden])");
-check("le panier détaille les lignes (format, photo, quantité)",
-      (await page.locator("#gp-cart-lines li").count()) === 2 && (await page.textContent("#gp-cart-lines")).includes("Photo n° 1"));
+check("le panier détaille les lignes (format, photo, quantité), chacune avec son aperçu",
+      (await page.locator("#gp-cart-lines li").count()) === 2 && (await page.textContent("#gp-cart-lines")).includes("Photo n° 1") &&
+      (await page.locator("#gp-cart-lines li .gp-mock canvas").count()) === 2);
 check("le total additionne tirages et livraison (2 × 4,00 + 12,00 + 5,90)",
       (await page.textContent("#gp-cart-items")).includes("20,00") && (await page.textContent("#gp-cart-shipping")).includes("5,90") &&
       (await page.textContent("#gp-cart-total")).includes("25,90"),

@@ -230,6 +230,67 @@ export const CATALOGUE = [
   },
 ];
 
+// Aspect de chaque produit pour l'aperçu dessiné côté client avec la photo
+// du client (aucune image du labo) : forme, passe-partout, profondeur.
+const LOOKS = {
+  "photo-ctype": { kind: "print" },
+  "art-fineart": { kind: "print", matte: true },
+  "art-photorag": { kind: "print", matte: true },
+  "art-budget-poster": { kind: "print" },
+  "canvas-stretched": { kind: "canvas" },
+  "canvas-rolled": { kind: "canvas-flat" },
+  "canvas-float": { kind: "float" },
+  "frame-classic-mount": { kind: "frame", mat: true },
+  "frame-classic": { kind: "frame" },
+  "frame-box-mount": { kind: "frame", mat: true, deep: true },
+  "frame-box": { kind: "frame", deep: true },
+  "acrylic-panel": { kind: "acrylic" },
+  "metal-aluminium": { kind: "metal" },
+  "gift-board": { kind: "board" },
+  "gift-mug": { kind: "mug" },
+  "gift-cushion": { kind: "cushion" },
+  "card-matte": { kind: "card", matte: true },
+  "card-gloss": { kind: "card" },
+};
+
+const PAPER_MM = { A4: [210, 297], A3: [297, 420], A2: [420, 594] };
+
+// Proportions d'un format (« 16x20 », « A4 ») ; null si le format n'en a pas
+// (contenance d'un mug).
+function ratioOf(size) {
+  if (PAPER_MM[size]) return PAPER_MM[size];
+  const m = /^(\d+)x(\d+)$/i.exec(String(size || ""));
+  return m ? [Number(m[1]), Number(m[2])] : null;
+}
+
+// Ce que la page client reçoit pour dessiner l'aperçu d'un produit en
+// boutique : d'après sa référence de catalogue, ou à défaut son SKU (produit
+// ajouté en mode avancé), sinon un simple tirage aux proportions de la photo.
+export function lookFor(row) {
+  const [productKey, refSize] = String(row.catalog_ref || "").split("|");
+  let found = productKey ? findProduct(productKey) : null;
+  const sku = String(row.sku || "").toUpperCase();
+  if (!found) {
+    let bestLength = 0;
+    for (const category of CATALOGUE) {
+      for (const product of category.products) {
+        const prefix = skuPrefix(product);
+        if (sku.startsWith(prefix) && prefix.length > bestLength) {
+          found = { category, product };
+          bestLength = prefix.length;
+        }
+      }
+    }
+  }
+  const look = { kind: "print", ...(found ? LOOKS[found.product.key] : {}) };
+  const skuSize = /-(\d+X\d+|A[234])(?:-|$)/.exec(sku);
+  look.ratio = ratioOf(refSize) || (skuSize ? ratioOf(skuSize[1]) : null);
+  let attributes = {};
+  try { attributes = JSON.parse(row.attributes || "{}") || {}; } catch { attributes = {}; }
+  if (typeof attributes.color === "string") look.color = attributes.color.toLowerCase();
+  return look;
+}
+
 export function findProduct(productKey) {
   for (const category of CATALOGUE) {
     for (const product of category.products) {

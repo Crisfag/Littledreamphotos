@@ -794,9 +794,11 @@ body.gp-veiled #gp-viewer-canvas {
 }
 .gp-print-products { list-style: none; margin: .2rem 0 0; padding: 0; }
 .gp-print-products li {
-  display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: .8rem;
-  padding: .45rem 0; border-bottom: 1px solid var(--line); font-size: .88rem; color: var(--ink);
+  display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: .7rem;
+  padding: .35rem .3rem; border-bottom: 1px solid var(--line); font-size: .88rem; color: var(--ink);
+  border-radius: 8px; transition: background .2s var(--ease);
 }
+.gp-print-products li.gp-print-active { background: rgba(185, 138, 122, .1); }
 .gp-print-products li:last-child { border-bottom: 0; }
 .gp-print-price { color: var(--muted); white-space: nowrap; }
 .gp-print-add {
@@ -822,7 +824,7 @@ body.gp-veiled #gp-viewer-canvas {
 }
 .gp-cart-lines { list-style: none; margin: 0; padding: 0; }
 .gp-cart-lines li {
-  display: grid; grid-template-columns: 1fr auto auto auto; align-items: center; gap: .5rem;
+  display: grid; grid-template-columns: auto 1fr auto auto auto; align-items: center; gap: .5rem;
   padding: .55rem 0; border-bottom: 1px solid var(--line); font-size: .88rem;
 }
 .gp-cart-lines .gp-cart-photo { color: var(--muted); font-size: .78rem; display: block; }
@@ -844,3 +846,93 @@ body.gp-veiled #gp-viewer-canvas {
   background: #e8f1ea; color: #2f5b3e; font-size: .9rem; text-align: center;
 }
 .gp-shop-banner-warn { background: #fbeecb; color: #7a5a14; }
+
+/* ---------- Aperçu des produits avec la photo du client ---------- */
+
+.gp-print-preview {
+  display: grid; justify-items: center; gap: .3rem; margin: .2rem 0 .5rem; padding: .6rem 0 .4rem;
+  border-radius: 10px; background: linear-gradient(180deg, #f1ebe3, #e7ddd1);
+}
+.gp-print-preview:empty { display: none; }
+.gp-print-preview-label { margin: 0; font-size: .78rem; color: var(--muted); text-align: center; padding: 0 .6rem; }
+
+.gp-mock { position: relative; display: grid; place-items: center; flex: none; }
+.gp-mock canvas { display: block; }
+.gp-mock-obj {
+  position: relative; box-sizing: border-box; display: grid; place-items: center;
+  background: #fff; box-shadow: 0 6px 12px -6px rgba(30, 22, 16, .55), 0 1px 3px rgba(30, 22, 16, .18);
+}
+
+/* Tirage papier : posé à plat ; les papiers d'art sont mats. */
+.gp-mock-print .gp-mock-obj::after,
+.gp-mock-canvas .gp-mock-obj::after,
+.gp-mock-canvas-flat .gp-mock-obj::after,
+.gp-mock-acrylic .gp-mock-obj::after,
+.gp-mock-metal .gp-mock-obj::after,
+.gp-mock-cushion .gp-mock-obj::after,
+.gp-mock-card .gp-mock-obj::after,
+.gp-mock-mug .gp-mock-obj::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
+}
+.gp-mock-print .gp-mock-obj::after { background: linear-gradient(135deg, rgba(255, 255, 255, .14), transparent 45%); }
+.gp-mock-matte .gp-mock-obj::after { background: rgba(255, 255, 255, .06); }
+
+/* Toile : grain du tissu et épaisseur du châssis. */
+.gp-mock-canvas .gp-mock-obj,
+.gp-mock-canvas-flat .gp-mock-obj { background: #f4efe6; }
+.gp-mock-canvas .gp-mock-obj::after,
+.gp-mock-canvas-flat .gp-mock-obj::after {
+  background:
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, .07) 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(90deg, rgba(0, 0, 0, .05) 0 1px, transparent 1px 3px);
+}
+.gp-mock-canvas .gp-mock-obj {
+  box-shadow: 3px 4px 0 -1px #6d5a4c, 4px 5px 0 -1px rgba(60, 46, 36, .7), 0 12px 18px -8px rgba(30, 22, 16, .6);
+}
+
+/* Cadres : couleur choisie, passe-partout blanc, profondeur des caisses. */
+.gp-mock-frame .gp-mock-obj,
+.gp-mock-float .gp-mock-obj {
+  border-style: solid; border-color: var(--frame, #1f1c1a);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08), 0 8px 14px -6px rgba(30, 22, 16, .6), 0 1px 3px rgba(30, 22, 16, .25);
+}
+.gp-mock-frame .gp-mock-obj.gp-mock-light,
+.gp-mock-float .gp-mock-obj.gp-mock-light { box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .1), 0 0 0 1px rgba(0, 0, 0, .08), 0 8px 14px -6px rgba(30, 22, 16, .5); }
+.gp-mock-frame .gp-mock-obj { background: #1a1714; }
+.gp-mock-frame .gp-mock-obj.gp-mock-mat { background: #fbfaf6; }
+.gp-mock-frame .gp-mock-mat canvas { box-shadow: 0 0 0 1px rgba(0, 0, 0, .12), inset 0 0 4px rgba(0, 0, 0, .3); }
+.gp-mock-deep .gp-mock-obj { box-shadow: inset 0 0 6px rgba(0, 0, 0, .35), 0 12px 18px -6px rgba(30, 22, 16, .65), 0 2px 4px rgba(30, 22, 16, .3); }
+.gp-mock-float .gp-mock-obj { background: #1a1714; }
+
+/* Plexiglas : reflet en diagonale et tranche de verre. */
+.gp-mock-acrylic .gp-mock-obj { box-shadow: 0 0 0 1px rgba(255, 255, 255, .7), 2px 3px 0 0 rgba(170, 196, 204, .65), 0 12px 18px -8px rgba(30, 22, 16, .6); }
+.gp-mock-acrylic .gp-mock-obj::after { background: linear-gradient(120deg, rgba(255, 255, 255, .45) 0%, rgba(255, 255, 255, .08) 32%, transparent 33%, transparent 70%, rgba(255, 255, 255, .12) 100%); }
+
+/* Aluminium : surface brillante, angles à peine arrondis. */
+.gp-mock-metal .gp-mock-obj { border-radius: 2px; overflow: hidden; }
+.gp-mock-metal .gp-mock-obj::after { background: linear-gradient(115deg, rgba(255, 255, 255, .32), rgba(255, 255, 255, 0) 40%, rgba(255, 255, 255, .14) 75%, rgba(255, 255, 255, 0)); }
+
+/* Panneau rigide : bloc épais. */
+.gp-mock-board .gp-mock-obj { box-shadow: 4px 4px 0 #e6dfd5, 5px 5px 0 #cfc6ba, 0 12px 16px -6px rgba(30, 22, 16, .55); }
+
+/* Coussin : forme bombée, ombre sur les bords. */
+.gp-mock-cushion .gp-mock-obj { border-radius: 18%; overflow: hidden; background: #e9e2d8; }
+.gp-mock-cushion .gp-mock-obj::after { background: radial-gradient(ellipse at center, transparent 50%, rgba(40, 28, 20, .38) 100%); }
+
+/* Carte : volet de dos qui dépasse et pli à gauche. */
+.gp-mock-card .gp-mock-obj { box-shadow: -3px 3px 0 #f2eee8, -4px 4px 0 #d9d2c8, 0 10px 14px -6px rgba(30, 22, 16, .5); }
+.gp-mock-card .gp-mock-obj::after { background: linear-gradient(90deg, rgba(0, 0, 0, .22), rgba(0, 0, 0, 0) 12%); }
+
+/* Mug : corps cylindrique, anse, photo posée entière au centre. */
+.gp-mock-mug .gp-mock-obj {
+  border-radius: 6% 6% 14% 14% / 4% 4% 10% 10%;
+  background: linear-gradient(90deg, #cfcac3 0%, #f7f5f2 22%, #ffffff 48%, #f2efeb 74%, #c8c2ba 100%);
+  box-shadow: 0 10px 14px -8px rgba(30, 22, 16, .55);
+}
+.gp-mock-mug .gp-mock-obj::before {
+  content: ""; position: absolute; right: -27%; top: 20%; width: 34%; height: 50%;
+  border: calc(var(--s, 60px) * .08) solid #e9e5df; border-left: 0; border-radius: 0 50% 50% 0;
+  box-shadow: 2px 3px 4px -2px rgba(30, 22, 16, .45);
+}
+.gp-mock-mug canvas { border-radius: 2px; }
+.gp-mock-mug .gp-mock-obj::after { background: linear-gradient(90deg, rgba(0, 0, 0, .16), transparent 24%, transparent 72%, rgba(0, 0, 0, .18)); }

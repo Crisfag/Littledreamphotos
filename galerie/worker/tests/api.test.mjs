@@ -1702,6 +1702,13 @@ check("clé Prodigi + Stripe actif + formats : le client voit les formats actifs
       !JSON.stringify(shopSession.gallery.shop).includes("GLOBAL-"),
       JSON.stringify(shopSession.gallery?.shop?.products?.[0]));
 check("une photo sans fichier d'impression n'est pas proposée en tirage", shopSession.photos.every((p) => p.printable === false));
+const looks = Object.fromEntries(shopSession.gallery.shop.products.map((p) => [p.label, p.look]));
+const frameLook = shopSession.gallery.shop.products.find((p) => p.look?.kind === "frame")?.look;
+check("chaque format arrive avec de quoi dessiner son aperçu (forme, proportions, couleur du cadre)",
+      shopSession.gallery.shop.products.every((p) => p.look && typeof p.look.kind === "string") &&
+      frameLook?.mat === true && frameLook?.color === "black" && frameLook?.ratio?.join("x") === "16x20" &&
+      shopSession.gallery.shop.products.some((p) => p.look.kind === "canvas"),
+      JSON.stringify(looks));
 
 const ORIGINAL = new Uint8Array(50000);
 for (let i = 0; i < ORIGINAL.length; i++) ORIGINAL[i] = (i * 7 + 3) & 0xff;

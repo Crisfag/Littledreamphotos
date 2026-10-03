@@ -9,7 +9,7 @@ import {
   buildOrderPayload, buildQuotePayload, costFromQuote, statusFromProdigiOrder, prodigiErrorMessage,
   prodigiBase, SUGGESTED_PRODUCTS, availabilityFromDetails,
 } from "../src/prodigi.js";
-import { CATALOGUE, resolveSelection, catalogueForAdmin, categoryLabelFor, sizingForSku } from "../src/printCatalogue.js";
+import { CATALOGUE, resolveSelection, catalogueForAdmin, categoryLabelFor, sizingForSku, lookFor } from "../src/printCatalogue.js";
 
 const checks = [];
 function check(label, ok, detail) {
@@ -183,6 +183,19 @@ check("la catégorie d'un produit se retrouve, y compris pour une référence sa
       categoryLabelFor({ sku: "GLOBAL-CUSH-16X16-SUE" }) === "Objets & cadeaux" &&
       categoryLabelFor({ sku: "GLOBAL-GRE-GLOS-7X5-BLA" }) === "Cartes" &&
       categoryLabelFor({ sku: "GLOBAL-MET-8X10" }) === "Plexiglas & aluminium");
+
+/* ---------- Aperçu dessiné côté client ---------- */
+
+const frameLook = lookFor({ catalog_ref: "frame-box-mount|16x20|white", sku: "GLOBAL-BOXM-16x20", attributes: '{"color":"white"}' });
+check("l'aperçu d'un cadre connaît sa forme, son passe-partout, sa profondeur, ses proportions et sa couleur",
+      frameLook.kind === "frame" && frameLook.mat === true && frameLook.deep === true && frameLook.ratio.join("x") === "16x20" && frameLook.color === "white",
+      JSON.stringify(frameLook));
+check("un produit ajouté en mode avancé retrouve son aperçu d'après son SKU (format en pouces ou A3)",
+      lookFor({ sku: "GLOBAL-CAN-ROL-SC-16X20" }).kind === "canvas-flat" && lookFor({ sku: "GLOBAL-CAN-ROL-SC-16X20" }).ratio.join("x") === "16x20" &&
+      lookFor({ sku: "GLOBAL-HPR-A3" }).ratio.join("x") === "297x420");
+check("un mug n'a pas de proportions imposées ; un produit inconnu est montré en simple tirage",
+      lookFor({ catalog_ref: "gift-mug|11oz|", sku: "GLOBAL-MUG-W" }).kind === "mug" && lookFor({ catalog_ref: "gift-mug|11oz|" }).ratio === null &&
+      lookFor({ sku: "PRODUIT-MAISON", attributes: "pas du json" }).kind === "print");
 
 /* ---------- Fiche produit Prodigi (formats réellement proposés) ---------- */
 

@@ -404,6 +404,12 @@ Le tableau de bord s'organise en trois onglets, chacun avec son propre lien
   produit que le labo refuse malgré tout est signalé « indisponible » et ne
   peut pas être ajouté. Sur un mug, la photo est posée entière au centre
   (pas de recadrage en bandeau) ; partout ailleurs elle remplit le format.
+  Côté client, chaque format est **illustré avec la photo elle-même** :
+  toile (grain et châssis), cadre à la couleur choisie avec ou sans
+  passe-partout, caisse américaine, plexiglas, aluminium, panneau, mug,
+  coussin, carte — au recadrage que fera le labo. L'aperçu est dessiné
+  depuis la vignette filigranée déjà affichée : aucune image du labo,
+  aucun fichier supplémentaire téléchargé ni exportable.
   Aucune référence Prodigi n'est à connaître (un mode avancé permet encore
   d'en saisir une à la main). « Mes produits » les range par catégorie, avec
   coût labo, prix client et marge recalculée à la frappe ; « Mettre à jour
@@ -717,7 +723,7 @@ des tuiles, refus du mauvais mot de passe, absence de toute balise `<img>`,
 neutralisation du menu contextuel et de la copie, voile sur « Impr. écran » et
 sur perte de focus, consignation au journal.
 
-**API du Worker** — 312 vérifications contre le vrai moteur Cloudflare (D1 et R2
+**API du Worker** — 313 vérifications contre le vrai moteur Cloudflare (D1 et R2
 émulés localement par `wrangler dev`) : comptes photographes (inscription,
 connexion, session, mot de passe oublié — même réponse générique qu'un
 compte existe ou non), cloisonnement strict entre comptes (un photographe ne
@@ -839,7 +845,7 @@ ou invitation à choisir, lien vers la galerie présent dans le HTML et le
 texte — ou aucun bouton du tout sans adresse publique configurée —, e-mail
 de sélection validée avec nombre de photos et supplément dû.
 
-**Boutique de tirages (logique)** — 51 vérifications sans réseau ni D1 :
+**Boutique de tirages (logique)** — 54 vérifications sans réseau ni D1 :
 clé Prodigi chiffrée (jamais en clair, illisible avec un autre secret, IV
 aléatoire), URLs signées propres à une commande et une photo, adresse de
 livraison nettoyée et validée (e-mail, ville, pays proposé), lignes figées
@@ -858,9 +864,11 @@ option hors catalogue refusés, catégorie retrouvée même pour une référence
 saisie à la main ; lecture d'une fiche produit Prodigi (options livrables
 dans le pays, produit à plusieurs images ou non livré écarté).
 
-**Boutique de tirages (page client)** — 17 vérifications dans un vrai
+**Boutique de tirages (page client)** — 20 vérifications dans un vrai
 navigateur, contre le faux laboratoire : boutique annoncée, bouton
-« Tirages » seulement sur une photo commandable, formats et prix,
+« Tirages » seulement sur une photo commandable, formats et prix, chaque
+format illustré avec la photo du client (cadre à sa couleur avec
+passe-partout, grand aperçu du format survolé, aperçu dans le panier),
 ajout au panier confirmé, compteur, détail du panier, total tirages +
 livraison, quantité modifiée et ligne retirée, Belgique par défaut, refus
 propre sans Stripe local avec panier conservé, panier qui survit à un
