@@ -10,6 +10,10 @@ compatibility_date = "2025-01-01"
 routes = [
   { pattern = "*.holypixx.com/*", zone_name = "holypixx.com" },
 ]
+# Garder aussi l'adresse galerie-protegee.….workers.dev : dès qu'une route est
+# déclarée, wrangler la désactive au déploiement si ce n'est pas écrit ici.
+# Or l'admin (GALERIE_API) et la page galerie (web/galerie.html) l'utilisent.
+workers_dev = true
 
 # Origines autorisées à appeler l'API (le site qui héberge la page galerie).
 [vars]
