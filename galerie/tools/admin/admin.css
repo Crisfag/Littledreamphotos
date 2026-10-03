@@ -79,8 +79,15 @@ h3 { font-size: 1.15rem; margin-bottom: .9rem; }
   background: var(--sand);
   border-radius: 999px;
   padding: .3rem;
+  max-width: 100%;
+  /* Trop d'onglets pour un téléphone : la barre défile au doigt. */
+  overflow-x: auto;
+  scrollbar-width: none;
 }
+.ad-tabs::-webkit-scrollbar { display: none; }
 .ad-tab {
+  flex: none;
+  white-space: nowrap;
   font-family: var(--sans);
   font-size: .85rem;
   font-weight: 500;
@@ -631,7 +638,7 @@ h3 { font-size: 1.15rem; margin-bottom: .9rem; }
   .ad-upload-item { grid-template-columns: minmax(0, 1fr) 70px; }
   .ad-upload-bar { grid-column: span 2; }
   .ad-tabs { width: 100%; order: 3; }
-  .ad-tab { flex: 1; text-align: center; padding: .5rem .4rem; }
+  .ad-tab { padding: .5rem .75rem; }
 }
 
 /* ---------- Relances et sélection validée ---------- */
@@ -730,3 +737,48 @@ h3 { font-size: 1.15rem; margin-bottom: .9rem; }
 .ad-promo-form .ad-field { margin-bottom: .6rem; }
 .ad-promo-form select, .ad-promo-form input { font-family: var(--sans); font-size: .92rem; padding: .5rem .6rem; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
 .ad-promo-form .ad-btn { margin-bottom: .6rem; }
+
+/* ---------- Ventes ---------- */
+
+.ad-seg { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; padding: 2px; background: var(--ivory); }
+.ad-seg-btn { border: 0; background: transparent; font: inherit; font-size: .82rem; color: var(--muted); padding: .3rem .85rem; border-radius: 999px; cursor: pointer; }
+.ad-seg-btn[aria-pressed="true"] { background: #fff; color: var(--ink); box-shadow: 0 1px 2px rgba(43, 37, 33, .12); }
+.ad-seg-btn:focus-visible { outline: 2px solid var(--rose); outline-offset: 1px; }
+
+.ad-legend { display: flex; flex-wrap: wrap; gap: .3rem 1.2rem; list-style: none; font-size: .84rem; color: var(--charcoal); margin-bottom: .6rem; }
+.ad-legend li { display: inline-flex; align-items: center; gap: .45rem; }
+.ad-legend i, .ad-chart-tip-row i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; flex: none; }
+
+.ad-chart { position: relative; min-height: 120px; }
+.ad-chart-svg { display: block; overflow: visible; }
+.ad-chart-grid { stroke: var(--line); stroke-width: 1; }
+.ad-chart-axis { stroke: #cdbfb1; stroke-width: 1; }
+.ad-chart-tick { fill: var(--muted); font-size: 11px; font-family: var(--sans); }
+.ad-chart-year { font-size: 10px; }
+.ad-chart-value { fill: var(--ink); font-size: 12px; font-weight: 500; font-family: var(--sans); }
+.ad-chart-hit { fill: transparent; }
+.ad-chart-col { cursor: default; outline: none; }
+.ad-chart-col-active .ad-chart-hit, .ad-chart-col:focus-visible .ad-chart-hit { fill: rgba(43, 37, 33, .05); }
+.ad-chart-tip {
+  position: absolute; z-index: 2; pointer-events: none; min-width: 190px;
+  background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: .55rem .7rem;
+  box-shadow: 0 6px 18px rgba(43, 37, 33, .12); font-size: .8rem; color: var(--charcoal);
+}
+.ad-chart-tip strong { display: block; color: var(--ink); font-weight: 500; margin-bottom: .25rem; }
+.ad-chart-tip-row { display: flex; align-items: center; gap: .45rem; line-height: 1.6; }
+.ad-chart-tip-row b { margin-left: auto; padding-left: 1rem; font-weight: 500; color: var(--ink); font-variant-numeric: tabular-nums; }
+.ad-chart-tip-total { border-top: 1px solid var(--line); margin-top: .2rem; padding-top: .2rem; }
+.ad-chart-tip-muted { color: var(--muted); }
+
+.ad-sales-table td, .ad-sales-table th[scope="row"] { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ad-sales-table th[scope="row"] { color: var(--charcoal); font-weight: 400; border-bottom: 1px solid var(--line); padding: .45rem .6rem; text-align: left; }
+.ad-sales-table tr:last-child th { border-bottom: 0; }
+
+.ad-sales-ranks { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 0 1.1rem; }
+.ad-rank { list-style: none; counter-reset: rank; }
+.ad-rank li { counter-increment: rank; display: flex; align-items: baseline; gap: .6rem; padding: .5rem 0; border-bottom: 1px solid var(--line); font-size: .9rem; }
+.ad-rank li:last-child { border-bottom: 0; }
+.ad-rank li::before { content: counter(rank); color: var(--muted); font-size: .78rem; min-width: 1.1rem; }
+.ad-rank li > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ad-rank a { color: var(--ink); }
+.ad-rank-meta { margin-left: auto; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }

@@ -593,6 +593,15 @@ async function handleApi(req, res, url) {
     }
   }
 
+  // GET /local/sales — tableau de bord des ventes (12 derniers mois).
+  if (parts[0] === "sales" && parts.length === 1 && req.method === "GET") {
+    try {
+      return json(res, 200, await client.request("GET", "/api/admin/sales"));
+    } catch (err) {
+      return relayError(res, err, "Les ventes n'ont pas pu être chargées");
+    }
+  }
+
   // /local/subscription — abonnement Holypixx du photographe. Les adresses
   // de retour de Stripe pointent vers ce même tableau de bord.
   if (parts[0] === "subscription") {

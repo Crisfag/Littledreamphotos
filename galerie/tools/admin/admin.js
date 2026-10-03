@@ -61,7 +61,13 @@
     stopTrackPreview();
     if (!el.tabs) return;
     el.tabs.querySelectorAll(".ad-tab").forEach(function (btn) {
-      btn.classList.toggle("ad-tab-active", btn.getAttribute("data-tab") === name);
+      var active = btn.getAttribute("data-tab") === name;
+      btn.classList.toggle("ad-tab-active", active);
+      // Sur téléphone, la barre défile : l'onglet ouvert reste visible.
+      if (active && el.tabs.scrollWidth > el.tabs.clientWidth) {
+        var offset = btn.getBoundingClientRect().left - el.tabs.getBoundingClientRect().left;
+        el.tabs.scrollLeft += offset - (el.tabs.clientWidth - btn.offsetWidth) / 2;
+      }
     });
   }
 
@@ -71,6 +77,7 @@
       if (!btn) return;
       var tab = btn.getAttribute("data-tab");
       if (tab === "galleries") renderList();
+      else if (tab === "sales") renderSales();
       else if (tab === "billing") renderBilling();
       else if (tab === "shop") renderShop();
       else if (tab === "subscription") renderSubscription();
@@ -806,6 +813,232 @@
 
   function planPrice(plan) {
     return plan.priceCents ? formatEuros(plan.priceCents).replace(",00", "") + " / mois" : "Gratuit";
+  }
+
+  /* ---------- Ventes : tableau de bord des 12 derniers mois ---------- */
+  // Graphique en colonnes empilées (suppléments en bas, tirages au-dessus),
+  // dessiné en SVG à la taille réelle du conteneur : redessiné quand la
+  // fenêtre change de largeur, pour garder un texte lisible sur téléphone.
+  // Les couleurs ne servent qu'à identifier la série ; montants et libellés
+  // restent dans les couleurs du texte, et une vue tableau donne les mêmes
+  // chiffres sans graphique.
+
+  var SALES_SERIES = [
+    { key: "supplementCents", label: "Suppléments photos", color: "#1f7fa8" },
+    { key: "printCents", label: "Tirages", color: "#d0603a" },
+  ];
+  var salesData = null;
+  var salesMode = "chart";
+
+  function formatEurosShort(cents) {
+    return Math.round((cents || 0) / 100).toLocaleString("fr-BE") + " €";
+  }
+
+  function percentText(ratio) {
+    return Math.round((ratio || 0) * 100) + " %";
+  }
+
+  // Graduation « ronde » (1, 2, 5 × 10ⁿ euros) pour l'axe vertical.
+  function niceStep(maxCents, ticks) {
+    var raw = Math.max(maxCents / 100 / ticks, 1);
+    var pow = Math.pow(10, Math.floor(Math.log10(raw)));
+    var unit = [1, 2, 5, 10].find(function (m) { return m * pow >= raw; });
+    return unit * pow * 100;
+  }
+
+  // Colonne dont seul le haut est arrondi (le pied reste posé sur l'axe).
+  function topRoundedPath(x, y, w, h, r) {
+    r = Math.min(r, w / 2, h);
+    return "M" + x + "," + (y + h) + "V" + (y + r) + "Q" + x + "," + y + " " + (x + r) + "," + y +
+      "H" + (x + w - r) + "Q" + (x + w) + "," + y + " " + (x + w) + "," + (y + r) + "V" + (y + h) + "Z";
+  }
+
+  function salesChartSvg(months, width) {
+    var height = 260, padTop = 26, padBottom = 30, padLeft = 64, padRight = 8;
+    var plotW = Math.max(width - padLeft - padRight, 120);
+    var plotH = height - padTop - padBottom;
+    var totals = months.map(function (m) { return m.supplementCents + m.printCents; });
+    var maxTotal = Math.max.apply(null, totals.concat([0]));
+    var step = niceStep(maxTotal || 10000, 4);
+    var top = Math.max(step * Math.ceil(maxTotal / step), step);
+    var y = function (cents) { return padTop + plotH - (cents / top) * plotH; };
+    var slot = plotW / months.length;
+    var barW = Math.min(24, Math.max(8, slot * 0.6));
+    var narrow = slot < 40;
+
+    var grid = "";
+    for (var v = 0; v <= top; v += step) {
+      grid += '<line class="ad-chart-grid" x1="' + padLeft + '" x2="' + (padLeft + plotW) + '" y1="' + y(v) + '" y2="' + y(v) + '"/>' +
+        '<text class="ad-chart-tick" x="' + (padLeft - 8) + '" y="' + (y(v) + 4) + '" text-anchor="end">' + esc(formatEurosShort(v)) + "</text>";
+    }
+
+    var peak = totals.indexOf(maxTotal);
+    var cols = months.map(function (m, i) {
+      var cx = padLeft + slot * i + slot / 2;
+      var x = cx - barW / 2;
+      var shapes = "";
+      var base = 0;
+      var stacked = SALES_SERIES.filter(function (s) { return m[s.key] > 0; });
+      stacked.forEach(function (s, j) {
+        var yTop = y(base + m[s.key]);
+        var yBottom = y(base) - (j > 0 ? 2 : 0); // 2 px de fond entre deux segments
+        var h = Math.max(yBottom - yTop, 1);
+        shapes += j === stacked.length - 1
+          ? '<path d="' + topRoundedPath(x, yTop, barW, h, 4) + '" fill="' + s.color + '"/>'
+          : '<rect x="' + x + '" y="' + yTop + '" width="' + barW + '" height="' + h + '" fill="' + s.color + '"/>';
+        base += m[s.key];
+      });
+      var parts = m.label.split(" ");
+      var label = narrow ? parts[0].charAt(0).toUpperCase() : parts[0];
+      var showYear = i === 0 || parts[0] === "janv.";
+      var peakLabel = i === peak && maxTotal > 0
+        ? '<text class="ad-chart-value" x="' + cx + '" y="' + (y(maxTotal) - 8) + '" text-anchor="middle">' + esc(formatEurosShort(maxTotal)) + "</text>"
+        : "";
+      return '<g class="ad-chart-col" data-index="' + i + '" tabindex="0" role="img" aria-label="' +
+        esc(m.label + " : " + formatEuros(totals[i]) + " (" + m.orders + " paiement" + (m.orders > 1 ? "s" : "") + ")") + '">' +
+        '<rect class="ad-chart-hit" x="' + (padLeft + slot * i) + '" y="' + padTop + '" width="' + slot + '" height="' + plotH + '"/>' +
+        shapes + peakLabel +
+        '<text class="ad-chart-tick" x="' + cx + '" y="' + (height - 12) + '" text-anchor="middle">' + esc(label) + "</text>" +
+        (showYear && !narrow ? '<text class="ad-chart-tick ad-chart-year" x="' + cx + '" y="' + (height - 0) + '" text-anchor="middle">' + esc(parts[1]) + "</text>" : "") +
+        "</g>";
+    }).join("");
+
+    return '<svg class="ad-chart-svg" width="' + width + '" height="' + (height + 4) + '" viewBox="0 0 ' + width + " " + (height + 4) + '">' +
+      grid + '<line class="ad-chart-axis" x1="' + padLeft + '" x2="' + (padLeft + plotW) + '" y1="' + y(0) + '" y2="' + y(0) + '"/>' +
+      cols + "</svg>";
+  }
+
+  function salesTableHtml(months) {
+    var rows = months.slice().reverse().map(function (m) {
+      return "<tr><th scope=\"row\">" + esc(m.label) + "</th><td>" + esc(formatEuros(m.supplementCents)) + "</td><td>" +
+        esc(formatEuros(m.printCents)) + "</td><td><strong>" + esc(formatEuros(m.supplementCents + m.printCents)) + "</strong></td><td>" + m.orders + "</td></tr>";
+    }).join("");
+    return '<div class="ad-table-wrap"><table class="ad-table ad-sales-table"><thead><tr><th>Mois</th><th>Suppléments</th><th>Tirages</th><th>Total</th><th>Paiements</th></tr></thead><tbody>' +
+      rows + "</tbody></table></div>";
+  }
+
+  function drawSalesChart() {
+    var host = document.getElementById("ad-sales-chart");
+    if (!host || !salesData) return;
+    if (salesMode === "table") {
+      host.innerHTML = salesTableHtml(salesData.months);
+      return;
+    }
+    host.innerHTML = salesChartSvg(salesData.months, Math.max(host.clientWidth, 280)) +
+      '<div class="ad-chart-tip" id="ad-sales-tip" hidden></div>';
+    var tip = document.getElementById("ad-sales-tip");
+    function show(col) {
+      var m = salesData.months[Number(col.getAttribute("data-index"))];
+      tip.innerHTML = "<strong>" + esc(m.label) + "</strong>" +
+        SALES_SERIES.map(function (s) {
+          return '<span class="ad-chart-tip-row"><i style="background:' + s.color + '"></i>' + esc(s.label) + "<b>" + esc(formatEuros(m[s.key])) + "</b></span>";
+        }).join("") +
+        '<span class="ad-chart-tip-row ad-chart-tip-total">Total<b>' + esc(formatEuros(m.supplementCents + m.printCents)) + "</b></span>" +
+        '<span class="ad-chart-tip-row ad-chart-tip-muted">' + m.orders + " paiement" + (m.orders > 1 ? "s" : "") + "</span>";
+      tip.hidden = false;
+      // À côté de la colonne (à droite, sinon à gauche) pour ne jamais
+      // masquer la colonne survolée ni ses voisines immédiates.
+      var hit = col.querySelector(".ad-chart-hit").getBoundingClientRect();
+      var box = host.getBoundingClientRect();
+      var right = hit.right - box.left + 4;
+      var left = right + tip.offsetWidth <= host.clientWidth ? right : hit.left - box.left - tip.offsetWidth - 4;
+      tip.style.left = Math.max(0, left) + "px";
+      tip.style.top = "8px";
+      host.querySelectorAll(".ad-chart-col").forEach(function (c) { c.classList.toggle("ad-chart-col-active", c === col); });
+    }
+    function hide() {
+      tip.hidden = true;
+      host.querySelectorAll(".ad-chart-col").forEach(function (c) { c.classList.remove("ad-chart-col-active"); });
+    }
+    host.querySelectorAll(".ad-chart-col").forEach(function (col) {
+      col.addEventListener("mouseenter", function () { show(col); });
+      col.addEventListener("focus", function () { show(col); });
+      col.addEventListener("click", function () { show(col); });
+      col.addEventListener("blur", hide);
+    });
+    host.querySelector("svg").addEventListener("mouseleave", hide);
+  }
+
+  var salesResizeTimer = null;
+  window.addEventListener("resize", function () {
+    clearTimeout(salesResizeTimer);
+    salesResizeTimer = setTimeout(function () {
+      if (salesMode === "chart" && document.getElementById("ad-sales-chart")) drawSalesChart();
+    }, 150);
+  });
+
+  function salesStatHtml(label, value, note) {
+    return '<div class="ad-stat"><p class="ad-stat-value">' + esc(value) + '</p><p class="ad-stat-label">' + esc(label) + "</p>" +
+      (note ? '<p class="ad-stat-sub">' + esc(note) + "</p>" : "") + "</div>";
+  }
+
+  function salesRankHtml(title, rows, empty, cells) {
+    return '<section><div class="ad-section-header"><h3>' + esc(title) + "</h3></div>" +
+      (rows.length ? '<ol class="ad-rank">' + rows.map(cells).join("") + "</ol>" : '<p class="ad-hint">' + esc(empty) + "</p>") +
+      "</section>";
+  }
+
+  async function renderSales(skipHash) {
+    if (!skipHash && location.hash !== "#/ventes") history.pushState(null, "", "#/ventes");
+    setActiveTab("sales");
+    el.view.innerHTML = '<p class="ad-loading">Chargement…</p>';
+    var data;
+    try {
+      data = await api("GET", "/sales");
+    } catch (err) {
+      el.view.innerHTML = '<div class="ad-error-panel"><h2>Ventes indisponibles</h2><p>' + esc(err.message) + "</p></div>";
+      return;
+    }
+    if (location.hash !== "#/ventes") return;
+    salesData = data;
+    var t = data.totals;
+    var margin = data.printMargin;
+    var marginNote = margin.lineRevenueCents
+      ? (margin.coverage < 0.999 ? "Sur " + percentText(margin.coverage) + " des tirages (coût connu), " : "") + "hors port et frais Stripe"
+      : "Aucun tirage vendu";
+
+    el.view.innerHTML =
+      '<header class="ad-detail-header"><div><h2>Ventes</h2>' +
+      '<p class="ad-hint">Les 12 derniers mois, paiements encaissés (suppléments photos et commandes de tirages), montants TTC.</p>' +
+      "</div></header>" +
+      '<div class="ad-stats">' +
+      salesStatHtml("Chiffre d'affaires", formatEuros(t.revenueCents),
+        formatEurosShort(t.supplementCents) + " suppléments · " + formatEurosShort(t.printCents) + " tirages") +
+      salesStatHtml("Paiements", String(t.orders), t.orders ? "Panier moyen " + formatEuros(t.averageOrderCents) : "") +
+      salesStatHtml("Marge estimée sur les tirages", margin.lineRevenueCents ? formatEuros(margin.marginCents) : "—", marginNote) +
+      salesStatHtml("Galeries qui vendent", data.conversion.galleries ? percentText(data.conversion.rate) : "—",
+        data.conversion.withSales + " sur " + data.conversion.galleries + " galerie" + (data.conversion.galleries > 1 ? "s" : "") + " créée" + (data.conversion.galleries > 1 ? "s" : "") + " sur la période") +
+      "</div>" +
+      '<section><div class="ad-section-header"><h3>Chiffre d\'affaires par mois</h3>' +
+      '<div class="ad-seg" role="group" aria-label="Affichage">' +
+      '<button type="button" class="ad-seg-btn" data-sales-mode="chart">Graphique</button>' +
+      '<button type="button" class="ad-seg-btn" data-sales-mode="table">Tableau</button></div></div>' +
+      '<ul class="ad-legend">' + SALES_SERIES.slice().reverse().map(function (s) {
+        return '<li><i style="background:' + s.color + '"></i>' + esc(s.label) + "</li>";
+      }).join("") + "</ul>" +
+      (t.revenueCents ? "" : '<p class="ad-hint">Pas encore de vente sur cette période : les montants apparaîtront ici dès le premier paiement.</p>') +
+      '<div class="ad-chart" id="ad-sales-chart"></div></section>' +
+      '<div class="ad-sales-ranks">' +
+      salesRankHtml("Formats les plus vendus", data.topProducts, "Aucun tirage vendu sur la période.", function (p) {
+        return "<li><span>" + esc(p.label) + '</span><span class="ad-rank-meta">' + p.copies + " ex. · " + esc(formatEuros(p.revenueCents)) + "</span></li>";
+      }) +
+      salesRankHtml("Galeries qui rapportent le plus", data.topGalleries, "Aucune vente sur la période.", function (g) {
+        var name = g.slug ? '<a href="#/g/' + encodeURIComponent(g.slug) + '">' + esc(g.title) + "</a>" : esc(g.title);
+        return "<li><span>" + name + '</span><span class="ad-rank-meta">' + g.orders + " paiement" + (g.orders > 1 ? "s" : "") + " · " + esc(formatEuros(g.revenueCents)) + "</span></li>";
+      }) +
+      "</div>";
+
+    el.view.querySelectorAll("[data-sales-mode]").forEach(function (btn) {
+      btn.setAttribute("aria-pressed", String(btn.getAttribute("data-sales-mode") === salesMode));
+      btn.addEventListener("click", function () {
+        salesMode = btn.getAttribute("data-sales-mode");
+        el.view.querySelectorAll("[data-sales-mode]").forEach(function (b) {
+          b.setAttribute("aria-pressed", String(b === btn));
+        });
+        drawSalesChart();
+      });
+    });
+    drawSalesChart();
   }
 
   function planFeaturesHtml(plan) {
@@ -3033,6 +3266,7 @@
     var match = /^#\/g\/(.+)$/.exec(location.hash);
     if (match) renderDetail(decodeURIComponent(match[1]), true);
     else if (location.hash === "#/detect") renderDetect(true);
+    else if (location.hash === "#/ventes") renderSales(true);
     else if (location.hash.indexOf("#/facturation") === 0) renderBilling(true);
     else if (location.hash.indexOf("#/abonnement") === 0) renderSubscription(true);
     else if (location.hash === "#/parametres") renderSettings(true);

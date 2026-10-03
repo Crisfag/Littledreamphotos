@@ -16,6 +16,7 @@ import { exportAccount, deleteAccount } from "./privacy.js";
 import { galleryQuotaRefusal, subscriptionForAdmin, startSubscriptionCheckout, openBillingPortal } from "./subscription.js";
 import { setPromo, sendPromoToClient, promoForAdmin } from "./campaigns.js";
 import { galleryUrlFor } from "./reminders.js";
+import { salesForAdmin } from "./sales.js";
 import { authenticatePhotographer } from "./authPhotographer.js";
 import { connectStripe, refreshStripeStatus, setBillingProfile } from "./billing.js";
 import { updateStudioName, updateName, changePassword, requestEmailChange, updateDefaults, updateReminders, updateSubdomain } from "./account.js";
@@ -693,6 +694,9 @@ export async function handleAdmin(request, env, ctx, path) {
 
   const shopResponse = await handleShopAdmin(request, env, photographerId, parts, { ownedGallery, ownedPhoto });
   if (shopResponse) return shopResponse;
+
+  // Tableau de bord des ventes (12 derniers mois).
+  if (section === "sales" && parts.length === 3 && request.method === "GET") return salesForAdmin(env, photographerId);
 
   // Bibliothèque musicale commune, lue par tous les photographes.
   if (section === "music-library" && parts.length === 3 && request.method === "GET") return listLibrary(env);
