@@ -18,7 +18,7 @@ import {
   normalizeRecipient, buildOrderLines, buildOrderPayload, buildQuotePayload,
   prodigiRequest, costFromQuote, statusFromProdigiOrder, availabilityFromDetails,
 } from "./prodigi.js";
-import { resolveSelection, catalogueForAdmin, categoryLabelFor, findProduct, skuFor } from "./printCatalogue.js";
+import { resolveSelection, catalogueForAdmin, categoryLabelFor, findProduct, skuFor, lookFor } from "./printCatalogue.js";
 
 const MAX_ORIGINAL_BYTES = 60 * 1024 * 1024;
 const MAX_PRODUCTS = 40;
@@ -486,7 +486,7 @@ export async function shopForClient(env, gallery) {
     shop: {
       shippingCents: state.photographer.shop_shipping_cents || 0,
       countries: SHOP_COUNTRIES,
-      products: state.products.map((p) => ({ id: p.id, label: p.label, priceCents: p.price_cents })),
+      products: state.products.map((p) => ({ id: p.id, label: p.label, priceCents: p.price_cents, look: lookFor(p) })),
     },
     printOrders: ordersOut,
   };

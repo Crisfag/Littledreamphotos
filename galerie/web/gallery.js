@@ -42,6 +42,7 @@
 
   var el = {};
   var heartButtons = {}; // photoId -> bouton cœur de la grille, pour une mise à jour directe
+  var gridCanvases = {}; // photoId -> vignette peinte dans la grille (source des aperçus produits)
   var commentBadges = {}; // photoId -> pastille « a un commentaire » de la grille
   var tagDots = {}; // photoId -> pastille de code couleur de la grille
   var markBadges = {}; // photoId -> compteur de repères de la grille
@@ -643,6 +644,117 @@
     closePinEditor();
   }
 
+  /* ---------- Aperçu des produits avec la photo du client ---------- */
+
+  // Chaque produit de la boutique est dessiné avec la photo elle-même :
+  // toile, cadre (à sa couleur), plexiglas, mug… La photo est copiée depuis
+  // une vignette déjà affichée (filigranée, basse définition), jamais
+  // rechargée ni exportée. Le recadrage montré est celui du labo : la photo
+  // remplit le format choisi (sauf sur un mug, où elle est posée entière).
+  var FRAME_COLORS = {
+    black: "#1f1c1a", white: "#f4f1eb", natural: "#c39a6b", brown: "#5b3a27",
+    "dark grey": "#4a4a4c", "light grey": "#b8b8ba", gold: "#b8944d", silver: "#bec0c3",
+  };
+
+  function photoSource(photo) {
+    if (currentViewerPhoto() === photo && el.viewerCanvas.width) return el.viewerCanvas;
+    return gridCanvases[photo.id] || null;
+  }
+
+  // Proportions du produit, tournées dans le sens de la photo (un 30 × 40
+  // accueille une photo en largeur comme en hauteur).
+  function productRatio(look, photo) {
+    var photoRatio = photo.width / photo.height;
+    if (!look.ratio) return photoRatio;
+    var r = look.ratio[0] / look.ratio[1];
+    if (r !== 1 && (r > 1) !== (photoRatio > 1)) r = 1 / r;
+    return r;
+  }
+
+  // Dessine la photo dans `canvas` (w × h en px CSS) : recadrée pour remplir,
+  // ou posée entière sur fond blanc (`fit`).
+  function drawPhoto(canvas, source, w, h, fit) {
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.max(1, Math.round(w * dpr));
+    canvas.height = Math.max(1, Math.round(h * dpr));
+    canvas.style.width = w + "px";
+    canvas.style.height = h + "px";
+    var ctx = canvas.getContext("2d");
+    ctx.fillStyle = fit ? "#ffffff" : "#efe6db";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    if (!source || !source.width || !source.height) return;
+    var sw = source.width;
+    var sh = source.height;
+    if (fit) {
+      var scale = Math.min(canvas.width / sw, canvas.height / sh);
+      var dw = sw * scale;
+      var dh = sh * scale;
+      ctx.drawImage(source, 0, 0, sw, sh, (canvas.width - dw) / 2, (canvas.height - dh) / 2, dw, dh);
+      return;
+    }
+    var target = canvas.width / canvas.height;
+    var cw = sw;
+    var ch = sh;
+    if (sw / sh > target) cw = sh * target;
+    else ch = sw / target;
+    ctx.drawImage(source, (sw - cw) / 2, (sh - ch) / 2, cw, ch, 0, 0, canvas.width, canvas.height);
+  }
+
+  // Aperçu d'un produit, dans un carré de `box` px.
+  function buildMockup(photo, product, box) {
+    var look = product.look || { kind: "print" };
+    var kind = look.kind || "print";
+    var wrap = document.createElement("div");
+    wrap.className = "gp-mock gp-mock-" + kind + (look.deep ? " gp-mock-deep" : "") + (look.matte ? " gp-mock-matte" : "");
+    wrap.style.width = box + "px";
+    wrap.style.height = box + "px";
+    wrap.setAttribute("aria-hidden", "true");
+    var obj = document.createElement("div");
+    obj.className = "gp-mock-obj";
+    var canvas = document.createElement("canvas");
+    var source = photoSource(photo);
+
+    if (kind === "mug") {
+      var body = Math.round(box * 0.6);
+      obj.style.width = body + "px";
+      obj.style.height = Math.round(body * 1.04) + "px";
+      obj.style.setProperty("--s", body + "px");
+      drawPhoto(canvas, source, Math.round(body * 0.78), Math.round(body * 0.7), true);
+      obj.appendChild(canvas);
+      wrap.appendChild(obj);
+      return wrap;
+    }
+
+    var ratio = productRatio(look, photo);
+    var max = box * (kind === "card" || kind === "board" ? 0.8 : 0.86);
+    var ow = ratio >= 1 ? max : max * ratio;
+    var oh = ratio >= 1 ? max / ratio : max;
+    var longSide = Math.max(ow, oh);
+    var border = 0;
+    var pad = 0;
+    if (kind === "frame") {
+      border = Math.max(2, longSide * (look.deep ? 0.075 : 0.055));
+      pad = look.mat ? longSide * 0.1 : 0;
+    } else if (kind === "float") {
+      border = Math.max(2, longSide * 0.045);
+      pad = Math.max(1.5, longSide * 0.03);
+    }
+    if (border) {
+      obj.style.borderWidth = border + "px";
+      obj.style.setProperty("--frame", FRAME_COLORS[look.color] || FRAME_COLORS.black);
+      if (look.color === "white" || look.color === "light grey" || look.color === "silver") obj.classList.add("gp-mock-light");
+    }
+    if (pad) obj.style.padding = pad + "px";
+    if (look.mat) obj.classList.add("gp-mock-mat");
+    obj.style.width = Math.round(ow) + "px";
+    obj.style.height = Math.round(oh) + "px";
+    var inset = 2 * (border + pad);
+    drawPhoto(canvas, source, Math.max(1, Math.round(ow - inset)), Math.max(1, Math.round(oh - inset)), false);
+    obj.appendChild(canvas);
+    wrap.appendChild(obj);
+    return wrap;
+  }
+
   /* ---------- Boutique de tirages ---------- */
 
   var shop = { cart: [] };
@@ -707,12 +819,29 @@
     el.printStatus.textContent = "Ajouté ✓ — " + n + " article" + (n > 1 ? "s" : "") + " dans « Mes tirages »";
   }
 
+  function showPrintPreview(photo, product, li) {
+    if (!el.printPreview) return;
+    el.printPreview.innerHTML = "";
+    el.printPreview.appendChild(buildMockup(photo, product, 168));
+    var caption = document.createElement("p");
+    caption.className = "gp-print-preview-label";
+    caption.textContent = product.label;
+    el.printPreview.appendChild(caption);
+    Array.prototype.forEach.call(el.printProducts.children, function (row) {
+      row.classList.toggle("gp-print-active", row === li);
+    });
+  }
+
   function renderPrintPanel(photo) {
     el.printProducts.innerHTML = "";
     el.printStatus.textContent = "";
     var products = state.gallery.shop.products;
-    products.forEach(function (product) {
+    products.forEach(function (product, index) {
       var li = document.createElement("li");
+      li.appendChild(buildMockup(photo, product, 52));
+      li.addEventListener("mouseenter", function () { showPrintPreview(photo, product, li); });
+      li.addEventListener("focusin", function () { showPrintPreview(photo, product, li); });
+      li.addEventListener("click", function () { showPrintPreview(photo, product, li); });
       var label = document.createElement("span");
       label.textContent = product.label;
       var price = document.createElement("span");
@@ -727,6 +856,7 @@
       li.appendChild(price);
       li.appendChild(add);
       el.printProducts.appendChild(li);
+      if (index === 0) showPrintPreview(photo, product, li);
     });
   }
 
@@ -762,6 +892,7 @@
       var photo = photoById(line.photoId);
       if (!product || !photo) return;
       var li = document.createElement("li");
+      li.appendChild(buildMockup(photo, product, 46));
       var what = document.createElement("span");
       what.textContent = product.label;
       var which = document.createElement("span");
@@ -1152,6 +1283,7 @@
   function buildGrid() {
     el.grid.innerHTML = "";
     heartButtons = {};
+    gridCanvases = {};
     commentBadges = {};
     tagDots = {};
     markBadges = {};
@@ -1169,6 +1301,7 @@
       canvas.setAttribute("role", "img");
       canvas.setAttribute("aria-label", "Photo " + (index + 1) + " sur " + state.photos.length);
       figure.appendChild(canvas);
+      gridCanvases[photo.id] = canvas;
 
       var button = document.createElement("button");
       button.type = "button";
@@ -1617,6 +1750,7 @@
       printToggle: $("gp-print-toggle"),
       printPanel: $("gp-print-panel"),
       printProducts: $("gp-print-products"),
+      printPreview: $("gp-print-preview"),
       printStatus: $("gp-print-status"),
       cart: $("gp-cart"),
       cartClose: $("gp-cart-close"),
