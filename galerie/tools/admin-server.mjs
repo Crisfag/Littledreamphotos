@@ -60,6 +60,9 @@ function crc32(buffer) {
   return (crc ^ 0xffffffff) >>> 0;
 }
 const MAX_MUSIC_BYTES = 15 * 1024 * 1024;
+// Photos du portfolio : réduites ici avant l'envoi (vitrine, pas originaux).
+const MAX_PORTFOLIO_UPLOAD_BYTES = 40 * 1024 * 1024;
+const PORTFOLIO_MAX_SIDE = 2000;
 const SESSION_COOKIE = "galerie_session";
 const SESSION_MAX_AGE = 30 * 24 * 60 * 60; // aligné sur la durée du jeton côté Worker
 
@@ -590,6 +593,62 @@ async function handleApi(req, res, url) {
       return json(res, 200, result);
     } catch (err) {
       return relayError(res, err, "Impossible de démarrer la connexion à Stripe");
+    }
+  }
+
+  // /local/portfolio… — mini-site portfolio (voir worker/src/portfolio.js).
+  if (parts[0] === "portfolio") {
+    const base = "/api/admin/portfolio";
+    try {
+      if (parts.length === 1 && req.method === "GET") return json(res, 200, await client.request("GET", base));
+      if (parts.length === 1 && req.method === "PUT") {
+        const body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
+        return json(res, 200, await client.request("PUT", base, body));
+      }
+      if (parts.length === 2 && parts[1] === "order" && req.method === "POST") {
+        const body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
+        return json(res, 200, await client.request("POST", `${base}/order`, { ids: body.ids }));
+      }
+      // POST /local/portfolio/photos (multipart, une photo par requête) :
+      // redressée selon l'EXIF, réduite à 2000 px, convertie en WebP. sharp
+      // ne recopie aucune métadonnée (EXIF, GPS, appareil) sans le lui demander.
+      if (parts.length === 2 && parts[1] === "photos" && req.method === "POST") {
+        const contentLength = Number(req.headers["content-length"] || 0);
+        if (contentLength > MAX_PORTFOLIO_UPLOAD_BYTES + 64 * 1024) return json(res, 413, { error: "Photo trop lourde (40 Mo maximum)" });
+        let form;
+        try {
+          form = await nodeRequestToWebRequest(req, await readBody(req, MAX_PORTFOLIO_UPLOAD_BYTES + 64 * 1024)).formData();
+        } catch (err) {
+          return json(res, err.status || 400, { error: err.status ? err.message : "Formulaire illisible" });
+        }
+        const file = form.get("file");
+        if (!file || typeof file.arrayBuffer !== "function") return json(res, 400, { error: "Aucun fichier reçu" });
+        let output;
+        try {
+          const input = Buffer.from(await file.arrayBuffer());
+          output = await withProcessingSlot(() => sharp(input, { failOn: "error" })
+            .rotate()
+            .resize({ width: PORTFOLIO_MAX_SIDE, height: PORTFOLIO_MAX_SIDE, fit: "inside", withoutEnlargement: true })
+            .toColourspace("srgb")
+            .webp({ quality: 84 })
+            .toBuffer({ resolveWithObject: true }));
+        } catch {
+          return json(res, 400, { error: "Image illisible (JPEG, PNG ou WebP attendu)" });
+        }
+        const query = `width=${output.info.width}&height=${output.info.height}`;
+        return json(res, 201, await client.request("PUT", `${base}/photos?${query}`, output.data, true));
+      }
+      if (parts.length === 3 && parts[1] === "photos" && req.method === "GET") {
+        const upstream = await client.getPortfolioPhotoResponse(decodeURIComponent(parts[2]));
+        if (!upstream.ok) return json(res, upstream.status, { error: "Photo introuvable" });
+        res.writeHead(200, { "content-type": "image/webp", "cache-control": "private, max-age=300" });
+        return res.end(Buffer.from(await upstream.arrayBuffer()));
+      }
+      if (parts.length === 3 && (parts[1] === "photos" || parts[1] === "messages") && req.method === "DELETE") {
+        return json(res, 200, await client.request("DELETE", `${base}/${parts[1]}/${encodeURIComponent(decodeURIComponent(parts[2]))}`));
+      }
+    } catch (err) {
+      return relayError(res, err, "Le portfolio n'a pas pu être mis à jour");
     }
   }
 

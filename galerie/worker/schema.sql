@@ -560,3 +560,50 @@ CREATE TABLE IF NOT EXISTS print_carts (
   updated_at  INTEGER NOT NULL,
   reminded_at INTEGER
 );
+
+-- Mini-site portfolio du photographe (voir worker/src/portfolio.js) : une
+-- ligne par compte. `handle` est l'identifiant de l'adresse publique
+-- (www.holypixx.com/portfolio.html?s=<handle>) ; les photos de vitrine
+-- vivent dans R2 sous portfolio/{photographer_id}/{id}.webp.
+CREATE TABLE IF NOT EXISTS portfolios (
+  photographer_id TEXT PRIMARY KEY REFERENCES photographers(id) ON DELETE CASCADE,
+  handle          TEXT NOT NULL UNIQUE,
+  published       INTEGER NOT NULL DEFAULT 0,
+  headline        TEXT NOT NULL DEFAULT '',
+  bio             TEXT NOT NULL DEFAULT '',
+  city            TEXT NOT NULL DEFAULT '',
+  services        TEXT NOT NULL DEFAULT '[]',
+  phone           TEXT NOT NULL DEFAULT '',
+  instagram       TEXT NOT NULL DEFAULT '',
+  website         TEXT NOT NULL DEFAULT '',
+  contact_enabled INTEGER NOT NULL DEFAULT 1,
+  updated_at      INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS portfolio_photos (
+  id              TEXT PRIMARY KEY,
+  photographer_id TEXT NOT NULL REFERENCES photographers(id) ON DELETE CASCADE,
+  position        INTEGER NOT NULL DEFAULT 0,
+  width           INTEGER NOT NULL,
+  height          INTEGER NOT NULL,
+  bytes           INTEGER NOT NULL,
+  created_at      INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_portfolio_photos ON portfolio_photos(photographer_id, position);
+
+-- Messages reçus par le formulaire de contact du portfolio, conservés un an.
+-- ip_hash (empreinte salée, jamais l'IP) sert seulement à plafonner les envois.
+CREATE TABLE IF NOT EXISTS portfolio_messages (
+  id              TEXT PRIMARY KEY,
+  photographer_id TEXT NOT NULL REFERENCES photographers(id) ON DELETE CASCADE,
+  name            TEXT NOT NULL,
+  email           TEXT NOT NULL,
+  phone           TEXT NOT NULL DEFAULT '',
+  event_date      TEXT NOT NULL DEFAULT '',
+  message         TEXT NOT NULL,
+  ip_hash         TEXT NOT NULL,
+  read_at         INTEGER,
+  created_at      INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_portfolio_messages ON portfolio_messages(photographer_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_portfolio_messages_ip ON portfolio_messages(ip_hash, created_at);

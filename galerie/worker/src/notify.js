@@ -453,6 +453,30 @@ export function buildPrintOrderShippedEmail({ studioName, galleryTitle, recipien
   return { subject, html: emailShell({ preheader: subject, bodyHtml }), text };
 }
 
+export function buildPortfolioContactEmail({ studioName, name, email, phone, eventDate, message }) {
+  const subject = `Nouveau message de ${name} via votre portfolio`;
+  const details = [
+    `<strong>E-mail :</strong> <a href="mailto:${escapeHtml(email)}" style="color:${ROSE_DEEP};">${escapeHtml(email)}</a>`,
+    phone ? `<strong>Téléphone :</strong> ${escapeHtml(phone)}` : "",
+    eventDate ? `<strong>Date souhaitée :</strong> ${escapeHtml(eventDate)}` : "",
+  ].filter(Boolean).join("<br>");
+  const bodyHtml =
+    eyebrow(studioName || "Votre portfolio") +
+    heading(`${escapeHtml(name)} vous a écrit`) +
+    paragraph(details) +
+    `<div style="margin:0 0 14px;padding:14px 16px;background:${CREAM};border-radius:10px;font-family:${SANS};font-size:15px;line-height:1.6;color:${CHARCOAL};white-space:pre-wrap;">${escapeHtml(message)}</div>` +
+    paragraph("Répondez directement à cet e-mail : votre réponse partira vers l'adresse du visiteur. Le message est aussi enregistré dans l'onglet Portfolio de votre tableau de bord.", { small: true });
+  const text = [
+    `${name} vous a écrit depuis votre portfolio.`,
+    `E-mail : ${email}`,
+    phone ? `Téléphone : ${phone}` : "",
+    eventDate ? `Date souhaitée : ${eventDate}` : "",
+    "",
+    message,
+  ].filter((l, i) => l !== "" || i === 4).join("\n");
+  return { subject, html: emailShell({ preheader: subject, bodyHtml }), text };
+}
+
 function bytesToBase64(bytes) {
   let binary = "";
   const chunkSize = 0x8000;
@@ -470,7 +494,7 @@ export async function sendInvoiceEmail(env, { to, galleryTitle, number, amountCe
   });
 }
 
-async function sendEmail(env, { to, subject, html, text, attachments }) {
+async function sendEmail(env, { to, subject, html, text, attachments, replyTo }) {
   if (!env.RESEND_API_KEY || !to) return;
   try {
     const response = await fetch("https://api.resend.com/emails", {
@@ -486,6 +510,7 @@ async function sendEmail(env, { to, subject, html, text, attachments }) {
         html,
         text,
         ...(attachments ? { attachments } : {}),
+        ...(replyTo ? { reply_to: replyTo } : {}),
       }),
     });
     // `fetch` ne lève une exception qu'en cas de panne réseau — un refus de
@@ -560,4 +585,8 @@ export async function sendCartReminder(env, params) {
 
 export async function sendFavoritesPrint(env, params) {
   await sendEmail(env, { to: params.to, ...buildFavoritesPrintEmail(params) });
+}
+
+export async function sendPortfolioContact(env, params) {
+  await sendEmail(env, { to: params.to, replyTo: params.replyTo, ...buildPortfolioContactEmail(params) });
 }

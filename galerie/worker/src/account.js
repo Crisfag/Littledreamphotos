@@ -230,6 +230,11 @@ export async function updateSubdomain(request, env, photographerId) {
       .bind(subdomain, photographerId)
       .first();
     if (taken) return fail(409, "Ce sous-domaine est déjà pris");
+    // Ni l'adresse du portfolio d'un autre studio (voir portfolio.js).
+    const handleTaken = await env.DB.prepare("SELECT 1 AS x FROM portfolios WHERE handle = ? AND photographer_id != ?")
+      .bind(subdomain, photographerId)
+      .first();
+    if (handleTaken) return fail(409, "Ce sous-domaine est déjà pris");
   }
   try {
     await env.DB.prepare("UPDATE photographers SET subdomain = ? WHERE id = ?").bind(subdomain, photographerId).run();

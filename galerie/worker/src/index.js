@@ -18,6 +18,7 @@ import { handleStripeWebhook } from "./billing.js";
 import { runReminders } from "./reminders.js";
 import { purgeOldAccessLogs } from "./privacy.js";
 import { runSalesReminders } from "./campaigns.js";
+import { handlePortfolioPublic, purgeOldPortfolioMessages } from "./portfolio.js";
 import { shopState } from "./shop.js";
 import { studioSubdomainOf, handleStudioHost } from "./studio.js";
 import { handlePrintAsset, handleProdigiCallback } from "./shop.js";
@@ -83,6 +84,9 @@ export default {
         response = await handleOwner(request, env, path);
       } else if (path.startsWith("/api/gallery/")) {
         response = await handleViewer(request, env, ctx, path);
+      } else if (path.startsWith("/api/portfolio/")) {
+        // Mini-site public du photographe (lecture, photos, formulaire de contact).
+        response = await handlePortfolioPublic(request, env, path);
       } else if (path.startsWith("/api/music-library/") && request.method === "GET") {
         // Écoute d'un morceau libre de droits de la bibliothèque commune.
         response = await handleLibraryAudio(request, env, decodeURIComponent(path.split("/")[3] || ""));
@@ -126,6 +130,12 @@ export default {
     ctx.waitUntil(
       runSalesReminders(env, shopState).catch((err) => {
         console.error("Relances de vente : échec de la passe planifiée :", err && err.stack ? err.stack : err);
+      })
+    );
+    // Messages du formulaire de contact des portfolios : conservés un an.
+    ctx.waitUntil(
+      purgeOldPortfolioMessages(env).catch((err) => {
+        console.error("Purge des messages : échec :", err && err.stack ? err.stack : err);
       })
     );
     // Conservation limitée des journaux d'accès (voir privacy.js).

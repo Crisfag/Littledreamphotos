@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Portfolio — Holypixx</title>
+  <meta name="description" content="Portfolio de photographe propulsé par Holypixx." />
+  <meta name="referrer" content="strict-origin-when-cross-origin" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Jost:wght@300;400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="portfolio.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%23b98a7a'/><text y='72' x='50' text-anchor='middle' font-size='60' font-family='Georgia'>H</text></svg>" />
+
+  <script>
+    /* Adresse du Worker (remplacée automatiquement sous l'adresse d'un
+       studio), et identifiant du portfolio : vide ici, lu dans « ?s=… ». */
+    window.PORTFOLIO_CONFIG = {
+      api: "https://galerie-protegee.littledreamphotos-be.workers.dev",
+      handle: "",
+    };
+  </script>
+</head>
+<body>
+
+  <div class="pf-state" id="pf-loading" role="status">
+    <span class="pf-spinner" aria-hidden="true"></span>
+    <span class="pf-sr">Chargement du portfolio…</span>
+  </div>
+
+  <div class="pf-state" id="pf-missing" hidden>
+    <div>
+      <h1>Ce portfolio n'est pas disponible</h1>
+      <p>Il n'existe pas, ou son auteur ne l'a pas encore publié. Vérifiez l'adresse reçue.</p>
+      <a class="pf-btn pf-btn-ghost" href="https://www.holypixx.com/">Découvrir Holypixx</a>
+    </div>
+  </div>
+
+  <div id="pf-page" hidden>
+    <header class="pf-top">
+      <div class="pf-wrap pf-top-inner">
+        <a class="pf-brand" id="pf-brand" href="#pf-hero"></a>
+        <nav class="pf-nav" aria-label="Sections">
+          <a href="#travaux">Travaux</a>
+          <a href="#apropos" id="pf-nav-about">À propos</a>
+          <a href="#contact" class="pf-nav-cta" id="pf-nav-contact">Me contacter</a>
+        </nav>
+      </div>
+    </header>
+
+    <section class="pf-hero" id="pf-hero">
+      <img class="pf-hero-img" id="pf-hero-img" alt="" draggable="false" />
+      <div class="pf-hero-shade" aria-hidden="true"></div>
+      <div class="pf-wrap pf-hero-text">
+        <p class="pf-eyebrow" id="pf-city" hidden></p>
+        <h1 id="pf-studio"></h1>
+        <p class="pf-headline" id="pf-headline" hidden></p>
+        <a class="pf-btn" href="#contact" id="pf-hero-cta">Me contacter</a>
+      </div>
+    </section>
+
+    <main>
+      <section class="pf-section pf-wrap" id="travaux" aria-labelledby="pf-works-title">
+        <h2 id="pf-works-title">Travaux</h2>
+        <div class="pf-grid" id="pf-grid"></div>
+      </section>
+
+      <section class="pf-section pf-about" id="apropos" aria-labelledby="pf-about-title" hidden>
+        <div class="pf-wrap pf-about-inner">
+          <div class="pf-about-text">
+            <h2 id="pf-about-title">À propos</h2>
+            <div id="pf-bio"></div>
+          </div>
+          <div class="pf-services" id="pf-services-wrap" hidden>
+            <h3>Prestations</h3>
+            <ul id="pf-services"></ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="pf-section pf-wrap pf-contact" id="contact" aria-labelledby="pf-contact-title" hidden>
+        <div class="pf-contact-intro">
+          <h2 id="pf-contact-title">Me contacter</h2>
+          <p id="pf-contact-lede">Un projet, une date, une question ? Écrivez-moi, je vous réponds rapidement.</p>
+          <ul class="pf-links" id="pf-links"></ul>
+        </div>
+
+        <form class="pf-form" id="pf-form" novalidate hidden>
+          <div class="pf-row">
+            <label class="pf-field">
+              <span>Nom</span>
+              <input type="text" name="name" autocomplete="name" maxlength="100" required />
+            </label>
+            <label class="pf-field">
+              <span>E-mail</span>
+              <input type="email" name="email" autocomplete="email" maxlength="200" required />
+            </label>
+          </div>
+          <div class="pf-row">
+            <label class="pf-field">
+              <span>Téléphone <em>(facultatif)</em></span>
+              <input type="tel" name="phone" autocomplete="tel" maxlength="30" />
+            </label>
+            <label class="pf-field">
+              <span>Date souhaitée <em>(facultatif)</em></span>
+              <input type="text" name="eventDate" maxlength="40" placeholder="ex. 14 juin 2027" />
+            </label>
+          </div>
+          <label class="pf-field">
+            <span>Message</span>
+            <textarea name="message" rows="6" maxlength="3000" required></textarea>
+          </label>
+          <!-- Piège à robots : invisible et ignoré par les humains. -->
+          <label class="pf-trap" aria-hidden="true">Site web <input type="text" name="website" tabindex="-1" autocomplete="off" /></label>
+          <p class="pf-privacy">
+            Vos coordonnées sont transmises uniquement à <span id="pf-privacy-name">ce studio</span> pour vous répondre.
+            <a href="https://www.holypixx.com/confidentialite.html" target="_blank" rel="noopener">Politique de confidentialité</a>
+          </p>
+          <p class="pf-error" id="pf-form-error" role="alert" hidden></p>
+          <button type="submit" class="pf-btn" id="pf-submit">Envoyer le message</button>
+        </form>
+        <div class="pf-sent" id="pf-sent" role="status" hidden>
+          <h3>Merci, votre message est bien parti.</h3>
+          <p>Vous recevrez une réponse à l'adresse indiquée.</p>
+        </div>
+      </section>
+    </main>
+
+    <footer class="pf-foot">
+      <div class="pf-wrap pf-foot-inner">
+        <p>© <span id="pf-year"></span> <span id="pf-foot-name"></span></p>
+        <p class="pf-foot-links">
+          <a href="https://www.holypixx.com/" target="_blank" rel="noopener">Portfolio et galeries propulsés par Holypixx</a>
+          <a href="https://www.holypixx.com/mentions-legales.html" target="_blank" rel="noopener">Mentions légales</a>
+          <a href="https://www.holypixx.com/confidentialite.html" target="_blank" rel="noopener">Confidentialité</a>
+        </p>
+      </div>
+    </footer>
+  </div>
+
+  <div class="pf-lightbox" id="pf-lightbox" role="dialog" aria-modal="true" aria-label="Photo agrandie" hidden>
+    <button type="button" class="pf-lb-btn pf-lb-close" id="pf-lb-close" aria-label="Fermer">×</button>
+    <button type="button" class="pf-lb-btn pf-lb-prev" id="pf-lb-prev" aria-label="Photo précédente">‹</button>
+    <img id="pf-lb-img" alt="" draggable="false" />
+    <button type="button" class="pf-lb-btn pf-lb-next" id="pf-lb-next" aria-label="Photo suivante">›</button>
+    <p class="pf-lb-count" id="pf-lb-count"></p>
+  </div>
+
+  <script src="portfolio.js"></script>
+</body>
+</html>

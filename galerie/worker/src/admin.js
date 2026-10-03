@@ -17,6 +17,7 @@ import { galleryQuotaRefusal, subscriptionForAdmin, startSubscriptionCheckout, o
 import { setPromo, sendPromoToClient, promoForAdmin } from "./campaigns.js";
 import { galleryUrlFor } from "./reminders.js";
 import { salesForAdmin } from "./sales.js";
+import { handlePortfolioAdmin, deletePortfolioFiles } from "./portfolio.js";
 import { authenticatePhotographer } from "./authPhotographer.js";
 import { connectStripe, refreshStripeStatus, setBillingProfile } from "./billing.js";
 import { updateStudioName, updateName, changePassword, requestEmailChange, updateDefaults, updateReminders, updateSubdomain } from "./account.js";
@@ -695,6 +696,9 @@ export async function handleAdmin(request, env, ctx, path) {
   const shopResponse = await handleShopAdmin(request, env, photographerId, parts, { ownedGallery, ownedPhoto });
   if (shopResponse) return shopResponse;
 
+  // Mini-site portfolio : présentation, photos de vitrine, messages reçus.
+  if (section === "portfolio") return handlePortfolioAdmin(request, env, photographerId, parts, new URL(request.url));
+
   // Tableau de bord des ventes (12 derniers mois).
   if (section === "sales" && parts.length === 3 && request.method === "GET") return salesForAdmin(env, photographerId);
 
@@ -846,7 +850,7 @@ export async function handleAdmin(request, env, ctx, path) {
     return exportAccount(env, photographerId);
   }
   if (section === "account" && parts[3] === "delete" && parts.length === 4 && request.method === "POST") {
-    return deleteAccount(request, env, photographerId, (gallery) => eraseGallery(env, gallery));
+    return deleteAccount(request, env, photographerId, (gallery) => eraseGallery(env, gallery), () => deletePortfolioFiles(env, photographerId));
   }
   if (section === "account" && parts[3] === "name" && parts.length === 4 && request.method === "POST") {
     return updateName(request, env, photographerId);

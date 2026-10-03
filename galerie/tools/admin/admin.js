@@ -78,6 +78,7 @@
       var tab = btn.getAttribute("data-tab");
       if (tab === "galleries") renderList();
       else if (tab === "sales") renderSales();
+      else if (tab === "portfolio") renderPortfolio();
       else if (tab === "billing") renderBilling();
       else if (tab === "shop") renderShop();
       else if (tab === "subscription") renderSubscription();
@@ -813,6 +814,219 @@
 
   function planPrice(plan) {
     return plan.priceCents ? formatEuros(plan.priceCents).replace(",00", "") + " / mois" : "Gratuit";
+  }
+
+  /* ---------- Portfolio : mini-site public du photographe ---------- */
+
+  function portfolioPublicUrl(data) {
+    return data.urls.studio && data.published ? data.urls.studio : data.urls.site;
+  }
+
+  function portfolioPhotoTile(photo, index, count) {
+    return '<li class="ad-pf-photo" data-id="' + esc(photo.id) + '">' +
+      '<img src="/local/portfolio/photos/' + encodeURIComponent(photo.id) + '" alt="Photo ' + (index + 1) + '" loading="lazy" />' +
+      (index === 0 ? '<span class="ad-pf-cover">Couverture</span>' : "") +
+      '<div class="ad-pf-actions">' +
+      '<button type="button" class="ad-btn ad-btn-small" data-move="-1" aria-label="Avancer la photo ' + (index + 1) + '"' + (index === 0 ? " disabled" : "") + ">←</button>" +
+      '<button type="button" class="ad-btn ad-btn-small" data-move="1" aria-label="Reculer la photo ' + (index + 1) + '"' + (index === count - 1 ? " disabled" : "") + ">→</button>" +
+      '<button type="button" class="ad-btn ad-btn-small ad-btn-danger" data-remove aria-label="Retirer la photo ' + (index + 1) + '">Retirer</button>' +
+      "</div></li>";
+  }
+
+  function portfolioMessageHtml(m) {
+    var when = new Date(m.createdAt * 1000).toLocaleString("fr-BE", { dateStyle: "medium", timeStyle: "short" });
+    return '<li class="ad-pf-message" data-id="' + esc(m.id) + '">' +
+      '<div class="ad-pf-message-head"><strong>' + esc(m.name) + "</strong>" + (m.unread ? ' <span class="ad-badge">Nouveau</span>' : "") +
+      '<span class="ad-hint">' + esc(when) + "</span></div>" +
+      '<p class="ad-pf-message-meta"><a href="mailto:' + esc(m.email) + '">' + esc(m.email) + "</a>" +
+      (m.phone ? " · " + esc(m.phone) : "") + (m.eventDate ? " · date souhaitée : " + esc(m.eventDate) : "") + "</p>" +
+      '<p class="ad-pf-message-body">' + esc(m.message) + "</p>" +
+      '<button type="button" class="ad-btn ad-btn-small" data-delete-message>Supprimer</button></li>';
+  }
+
+  async function renderPortfolio(skipHash) {
+    if (!skipHash && location.hash !== "#/portfolio") history.pushState(null, "", "#/portfolio");
+    setActiveTab("portfolio");
+    el.view.innerHTML = '<p class="ad-loading">Chargement…</p>';
+    var data;
+    try {
+      data = await api("GET", "/portfolio");
+    } catch (err) {
+      el.view.innerHTML = '<div class="ad-error-panel"><h2>Portfolio indisponible</h2><p>' + esc(err.message) + "</p></div>";
+      return;
+    }
+    if (location.hash !== "#/portfolio") return;
+    drawPortfolio(data);
+  }
+
+  function drawPortfolio(data) {
+    var url = portfolioPublicUrl(data);
+    var photos = data.photos;
+    var status = data.published
+      ? '<p class="ad-banner">Votre portfolio est en ligne : <a href="' + esc(url) + '" target="_blank" rel="noopener" id="ad-pf-link">' + esc(url.replace(/^https?:\/\//, "")) + "</a></p>"
+      : '<p class="ad-banner ad-banner-muted">' + (data.exists ? "Votre portfolio n'est pas publié : personne ne peut le voir." : "Présentez votre travail sur une page à vous : vos plus belles photos, quelques mots, et un formulaire pour vous contacter.") + "</p>";
+    var unread = data.messages.filter(function (m) { return m.unread; }).length;
+
+    el.view.innerHTML =
+      '<header class="ad-detail-header"><div><h2>Portfolio</h2>' +
+      '<p class="ad-hint">Votre mini-site public, inclus dans toutes les formules' +
+      (data.urls.studio ? " — avec la formule Pro, il s'affiche aussi à l'adresse de votre studio." : ".") + "</p>" +
+      "</div></header>" + status +
+
+      '<section><div class="ad-section-header"><h3>Photos <span class="ad-hint" id="ad-pf-count">' + photos.length + " / " + data.maxPhotos + "</span></h3>" +
+      '<label class="ad-btn ad-btn-primary ad-pf-upload"' + (photos.length >= data.maxPhotos ? " hidden" : "") + ">Ajouter des photos" +
+      '<input type="file" id="ad-pf-files" accept="image/jpeg,image/png,image/webp" multiple hidden /></label></div>' +
+      '<p class="ad-hint">La première photo sert de couverture. Elles sont réduites à 2000 px et débarrassées de leurs données EXIF (appareil, lieu) avant d\'être publiées.</p>' +
+      '<p class="ad-hint" id="ad-pf-progress" hidden></p>' +
+      (photos.length ? '<ol class="ad-pf-photos" id="ad-pf-photos">' + photos.map(function (p, i) { return portfolioPhotoTile(p, i, photos.length); }).join("") + "</ol>"
+        : '<p class="ad-hint">Aucune photo pour l\'instant : ajoutez entre 10 et 30 images qui vous ressemblent.</p>') +
+      "</section>" +
+
+      '<section><div class="ad-section-header"><h3>Présentation</h3></div>' +
+      '<form id="ad-pf-form">' +
+      '<label class="ad-field"><span>Adresse du portfolio</span>' +
+      '<span class="ad-pf-handle"><span class="ad-pf-handle-prefix">www.holypixx.com/portfolio.html?s=</span>' +
+      '<input type="text" name="handle" value="' + esc(data.handle) + '" required maxlength="30" autocapitalize="off" spellcheck="false" /></span></label>' +
+      '<label class="ad-field"><span>Accroche <em>(une phrase, sous votre nom)</em></span>' +
+      '<input type="text" name="headline" value="' + esc(data.headline) + '" maxlength="120" placeholder="Photographe de mariage et de famille, en lumière naturelle" /></label>' +
+      '<div class="ad-field-row">' +
+      '<label class="ad-field"><span>Ville ou région</span><input type="text" name="city" value="' + esc(data.city) + '" maxlength="80" placeholder="Liège" /></label>' +
+      '<label class="ad-field"><span>Téléphone <em>(facultatif, affiché)</em></span><input type="tel" name="phone" value="' + esc(data.phone) + '" maxlength="30" /></label>' +
+      "</div>" +
+      '<label class="ad-field"><span>À propos</span><textarea name="bio" rows="6" maxlength="2000" placeholder="Qui vous êtes, votre façon de travailler…">' + esc(data.bio) + "</textarea></label>" +
+      '<label class="ad-field"><span>Prestations <em>(une par ligne, 8 au plus)</em></span><textarea name="services" rows="4" placeholder="Mariages&#10;Séances famille&#10;Portraits">' + esc(data.services.join("\n")) + "</textarea></label>" +
+      '<div class="ad-field-row">' +
+      '<label class="ad-field"><span>Instagram <em>(facultatif)</em></span><input type="text" name="instagram" value="' + esc(data.instagram ? "@" + data.instagram : "") + '" placeholder="@votre.studio" /></label>' +
+      '<label class="ad-field"><span>Site web <em>(facultatif)</em></span><input type="text" inputmode="url" autocapitalize="off" spellcheck="false" name="website" value="' + esc(data.website) + '" placeholder="votre-site.be" /></label>' +
+      "</div>" +
+      '<label class="ad-check"><input type="checkbox" name="contactEnabled"' + (data.contactEnabled ? " checked" : "") + " /> Formulaire de contact (les messages arrivent par e-mail et ci-dessous)</label>" +
+      '<label class="ad-check"><input type="checkbox" name="published"' + (data.published ? " checked" : "") + " /> Publier le portfolio</label>" +
+      '<p class="ad-error" id="ad-pf-error" hidden></p>' +
+      '<div class="ad-pf-buttons"><button type="submit" class="ad-btn ad-btn-primary" id="ad-pf-save">Enregistrer</button>' +
+      (data.urls.site ? '<a class="ad-btn" href="' + esc(url) + '" target="_blank" rel="noopener">Voir la page</a>' : "") + "</div>" +
+      "</form></section>" +
+
+      '<section><div class="ad-section-header"><h3>Messages reçus' + (unread ? ' <span class="ad-badge">' + unread + " nouveau" + (unread > 1 ? "x" : "") + "</span>" : "") + "</h3></div>" +
+      (data.messages.length ? '<ul class="ad-pf-messages">' + data.messages.map(portfolioMessageHtml).join("") + "</ul>"
+        : '<p class="ad-hint">Aucun message pour l\'instant. Ils sont conservés un an.</p>') +
+      "</section>";
+
+    wirePortfolio(data);
+  }
+
+  function wirePortfolio(data) {
+    var form = document.getElementById("ad-pf-form");
+    form.addEventListener("submit", async function (event) {
+      event.preventDefault();
+      var error = document.getElementById("ad-pf-error");
+      var button = document.getElementById("ad-pf-save");
+      error.hidden = true;
+      button.disabled = true;
+      try {
+        var saved = await api("PUT", "/portfolio", {
+          handle: form.elements.handle.value,
+          headline: form.elements.headline.value,
+          city: form.elements.city.value,
+          phone: form.elements.phone.value,
+          bio: form.elements.bio.value,
+          services: form.elements.services.value.split("\n"),
+          instagram: form.elements.instagram.value,
+          website: form.elements.website.value,
+          contactEnabled: form.elements.contactEnabled.checked,
+          published: form.elements.published.checked,
+        });
+        if (location.hash !== "#/portfolio") return;
+        drawPortfolio(saved);
+        toast(saved.published ? "Portfolio enregistré et en ligne" : "Portfolio enregistré");
+      } catch (err) {
+        error.textContent = err.message;
+        error.hidden = false;
+        button.disabled = false;
+      }
+    });
+
+    var input = document.getElementById("ad-pf-files");
+    if (input) {
+      input.addEventListener("change", async function () {
+        var files = Array.prototype.slice.call(input.files || []);
+        if (!files.length) return;
+        var room = data.maxPhotos - data.photos.length;
+        var progress = document.getElementById("ad-pf-progress");
+        var failures = [];
+        if (files.length > room) {
+          failures.push((files.length - room) + " photo" + (files.length - room > 1 ? "s" : "") + " au-delà de la limite de " + data.maxPhotos);
+          files = files.slice(0, room);
+        }
+        for (var i = 0; i < files.length; i++) {
+          if (!document.body.contains(progress)) return;
+          progress.hidden = false;
+          progress.textContent = "Envoi de la photo " + (i + 1) + " sur " + files.length + "…";
+          var body = new FormData();
+          body.append("file", files[i]);
+          try {
+            var response = await fetch("/local/portfolio/photos", { method: "POST", body: body });
+            if (response.status === 401) { showLogin(); return; }
+            if (!response.ok) {
+              var detail = await response.json().catch(function () { return {}; });
+              failures.push(files[i].name + " : " + (detail.error || "refusée"));
+            }
+          } catch (err) {
+            failures.push(files[i].name + " : envoi interrompu");
+          }
+        }
+        if (location.hash !== "#/portfolio") return;
+        await renderPortfolio(true);
+        if (failures.length) toast(failures.join(" · "), true);
+        else toast(files.length > 1 ? files.length + " photos ajoutées" : "Photo ajoutée");
+      });
+    }
+
+    var list = document.getElementById("ad-pf-photos");
+    if (list) {
+      list.addEventListener("click", async function (event) {
+        var item = event.target.closest(".ad-pf-photo");
+        if (!item) return;
+        var id = item.getAttribute("data-id");
+        var move = event.target.closest("[data-move]");
+        try {
+          if (move) {
+            var ids = data.photos.map(function (p) { return p.id; });
+            var from = ids.indexOf(id);
+            var to = from + Number(move.getAttribute("data-move"));
+            if (to < 0 || to >= ids.length) return;
+            ids.splice(to, 0, ids.splice(from, 1)[0]);
+            await api("POST", "/portfolio/order", { ids: ids });
+            data.photos = ids.map(function (pid) { return data.photos.find(function (p) { return p.id === pid; }); });
+            if (location.hash !== "#/portfolio") return;
+            drawPortfolio(data);
+            var moved = document.querySelector('.ad-pf-photo[data-id="' + id + '"] [data-move="' + move.getAttribute("data-move") + '"]');
+            if (moved && !moved.disabled) moved.focus();
+          } else if (event.target.closest("[data-remove]")) {
+            if (!confirm("Retirer cette photo du portfolio ?")) return;
+            var result = await api("DELETE", "/portfolio/photos/" + encodeURIComponent(id));
+            if (location.hash !== "#/portfolio") return;
+            await renderPortfolio(true);
+            toast(result.unpublished ? "Photo retirée — le portfolio, vide, a été dépublié" : "Photo retirée");
+          }
+        } catch (err) {
+          toast(err.message, true);
+        }
+      });
+    }
+
+    el.view.querySelectorAll("[data-delete-message]").forEach(function (btn) {
+      btn.addEventListener("click", async function () {
+        var item = btn.closest(".ad-pf-message");
+        if (!confirm("Supprimer définitivement ce message ?")) return;
+        try {
+          await api("DELETE", "/portfolio/messages/" + encodeURIComponent(item.getAttribute("data-id")));
+          item.remove();
+          toast("Message supprimé");
+        } catch (err) {
+          toast(err.message, true);
+        }
+      });
+    });
   }
 
   /* ---------- Ventes : tableau de bord des 12 derniers mois ---------- */
@@ -3267,6 +3481,7 @@
     if (match) renderDetail(decodeURIComponent(match[1]), true);
     else if (location.hash === "#/detect") renderDetect(true);
     else if (location.hash === "#/ventes") renderSales(true);
+    else if (location.hash === "#/portfolio") renderPortfolio(true);
     else if (location.hash.indexOf("#/facturation") === 0) renderBilling(true);
     else if (location.hash.indexOf("#/abonnement") === 0) renderSubscription(true);
     else if (location.hash === "#/parametres") renderSettings(true);

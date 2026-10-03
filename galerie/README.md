@@ -526,6 +526,47 @@ touche à l'argent, toutes galeries confondues :
   2026-0001), avec TVA belge (21 %) si un numéro de TVA est renseigné dans
   les Paramètres, ou mention d'exonération (régime de la franchise) sinon.
 
+#### Onglet Ventes
+
+Le chiffre d'affaires des douze derniers mois (mois du calendrier belge),
+calculé sur les paiements réellement encaissés, la même source que les
+factures :
+
+- **Indicateurs** : chiffre d'affaires (suppléments et tirages), nombre de
+  paiements et panier moyen, **marge estimée sur les tirages** (prix payé
+  moins le dernier coût Prodigi connu du produit, hors port et frais Stripe ;
+  la part des tirages couverte par l'estimation est indiquée), et part des
+  galeries créées sur la période qui ont vendu au moins une fois.
+- **Graphique mensuel** en colonnes empilées suppléments / tirages, avec le
+  détail au survol (ou au clavier) et une **vue tableau** des mêmes chiffres.
+- **Classements** : formats les plus vendus (exemplaires, montant) et
+  galeries qui rapportent le plus (un clic ouvre la fiche).
+
+#### Onglet Portfolio
+
+Un mini-site public pour présenter son travail, inclus dans toutes les
+formules, à l'adresse `www.holypixx.com/portfolio.html?s=<adresse>` — et, en
+formule Pro, directement à la racine de son sous-domaine
+(`julie.holypixx.com`, les liens de galerie `?g=…` y fonctionnant toujours).
+
+- **Photos** (40 au plus) : réduites à 2000 px et converties en WebP par le
+  serveur d'administration, **sans aucune métadonnée** (appareil, lieu GPS) ;
+  la première sert de couverture, l'ordre se change avec les flèches.
+- **Présentation** : adresse (mêmes règles qu'un sous-domaine, unique sur la
+  plateforme), accroche, ville, à propos, prestations (une par ligne),
+  téléphone, Instagram et site web (facultatifs), formulaire de contact
+  activable, publication (impossible sans photo ; retirer la dernière photo
+  dépublie).
+- **Messages reçus** : chaque message du formulaire est envoyé par e-mail
+  (répondre à l'e-mail répond au visiteur) et gardé ici un an. Un champ
+  piège écarte les robots ; 3 messages par heure au plus depuis une même
+  adresse, 50 par jour au plus par photographe.
+
+La page publique (`web/portfolio.html`) : couverture plein écran, travaux en
+mosaïque, visionneuse (flèches, Échap, glisser au doigt), à propos et
+prestations, contact. Le portfolio, ses photos et ses messages figurent dans
+l'export RGPD et disparaissent avec le compte.
+
 #### Onglet Paramètres
 
 Tout ce qui concerne le compte plutôt qu'une galerie en particulier :
@@ -1172,6 +1213,37 @@ avec la marche à suivre ; tout autre site, identifiant invalide ou domaine
 piège refusé ; rien du lien collé recopié tel quel ; ce que reçoit la page
 client pour chaque source.
 
+**Tableau de bord des ventes (logique)** — 12 vérifications sans réseau
+ni D1 : douze mois calendaires (passage d'année, heure belge et non UTC),
+paiement rangé dans son mois et sa catégorie, paiements hors période
+ignorés, totaux et panier moyen, marge estimée limitée aux produits au coût
+connu (avec la part couverte), classements des formats et des galeries,
+conversion, et aucune division par zéro sans vente.
+
+**Onglet Ventes** — 16 vérifications dans un vrai navigateur, contre le vrai
+Worker local : seuls les paiements réglés des douze derniers mois comptent,
+marge, conversion, cloisonnement entre photographes, indicateurs affichés,
+douze colonnes de 24 px au plus avec légende, détail au survol, vue
+tableau, classements, lien vers la fiche d'une galerie, page tenant dans la
+largeur d'un téléphone, aucune exception.
+
+**Portfolio (logique)** — 8 vérifications sans réseau ni D1 : règles de
+l'adresse, adresse proposée, prestations, Instagram, site (https ajouté,
+schémas dangereux refusés), téléphone, adresse du studio réservée à la
+formule Pro, e-mail de contact échappé.
+
+**Portfolio** — 33 vérifications dans un vrai navigateur, contre le vrai
+Worker local : adresse proposée, publication refusée sans photo, envoi de
+trois photos (réduites à 2000 px, WebP sans bloc EXIF), ordre, champs
+nettoyés (prestations, Instagram, site), adresse unique ; page publique
+(titre, ville, accroche, couverture, grille, à propos, prestations, liens,
+visionneuse et clavier, largeur de téléphone) ; formulaire de contact
+(adresse invalide, envoi, champ piège, message trop court, plafond de 3 par
+heure) ; messages dans l'admin, nouveaux signalés, suppression ; racine du
+sous-domaine d'un studio Pro, galerie toujours servie avec `?g=`, portfolio
+d'un autre studio introuvable, adresse protégée comme sous-domaine ;
+dépublication ; export RGPD ; effacement avec le compte.
+
 **Sous-domaine par studio** — 8 vérifications dans un vrai navigateur, où
 Playwright rejoue toute requête vers `<studio>.holypixx.com` sur le Worker
 local avec l'en-tête `Host` du studio (ce que le Worker recevra derrière la
@@ -1196,6 +1268,8 @@ node tests/subdomain.test.mjs         # sous-domaine par studio, autonome (PUBLI
 node tests/shop.test.mjs              # boutique de tirages côté client, autonome (PRODIGI_API_BASE=http://127.0.0.1:8790/v4.0 dans worker/.dev.vars)
 node tests/music.test.mjs             # musique côté client (bibliothèque, lien Spotify), autonome
 node tests/delivery.test.mjs          # livraison des photos définitives côté client, autonome
+node tests/sales.test.mjs             # onglet Ventes, autonome (admin-server.mjs lancé)
+node tests/portfolio.test.mjs         # portfolio (admin, page publique, contact, sous-domaine), autonome (admin-server.mjs lancé)
 
 cd ../worker
 node tests/notify.test.mjs            # e-mails (alerte de capture, relances…), sans réseau
@@ -1205,6 +1279,8 @@ node tests/music.test.mjs             # liens Spotify / Deezer / SoundCloud / Yo
 node tests/delivery.test.mjs          # ZIP de livraison (en-têtes, CRC, noms), sans réseau
 node tests/subscription.test.mjs      # formules d'abonnement et webhook Stripe, sans réseau
 node tests/campaigns.test.mjs         # promotion, panier enregistré, e-mails de relance, sans réseau
+node tests/sales.test.mjs             # tableau de bord des ventes (mois, marge, classements), sans réseau
+node tests/portfolio.test.mjs         # règles du portfolio et e-mail de contact, sans réseau
 node tests/stripe.test.mjs            # signature de webhook + encodage des sessions Stripe, sans réseau
 node tests/invoices.test.mjs          # calcul de TVA + génération du PDF de facture, sans réseau
 npm run dev:local                     # dans un autre terminal (Worker local sur le port 8788)

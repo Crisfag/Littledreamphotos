@@ -782,3 +782,27 @@ h3 { font-size: 1.15rem; margin-bottom: .9rem; }
 .ad-rank li > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ad-rank a { color: var(--ink); }
 .ad-rank-meta { margin-left: auto; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+/* ---------- Portfolio ---------- */
+
+.ad-pf-upload { cursor: pointer; }
+.ad-pf-photos { list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: .8rem; margin-top: 1rem; }
+.ad-pf-photo { position: relative; background: var(--sand); border-radius: 10px; overflow: hidden; border: 1px solid var(--line); }
+.ad-pf-photo img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; }
+.ad-pf-cover { position: absolute; top: 8px; left: 8px; background: rgba(43, 37, 33, .78); color: #fff; font-size: .7rem; letter-spacing: .04em; padding: .15rem .5rem; border-radius: 999px; }
+.ad-pf-actions { display: flex; gap: .3rem; padding: .45rem; background: #fff; }
+.ad-pf-actions .ad-btn-danger { margin-left: auto; }
+.ad-pf-actions button:disabled { opacity: .35; cursor: default; }
+.ad-field .ad-pf-handle { display: flex; align-items: stretch; margin: 0; font-size: inherit; }
+.ad-pf-handle .ad-pf-handle-prefix { display: flex; align-items: center; margin: 0; padding: 0 .6rem; font-size: .82rem; color: var(--muted); background: var(--sand); border: 1px solid var(--line); border-right: 0; border-radius: 8px 0 0 8px; white-space: nowrap; }
+.ad-field .ad-pf-handle input { border-radius: 0 8px 8px 0; min-width: 0; }
+@media (max-width: 560px) { .ad-pf-handle .ad-pf-handle-prefix { display: none; } .ad-field .ad-pf-handle input { border-radius: 8px; } }
+.ad-pf-buttons { display: flex; flex-wrap: wrap; gap: .6rem; }
+.ad-pf-messages { list-style: none; }
+.ad-pf-message { padding: .9rem 0; border-bottom: 1px solid var(--line); }
+.ad-pf-message:last-child { border-bottom: 0; }
+.ad-pf-message-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: .5rem; }
+.ad-pf-message-head .ad-hint { margin-left: auto; }
+.ad-pf-message-meta { font-size: .86rem; margin: .2rem 0 .5rem; color: var(--muted); }
+.ad-pf-message-body { white-space: pre-wrap; margin-bottom: .6rem; color: var(--charcoal); }
+.ad-banner a { color: inherit; font-weight: 500; }

@@ -71,6 +71,11 @@ export async function exportAccount(env, photographerId) {
     print_products: await all(env, "SELECT * FROM print_products WHERE photographer_id = ? ORDER BY position ASC", photographerId),
     print_orders: (await all(env, "SELECT * FROM print_orders WHERE photographer_id = ? ORDER BY created_at ASC", photographerId))
       .map((o) => ({ ...o, items: parseJson(o.items || "[]", []), recipient: parseJson(o.recipient || "{}", {}) })),
+    portfolio: (await all(env, "SELECT * FROM portfolios WHERE photographer_id = ?", photographerId))
+      .map((p) => ({ ...p, services: parseJson(p.services || "[]", []) }))[0] || null,
+    portfolio_photos: await all(env, "SELECT id, position, width, height, bytes, created_at FROM portfolio_photos WHERE photographer_id = ? ORDER BY position ASC", photographerId),
+    portfolio_messages: await all(env,
+      "SELECT id, name, email, phone, event_date, message, read_at, created_at FROM portfolio_messages WHERE photographer_id = ? ORDER BY created_at ASC", photographerId),
   };
   const day = new Date().toISOString().slice(0, 10);
   return new Response(JSON.stringify(data, null, 2), {
@@ -85,7 +90,7 @@ export async function exportAccount(env, photographerId) {
 // Suppression définitive : mot de passe redemandé (une session volée ne
 // suffit pas), puis chaque galerie effacée comme depuis la fiche (fichiers
 // R2 compris), puis le compte — les tables liées suivent (ON DELETE CASCADE).
-export async function deleteAccount(request, env, photographerId, deleteGalleryFiles) {
+export async function deleteAccount(request, env, photographerId, deleteGalleryFiles, deleteOtherFiles = async () => {}) {
   const body = await request.json().catch(() => null);
   const photographer = await env.DB.prepare("SELECT * FROM photographers WHERE id = ?").bind(photographerId).first();
   if (!photographer) return fail(401, "Session invalide");
@@ -95,6 +100,7 @@ export async function deleteAccount(request, env, photographerId, deleteGalleryF
 
   const galleries = await all(env, "SELECT id, slug FROM galleries WHERE photographer_id = ?", photographerId);
   for (const gallery of galleries) await deleteGalleryFiles(gallery);
+  await deleteOtherFiles();
 
   await env.DB.batch([
     ...galleries.map((g) => env.DB.prepare("DELETE FROM access_log WHERE gallery_id = ?").bind(g.id)),

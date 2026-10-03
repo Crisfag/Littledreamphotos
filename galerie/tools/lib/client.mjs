@@ -241,6 +241,18 @@ export class WorkerClient {
   }
 
   // Renvoie la réponse brute (pas de JSON) : un flux d'octets PDF.
+  // Photo du portfolio (vignette de l'admin, même si le portfolio n'est pas publié).
+  async getPortfolioPhotoResponse(photoId) {
+    if (!this.token) await this.login();
+    const url = `${this.base}/api/admin/portfolio/photos/${encodeURIComponent(photoId)}`;
+    let response = await fetch(url, { headers: { authorization: `Bearer ${this.token}` } });
+    if (response.status === 401 && this.canRelogin) {
+      await this.login();
+      response = await fetch(url, { headers: { authorization: `Bearer ${this.token}` } });
+    }
+    return response;
+  }
+
   async getInvoiceResponse(invoiceId) {
     if (!this.token) await this.login();
     let response = await fetch(`${this.base}/api/admin/invoices/${invoiceId}`, {
