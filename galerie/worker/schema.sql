@@ -124,6 +124,11 @@ CREATE TABLE IF NOT EXISTS galleries (
   delivery_open          INTEGER NOT NULL DEFAULT 0,
   delivery_opened_at     INTEGER,
   delivery_notified_at   INTEGER,
+  -- Promotion sur les tirages : remise en % (0 = aucune), date de fin, et
+  -- quand elle a été annoncée au client par e-mail (voir campaigns.js).
+  promo_percent          INTEGER NOT NULL DEFAULT 0,
+  promo_ends_at          INTEGER,
+  promo_sent_at          INTEGER,
   -- Moment où le client a cliqué « Valider ma sélection » (epoch secondes) ;
   -- NULL tant qu'il ne l'a pas fait. Arrête les relances automatiques.
   selection_done_at      INTEGER,
@@ -442,6 +447,10 @@ CREATE INDEX IF NOT EXISTS idx_email_changes_photographer ON email_changes(photo
 --   ALTER TABLE photographers ADD COLUMN plan_cancel_at_period_end INTEGER NOT NULL DEFAULT 0;
 --   ALTER TABLE photographers ADD COLUMN stripe_customer_id TEXT NOT NULL DEFAULT '';
 --   ALTER TABLE photographers ADD COLUMN stripe_subscription_id TEXT NOT NULL DEFAULT '';
+--   ALTER TABLE galleries ADD COLUMN promo_percent INTEGER NOT NULL DEFAULT 0;
+--   ALTER TABLE galleries ADD COLUMN promo_ends_at INTEGER;
+--   ALTER TABLE galleries ADD COLUMN promo_sent_at INTEGER;
+--   puis la table print_carts (fin de ce fichier).
 
 -- Relances déjà envoyées, pour ne jamais relancer deux fois pour la même
 -- échéance : une ligne par galerie et par type (client_j7, client_j2,
@@ -541,3 +550,13 @@ CREATE TABLE IF NOT EXISTS delivery_files (
   created_at   INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_delivery_files_gallery ON delivery_files(gallery_id, position);
+
+-- Panier de tirages du client, enregistré côté serveur (une ligne par
+-- galerie) : retrouvé sur un autre appareil, et rappelé par e-mail s'il est
+-- laissé 24 h sans commande (reminded_at, remis à zéro quand il change).
+CREATE TABLE IF NOT EXISTS print_carts (
+  gallery_id  TEXT PRIMARY KEY REFERENCES galleries(id) ON DELETE CASCADE,
+  lines       TEXT NOT NULL,
+  updated_at  INTEGER NOT NULL,
+  reminded_at INTEGER
+);

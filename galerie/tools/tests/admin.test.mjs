@@ -849,6 +849,16 @@ await page.check("#ad-gallery-shop-toggle");
 await page.waitForFunction(() => (document.getElementById("ad-shop-printable") || {}).textContent?.includes("tant que la boutique est ouverte"), { timeout: 10000 });
 check("ouvrir la boutique l'enregistre et explique quelles photos sont commandables",
       await page.isChecked("#ad-gallery-shop-toggle") && (await page.textContent("#ad-shop-printable")).includes("disponible"));
+
+check("une fois la boutique ouverte, la fiche propose une promotion à durée limitée", await page.isVisible("#ad-promo-start"));
+await page.selectOption("#ad-promo-percent", "25");
+await page.click("#ad-promo-start");
+await page.waitForSelector(".ad-promo-on", { timeout: 10000 });
+check("lancer une promotion l'affiche sur la fiche (remise et date de fin)",
+      (await page.textContent(".ad-promo-on")).includes("−25 %") && await page.isVisible("#ad-promo-stop"));
+await page.click("#ad-promo-stop");
+await page.waitForSelector("#ad-promo-start", { timeout: 10000 });
+check("la promotion s'arrête d'un clic", true);
 await shopLab.close();
 
 await page.click("#ad-tab-settings");

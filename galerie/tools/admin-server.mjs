@@ -994,6 +994,16 @@ async function handleApi(req, res, url) {
     }
   }
 
+  // POST /local/galleries/:slug/promo[/send] — promotion sur les tirages.
+  if (parts[2] === "promo" && req.method === "POST" && (parts.length === 3 || (parts.length === 4 && parts[3] === "send"))) {
+    const body = parts.length === 3 ? JSON.parse((await readBody(req)).toString("utf8") || "{}") : {};
+    try {
+      return json(res, 200, await client.request("POST", `/api/admin/galleries/${encodeURIComponent(slug)}/promo${parts.length === 4 ? "/send" : ""}`, body));
+    } catch (err) {
+      return relayError(res, err, "La promotion n'a pas pu être enregistrée");
+    }
+  }
+
   // /local/galleries/:slug/delivery… — livraison des photos définitives.
   // L'envoi d'un fichier arrive brut (corps = le fichier, ?name=…) : on en
   // calcule le CRC-32 ici puis on le transmet au Worker.

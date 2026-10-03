@@ -720,3 +720,13 @@ h3 { font-size: 1.15rem; margin-bottom: .9rem; }
 .ad-plan .ad-btn, .ad-plan .ad-badge { margin-top: auto; align-self: flex-start; }
 .ad-banner { padding: .8rem 1rem; border-radius: var(--radius); background: #eaf4ed; color: var(--success); margin: 0 0 1rem; }
 .ad-banner-muted { background: var(--sand); color: var(--charcoal); }
+
+/* ---------- Promotion sur les tirages ---------- */
+.ad-promo { margin: 1rem 0 1.4rem; padding: 1rem 1.1rem; border: 1px dashed var(--rose); border-radius: var(--radius); background: #fffaf7; }
+.ad-promo h4 { margin: 0 0 .5rem; }
+.ad-promo-on { margin: 0 0 .7rem; font-size: .95rem; }
+.ad-promo-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+.ad-promo-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .2rem 1rem; }
+.ad-promo-form .ad-field { margin-bottom: .6rem; }
+.ad-promo-form select, .ad-promo-form input { font-family: var(--sans); font-size: .92rem; padding: .5rem .6rem; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+.ad-promo-form .ad-btn { margin-bottom: .6rem; }

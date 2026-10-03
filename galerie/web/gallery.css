@@ -789,6 +789,13 @@ body.gp-veiled #gp-viewer-canvas {
 }
 .gp-cart-btn:hover { background: var(--rose-deep); transform: translateY(-1px); }
 .gp-shop-hint { font-size: .78rem; color: var(--muted); }
+.gp-shop-promo {
+  font-size: .78rem; font-weight: 500; letter-spacing: .02em; color: #fff;
+  background: linear-gradient(135deg, #c98a74, #9c5f4f); border-radius: 999px; padding: .35rem .8rem;
+}
+.gp-shop-promo[hidden] { display: none; }
+.gp-print-promo { color: var(--rose-deep); font-weight: 500; }
+.gp-print-was { color: var(--muted); font-weight: 400; margin-right: .35rem; font-size: .8em; }
 .gp-print-orders { list-style: none; margin: .6rem 0 0; padding: 0; font-size: .8rem; color: var(--muted); }
 .gp-print-orders li { margin-bottom: .2rem; }
 .gp-print-orders a { color: var(--rose-deep); margin-left: .4rem; }

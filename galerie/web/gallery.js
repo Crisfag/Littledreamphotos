@@ -781,15 +781,42 @@
     try { raw = window.localStorage.getItem(cartKey()); } catch (e) { raw = null; }
     var lines = [];
     try { lines = JSON.parse(raw || "[]") || []; } catch (e) { lines = []; }
+    // Panier vide dans ce navigateur : on reprend celui enregistré côté
+    // serveur (préparé sur un autre appareil, ou rappelé par e-mail).
+    var saved = state.gallery && state.gallery.shop && state.gallery.shop.savedCart;
+    if (!lines.length && saved && saved.length) lines = saved;
     shop.cart = lines.filter(function (l) {
       var photo = photoById(l.photoId);
       return photo && photo.printable && shopProduct(l.productId) && l.copies >= 1 && l.copies <= 10;
     });
   }
 
+  // Copie du panier côté serveur, regroupée (un envoi par rafale de clics)
+  // et envoyée tout de suite si la page se ferme avant.
+  var cartSync = { timer: null, pending: null };
+
+  function flushCartSync() {
+    clearTimeout(cartSync.timer);
+    var lines = cartSync.pending;
+    cartSync.pending = null;
+    if (!lines || !state.token) return;
+    fetch(apiUrl("/cart"), {
+      method: "POST",
+      headers: Object.assign({ "content-type": "application/json" }, authHeaders()),
+      body: JSON.stringify({ lines: lines }),
+      keepalive: true,
+    }).catch(function () {});
+  }
+
   function saveCart() {
     try { window.localStorage.setItem(cartKey(), JSON.stringify(shop.cart)); } catch (e) { /* navigation privée */ }
+    if (!state.token) return;
+    cartSync.pending = shop.cart.map(function (l) { return { photoId: l.photoId, productId: l.productId, copies: l.copies }; });
+    clearTimeout(cartSync.timer);
+    cartSync.timer = setTimeout(flushCartSync, 600);
   }
+
+  window.addEventListener("pagehide", flushCartSync);
 
   function cartCount() {
     return shop.cart.reduce(function (n, l) { return n + l.copies; }, 0);
@@ -847,6 +874,13 @@
       var price = document.createElement("span");
       price.className = "gp-print-price";
       price.textContent = formatEuros(product.priceCents);
+      if (product.listPriceCents && product.listPriceCents > product.priceCents) {
+        var was = document.createElement("s");
+        was.className = "gp-print-was";
+        was.textContent = formatEuros(product.listPriceCents);
+        price.insertBefore(was, price.firstChild);
+        price.classList.add("gp-print-promo");
+      }
       var add = document.createElement("button");
       add.type = "button";
       add.className = "gp-print-add";
@@ -1038,6 +1072,14 @@
   function setupShop() {
     var open = Boolean(state.gallery.shop);
     if (el.shopBar) el.shopBar.hidden = !open;
+    var promo = open && state.gallery.shop.promo;
+    if (el.shopPromo) {
+      el.shopPromo.hidden = !promo;
+      if (promo) {
+        var until = new Date(promo.endsAt * 1000).toLocaleDateString("fr-FR", { day: "numeric", month: "long" });
+        el.shopPromo.textContent = "−" + promo.percent + " % sur tous les tirages jusqu'au " + until;
+      }
+    }
     renderPrintOrders();
     if (open) {
       var countries = state.gallery.shop.countries || {};
@@ -1050,6 +1092,9 @@
       });
       loadCart();
       updateCartUI();
+      // Le panier de ce navigateur fait foi : on resynchronise la copie
+      // serveur (au cas où une modification ne serait pas partie).
+      if (shop.cart.length) saveCart();
     }
     // Retour de la page de paiement Stripe.
     var result = new URLSearchParams(window.location.search).get("tirages");
@@ -1901,6 +1946,7 @@
       deliveryStatus: $("gp-delivery-status"),
       deliveryList: $("gp-delivery-list"),
       deliveryFiles: document.querySelector(".gp-delivery-files"),
+      shopPromo: $("gp-shop-promo"),
       musicPlayer: $("gp-music-player"),
       musicPlayerFrame: $("gp-music-player-frame"),
       musicPlayerTitle: $("gp-music-player-title"),

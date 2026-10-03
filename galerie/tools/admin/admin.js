@@ -1536,10 +1536,85 @@
         ? "Les photos importées tant que la boutique est ouverte gardent un fichier d'impression en pleine définition (jamais montré au client) ; réimportez les plus anciennes pour les proposer aussi."
         : "Ouvrez la boutique avant d'importer les photos : seules celles importées ensuite pourront être commandées.") +
       "</p>" +
+      (on ? promoBlockHtml(data.gallery) : "") +
       "<h4>Commandes de cette galerie</h4>" +
       printOrdersTableHtml(data.printOrders, false) +
       "</section>"
     );
+  }
+
+  // Campagnes de vente : promotion à durée limitée et panier en cours.
+  function promoBlockHtml(gallery) {
+    var sales = gallery.sales || { promo: null, percents: [10, 15, 20, 25, 30, 40, 50], cart: null };
+    var promo = sales.promo;
+    var html = '<div class="ad-promo"><h4>Promotion sur les tirages</h4>';
+    if (promo) {
+      html += '<p class="ad-promo-on"><strong>−' + promo.percent + " %</strong> sur tous les tirages jusqu'au " + esc(formatDate(promo.endsAt)) +
+        (promo.sentAt ? ' · <span class="ad-hint">annoncée au client le ' + esc(formatDate(promo.sentAt)) + "</span>" : "") + "</p>" +
+        '<div class="ad-promo-actions">' +
+        (!promo.sentAt && gallery.client_email ? '<button type="button" class="ad-btn ad-btn-primary" id="ad-promo-send">Annoncer au client par e-mail</button>' : "") +
+        '<button type="button" class="ad-btn" id="ad-promo-stop">Arrêter la promotion</button></div>';
+    } else {
+      var defaultEnd = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+      html += '<p class="ad-hint">Une remise sur tous les tirages de cette galerie, pour une durée limitée : prix barrés chez le client, ' +
+        "remise appliquée au paiement. Jamais en dessous de votre coût labo.</p>" +
+        '<div class="ad-promo-form"><label class="ad-field"><span>Remise</span><select id="ad-promo-percent">' +
+        sales.percents.map(function (p) { return '<option value="' + p + '"' + (p === 20 ? " selected" : "") + ">−" + p + " %</option>"; }).join("") +
+        '</select></label><label class="ad-field"><span>Jusqu\'au (inclus)</span><input type="date" id="ad-promo-end" value="' + defaultEnd + '" /></label>' +
+        '<button type="button" class="ad-btn ad-btn-primary" id="ad-promo-start">Lancer la promotion</button></div>';
+    }
+    if (sales.cart) {
+      html += '<p class="ad-hint">Panier en cours chez le client : <strong>' + sales.cart.items + " article" + (sales.cart.items > 1 ? "s" : "") +
+        "</strong> (mis à jour le " + esc(formatDate(sales.cart.updatedAt)) + ")" +
+        (sales.cart.remindedAt ? " · rappel envoyé le " + esc(formatDate(sales.cart.remindedAt)) : " · un rappel partira par e-mail après 24 h sans commande") + ".</p>";
+    }
+    return html + "</div>";
+  }
+
+  function wirePromoBlock(slug) {
+    var start = document.getElementById("ad-promo-start");
+    if (start) {
+      start.addEventListener("click", async function () {
+        var day = document.getElementById("ad-promo-end").value;
+        // Fin de la journée choisie, heure de Bruxelles approximée (23:59 locale).
+        var endsAt = Math.floor(new Date(day + "T23:59:00").getTime() / 1000);
+        try {
+          await api("POST", "/galleries/" + encodeURIComponent(slug) + "/promo", {
+            percent: Number(document.getElementById("ad-promo-percent").value), endsAt: endsAt,
+          });
+          toast("Promotion lancée : les prix remisés s'affichent chez le client.");
+          renderDetail(slug, true);
+        } catch (err) {
+          toast(err.message, true);
+        }
+      });
+    }
+    var stop = document.getElementById("ad-promo-stop");
+    if (stop) {
+      stop.addEventListener("click", async function () {
+        try {
+          await api("POST", "/galleries/" + encodeURIComponent(slug) + "/promo", { percent: 0 });
+          toast("Promotion arrêtée.");
+          renderDetail(slug, true);
+        } catch (err) {
+          toast(err.message, true);
+        }
+      });
+    }
+    var send = document.getElementById("ad-promo-send");
+    if (send) {
+      send.addEventListener("click", async function () {
+        send.disabled = true;
+        try {
+          await api("POST", "/galleries/" + encodeURIComponent(slug) + "/promo/send");
+          toast("Promotion annoncée au client par e-mail.");
+          renderDetail(slug, true);
+        } catch (err) {
+          toast(err.message, true);
+          send.disabled = false;
+        }
+      });
+    }
   }
 
   // Une ligne par produit de la boutique : seul le prix et l'activation se
@@ -2586,6 +2661,7 @@
     });
     wireMusicSection(slug, data.gallery);
     wireDeliverySection(slug);
+    wirePromoBlock(slug);
     var shopToggle = document.getElementById("ad-gallery-shop-toggle");
     if (shopToggle) {
       shopToggle.addEventListener("change", async function () {

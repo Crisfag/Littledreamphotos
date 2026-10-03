@@ -375,6 +375,73 @@ export function buildDeliveryReadyEmail({ studioName, galleryTitle, clientName, 
   return { subject, html: emailShell({ preheader: subject, bodyHtml }), text };
 }
 
+function formatDay(ts) {
+  return new Date(ts * 1000).toLocaleDateString("fr-FR", { day: "numeric", month: "long", timeZone: "Europe/Brussels" });
+}
+
+function promoLine(promo) {
+  return promo ? `−${promo.percent} % sur tous les tirages jusqu'au ${formatDay(promo.endsAt)}` : "";
+}
+
+export function buildPrintPromoEmail({ studioName, galleryTitle, clientName, percent, endsAt, favoritesCount, galleryUrl }) {
+  const until = formatDay(endsAt);
+  const subject = `−${percent} % sur vos tirages jusqu'au ${until}`;
+  const favorites = favoritesCount > 0
+    ? `Vos ${favoritesCount} coup${favoritesCount > 1 ? "s" : ""} de cœur n'attendent que ça : tirage photo, toile, cadre…`
+    : "Tirages photo, toiles, cadres : choisissez vos préférées et recevez-les chez vous.";
+  const bodyHtml =
+    eyebrow(studioName || "Vos photos") +
+    heading(`−${percent} % sur vos tirages`) +
+    paragraph(`${clientName ? escapeHtml(clientName) + ", j" : "J"}usqu'au <strong>${escapeHtml(until)}</strong>, tous les tirages de votre galerie « <strong>${escapeHtml(galleryTitle)}</strong> » sont à −${percent} %.`) +
+    paragraph(escapeHtml(favorites)) +
+    (galleryUrl ? emailButton(galleryUrl, "Choisir mes tirages") : "") +
+    paragraph("Ouvrez une photo, puis « Tirages » : la remise est appliquée automatiquement. Livraison à domicile.", { small: true });
+  const text = [
+    `Jusqu'au ${until}, tous les tirages de votre galerie « ${galleryTitle} » sont à −${percent} %.`,
+    favorites,
+    galleryUrl ? `\nChoisir mes tirages : ${galleryUrl}` : "",
+  ].join("\n");
+  return { subject, html: emailShell({ preheader: subject, bodyHtml }), text };
+}
+
+export function buildCartReminderEmail({ studioName, galleryTitle, clientName, items, promo, galleryUrl }) {
+  const count = items.reduce((n, i) => n + i.copies, 0);
+  const subject = `Votre panier vous attend : ${count} tirage${count > 1 ? "s" : ""}`;
+  const list = items.map((i) => `${i.copies} × ${i.label}`);
+  const bodyHtml =
+    eyebrow(studioName || "Vos tirages") +
+    heading("Votre panier vous attend") +
+    paragraph(`${clientName ? escapeHtml(clientName) + ", v" : "V"}ous avez préparé une commande de tirages dans votre galerie « <strong>${escapeHtml(galleryTitle)}</strong> » sans la finaliser :`) +
+    `<ul style="margin:0 0 18px;padding-left:20px;color:#3a332e;font-size:15px;line-height:1.6;">${list.map((l) => `<li>${escapeHtml(l)}</li>`).join("")}</ul>` +
+    (promo ? paragraph(`<strong>${escapeHtml(promoLine(promo))}</strong>`) : "") +
+    (galleryUrl ? emailButton(galleryUrl, "Finaliser ma commande") : "") +
+    paragraph("Votre panier est enregistré : il vous suffit d'ouvrir votre galerie, puis « Mes tirages ».", { small: true });
+  const text = [
+    `Vous avez préparé une commande de tirages dans votre galerie « ${galleryTitle} » sans la finaliser :`,
+    ...list.map((l) => `- ${l}`),
+    promo ? `\n${promoLine(promo)}` : "",
+    galleryUrl ? `\nFinaliser ma commande : ${galleryUrl}` : "",
+  ].join("\n");
+  return { subject, html: emailShell({ preheader: subject, bodyHtml }), text };
+}
+
+export function buildFavoritesPrintEmail({ studioName, galleryTitle, clientName, favoritesCount, promo, galleryUrl }) {
+  const subject = "Vos coups de cœur méritent d'être imprimés";
+  const bodyHtml =
+    eyebrow(studioName || "Vos photos") +
+    heading("Et si vous les imprimiez ?") +
+    paragraph(`${clientName ? escapeHtml(clientName) + ", v" : "V"}ous avez choisi ${favoritesCount} coup${favoritesCount > 1 ? "s" : ""} de cœur dans « <strong>${escapeHtml(galleryTitle)}</strong> ». Tirage photo, toile, cadre ou plexiglas : vos photos préférées méritent mieux qu'un écran.`) +
+    (promo ? paragraph(`<strong>${escapeHtml(promoLine(promo))}</strong>`) : "") +
+    (galleryUrl ? emailButton(galleryUrl, "Voir les tirages") : "") +
+    paragraph("Fabriqués par notre laboratoire partenaire et livrés chez vous.", { small: true });
+  const text = [
+    `Vous avez choisi ${favoritesCount} coup${favoritesCount > 1 ? "s" : ""} de cœur dans « ${galleryTitle} ». Tirage photo, toile, cadre : vos photos préférées méritent mieux qu'un écran.`,
+    promo ? promoLine(promo) : "",
+    galleryUrl ? `\nVoir les tirages : ${galleryUrl}` : "",
+  ].join("\n");
+  return { subject, html: emailShell({ preheader: subject, bodyHtml }), text };
+}
+
 export function buildPrintOrderShippedEmail({ studioName, galleryTitle, recipientName, trackingUrl }) {
   const subject = `Vos tirages sont en route — ${galleryTitle}`;
   const bodyHtml =
@@ -481,4 +548,16 @@ export async function sendPrintOrderShipped(env, params) {
 
 export async function sendDeliveryReady(env, params) {
   await sendEmail(env, { to: params.to, ...buildDeliveryReadyEmail(params) });
+}
+
+export async function sendPrintPromo(env, params) {
+  await sendEmail(env, { to: params.to, ...buildPrintPromoEmail(params) });
+}
+
+export async function sendCartReminder(env, params) {
+  await sendEmail(env, { to: params.to, ...buildCartReminderEmail(params) });
+}
+
+export async function sendFavoritesPrint(env, params) {
+  await sendEmail(env, { to: params.to, ...buildFavoritesPrintEmail(params) });
 }

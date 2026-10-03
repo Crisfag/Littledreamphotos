@@ -14,6 +14,7 @@ import { handleDeliveryAdmin, deliveryForAdmin } from "./delivery.js";
 import { sendDeliveryReady } from "./notify.js";
 import { exportAccount, deleteAccount } from "./privacy.js";
 import { galleryQuotaRefusal, subscriptionForAdmin, startSubscriptionCheckout, openBillingPortal } from "./subscription.js";
+import { setPromo, sendPromoToClient, promoForAdmin } from "./campaigns.js";
 import { galleryUrlFor } from "./reminders.js";
 import { authenticatePhotographer } from "./authPhotographer.js";
 import { connectStripe, refreshStripeStatus, setBillingProfile } from "./billing.js";
@@ -241,6 +242,7 @@ async function getGallery(env, photographerId, slug) {
       music_name: gallery.music_name || "",
       music: await musicForAdmin(env, gallery),
       delivery: await deliveryForAdmin(env, gallery),
+      sales: await promoForAdmin(env, gallery),
       selection_done_at: gallery.selection_done_at,
       shop_enabled: Boolean(gallery.shop_enabled),
       included_photos: gallery.included_photos,
@@ -464,6 +466,7 @@ async function eraseGallery(env, gallery) {
     env.DB.prepare("DELETE FROM photos WHERE gallery_id = ?").bind(gallery.id),
     env.DB.prepare("DELETE FROM access_log WHERE gallery_id = ?").bind(gallery.id),
     env.DB.prepare("DELETE FROM delivery_files WHERE gallery_id = ?").bind(gallery.id),
+    env.DB.prepare("DELETE FROM print_carts WHERE gallery_id = ?").bind(gallery.id),
     env.DB.prepare("DELETE FROM galleries WHERE id = ?").bind(gallery.id),
   ]);
 }
@@ -731,6 +734,14 @@ export async function handleAdmin(request, env, ctx, path) {
     }
     if (parts.length === 5 && parts[4] === "music" && request.method === "DELETE") {
       return deleteMusic(env, photographerId, slug);
+    }
+    // /api/admin/galleries/<slug>/promo[/send] — promotion sur les tirages.
+    if ((parts.length === 5 || (parts.length === 6 && parts[5] === "send")) && parts[4] === "promo" && request.method === "POST") {
+      const gallery = await ownedGallery(env, photographerId, slug);
+      if (!gallery) return fail(404, "Galerie introuvable");
+      if (parts.length === 5) return setPromo(request, env, gallery);
+      const photographer = await env.DB.prepare("SELECT studio_name FROM photographers WHERE id = ?").bind(photographerId).first();
+      return sendPromoToClient(env, gallery, photographer?.studio_name || "");
     }
     // /api/admin/galleries/<slug>/delivery[/files[/<id>]] — livraison HD.
     if (parts.length >= 5 && parts[4] === "delivery") {

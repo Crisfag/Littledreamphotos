@@ -424,6 +424,21 @@ Le tableau de bord s'organise en trois onglets, chacun avec son propre lien
   `customer.subscription.deleted` (en plus de `checkout.session.completed`) ;
   enregistrer une configuration du *portail client* (Paramètres → Billing →
   Portail client), en y autorisant le changement de formule si souhaité.
+- **Campagnes de vente des tirages** (`worker/src/campaigns.js`) :
+  - *Promotion à durée limitée* sur une galerie (−10 à −50 % jusqu'à une
+    date, depuis la section boutique de la fiche) : bandeau et prix barrés
+    chez le client, remise appliquée par le serveur au paiement, jamais en
+    dessous du coût du labo connu. Bouton « Annoncer au client par
+    e-mail » (une fois par promotion).
+  - *Panier enregistré côté serveur* : le client le retrouve sur un autre
+    appareil ; la fiche galerie indique le panier en cours.
+  - *Relances automatiques* (passe quotidienne, réglage « Relances
+    automatiques » du photographe, boutique réellement ouverte) : panier
+    laissé 24 h sans commande (une fois par panier, rappel de la promotion
+    en cours), et « Vos coups de cœur méritent d'être imprimés » 3 jours
+    après la sélection validée si rien n'a été commandé (une fois par
+    galerie). Le bouton « Lancer les relances maintenant » de l'onglet Admin
+    lance aussi ces relances.
 - **Forfait et suppléments** : le nombre de photos déjà payées par le
   client (optionnel — sans forfait défini, aucun supplément n'est jamais
   calculé) et le prix de chaque photo au-delà. Le supplément se calcule
@@ -789,7 +804,7 @@ des tuiles, refus du mauvais mot de passe, absence de toute balise `<img>`,
 neutralisation du menu contextuel et de la copie, voile sur « Impr. écran » et
 sur perte de focus, consignation au journal.
 
-**API du Worker** — 356 vérifications contre le vrai moteur Cloudflare (D1 et R2
+**API du Worker** — 365 vérifications contre le vrai moteur Cloudflare (D1 et R2
 émulés localement par `wrangler dev`) : comptes photographes (inscription,
 connexion, session, mot de passe oublié — même réponse générique qu'un
 compte existe ou non), cloisonnement strict entre comptes (un photographe ne
@@ -868,7 +883,13 @@ et adresse à son nom refusées (402), souscription refusée pour une formule
 inconnue ou sans Stripe configuré (503), rien à gérer sans abonnement ;
 Essentiel actif : galeries et boutique débloquées mais pas l'adresse à son
 nom, formule conservée en `past_due`, retour au gratuit une fois résilié ;
-compte propriétaire illimité. Bibliothèque musicale : ajout réservé à la propriétaire
+compte propriétaire illimité. Campagnes de vente : remise hors liste ou date
+passée refusées, autre compte refusé ; prix barrés et date de fin chez le
+client, format jamais vendu sous son coût labo ; annonce par e-mail exigeant
+un e-mail client, envoyée une seule fois et indiquée sur la fiche ; panier
+enregistré (lignes invalides écartées) et retrouvé à la connexion ; panier
+oublié 24 h rappelé une seule fois ; coups de cœur imprimables relancés une
+fois 3 jours après la sélection ; arrêt de la promotion et panier vidé. Bibliothèque musicale : ajout réservé à la propriétaire
 (403 sinon), titre et ambiance obligatoires, liste visible de chaque
 photographe, écoute d'un morceau (lecture partielle comprise), morceau
 inconnu non servi ; choix d'un morceau (refusé depuis un autre compte) qui
@@ -957,7 +978,7 @@ option hors catalogue refusés, catégorie retrouvée même pour une référence
 saisie à la main ; lecture d'une fiche produit Prodigi (options livrables
 dans le pays, produit à plusieurs images ou non livré écarté).
 
-**Boutique de tirages (page client)** — 20 vérifications dans un vrai
+**Boutique de tirages (page client)** — 22 vérifications dans un vrai
 navigateur, contre le faux laboratoire : boutique annoncée, bouton
 « Tirages » seulement sur une photo commandable, formats et prix, chaque
 format illustré avec la photo du client (cadre à sa couleur avec
@@ -965,7 +986,8 @@ passe-partout, grand aperçu du format survolé, aperçu dans le panier),
 ajout au panier confirmé, compteur, détail du panier, total tirages +
 livraison, quantité modifiée et ligne retirée, Belgique par défaut, refus
 propre sans Stripe local avec panier conservé, panier qui survit à un
-rechargement, message de confirmation au retour du paiement (panier vidé,
+rechargement et se retrouve sur un autre appareil (navigateur vierge),
+bandeau et prix barrés pendant une promotion, message de confirmation au retour du paiement (panier vidé,
 paramètre retiré de l'adresse), commandes passées avec statut et suivi.
 
 **Décision des relances** — 11 vérifications sans réseau ni D1
@@ -997,7 +1019,7 @@ appliqué sinon, HT + TVA se recomposant exactement au centime près en TTC
 même sur un montant qui ne se divise pas rond, et un vrai PDF valide généré
 aussi bien avec des coordonnées complètes qu'avec des champs vides.
 
-**Interface d'administration** — 129 vérifications dans un vrai navigateur,
+**Interface d'administration** — 132 vérifications dans un vrai navigateur,
 contre le vrai Worker local : demande de lien de réinitialisation de mot de
 passe (message générique affiché), création de compte et connexion depuis
 le formulaire (pas de session présupposée), barre d'onglets Galeries /
@@ -1047,7 +1069,9 @@ Admin (titre, ambiance et crédit affichés), le photographe le retrouve dans
 sa fiche avec un bouton d'écoute et le choisit, un lien d'un autre site est
 refusé, un lien Spotify devient le lecteur de la galerie. Livraison : rien
 à ouvrir sans fichier, deux photos ajoutées avec leur poids, ouverture
-après confirmation, fermeture d'un clic. Inscription refusée sans
+après confirmation, fermeture d'un clic. Promotion : proposée une fois la
+boutique ouverte, lancée (remise et date de fin affichées), arrêtée d'un
+clic. Inscription refusée sans
 acceptation des conditions ; export de « Mes données » téléchargé sans
 aucun secret ; suppression du compte refusée avec un mauvais mot de passe,
 puis compte supprimé (reconnexion impossible). Onglet Abonnement : 3 formules,
@@ -1116,6 +1140,11 @@ chez Spotify avant le clic, lecteur officiel ouvert sur la bonne playlist,
 « Réduire » qui le garde, « Fermer » qui le retire, aucun bouton sans
 musique, aucune exception.
 
+**Campagnes de vente (logique)** — 11 vérifications sans réseau ni D1 :
+période de promotion, remises proposées, arrondi, plancher au coût du labo,
+prix barré conservé, prix remisé encaissé à la commande, panier nettoyé,
+contenu des e-mails (promotion, panier, coups de cœur).
+
 **Abonnements (logique)** — 12 vérifications sans réseau ni D1 : formule
 effective selon le statut Stripe (active, essai, période de grâce ; tout le
 reste retombe en gratuit), formule inconnue ignorée, propriétaire illimitée,
@@ -1175,6 +1204,7 @@ node tests/prodigi.test.mjs           # boutique de tirages (Prodigi), sans rés
 node tests/music.test.mjs             # liens Spotify / Deezer / SoundCloud / YouTube, sans réseau
 node tests/delivery.test.mjs          # ZIP de livraison (en-têtes, CRC, noms), sans réseau
 node tests/subscription.test.mjs      # formules d'abonnement et webhook Stripe, sans réseau
+node tests/campaigns.test.mjs         # promotion, panier enregistré, e-mails de relance, sans réseau
 node tests/stripe.test.mjs            # signature de webhook + encodage des sessions Stripe, sans réseau
 node tests/invoices.test.mjs          # calcul de TVA + génération du PDF de facture, sans réseau
 npm run dev:local                     # dans un autre terminal (Worker local sur le port 8788)

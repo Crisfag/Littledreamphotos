@@ -10,6 +10,7 @@ import { shopForClient, handlePrintOrder } from "./shop.js";
 import { createCheckoutSession } from "./stripe.js";
 import { musicForClient, audioKeyFor, serveAudio, getTrack } from "./music.js";
 import { deliveryForClient, createDownloadLink, downloadFile, downloadZip } from "./delivery.js";
+import { saveCart } from "./campaigns.js";
 
 const SESSION_TTL_SECONDS = 2 * 60 * 60; // 2 h
 const MAX_FAILED_LOGINS = 10;
@@ -716,6 +717,13 @@ export async function handleViewer(request, env, ctx, path) {
   }
   if (action === "validate" && request.method === "POST") {
     return handleValidate(request, env, ctx, slug);
+  }
+  // Panier de tirages enregistré côté serveur (retrouvé sur un autre
+  // appareil, rappel s'il est oublié — voir campaigns.js).
+  if (action === "cart" && request.method === "POST" && parts.length === 4) {
+    const auth = await authorize(request, env, slug);
+    if (auth.error) return auth.error;
+    return saveCart(request, env, auth.gallery);
   }
   if (action === "print-order" && request.method === "POST" && parts.length === 4) {
     const auth = await authorize(request, env, slug);

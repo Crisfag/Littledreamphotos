@@ -17,6 +17,8 @@ import { handleLibraryAudio } from "./music.js";
 import { handleStripeWebhook } from "./billing.js";
 import { runReminders } from "./reminders.js";
 import { purgeOldAccessLogs } from "./privacy.js";
+import { runSalesReminders } from "./campaigns.js";
+import { shopState } from "./shop.js";
 import { studioSubdomainOf, handleStudioHost } from "./studio.js";
 import { handlePrintAsset, handleProdigiCallback } from "./shop.js";
 import { json, fail } from "./http.js";
@@ -118,6 +120,12 @@ export default {
     ctx.waitUntil(
       runReminders(env).catch((err) => {
         console.error("Relances : échec de la passe planifiée :", err && err.stack ? err.stack : err);
+      })
+    );
+    // Campagnes de vente : paniers oubliés, coups de cœur à imprimer.
+    ctx.waitUntil(
+      runSalesReminders(env, shopState).catch((err) => {
+        console.error("Relances de vente : échec de la passe planifiée :", err && err.stack ? err.stack : err);
       })
     );
     // Conservation limitée des journaux d'accès (voir privacy.js).

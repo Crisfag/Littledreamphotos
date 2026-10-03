@@ -2048,6 +2048,68 @@ check("une commande valide part vers le paiement Stripe — sans Stripe configur
 // Commande payée, posée comme le ferait le webhook Stripe.
 const shopGalleryId = galleryNoOrder.gallery.id;
 const nowS = Math.floor(Date.now() / 1000);
+
+/* ---------- Campagnes de vente : promotion, panier enregistré, relances ---------- */
+
+const promoBase = `/api/admin/galleries/${shopSlug}/promo`;
+const promoBadPercent = await admin("POST", promoBase, { percent: 33, endsAt: nowS + 3 * 86400 });
+const promoPast = await admin("POST", promoBase, { percent: 20, endsAt: nowS - 10 });
+const promoPeer = await peerAdmin("POST", promoBase, { percent: 20, endsAt: nowS + 3 * 86400 });
+check("promotion : remise hors liste ou date passée refusées (400), autre compte refusé (404)",
+      promoBadPercent.status === 400 && promoPast.status === 400 && promoPeer.status === 404);
+const promoSet = await (await admin("POST", promoBase, { percent: 20, endsAt: nowS + 3 * 86400 })).json();
+const promoSession = await shopLogin();
+const promoProducts = promoSession.gallery?.shop?.products || [];
+const bigProduct = promoProducts.slice().sort((a, b) => b.listPriceCents - a.listPriceCents)[0];
+const promoTirage = promoProducts.find((p) => p.id === tirage.id);
+check("pendant la promotion, le client voit les prix barrés et la date de fin",
+      promoSet.promo?.percent === 20 && promoSession.gallery.shop.promo?.percent === 20 &&
+      bigProduct && bigProduct.priceCents === Math.round(bigProduct.listPriceCents * 0.8) && bigProduct.priceCents < bigProduct.listPriceCents,
+      JSON.stringify(bigProduct));
+check("un format dont la remise passerait sous le coût du labo reste à prix coûtant ou plus",
+      promoTirage && promoTirage.priceCents >= Math.min(promoTirage.listPriceCents, 1250), JSON.stringify(promoTirage));
+
+const promoSendNoEmail = await admin("POST", `${promoBase}/send`);
+check("annoncer la promotion exige un e-mail client (409)", promoSendNoEmail.status === 409);
+await d1(`UPDATE galleries SET client_email = 'client-boutique@test.invalid' WHERE id = '${shopGalleryId}'`);
+const promoSent = await admin("POST", `${promoBase}/send`);
+const promoSentAgain = await admin("POST", `${promoBase}/send`);
+const promoDetail = (await (await admin("GET", `/api/admin/galleries/${shopSlug}`)).json()).gallery?.sales;
+check("la promotion s'annonce au client par e-mail, une seule fois, et la fiche l'indique",
+      promoSent.ok && promoSentAgain.status === 409 && typeof promoDetail?.promo?.sentAt === "number");
+
+const cartUrl = `${BASE}/api/gallery/${shopSlug}/cart`;
+const cartNoAuth = await fetch(cartUrl, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+const cartSaved = await (await fetch(cartUrl, {
+  method: "POST", headers: { authorization: `Bearer ${promoSession.token}`, "content-type": "application/json" },
+  body: JSON.stringify({ lines: [{ photoId: shopPhoto, productId: bigProduct.id, copies: 2 }, { photoId: "../x", productId: "y", copies: 1 }] }),
+})).json();
+const cartSession = await shopLogin();
+const cartDetail = (await (await admin("GET", `/api/admin/galleries/${shopSlug}`)).json()).gallery?.sales;
+check("le panier du client est enregistré (lignes invalides écartées) et retrouvé à la connexion, sur n'importe quel appareil",
+      cartNoAuth.status === 401 && cartSaved.items === 2 && cartSession.gallery?.shop?.savedCart?.length === 1 &&
+      cartSession.gallery.shop.savedCart[0].copies === 2 && cartDetail?.cart?.items === 2);
+
+await d1(`UPDATE print_carts SET updated_at = ${nowS - 2 * 86400} WHERE gallery_id = '${shopGalleryId}'`);
+const salesRun1 = await (await ownerClient("POST", "/api/owner/reminders/run")).json();
+const salesRun2 = await (await ownerClient("POST", "/api/owner/reminders/run")).json();
+check("un panier laissé 24 h sans commande est rappelé au client par e-mail, une seule fois",
+      salesRun1.sent?.some((r) => r.slug === shopSlug && r.kind === "cart") && !salesRun2.sent?.some((r) => r.slug === shopSlug && r.kind === "cart"),
+      JSON.stringify(salesRun1.sent?.filter((r) => r.slug === shopSlug)));
+
+await d1(`UPDATE photos SET selected = 1 WHERE id = '${shopPhoto}'; UPDATE galleries SET selection_done_at = ${nowS - 4 * 86400} WHERE id = '${shopGalleryId}'`);
+const favRun1 = await (await ownerClient("POST", "/api/owner/reminders/run")).json();
+const favRun2 = await (await ownerClient("POST", "/api/owner/reminders/run")).json();
+check("3 jours après la sélection validée, sans commande, les coups de cœur imprimables sont relancés une fois",
+      favRun1.sent?.some((r) => r.slug === shopSlug && r.kind === "print_favorites") && !favRun2.sent?.some((r) => r.slug === shopSlug && r.kind === "print_favorites"),
+      JSON.stringify(favRun1.sent?.filter((r) => r.slug === shopSlug)));
+
+await admin("POST", promoBase, { percent: 0 });
+await fetch(cartUrl, { method: "POST", headers: { authorization: `Bearer ${promoSession.token}`, "content-type": "application/json" }, body: JSON.stringify({ lines: [] }) });
+const afterPromo = await shopLogin();
+check("arrêter la promotion rétablit les prix ; un panier vidé n'est plus enregistré",
+      afterPromo.gallery.shop.promo === null && afterPromo.gallery.shop.products.find((p) => p.id === bigProduct.id)?.priceCents === bigProduct.listPriceCents &&
+      afterPromo.gallery.shop.savedCart.length === 0);
 const paidLines = JSON.stringify([{ photoId: shopPhoto, photoNumber: 1, productId: tirage.id, label: tirage.label, sku: "GLOBAL-PHO-4x6", attributes: {}, copies: 2, unitCents: 450, lineCents: 900 }]);
 const insertPaidOrder = (orderId, paymentId, lines) => d1(
   `INSERT INTO payments (id, gallery_id, stripe_checkout_session_id, extra_count, amount_cents, status, kind, created_at, paid_at) ` +
