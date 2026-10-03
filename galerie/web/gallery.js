@@ -1124,11 +1124,94 @@
     if (remember) rememberMusicPref("off");
   }
 
+  // Lecteur officiel d'un service de musique (lien collé par le
+  // photographe). Rien n'est chargé chez le service tant que le client n'a
+  // pas ouvert le lecteur ; « Réduire » le cache sans couper la musique,
+  // « Fermer » le retire (et l'arrête).
+  var EMBED_PREFIXES = [
+    "https://open.spotify.com/embed/",
+    "https://widget.deezer.com/widget/auto/",
+    "https://w.soundcloud.com/player/?url=",
+    "https://www.youtube-nocookie.com/embed/",
+  ];
+  var EMBED_HEIGHTS = { spotify: 152, deezer: 150, soundcloud: 166 };
+
+  function currentEmbed() {
+    var m = state.gallery && state.gallery.music;
+    if (!m || m.kind !== "embed") return null;
+    var allowed = EMBED_PREFIXES.some(function (prefix) { return String(m.embedUrl || "").indexOf(prefix) === 0; });
+    return allowed ? m : null;
+  }
+
+  function reflectEmbedUI() {
+    if (!el.music || !el.musicPlayer) return;
+    var open = !el.musicPlayer.hidden;
+    el.music.setAttribute("aria-pressed", open || el.musicPlayerFrame.firstChild ? "true" : "false");
+    el.music.setAttribute("aria-expanded", open ? "true" : "false");
+  }
+
+  function openEmbedPlayer() {
+    var m = currentEmbed();
+    if (!m || !el.musicPlayer) return;
+    if (!el.musicPlayerFrame.firstChild) {
+      var frame = document.createElement("iframe");
+      frame.src = m.embedUrl;
+      frame.title = "Lecteur " + (m.providerLabel || "de musique");
+      frame.setAttribute("allow", "autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture");
+      frame.setAttribute("loading", "lazy");
+      frame.setAttribute("referrerpolicy", "strict-origin-when-cross-origin");
+      if (EMBED_HEIGHTS[m.provider]) frame.style.height = EMBED_HEIGHTS[m.provider] + "px";
+      else frame.className = "gp-music-player-video";
+      el.musicPlayerFrame.appendChild(frame);
+    }
+    el.musicPlayer.hidden = false;
+    reflectEmbedUI();
+  }
+
+  function minimizeEmbedPlayer() {
+    if (el.musicPlayer) el.musicPlayer.hidden = true;
+    reflectEmbedUI();
+  }
+
+  function closeEmbedPlayer() {
+    if (!el.musicPlayer) return;
+    el.musicPlayer.hidden = true;
+    el.musicPlayerFrame.innerHTML = "";
+    reflectEmbedUI();
+  }
+
+  function toggleMusic() {
+    if (currentEmbed()) {
+      if (el.musicPlayer.hidden) openEmbedPlayer();
+      else minimizeEmbedPlayer();
+      return;
+    }
+    if (music.audio && !music.audio.paused) stopMusic(true);
+    else startMusic();
+  }
+
   function setupMusic() {
     if (!el.music) return;
+    closeEmbedPlayer();
+    if (el.musicCredit) el.musicCredit.hidden = true;
+    var embed = currentEmbed();
+    if (embed) {
+      if (music.audio) music.audio.pause();
+      el.music.hidden = false;
+      if (el.musicLabel) el.musicLabel.textContent = "Écouter la musique · " + (embed.providerLabel || "lecteur");
+      if (el.musicPlayerTitle) el.musicPlayerTitle.textContent = "Musique · " + (embed.providerLabel || "");
+      reflectEmbedUI();
+      return;
+    }
+    el.music.removeAttribute("aria-expanded");
     if (!(state.gallery && state.gallery.hasMusic)) {
       el.music.hidden = true;
       return;
+    }
+    var info = state.gallery.music || {};
+    if (el.musicCredit && info.title) {
+      el.musicCredit.textContent = "« " + info.title + " »" + (info.artist ? " — " + info.artist : "") + (info.credit ? " · " + info.credit : "");
+      el.musicCredit.hidden = false;
     }
     if (!music.audio) {
       music.audio = new Audio();
@@ -1175,6 +1258,7 @@
     state.token = null;
     state.drawn = {};
     stopMusic(false);
+    closeEmbedPlayer();
     closeViewer();
     show(el.login);
     hide(el.gallery);
@@ -1732,6 +1816,10 @@
       commentStatus: $("gp-comment-status"),
       music: $("gp-music"),
       musicLabel: $("gp-music-label"),
+      musicCredit: $("gp-music-credit"),
+      musicPlayer: $("gp-music-player"),
+      musicPlayerFrame: $("gp-music-player-frame"),
+      musicPlayerTitle: $("gp-music-player-title"),
       viewerFrame: $("gp-viewer-frame"),
       pins: $("gp-pins"),
       pinToggle: $("gp-pin-toggle"),
@@ -1820,10 +1908,11 @@
       el.commentToggle.addEventListener("click", toggleCommentPanel);
     }
     if (el.music) {
-      el.music.addEventListener("click", function () {
-        if (music.audio && !music.audio.paused) stopMusic(true);
-        else startMusic();
-      });
+      el.music.addEventListener("click", toggleMusic);
+    }
+    if (el.musicPlayer) {
+      $("gp-music-player-min").addEventListener("click", minimizeEmbedPlayer);
+      $("gp-music-player-close").addEventListener("click", closeEmbedPlayer);
     }
     wireCommentInput();
     el.tagButtons.forEach(function (button) {

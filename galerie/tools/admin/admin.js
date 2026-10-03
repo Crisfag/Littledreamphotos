@@ -58,6 +58,7 @@
   // raccourci qui reflète, et met à jour, ce même état.
 
   function setActiveTab(name) {
+    stopTrackPreview();
     if (!el.tabs) return;
     el.tabs.querySelectorAll(".ad-tab").forEach(function (btn) {
       btn.classList.toggle("ad-tab-active", btn.getAttribute("data-tab") === name);
@@ -760,6 +761,293 @@
   // /owner/* est revérifié côté serveur (voir worker/src/owner.js), jamais
   // sur la seule foi de ce qui est affiché ici.
 
+  /* ---------- Musique : bibliothèque commune ---------- */
+  // Morceaux libres de droits ajoutés par la propriétaire (onglet Admin) et
+  // choisis par chaque photographe pour ses galeries. L'écoute passe par un
+  // seul lecteur partagé, coupé dès qu'on change d'écran.
+
+  var trackPreview = { audio: null, id: null };
+  // Mêmes clés que MUSIC_MOODS côté Worker (worker/src/music.js).
+  var MUSIC_MOODS = {
+    douce: "Douce", joyeuse: "Joyeuse", romantique: "Romantique", piano: "Piano",
+    acoustique: "Acoustique", cinematique: "Cinématique", enfance: "Enfance",
+  };
+
+  function formatDuration(seconds) {
+    if (!seconds) return "";
+    return Math.floor(seconds / 60) + ":" + String(seconds % 60).padStart(2, "0");
+  }
+
+  function reflectTrackPreview() {
+    var playing = trackPreview.audio && !trackPreview.audio.paused ? trackPreview.id : null;
+    document.querySelectorAll("[data-preview]").forEach(function (btn) {
+      var on = btn.getAttribute("data-preview") === playing;
+      btn.setAttribute("aria-pressed", on ? "true" : "false");
+      btn.textContent = on ? "❚❚" : "▶";
+    });
+  }
+
+  function toggleTrackPreview(trackId) {
+    if (!trackPreview.audio) {
+      trackPreview.audio = new Audio();
+      ["play", "pause", "ended"].forEach(function (name) { trackPreview.audio.addEventListener(name, reflectTrackPreview); });
+    }
+    if (trackPreview.id === trackId && !trackPreview.audio.paused) {
+      trackPreview.audio.pause();
+      return;
+    }
+    trackPreview.id = trackId;
+    trackPreview.audio.src = state.config.api + "/api/music-library/" + encodeURIComponent(trackId);
+    trackPreview.audio.play().catch(function () { toast("Lecture impossible dans ce navigateur.", true); });
+    reflectTrackPreview();
+  }
+
+  function stopTrackPreview() {
+    if (trackPreview.audio) trackPreview.audio.pause();
+  }
+
+  // Liste de morceaux ; `mode` : "pick" (fiche galerie, bouton « Choisir »)
+  // ou "manage" (onglet Admin, bouton « Retirer » et crédit affiché).
+  function trackListHtml(library, mode, currentId) {
+    if (!library.tracks.length) {
+      return '<p class="ad-hint">' + (mode === "manage"
+        ? "La bibliothèque est vide : ajoutez un premier morceau ci-dessus."
+        : "La bibliothèque est encore vide — elle se remplit depuis l'onglet Admin de la plateforme.") + "</p>";
+    }
+    var moods = {};
+    library.tracks.forEach(function (t) { moods[t.mood] = t.moodLabel || t.mood; });
+    var chips = Object.keys(moods).length > 1
+      ? '<div class="ad-music-moods" role="group" aria-label="Ambiance">' +
+        '<button type="button" class="ad-chip ad-chip-active" data-mood-filter="">Toutes</button>' +
+        Object.keys(moods).map(function (m) {
+          return '<button type="button" class="ad-chip" data-mood-filter="' + esc(m) + '">' + esc(moods[m]) + "</button>";
+        }).join("") + "</div>"
+      : "";
+    var items = library.tracks.map(function (t) {
+      var meta = [t.artist, t.moodLabel, formatDuration(t.durationSeconds)].filter(Boolean).map(esc).join(" · ");
+      var action;
+      if (mode === "manage") {
+        action = '<button type="button" class="ad-btn ad-btn-small ad-btn-danger" data-remove-track="' + esc(t.id) + '">Retirer</button>';
+      } else if (t.id === currentId) {
+        action = '<span class="ad-badge ad-badge-selected">✓ Choisie</span>';
+      } else {
+        action = '<button type="button" class="ad-btn ad-btn-small" data-pick-track="' + esc(t.id) + '">Choisir</button>';
+      }
+      return (
+        '<li class="ad-track' + (t.id === currentId ? " ad-track-current" : "") + '" data-mood="' + esc(t.mood) + '">' +
+        '<button type="button" class="ad-track-play" data-preview="' + esc(t.id) + '" aria-pressed="false" aria-label="Écouter « ' + esc(t.title) + ' »">▶</button>' +
+        '<div class="ad-track-info"><strong>' + esc(t.title) + "</strong><span>" + meta + "</span>" +
+        (mode === "manage" && t.credit ? '<span class="ad-track-credit">Crédit : ' + esc(t.credit) + "</span>" : "") +
+        "</div>" + action + "</li>"
+      );
+    });
+    return chips + '<ul class="ad-track-list">' + items.join("") + "</ul>";
+  }
+
+  // Écoute et filtre par ambiance, communs aux deux listes.
+  function wireTrackList(container) {
+    container.querySelectorAll("[data-preview]").forEach(function (btn) {
+      btn.addEventListener("click", function () { toggleTrackPreview(btn.getAttribute("data-preview")); });
+    });
+    container.querySelectorAll("[data-mood-filter]").forEach(function (chip) {
+      chip.addEventListener("click", function () {
+        var mood = chip.getAttribute("data-mood-filter");
+        container.querySelectorAll("[data-mood-filter]").forEach(function (c) { c.classList.toggle("ad-chip-active", c === chip); });
+        container.querySelectorAll(".ad-track").forEach(function (li) {
+          li.hidden = Boolean(mood) && li.getAttribute("data-mood") !== mood;
+        });
+      });
+    });
+    reflectTrackPreview();
+  }
+
+  function musicSectionHtml(gallery) {
+    var m = gallery.music || { source: gallery.music_name ? "file" : "none", name: gallery.music_name };
+    var current;
+    if (m.source === "library" && m.track) current = "Morceau de la bibliothèque : <strong>" + esc(m.track.title) + "</strong>" + (m.track.artist ? " — " + esc(m.track.artist) : "");
+    else if (m.source === "link") current = "Lecteur <strong>" + esc(m.providerLabel || "intégré") + "</strong> affiché dans la galerie";
+    else if (m.source === "file") current = "Fichier MP3 : <strong>" + esc(m.name) + "</strong>";
+    else current = '<span class="ad-hint">Aucune musique pour cette galerie.</span>';
+    var tab = m.source === "link" ? "link" : m.source === "file" ? "file" : "library";
+    var tabButton = function (key, label) {
+      return '<button type="button" class="ad-music-tab' + (key === tab ? " ad-music-tab-active" : "") + '" data-music-tab="' + key + '" aria-pressed="' + (key === tab) + '">' + label + "</button>";
+    };
+    return (
+      '<section class="ad-music">' +
+      '<div class="ad-section-header"><h3>Musique d\'ambiance</h3></div>' +
+      '<p class="ad-hint">Lancée automatiquement en mise en page « Défilement », proposée en pause dans les autres — le client garde toujours la main.</p>' +
+      '<p class="ad-music-state" id="ad-music-state">' + current + "</p>" +
+      '<div class="ad-music-tabs">' +
+      tabButton("library", "Bibliothèque") + tabButton("link", "Spotify, Deezer, YouTube…") + tabButton("file", "Mon fichier MP3") +
+      "</div>" +
+      '<div class="ad-music-pane" data-music-pane="library"' + (tab === "library" ? "" : " hidden") + ">" +
+      '<p class="ad-hint">Morceaux libres de droits, utilisables sans souci pour un usage professionnel. Écoutez, puis choisissez.</p>' +
+      '<div id="ad-music-library"><p class="ad-hint">Chargement de la bibliothèque…</p></div>' +
+      "</div>" +
+      '<div class="ad-music-pane" data-music-pane="link"' + (tab === "link" ? "" : " hidden") + ">" +
+      '<p class="ad-hint">Collez le lien d\'un morceau ou d\'une playlist (Partager → Copier le lien). Le lecteur officiel s\'affiche discrètement dans la galerie et le client lance lui-même la lecture. ' +
+      "Avec Spotify, un client sans compte Spotify n'entend qu'un extrait de 30 secondes ; YouTube, SoundCloud et Deezer jouent le morceau en entier.</p>" +
+      '<div class="ad-music-link"><input type="url" id="ad-music-link-input" placeholder="https://open.spotify.com/playlist/…" autocomplete="off" />' +
+      '<button type="button" class="ad-btn ad-btn-primary" id="ad-music-link-save">Enregistrer</button></div>' +
+      "</div>" +
+      '<div class="ad-music-pane" data-music-pane="file"' + (tab === "file" ? "" : " hidden") + ">" +
+      '<p class="ad-hint">Un morceau dont vous avez les droits (MP3, 15 Mo maximum), joué en boucle.</p>' +
+      '<div class="ad-bg-custom">' +
+      '<label class="ad-btn">' + (m.source === "file" ? "Remplacer le MP3" : "Importer un MP3") +
+      '<input type="file" id="ad-music-file-input" accept="audio/mpeg,.mp3" hidden /></label>' +
+      "</div></div>" +
+      (m.source !== "none" ? '<p><button type="button" class="ad-btn" id="ad-music-remove">Retirer la musique</button></p>' : "") +
+      "</section>"
+    );
+  }
+
+  async function wireMusicSection(slug, gallery) {
+    var section = document.querySelector(".ad-music");
+    if (!section) return;
+    section.querySelectorAll("[data-music-tab]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var key = btn.getAttribute("data-music-tab");
+        section.querySelectorAll("[data-music-tab]").forEach(function (b) {
+          var on = b === btn;
+          b.classList.toggle("ad-music-tab-active", on);
+          b.setAttribute("aria-pressed", on ? "true" : "false");
+        });
+        section.querySelectorAll("[data-music-pane]").forEach(function (pane) { pane.hidden = pane.getAttribute("data-music-pane") !== key; });
+        if (key !== "library") stopTrackPreview();
+      });
+    });
+
+    async function choose(body, message) {
+      try {
+        await api("POST", "/galleries/" + encodeURIComponent(slug) + "/music-choice", body);
+        stopTrackPreview();
+        toast(message);
+        renderDetail(slug, true);
+      } catch (err) {
+        toast(err.message, true);
+      }
+    }
+    document.getElementById("ad-music-link-save").addEventListener("click", function () {
+      var url = document.getElementById("ad-music-link-input").value.trim();
+      if (!url) return toast("Collez d'abord un lien.", true);
+      choose({ source: "link", url: url }, "Lecteur enregistré : il s'affichera dans la galerie.");
+    });
+
+    var box = document.getElementById("ad-music-library");
+    try {
+      var library = await api("GET", "/music-library");
+      if (!document.body.contains(box)) return; // fiche quittée entre-temps
+      var currentId = gallery.music && gallery.music.source === "library" && gallery.music.track ? gallery.music.track.id : null;
+      box.innerHTML = trackListHtml(library, "pick", currentId);
+      wireTrackList(box);
+      box.querySelectorAll("[data-pick-track]").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          choose({ source: "library", trackId: btn.getAttribute("data-pick-track") }, "Musique choisie pour cette galerie.");
+        });
+      });
+    } catch (err) {
+      if (document.body.contains(box)) box.innerHTML = '<p class="ad-hint">Bibliothèque indisponible : ' + esc(err.message) + "</p>";
+    }
+  }
+
+  // Onglet Admin : ajout et retrait de morceaux dans la bibliothèque.
+  function ownerMusicSectionHtml() {
+    return (
+      '<section><div class="ad-section-header"><h3>Bibliothèque musicale</h3></div>' +
+      '<p class="ad-hint">Les morceaux ajoutés ici sont proposés à tous les photographes pour leurs galeries. ' +
+      "N'ajoutez que de la musique dont la licence autorise un usage commercial sur un site : par exemple les morceaux sous licence " +
+      "<strong>CC BY</strong> (incompetech.com, freemusicarchive.org — indiquez le crédit demandé, il sera affiché discrètement au client) " +
+      "ou des morceaux achetés avec une licence qui le permet.</p>" +
+      '<form class="ad-music-upload" id="ad-owner-music-form">' +
+      '<label class="ad-field"><span>Fichier MP3 (15 Mo max.)</span><input type="file" name="file" accept="audio/mpeg,.mp3" required /></label>' +
+      '<label class="ad-field"><span>Titre</span><input type="text" name="title" maxlength="120" required /></label>' +
+      '<label class="ad-field"><span>Artiste</span><input type="text" name="artist" maxlength="120" /></label>' +
+      '<label class="ad-field"><span>Ambiance</span><select name="mood">' +
+      Object.keys(MUSIC_MOODS).map(function (k) { return '<option value="' + esc(k) + '">' + esc(MUSIC_MOODS[k]) + "</option>"; }).join("") +
+      "</select></label>" +
+      '<label class="ad-field ad-field-wide"><span>Crédit / licence</span><input type="text" name="credit" maxlength="200" placeholder="Ex. « Kevin MacLeod (incompetech.com) — CC BY 4.0 »" /></label>' +
+      '<button type="submit" class="ad-btn ad-btn-primary" id="ad-owner-music-submit">Ajouter à la bibliothèque</button>' +
+      "</form>" +
+      '<div id="ad-owner-music-list"><p class="ad-hint">Chargement…</p></div>' +
+      "</section>"
+    );
+  }
+
+  function audioDuration(file) {
+    return new Promise(function (resolve) {
+      var url = URL.createObjectURL(file);
+      var probe = new Audio();
+      var settled = false;
+      var done = function (value) {
+        if (settled) return;
+        settled = true;
+        URL.revokeObjectURL(url);
+        resolve(value);
+      };
+      probe.addEventListener("loadedmetadata", function () { done(isFinite(probe.duration) ? Math.round(probe.duration) : 0); });
+      probe.addEventListener("error", function () { done(0); });
+      setTimeout(function () { done(0); }, 5000);
+      probe.preload = "metadata";
+      probe.src = url;
+    });
+  }
+
+  async function refreshOwnerMusic() {
+    var box = document.getElementById("ad-owner-music-list");
+    if (!box) return;
+    try {
+      var library = await api("GET", "/music-library");
+      if (!document.body.contains(box)) return;
+      box.innerHTML = trackListHtml(library, "manage", null);
+      wireTrackList(box);
+      box.querySelectorAll("[data-remove-track]").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          confirmAction("Retirer ce morceau de la bibliothèque ? Les galeries qui l'utilisent repasseront sans musique.", async function () {
+            try {
+              stopTrackPreview();
+              await api("DELETE", "/owner/music/" + encodeURIComponent(btn.getAttribute("data-remove-track")));
+              toast("Morceau retiré.");
+              refreshOwnerMusic();
+            } catch (err) {
+              toast(err.message, true);
+            }
+          });
+        });
+      });
+    } catch (err) {
+      if (document.body.contains(box)) box.innerHTML = '<p class="ad-hint">Bibliothèque indisponible : ' + esc(err.message) + "</p>";
+    }
+  }
+
+  function wireOwnerMusic() {
+    var form = document.getElementById("ad-owner-music-form");
+    if (!form) return;
+    form.addEventListener("submit", async function (event) {
+      event.preventDefault();
+      var submit = document.getElementById("ad-owner-music-submit");
+      var file = form.file.files[0];
+      if (!file) return;
+      submit.disabled = true;
+      submit.textContent = "Envoi…";
+      try {
+        var data = new FormData(form);
+        data.set("duration", String(await audioDuration(file)));
+        var response = await fetch("/local/owner/music", { method: "POST", body: data });
+        var result = await response.json().catch(function () { return {}; });
+        if (!response.ok) throw new Error(result.error || "Échec de l'envoi");
+        toast("« " + result.track.title + " » ajouté à la bibliothèque.");
+        form.reset();
+        refreshOwnerMusic();
+      } catch (err) {
+        toast(err.message, true);
+      } finally {
+        submit.disabled = false;
+        submit.textContent = "Ajouter à la bibliothèque";
+      }
+    });
+    refreshOwnerMusic();
+  }
+
   function formatMonthLabel(month) {
     var parts = month.split("-");
     var date = new Date(Number(parts[0]), Number(parts[1]) - 1, 1);
@@ -879,6 +1167,8 @@
       photographersTableHtml(photographersData.photographers) +
       "</section>" +
 
+      ownerMusicSectionHtml() +
+
       '<section><div class="ad-section-header"><h3>Relances automatiques</h3></div>' +
       '<p class="ad-hint">Une passe tourne chaque jour sur le Worker (08:00 UTC) : rappel au client à J-7 et J-2 de l\'expiration tant que sa sélection n\'est pas validée, rappel au photographe à J-2. ' +
       "Chaque relance ne part qu'une fois. Vous pouvez lancer la passe tout de suite :</p>" +
@@ -890,6 +1180,7 @@
       trafficSectionHtml() +
       "</section>";
 
+    wireOwnerMusic();
     document.getElementById("ad-run-reminders").addEventListener("click", async function () {
       var btn = this;
       var out = document.getElementById("ad-run-reminders-result");
@@ -1863,22 +2154,7 @@
       '<p class="ad-hint">Comment les photos s\'affichent chez le client — à choisir selon le type de séance.</p>' +
       '<div class="ad-layout-options" id="ad-layout-options">' + layoutOptionsHtml(data.gallery) + "</div>" +
       "</section>" +
-      '<section class="ad-music">' +
-      '<div class="ad-section-header"><h3>Musique d\'ambiance</h3></div>' +
-      '<p class="ad-hint">Un morceau (MP3, 15 Mo maximum) joué en boucle chez le client. Lancé automatiquement en mise en page « Défilement », proposé en pause dans les autres — le client garde toujours la main.</p>' +
-      '<p class="ad-music-state" id="ad-music-state">' +
-      (data.gallery.music_name
-        ? "Piste actuelle : <strong>" + esc(data.gallery.music_name) + "</strong>"
-        : '<span class="ad-hint">Aucune musique pour cette galerie.</span>') +
-      "</p>" +
-      '<div class="ad-bg-custom">' +
-      '<label class="ad-btn">' + (data.gallery.music_name ? "Remplacer le MP3" : "Importer un MP3") +
-      '<input type="file" id="ad-music-file-input" accept="audio/mpeg,.mp3" hidden /></label>' +
-      (data.gallery.music_name
-        ? '<button type="button" class="ad-btn" id="ad-music-remove">Retirer la musique</button>'
-        : "") +
-      "</div>" +
-      "</section>" +
+      musicSectionHtml(data.gallery) +
       gallerySectionShopHtml(data) +
       '<section class="ad-dropzone" id="ad-dropzone">' +
       '<p><strong>Glissez vos photos ici</strong>, ou</p>' +
@@ -2049,6 +2325,7 @@
         renderDetail(slug, true);
       }
     });
+    wireMusicSection(slug, data.gallery);
     var shopToggle = document.getElementById("ad-gallery-shop-toggle");
     if (shopToggle) {
       shopToggle.addEventListener("change", async function () {

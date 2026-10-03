@@ -13,6 +13,7 @@ import { handleAdmin } from "./admin.js";
 import { handleViewer } from "./viewer.js";
 import { handleAuth } from "./authPhotographer.js";
 import { handleOwner } from "./owner.js";
+import { handleLibraryAudio } from "./music.js";
 import { handleStripeWebhook } from "./billing.js";
 import { runReminders } from "./reminders.js";
 import { studioSubdomainOf, handleStudioHost } from "./studio.js";
@@ -79,6 +80,9 @@ export default {
         response = await handleOwner(request, env, path);
       } else if (path.startsWith("/api/gallery/")) {
         response = await handleViewer(request, env, ctx, path);
+      } else if (path.startsWith("/api/music-library/") && request.method === "GET") {
+        // Écoute d'un morceau libre de droits de la bibliothèque commune.
+        response = await handleLibraryAudio(request, env, decodeURIComponent(path.split("/")[3] || ""));
       } else if (path.startsWith("/api/print-assets/") && request.method === "GET") {
         // Fichier d'impression, téléchargé par le labo via une URL signée.
         const [, , , orderId, photoId] = path.split("/");

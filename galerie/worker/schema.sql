@@ -99,6 +99,12 @@ CREATE TABLE IF NOT EXISTS galleries (
   -- sous music/{id}.mp3. Jouée côté client en mise en page « défilement »,
   -- proposée en pause dans les autres — jamais imposée.
   music_name             TEXT NOT NULL DEFAULT '',
+  -- Ou bien une piste de la bibliothèque commune (music_tracks.id), ou bien
+  -- un lien Spotify / Deezer / SoundCloud / YouTube déjà converti en adresse
+  -- de lecteur intégré officiel. Une seule source à la fois : choisir l'une
+  -- vide les deux autres (voir worker/src/music.js).
+  music_track_id         TEXT NOT NULL DEFAULT '',
+  music_embed            TEXT NOT NULL DEFAULT '',
   -- Moment où le client a cliqué « Valider ma sélection » (epoch secondes) ;
   -- NULL tant qu'il ne l'a pas fait. Arrête les relances automatiques.
   selection_done_at      INTEGER,
@@ -402,6 +408,9 @@ CREATE INDEX IF NOT EXISTS idx_email_changes_photographer ON email_changes(photo
 --   ALTER TABLE print_products ADD COLUMN cost_cents INTEGER NOT NULL DEFAULT 0;
 --   ALTER TABLE print_products ADD COLUMN ship_cost_cents INTEGER NOT NULL DEFAULT 0;
 --   CREATE UNIQUE INDEX IF NOT EXISTS idx_photographers_subdomain ON photographers(subdomain) WHERE subdomain != '';
+--   ALTER TABLE galleries ADD COLUMN music_track_id TEXT NOT NULL DEFAULT '';
+--   ALTER TABLE galleries ADD COLUMN music_embed TEXT NOT NULL DEFAULT '';
+--   puis la table music_tracks (fin de ce fichier).
 
 -- Relances déjà envoyées, pour ne jamais relancer deux fois pour la même
 -- échéance : une ligne par galerie et par type (client_j7, client_j2,
@@ -470,3 +479,18 @@ CREATE TABLE IF NOT EXISTS print_orders (
 
 CREATE INDEX IF NOT EXISTS idx_print_orders_gallery ON print_orders(gallery_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_print_orders_photographer ON print_orders(photographer_id, created_at);
+
+-- Bibliothèque musicale commune : morceaux libres de droits ajoutés par la
+-- propriétaire de la plateforme (onglet Admin), que chaque photographe peut
+-- choisir pour ses galeries. Le fichier vit dans R2 sous
+-- library/music/{id}.mp3 ; `credit` est la mention exigée par la licence
+-- (ex. « Kevin MacLeod — CC BY 4.0 »), affichée discrètement au client.
+CREATE TABLE IF NOT EXISTS music_tracks (
+  id          TEXT PRIMARY KEY,
+  title       TEXT NOT NULL,
+  artist      TEXT NOT NULL DEFAULT '',
+  mood        TEXT NOT NULL DEFAULT '',
+  credit      TEXT NOT NULL DEFAULT '',
+  duration_s  INTEGER NOT NULL DEFAULT 0,
+  created_at  INTEGER NOT NULL
+);

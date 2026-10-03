@@ -351,13 +351,28 @@ Le tableau de bord s'organise en trois onglets, chacun avec son propre lien
   *Défilement* (une photo à la fois, en grand — rendu éditorial, pour
   raconter une séance plutôt que la survoler). Purement visuel : les trois
   rendus s'appuient sur les mêmes tuiles, protégées de la même façon.
-- **Musique d'ambiance** : un MP3 (15 Mo maximum) importé depuis la fiche
-  de la galerie, stocké à côté des tuiles et servi au client avec lecture
-  progressive. Côté client, un bouton « Lancer la musique » apparaît dans
-  l'en-tête dès qu'une piste existe ; en mise en page *Défilement* la lecture
-  démarre d'elle-même quand le navigateur l'autorise, et le choix du client
-  (coupée ou non) est retenu le temps de sa visite. Une galerie sans piste
-  ne montre rien de plus qu'avant.
+- **Musique d'ambiance** : trois sources au choix sur la fiche galerie,
+  une seule à la fois.
+  - **Bibliothèque** commune de morceaux libres de droits, classés par
+    ambiance (douce, joyeuse, romantique, piano, acoustique, cinématique,
+    enfance), écoutés en un clic puis choisis. La propriétaire de la
+    plateforme la remplit depuis l'onglet Admin (MP3, titre, artiste,
+    ambiance, crédit de licence) ; le crédit est affiché discrètement au
+    client. Retirer un morceau laisse sans musique les galeries qui
+    l'utilisaient.
+  - **Lien Spotify, Deezer, SoundCloud ou YouTube** (titre, album ou
+    playlist), converti en lecteur officiel du service — la seule façon
+    autorisée de diffuser leur catalogue sur un site. Le lecteur n'est
+    chargé qu'au clic du client, dans un petit encart flottant (« Réduire »
+    le cache sans couper la musique, « Fermer » l'arrête). Avec Spotify, un
+    client sans compte Spotify n'entend qu'un extrait de 30 secondes.
+  - **Fichier MP3** du photographe (15 Mo maximum), comme avant.
+
+  Les morceaux de la bibliothèque et les MP3 sont servis avec lecture
+  progressive ; un bouton « Lancer la musique » apparaît dans l'en-tête, en
+  mise en page *Défilement* la lecture démarre d'elle-même quand le
+  navigateur l'autorise, et le choix du client (coupée ou non) est retenu le
+  temps de sa visite. Une galerie sans musique ne montre rien de plus.
 - **Forfait et suppléments** : le nombre de photos déjà payées par le
   client (optionnel — sans forfait défini, aucun supplément n'est jamais
   calculé) et le prix de chaque photo au-delà. Le supplément se calcule
@@ -723,7 +738,7 @@ des tuiles, refus du mauvais mot de passe, absence de toute balise `<img>`,
 neutralisation du menu contextuel et de la copie, voile sur « Impr. écran » et
 sur perte de focus, consignation au journal.
 
-**API du Worker** — 313 vérifications contre le vrai moteur Cloudflare (D1 et R2
+**API du Worker** — 326 vérifications contre le vrai moteur Cloudflare (D1 et R2
 émulés localement par `wrangler dev`) : comptes photographes (inscription,
 connexion, session, mot de passe oublié — même réponse générique qu'un
 compte existe ou non), cloisonnement strict entre comptes (un photographe ne
@@ -783,7 +798,15 @@ passe). Musique d'ambiance : dépôt refusé depuis un autre compte, piste
 annoncée au client à la connexion puis servie octet pour octet en
 `audio/mpeg`, lecture progressive par morceaux (`Range` → 206), retrait
 refusé depuis un autre compte, et plus rien de servi ni d'annoncé une fois
-la piste retirée. « Valider ma sélection » : refusé sans jeton, horodaté et
+la piste retirée. Bibliothèque musicale : ajout réservé à la propriétaire
+(403 sinon), titre et ambiance obligatoires, liste visible de chaque
+photographe, écoute d'un morceau (lecture partielle comprise), morceau
+inconnu non servi ; choix d'un morceau (refusé depuis un autre compte) qui
+remplace le MP3 importé et que le client entend avec titre et crédit ; lien
+d'un autre site refusé avec explication ; lien Spotify transmis au client
+comme lecteur officiel (plus de MP3 servi) ; morceau retiré par la
+propriétaire seulement, galeries concernées repassées sans musique ;
+« aucune musique ». « Valider ma sélection » : refusé sans jeton, horodaté et
 e-mail au photographe à la première validation mais pas à une seconde dans
 l'heure, relu sur la fiche, dans la liste, au journal et à la reconnexion
 du client. Relances automatiques (passe lancée par la propriétaire, refusée
@@ -904,7 +927,7 @@ appliqué sinon, HT + TVA se recomposant exactement au centime près en TTC
 même sur un montant qui ne se divise pas rond, et un vrai PDF valide généré
 aussi bien avec des coordonnées complètes qu'avec des champs vides.
 
-**Interface d'administration** — 115 vérifications dans un vrai navigateur,
+**Interface d'administration** — 120 vérifications dans un vrai navigateur,
 contre le vrai Worker local : demande de lien de réinitialisation de mot de
 passe (message générique affiché), création de compte et connexion depuis
 le formulaire (pas de session présupposée), barre d'onglets Galeries /
@@ -948,7 +971,11 @@ dans ce test apparaît dans la liste complète avec son prénom et son nom, et
 la section trafic explique comment brancher Cloudflare Web Analytics.
 Musique d'ambiance sur la fiche galerie : « aucune musique » au départ,
 import d'un MP3 qui devient la piste actuelle, refus d'un fichier qui n'en
-est pas un (la piste existante est conservée), retrait après confirmation.
+est pas un (la piste existante est conservée), retrait après confirmation ;
+la propriétaire ajoute un morceau à la bibliothèque musicale depuis l'onglet
+Admin (titre, ambiance et crédit affichés), le photographe le retrouve dans
+sa fiche avec un bouton d'écoute et le choisit, un lien d'un autre site est
+refusé, un lien Spotify devient le lecteur de la galerie.
 Codes couleur et repères posés par le client (via l'API, comme le ferait sa
 page) : pastille jaune et compteur de repères sur la vignette, légende de
 la galerie, photo ouverte en grand avec le repère dessus, sa note listée et
@@ -1006,6 +1033,21 @@ repère existant mais retire un repère tout juste posé sans rien envoyer ;
 pastille et compteur dans la grille ; tout retrouvé après une reconnexion
 complète ; suppression répercutée côté Worker.
 
+**Musique côté client** — 10 vérifications dans un vrai navigateur, contre
+le vrai Worker local : morceau de la bibliothèque annoncé avec son titre et
+son crédit puis servi par le Worker, lien Spotify annoncé sans rien charger
+chez Spotify avant le clic, lecteur officiel ouvert sur la bonne playlist,
+« Réduire » qui le garde, « Fermer » qui le retire, aucun bouton sans
+musique, aucune exception.
+
+**Musique (logique)** — 22 vérifications sans réseau ni D1 : liens
+Spotify (titre, playlist, album, adresse `intl-fr`, URI `spotify:`),
+Deezer, SoundCloud (morceau, playlist) et YouTube (vidéo, `youtu.be`, YouTube
+Music, playlist) convertis en lecteur officiel ; liens raccourcis refusés
+avec la marche à suivre ; tout autre site, identifiant invalide ou domaine
+piège refusé ; rien du lien collé recopié tel quel ; ce que reçoit la page
+client pour chaque source.
+
 **Sous-domaine par studio** — 8 vérifications dans un vrai navigateur, où
 Playwright rejoue toute requête vers `<studio>.holypixx.com` sur le Worker
 local avec l'en-tête `Host` du studio (ce que le Worker recevra derrière la
@@ -1028,11 +1070,13 @@ node tests/comments.test.mjs          # commentaires client, autonome (crée sa 
 node tests/marks.test.mjs             # codes couleur + repères client, autonome (crée sa propre galerie)
 node tests/subdomain.test.mjs         # sous-domaine par studio, autonome (PUBLIC_SITE_ORIGIN=http://localhost:8000 dans worker/.dev.vars)
 node tests/shop.test.mjs              # boutique de tirages côté client, autonome (PRODIGI_API_BASE=http://127.0.0.1:8790/v4.0 dans worker/.dev.vars)
+node tests/music.test.mjs             # musique côté client (bibliothèque, lien Spotify), autonome
 
 cd ../worker
 node tests/notify.test.mjs            # e-mails (alerte de capture, relances…), sans réseau
 node tests/reminders.test.mjs         # décision des relances automatiques, sans réseau
 node tests/prodigi.test.mjs           # boutique de tirages (Prodigi), sans réseau
+node tests/music.test.mjs             # liens Spotify / Deezer / SoundCloud / YouTube, sans réseau
 node tests/stripe.test.mjs            # signature de webhook + encodage des sessions Stripe, sans réseau
 node tests/invoices.test.mjs          # calcul de TVA + génération du PDF de facture, sans réseau
 npm run dev:local                     # dans un autre terminal (Worker local sur le port 8788)

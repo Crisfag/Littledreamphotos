@@ -9,6 +9,7 @@ import { json, fail } from "./http.js";
 import { parseMarks } from "./marks.js";
 import { handleShopAdmin, listPrintOrders } from "./shop.js";
 import { hashPassword, randomBytes, b64url } from "./auth.js";
+import { listLibrary, setMusicChoice, musicForAdmin } from "./music.js";
 import { authenticatePhotographer } from "./authPhotographer.js";
 import { connectStripe, refreshStripeStatus, setBillingProfile } from "./billing.js";
 import { updateStudioName, updateName, changePassword, requestEmailChange, updateDefaults, updateReminders, updateSubdomain } from "./account.js";
@@ -229,6 +230,7 @@ async function getGallery(env, photographerId, slug) {
       login_background_color: gallery.login_background_color,
       layout: gallery.layout,
       music_name: gallery.music_name || "",
+      music: await musicForAdmin(env, gallery),
       selection_done_at: gallery.selection_done_at,
       shop_enabled: Boolean(gallery.shop_enabled),
       included_photos: gallery.included_photos,
@@ -352,7 +354,8 @@ async function setMusic(request, env, photographerId, slug) {
   await env.TILES.put(`music/${gallery.id}.mp3`, request.body, {
     httpMetadata: { contentType: "audio/mpeg" },
   });
-  await env.DB.prepare("UPDATE galleries SET music_name = ? WHERE id = ?")
+  // Un MP3 importé remplace une éventuelle piste de bibliothèque ou un lien.
+  await env.DB.prepare("UPDATE galleries SET music_name = ?, music_track_id = '', music_embed = '' WHERE id = ?")
     .bind(name, gallery.id)
     .run();
 
@@ -364,7 +367,7 @@ async function deleteMusic(env, photographerId, slug) {
   if (!gallery) return fail(404, "Galerie introuvable");
 
   await env.TILES.delete(`music/${gallery.id}.mp3`);
-  await env.DB.prepare("UPDATE galleries SET music_name = '' WHERE id = ?")
+  await env.DB.prepare("UPDATE galleries SET music_name = '', music_track_id = '', music_embed = '' WHERE id = ?")
     .bind(gallery.id)
     .run();
 
@@ -673,6 +676,9 @@ export async function handleAdmin(request, env, ctx, path) {
   const shopResponse = await handleShopAdmin(request, env, photographerId, parts, { ownedGallery, ownedPhoto });
   if (shopResponse) return shopResponse;
 
+  // Bibliothèque musicale commune, lue par tous les photographes.
+  if (section === "music-library" && parts.length === 3 && request.method === "GET") return listLibrary(env);
+
   if (section === "galleries") {
     if (parts.length === 3) {
       if (request.method === "POST") return createGallery(request, env, photographerId);
@@ -710,6 +716,11 @@ export async function handleAdmin(request, env, ctx, path) {
     }
     if (parts.length === 5 && parts[4] === "music" && request.method === "DELETE") {
       return deleteMusic(env, photographerId, slug);
+    }
+    if (parts.length === 5 && parts[4] === "music-choice" && request.method === "POST") {
+      const gallery = await ownedGallery(env, photographerId, slug);
+      if (!gallery) return fail(404, "Galerie introuvable");
+      return setMusicChoice(request, env, gallery);
     }
     if (parts.length === 5 && parts[4] === "quota" && request.method === "POST") {
       return setQuota(request, env, photographerId, slug);

@@ -1445,6 +1445,79 @@ check("un compte créé plus haut dans ce test apparaît dans la liste, avec son
 check("les mots de passe ne figurent jamais dans la liste",
       !JSON.stringify(ownerPhotographers).toLowerCase().includes("password"));
 
+/* ---------- Bibliothèque musicale et liens Spotify & co ---------- */
+
+const TRACK = new Uint8Array(6000);
+for (let i = 0; i < TRACK.length; i++) TRACK[i] = (i * 13 + 5) & 0xff;
+const trackQuery = `title=${encodeURIComponent("Matin doux")}&artist=Test&mood=douce&credit=${encodeURIComponent("Artiste — CC BY 4.0")}&duration=95`;
+const trackForbidden = await admin("PUT", `/api/owner/music?${trackQuery}`, TRACK, true);
+check("seule la propriétaire peut ajouter un morceau à la bibliothèque (403)", trackForbidden.status === 403);
+const trackBadMood = await ownerClient("PUT", "/api/owner/music?title=X&mood=inconnue", TRACK, true);
+const trackNoTitle = await ownerClient("PUT", "/api/owner/music?mood=douce", TRACK, true);
+check("un morceau sans titre ou d'ambiance inconnue est refusé (400)", trackBadMood.status === 400 && trackNoTitle.status === 400);
+const trackAddedResponse = await ownerClient("PUT", `/api/owner/music?${trackQuery}`, TRACK, true);
+const trackAdded = (await trackAddedResponse.json()).track;
+check("la propriétaire ajoute un morceau libre de droits à la bibliothèque",
+      trackAddedResponse.status === 201 && /^mus_/.test(trackAdded?.id || "") && trackAdded.moodLabel === "Douce", JSON.stringify(trackAdded));
+const library = await (await admin("GET", "/api/admin/music-library")).json();
+check("chaque photographe voit la bibliothèque (titre, artiste, ambiance, durée, crédit)",
+      library.tracks.some((t) => t.id === trackAdded.id && t.title === "Matin doux" && t.durationSeconds === 95 && t.credit === "Artiste — CC BY 4.0") &&
+      library.moods?.piano === "Piano");
+const trackPreview = await fetch(`${BASE}/api/music-library/${trackAdded.id}`, { headers: { range: "bytes=0-9" } });
+const trackPreviewBytes = new Uint8Array(await trackPreview.arrayBuffer());
+check("un morceau de la bibliothèque s'écoute avant d'être choisi (lecture partielle comprise)",
+      trackPreview.status === 206 && trackPreviewBytes.length === 10 && trackPreviewBytes.every((b, i) => b === TRACK[i]));
+check("un morceau inconnu de la bibliothèque n'est pas servi (404)",
+      (await fetch(`${BASE}/api/music-library/mus_inconnu00`)).status === 404 && (await fetch(`${BASE}/api/music-library/..%2Fmusic`)).status === 404);
+
+const musicSlug = `${SLUG}-musique`;
+await admin("POST", "/api/admin/galleries", { slug: musicSlug, password: "mot-de-passe-solide", title: "Séance musique", clientName: "Famille Musique" });
+const musicLogin = async () => (await fetch(`${BASE}/api/gallery/${musicSlug}/login`, {
+  method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ password: "mot-de-passe-solide" }),
+})).json();
+
+const peerChoice = await peerAdmin("POST", `/api/admin/galleries/${musicSlug}/music-choice`, { source: "library", trackId: trackAdded.id });
+check("un autre compte ne peut pas choisir la musique de cette galerie (404)", peerChoice.status === 404);
+await admin("PUT", `/api/admin/galleries/${musicSlug}/music?name=avant.mp3`, MUSIC, true);
+const libraryChoice = await admin("POST", `/api/admin/galleries/${musicSlug}/music-choice`, { source: "library", trackId: trackAdded.id });
+const afterLibrary = await (await admin("GET", `/api/admin/galleries/${musicSlug}`)).json();
+const libraryAudio = new Uint8Array(await (await fetch(`${BASE}/api/gallery/${musicSlug}/music`)).arrayBuffer());
+const libraryLogin = await musicLogin();
+check("choisir un morceau de la bibliothèque remplace le MP3 importé, et la fiche l'indique",
+      libraryChoice.ok && afterLibrary.gallery?.music?.source === "library" && afterLibrary.gallery.music.track?.id === trackAdded.id &&
+      afterLibrary.gallery.music_name === "", JSON.stringify(afterLibrary.gallery?.music));
+check("le client entend le morceau choisi, avec son titre et son crédit",
+      libraryAudio.length === TRACK.length && libraryAudio.every((b, i) => b === TRACK[i]) &&
+      libraryLogin.gallery?.hasMusic === true && libraryLogin.gallery.music?.kind === "audio" &&
+      libraryLogin.gallery.music.title === "Matin doux" && libraryLogin.gallery.music.credit === "Artiste — CC BY 4.0",
+      JSON.stringify(libraryLogin.gallery?.music));
+
+const badLink = await admin("POST", `/api/admin/galleries/${musicSlug}/music-choice`, { source: "link", url: "https://example.com/ma-musique" });
+const badLinkBody = await badLink.json();
+check("un lien qui n'est ni Spotify, ni Deezer, ni SoundCloud, ni YouTube est refusé avec une explication",
+      badLink.status === 400 && /Spotify/.test(badLinkBody.error || ""), badLinkBody.error);
+const spotifyChoice = await (await admin("POST", `/api/admin/galleries/${musicSlug}/music-choice`, {
+  source: "link", url: "https://open.spotify.com/intl-fr/playlist/37i9dQZF1DX4sWSpwq3LiO?si=1234",
+})).json();
+const spotifyLogin = await musicLogin();
+check("un lien Spotify devient le lecteur officiel : le client reçoit son adresse, plus de MP3 servi",
+      spotifyChoice.provider === "spotify" &&
+      spotifyLogin.gallery?.music?.kind === "embed" && spotifyLogin.gallery.music.embedUrl === "https://open.spotify.com/embed/playlist/37i9dQZF1DX4sWSpwq3LiO" &&
+      spotifyLogin.gallery.music.providerLabel === "Spotify" && spotifyLogin.gallery.hasMusic === false &&
+      (await fetch(`${BASE}/api/gallery/${musicSlug}/music`)).status === 404,
+      JSON.stringify(spotifyLogin.gallery?.music));
+
+await admin("POST", `/api/admin/galleries/${musicSlug}/music-choice`, { source: "library", trackId: trackAdded.id });
+const trackDeleteForbidden = await admin("DELETE", `/api/owner/music/${trackAdded.id}`);
+const trackDeleted = await ownerClient("DELETE", `/api/owner/music/${trackAdded.id}`);
+const afterTrackDelete = await musicLogin();
+check("retirer un morceau de la bibliothèque (propriétaire seulement) laisse les galeries qui l'utilisaient sans musique",
+      trackDeleteForbidden.status === 403 && trackDeleted.ok && afterTrackDelete.gallery?.music === null &&
+      (await fetch(`${BASE}/api/music-library/${trackAdded.id}`)).status === 404);
+const noneChoice = await admin("POST", `/api/admin/galleries/${musicSlug}/music-choice`, { source: "none" });
+check("« Aucune musique » est un choix possible", noneChoice.ok && (await musicLogin()).gallery?.music === null);
+await admin("DELETE", `/api/admin/galleries/${musicSlug}`);
+
 /* ---------- « Valider ma sélection » ---------- */
 
 const validateSlug = `${SLUG}-validation`;

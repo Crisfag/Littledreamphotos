@@ -170,6 +170,24 @@ h1 { font-family: var(--serif); font-weight: 500; font-size: clamp(1.9rem, 4vw, 
 .gp-music-icon { font-size: 1rem; line-height: 1; }
 @keyframes gp-music-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.25); } }
 .gp-music[aria-pressed="true"] .gp-music-icon { animation: gp-music-pulse 1.6s var(--ease) infinite; }
+.gp-music-credit { margin: .45rem 0 0; font-size: .72rem; color: var(--muted); letter-spacing: .02em; }
+
+/* Lecteur officiel flottant (Spotify, Deezer, SoundCloud, YouTube). */
+.gp-music-player {
+  position: fixed; right: max(16px, env(safe-area-inset-right)); bottom: max(16px, env(safe-area-inset-bottom)); z-index: 60;
+  width: min(360px, calc(100vw - 32px));
+  background: var(--ivory); border-radius: 14px; overflow: hidden;
+  box-shadow: 0 24px 60px -24px rgba(0, 0, 0, .55), 0 0 0 1px rgba(0, 0, 0, .05);
+}
+.gp-music-player-bar { display: flex; align-items: center; gap: .3rem; padding: .35rem .4rem .35rem .85rem; font-size: .78rem; color: var(--muted); letter-spacing: .04em; }
+.gp-music-player-bar span { flex: 1; }
+.gp-music-player-btn {
+  width: 1.9rem; height: 1.9rem; border: 0; border-radius: 999px; background: transparent; color: var(--muted);
+  font-size: 1.15rem; line-height: 1; cursor: pointer;
+}
+.gp-music-player-btn:hover { background: var(--cream); color: var(--ink); }
+.gp-music-player-frame iframe { display: block; width: 100%; border: 0; }
+.gp-music-player-frame .gp-music-player-video { aspect-ratio: 16 / 9; height: auto; }
 
 .gp-notice {
   max-width: 760px;

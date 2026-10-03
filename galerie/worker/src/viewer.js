@@ -8,6 +8,7 @@ import { sendCaptureAlert, sendSelectionValidated } from "./notify.js";
 import { supplementFor } from "./admin.js";
 import { shopForClient, handlePrintOrder } from "./shop.js";
 import { createCheckoutSession } from "./stripe.js";
+import { musicForClient, audioKeyFor, serveAudio, getTrack } from "./music.js";
 
 const SESSION_TTL_SECONDS = 2 * 60 * 60; // 2 h
 const MAX_FAILED_LOGINS = 10;
@@ -145,6 +146,7 @@ async function handleLogin(request, env, slug) {
     .all();
 
   const { shop, printOrders } = await shopForClient(env, gallery);
+  const music = musicForClient(gallery, gallery.music_track_id ? await getTrack(env, gallery.music_track_id) : null);
 
   return json({
     token,
@@ -157,7 +159,8 @@ async function handleLogin(request, env, slug) {
       watermark: gallery.watermark_text,
       expiresAt: gallery.expires_at,
       layout: gallery.layout || "grille",
-      hasMusic: Boolean(gallery.music_name),
+      hasMusic: music?.kind === "audio",
+      music,
       selectionDoneAt: gallery.selection_done_at || null,
       studioName: photographer?.studio_name || "",
       includedPhotos: gallery.included_photos,
@@ -666,34 +669,9 @@ async function handleBackgroundImage(env, slug) {
 // partielles (Range) sont honorées : Safari refuse de lire un média sans ça.
 async function handleMusic(request, env, slug) {
   const gallery = await getGallery(env, slug);
-  if (!gallery || isExpired(gallery) || !gallery.music_name) {
-    return fail(404, "Aucune musique");
-  }
-
-  const key = `music/${gallery.id}.mp3`;
-  const wantsRange = request.headers.has("range");
-  let object;
-  try {
-    object = await env.TILES.get(key, wantsRange ? { range: request.headers } : undefined);
-  } catch {
-    return new Response(null, { status: 416, headers: { "content-range": "bytes */*" } });
-  }
-  if (!object) return fail(404, "Aucune musique");
-
-  const headers = new Headers({
-    "content-type": "audio/mpeg",
-    "accept-ranges": "bytes",
-    "cache-control": "public, max-age=3600",
-  });
-  if (wantsRange && object.range && typeof object.range.offset === "number") {
-    const start = object.range.offset;
-    const length = object.range.length ?? object.size - start;
-    headers.set("content-range", `bytes ${start}-${start + length - 1}/${object.size}`);
-    headers.set("content-length", String(length));
-    return new Response(object.body, { status: 206, headers });
-  }
-  headers.set("content-length", String(object.size));
-  return new Response(object.body, { headers });
+  const key = gallery && !isExpired(gallery) ? audioKeyFor(gallery) : null;
+  if (!key) return fail(404, "Aucune musique");
+  return serveAudio(request, env, key);
 }
 
 export async function handleViewer(request, env, ctx, path) {

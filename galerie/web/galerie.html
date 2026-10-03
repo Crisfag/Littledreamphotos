@@ -70,6 +70,7 @@
         <span class="gp-music-icon" aria-hidden="true">♪</span>
         <span id="gp-music-label">Lancer la musique</span>
       </button>
+      <p class="gp-music-credit" id="gp-music-credit" hidden></p>
     </header>
 
     <!--
@@ -182,6 +183,17 @@
   </div>
 
   <!-- ============ Panier de tirages ============ -->
+  <!-- Lecteur officiel (Spotify, Deezer, SoundCloud, YouTube) choisi par le
+       photographe : chargé seulement quand le client l'ouvre. -->
+  <div class="gp-music-player" id="gp-music-player" hidden role="region" aria-label="Lecteur de musique">
+    <div class="gp-music-player-bar">
+      <span id="gp-music-player-title">Musique</span>
+      <button type="button" class="gp-music-player-btn" id="gp-music-player-min" aria-label="Réduire le lecteur" title="Réduire (la musique continue)">–</button>
+      <button type="button" class="gp-music-player-btn" id="gp-music-player-close" aria-label="Fermer le lecteur" title="Fermer (arrête la musique)">&times;</button>
+    </div>
+    <div class="gp-music-player-frame" id="gp-music-player-frame"></div>
+  </div>
+
   <div class="gp-cart" id="gp-cart" hidden role="dialog" aria-modal="true" aria-labelledby="gp-cart-title">
     <div class="gp-cart-card">
       <button type="button" class="gp-cart-close" id="gp-cart-close" aria-label="Fermer">&times;</button>

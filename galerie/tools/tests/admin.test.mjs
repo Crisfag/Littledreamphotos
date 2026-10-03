@@ -180,7 +180,7 @@ await page.setInputFiles("#ad-music-file-input", { name: "balade.mp3", mimeType:
 await page.waitForFunction(
   () => {
     const el = document.querySelector("#ad-music-state");
-    return el && el.textContent.includes("Piste actuelle") && el.textContent.includes("balade.mp3");
+    return el && el.textContent.includes("Fichier MP3") && el.textContent.includes("balade.mp3");
   },
   { timeout: 15000 }
 );
@@ -365,12 +365,51 @@ check("le compte créé plus haut dans ce test apparaît dans la liste, avec son
 check("la section trafic & sources explique comment brancher Cloudflare Web Analytics",
       ownerPageText.indexOf("Cloudflare Web Analytics") !== -1);
 
+// Bibliothèque musicale : la propriétaire ajoute un morceau libre de droits.
+const libraryTitle = `Matin doux ${Date.now().toString(36)}`;
+await ownerPage.waitForSelector("#ad-owner-music-form");
+await ownerPage.setInputFiles('#ad-owner-music-form [name="file"]', { name: "matin.mp3", mimeType: "audio/mpeg", buffer: musicBuffer });
+await ownerPage.fill('#ad-owner-music-form [name="title"]', libraryTitle);
+await ownerPage.fill('#ad-owner-music-form [name="artist"]', "Artiste libre");
+await ownerPage.selectOption('#ad-owner-music-form [name="mood"]', "piano");
+await ownerPage.fill('#ad-owner-music-form [name="credit"]', "Artiste libre — CC BY 4.0");
+await ownerPage.click("#ad-owner-music-submit");
+await ownerPage.waitForFunction((t) => (document.getElementById("ad-owner-music-list") || {}).textContent?.includes(t), libraryTitle, { timeout: 15000 });
+check("la propriétaire ajoute un morceau à la bibliothèque musicale (titre, ambiance, crédit affichés)",
+      (await ownerPage.textContent("#ad-owner-music-list")).includes("Piano") &&
+      (await ownerPage.textContent("#ad-owner-music-list")).includes("CC BY 4.0"));
+
 // Reconnexion avec le compte normal créé au tout début de ce test : l'onglet
 // Admin ne doit jamais apparaître pour lui, même après tout ce qui précède.
 check("l'onglet Admin reste masqué pour le compte normal de ce test, même après coup",
       await page.isHidden("#ad-tab-owner"));
 
 await ownerContext.close();
+
+// Le photographe choisit ce morceau pour sa galerie, puis un lien Spotify.
+await page.reload({ waitUntil: "domcontentloaded" });
+await page.waitForFunction((t) => (document.getElementById("ad-music-library") || {}).textContent?.includes(t), libraryTitle, { timeout: 15000 });
+check("la bibliothèque est proposée dans la fiche galerie, avec écoute",
+      (await page.locator("#ad-music-library .ad-track-play").count()) >= 1);
+await page.locator("#ad-music-library .ad-track", { hasText: libraryTitle }).locator("[data-pick-track]").click();
+await page.waitForFunction((t) => (document.getElementById("ad-music-state") || {}).textContent?.includes(t), libraryTitle, { timeout: 15000 });
+check("choisir un morceau de la bibliothèque en fait la musique de la galerie",
+      (await page.textContent("#ad-music-state")).includes("bibliothèque") &&
+      (await page.locator("#ad-music-library .ad-track-current", { hasText: libraryTitle }).count()) === 1);
+
+await page.click('[data-music-tab="link"]');
+await page.fill("#ad-music-link-input", "https://exemple.com/ma-musique");
+await page.click("#ad-music-link-save");
+await page.waitForFunction(() => (document.querySelector(".ad-toast-visible") || {}).textContent?.includes("Spotify"), { timeout: 10000 });
+check("un lien d'un autre site est refusé avec un message clair", true);
+await page.fill("#ad-music-link-input", "https://open.spotify.com/playlist/37i9dQZF1DX4sWSpwq3LiO?si=abc");
+await page.click("#ad-music-link-save");
+await page.waitForFunction(() => (document.getElementById("ad-music-state") || {}).textContent?.includes("Spotify"), { timeout: 15000 });
+check("un lien Spotify devient le lecteur de la galerie", (await page.textContent("#ad-music-state")).includes("Lecteur Spotify"));
+await page.click("#ad-music-remove");
+await page.waitForSelector("#ad-confirm-modal:not([hidden])");
+await page.click("#ad-confirm-ok");
+await page.waitForFunction(() => (document.getElementById("ad-music-state") || {}).textContent?.includes("Aucune musique"), { timeout: 15000 });
 
 /* ---------- Le lien créé fonctionne vraiment côté client ---------- */
 

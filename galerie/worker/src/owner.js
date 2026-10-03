@@ -12,6 +12,7 @@ import { json, fail } from "./http.js";
 import { authenticatePhotographer } from "./authPhotographer.js";
 import { supplementFor } from "./admin.js";
 import { runReminders } from "./reminders.js";
+import { handleOwnerMusic } from "./music.js";
 
 async function requireOwner(env, photographerId) {
   if (!env.OWNER_EMAIL) return null;
@@ -128,6 +129,12 @@ export async function handleOwner(request, env, path) {
     const owner = await requireOwner(env, photographerId);
     if (!owner) return fail(403, "Accès réservé");
     return json(await runReminders(env));
+  }
+  // Bibliothèque musicale commune : ajout et retrait de morceaux.
+  if (action === "music") {
+    const owner = await requireOwner(env, photographerId);
+    if (!owner) return fail(403, "Accès réservé");
+    return handleOwnerMusic(request, env, parts);
   }
   return fail(404, "Route inconnue");
 }

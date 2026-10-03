@@ -723,6 +723,52 @@ async function handleApi(req, res, url) {
     }
   }
 
+  // GET /local/music-library — bibliothèque musicale commune.
+  if (parts.length === 1 && parts[0] === "music-library" && req.method === "GET") {
+    try {
+      return json(res, 200, await client.request("GET", "/api/admin/music-library"));
+    } catch (err) {
+      return relayError(res, err, "Impossible de lire la bibliothèque musicale");
+    }
+  }
+
+  // /local/owner/music — ajout (formulaire : fichier MP3 + titre, artiste,
+  // ambiance, crédit, durée) et retrait de morceaux, propriétaire seulement
+  // (revérifié par le Worker).
+  if (parts[0] === "owner" && parts[1] === "music") {
+    if (parts.length === 2 && req.method === "POST") {
+      const contentLength = Number(req.headers["content-length"] || 0);
+      if (contentLength > MAX_MUSIC_BYTES + 64 * 1024) return json(res, 413, { error: "Fichier trop volumineux (15 Mo maximum)" });
+      let form;
+      try {
+        form = await nodeRequestToWebRequest(req, await readBody(req)).formData();
+      } catch (err) {
+        return json(res, err.status || 400, { error: err.status ? err.message : "Formulaire illisible" });
+      }
+      const file = form.get("file");
+      if (!file || typeof file.arrayBuffer !== "function") return json(res, 400, { error: "Aucun fichier reçu" });
+      const name = String(file.name || "");
+      if (!/\.mp3$/i.test(name) && !/^audio\/(mpeg|mp3)$/i.test(file.type || "")) return json(res, 400, { error: "Seul le format MP3 est accepté" });
+      const buffer = Buffer.from(await file.arrayBuffer());
+      if (!buffer.length) return json(res, 400, { error: "Fichier vide" });
+      if (buffer.length > MAX_MUSIC_BYTES) return json(res, 413, { error: "Fichier trop volumineux (15 Mo maximum)" });
+      const query = new URLSearchParams();
+      for (const field of ["title", "artist", "mood", "credit", "duration"]) query.set(field, String(form.get(field) || ""));
+      try {
+        return json(res, 201, await client.request("PUT", `/api/owner/music?${query}`, buffer, true));
+      } catch (err) {
+        return relayError(res, err, "Impossible d'ajouter ce morceau");
+      }
+    }
+    if (parts.length === 3 && req.method === "DELETE") {
+      try {
+        return json(res, 200, await client.request("DELETE", `/api/owner/music/${encodeURIComponent(decodeURIComponent(parts[2]))}`));
+      } catch (err) {
+        return relayError(res, err, "Impossible de retirer ce morceau");
+      }
+    }
+  }
+
   if (parts[0] !== "galleries") return json(res, 404, { error: "Route inconnue" });
 
   // GET/POST /local/galleries
@@ -877,6 +923,17 @@ async function handleApi(req, res, url) {
       return json(res, 200, result);
     } catch (err) {
       return relayError(res, err, "Impossible d'enregistrer la musique");
+    }
+  }
+
+  // POST /local/galleries/:slug/music-choice — bibliothèque, lien Spotify &
+  // co, ou aucune musique (le Worker valide le lien et le morceau).
+  if (parts.length === 3 && parts[2] === "music-choice" && req.method === "POST") {
+    const body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
+    try {
+      return json(res, 200, await client.request("POST", `/api/admin/galleries/${encodeURIComponent(slug)}/music-choice`, body));
+    } catch (err) {
+      return relayError(res, err, "Impossible d'enregistrer ce choix de musique");
     }
   }
 
