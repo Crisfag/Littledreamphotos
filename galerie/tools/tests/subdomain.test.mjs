@@ -8,7 +8,7 @@
 // avec l'en-tête Host du studio — exactement ce que le Worker recevra en
 // production derrière la route « *.holypixx.com/* ».
 //
-//   npx wrangler dev --local --port 8788   (depuis worker/, avec
+//   npm run dev:local                      (depuis worker/, avec
 //                                           PUBLIC_SITE_ORIGIN=http://localhost:8000 dans .dev.vars)
 //   node tests/subdomain.test.mjs          (depuis tools/)
 

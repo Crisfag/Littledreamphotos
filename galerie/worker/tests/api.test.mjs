@@ -1,7 +1,7 @@
 // Vérification de bout en bout de l'API, contre un `wrangler dev --local`
 // (D1 et R2 émulés localement).
 //
-//   npx wrangler dev --local --port 8788
+//   npm run dev:local
 //   node tests/api.test.mjs
 
 const BASE = process.env.BASE || "http://127.0.0.1:8788";
@@ -1630,7 +1630,7 @@ check("le devis mémorise le coût du labo sur chaque produit (marge affichée s
 
 // Ajout en menus déroulants (catalogue intégré).
 check("l'admin reçoit le catalogue en menus (catégories, produits, formats en cm, options)",
-      shopAfterQuote.catalogue?.length === 4 && shopAfterQuote.catalogue[2].products[0].sizes.some((x) => x.label === "30 × 40 cm"),
+      shopAfterQuote.catalogue?.length === 7 && shopAfterQuote.catalogue[2].products[0].sizes.some((x) => x.label === "30 × 40 cm"),
       JSON.stringify(shopAfterQuote.catalogue?.map((c) => c.label)));
 check("les produits sont rangés par catégorie",
       shopAfterQuote.products.find((p) => p.id === tirage.id)?.category === "Tirages photo" &&
@@ -1644,6 +1644,18 @@ const pickBad = await admin("POST", "/api/admin/shop/quote-item", { product: "ca
 check("un format hors catalogue est refusé avant même d'interroger le labo (400)", pickBad.status === 400);
 const pickNoKey = await peerAdmin("POST", "/api/admin/shop/quote-item", { product: "canvas-rolled", size: "16x20" });
 check("sans clé Prodigi, le devis demande d'abord d'enregistrer la clé (409)", pickNoKey.status === 409);
+const lookupsBefore = lab.productLookups.length;
+const avail = await (await admin("POST", "/api/admin/shop/availability", { product: "frame-classic-mount", countryCode: "BE" })).json();
+check("les menus ne gardent que les formats que le labo fabrique et livre, avec les couleurs proposées",
+      avail.sizes?.["16x20"]?.available === true && avail.sizes["16x20"].allowed?.join(",") === "black,white" &&
+      avail.sizes["12x12"]?.available === false && lab.productLookups.includes("GLOBAL-CFPM-16x20"),
+      JSON.stringify({ a: avail.sizes?.["16x20"], b: avail.sizes?.["12x12"] }));
+await admin("POST", "/api/admin/shop/availability", { product: "frame-classic-mount", countryCode: "FR" });
+check("la fiche d'un produit n'est demandée qu'une fois au labo, même pour un autre pays",
+      lab.productLookups.length - lookupsBefore === 13, String(lab.productLookups.length - lookupsBefore));
+const availBad = await admin("POST", "/api/admin/shop/availability", { product: "inconnu" });
+const availNoKey = await peerAdmin("POST", "/api/admin/shop/availability", { product: "gift-mug" });
+check("vérifier les formats : produit inconnu refusé (400), clé Prodigi exigée (409)", availBad.status === 400 && availNoKey.status === 409);
 const pickAdd = await admin("POST", "/api/admin/shop/products", { product: "canvas-rolled", size: "16x20", priceCents: 2550, costCents: 1250, shipCostCents: 495, sku: "GLOBAL-PIRATE" });
 const shopWithPick = await (await admin("GET", "/api/admin/shop")).json();
 const picked = shopWithPick.products.find((p) => p.label === "Toile roulée (sans châssis) 40 × 50 cm");

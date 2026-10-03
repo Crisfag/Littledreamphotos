@@ -1068,7 +1068,7 @@
   function wirePicker(catalogue, connected, onAdded) {
     if (!catalogue || !catalogue.length) return;
     var $ = function (id) { return document.getElementById(id); };
-    var pick = { costCents: null, shipCents: 0, seq: 0 };
+    var pick = { costCents: null, shipCents: 0, seq: 0, fillSeq: 0, sizes: null };
     var findCategory = function () { return catalogue.find(function (c) { return c.key === $("ad-pick-category").value; }); };
     var findProduct = function () {
       var cat = findCategory();
@@ -1088,7 +1088,7 @@
     async function requote() {
       pick.costCents = null;
       refreshPrice();
-      if (!connected) return;
+      if (!connected || !$("ad-pick-size").value) return;
       var seq = ++pick.seq;
       var product = findProduct();
       $("ad-pick-cost").textContent = "Demande du coût au laboratoire…";
@@ -1099,7 +1099,7 @@
           option: product.option ? $("ad-pick-option").value : "",
           countryCode: $("ad-shop-country").value,
         });
-        if (seq !== pick.seq) return; // un autre choix a été fait entre-temps
+        if (seq !== pick.seq || !$("ad-pick-cost")) return; // un autre choix a été fait entre-temps, ou l'onglet a été quitté
         if (!q.available) {
           $("ad-pick-cost").innerHTML = '<span class="ad-order-error">Indisponible chez le labo dans cette version : ' + esc(q.error || "") + "</span>";
           return;
@@ -1112,19 +1112,81 @@
         if (!$("ad-pick-margin").value) $("ad-pick-margin").value = eurosInput(Math.max(500, Math.ceil(q.itemsCents / 100) * 100));
         refreshPrice();
       } catch (err) {
-        if (seq === pick.seq) $("ad-pick-cost").innerHTML = '<span class="ad-order-error">' + esc(err.message) + "</span>";
+        if (seq === pick.seq && $("ad-pick-cost")) $("ad-pick-cost").innerHTML = '<span class="ad-order-error">' + esc(err.message) + "</span>";
       }
     }
 
-    function fillSizesAndOptions() {
+    // Formats que Prodigi propose vraiment pour ce produit (et cette
+    // livraison), demandés une fois par produit et par pays. null : on ne
+    // sait pas (pas de clé, ancien Worker, panne) — tous les formats restent
+    // affichés et le devis tranchera.
+    var availability = {};
+    function availabilityFor(product) {
+      if (!connected) return Promise.resolve(null);
+      var key = product.key + "|" + $("ad-shop-country").value;
+      if (!availability[key]) {
+        availability[key] = api("POST", "/shop/availability", { product: product.key, countryCode: $("ad-shop-country").value })
+          .then(function (r) { return r && r.sizes ? r.sizes : null; })
+          .catch(function () { delete availability[key]; return null; });
+      }
+      return availability[key];
+    }
+
+    // Options valides pour le format choisi (ex. couleurs de cadre
+    // réellement fabriquées dans ce format).
+    function fillOptions() {
       var product = findProduct();
-      $("ad-pick-size").innerHTML = options(product.sizes.map(function (s) { return { value: s.key, label: s.label }; }));
+      if (!product.option) return;
+      var info = pick.sizes && pick.sizes[$("ad-pick-size").value];
+      var allowed = info && info.allowed;
+      var choices = product.option.choices.filter(function (c) {
+        return !allowed || allowed.indexOf(String(c.value).toLowerCase()) !== -1;
+      });
+      if (!choices.length) choices = product.option.choices;
+      var current = $("ad-pick-option").value;
+      $("ad-pick-option").innerHTML = options(choices);
+      if (choices.some(function (c) { return c.value === current; })) $("ad-pick-option").value = current;
+    }
+
+    async function fillSizesAndOptions() {
+      var product = findProduct();
+      var seq = ++pick.fillSeq;
+      var previousSize = $("ad-pick-size").value;
+      var all = product.sizes.map(function (s) { return { value: s.key, label: s.label }; });
       $("ad-pick-description").textContent = product.description || "";
       $("ad-pick-option-wrap").hidden = !product.option;
       if (product.option) {
         $("ad-pick-option-label").textContent = product.option.label;
         $("ad-pick-option").innerHTML = options(product.option.choices);
       }
+      $("ad-pick-size").innerHTML = options(all);
+      if (all.some(function (s) { return s.value === previousSize; })) $("ad-pick-size").value = previousSize;
+      pick.sizes = null;
+      if (connected) {
+        pick.seq++; // annule un devis encore en route pour l'ancien choix
+        pick.costCents = null;
+        refreshPrice();
+        $("ad-pick-cost").textContent = "Vérification des formats proposés par le labo…";
+      }
+      var sizeSelect = $("ad-pick-size");
+      var sizes = await availabilityFor(product);
+      // Un autre produit a été choisi entre-temps, ou l'onglet a été quitté
+      // (menus retirés de la page) : cette réponse ne sert plus.
+      if (seq !== pick.fillSeq || !document.body.contains(sizeSelect)) return;
+      pick.sizes = sizes;
+      var chosen = $("ad-pick-size").value; // a pu changer pendant la vérification
+      if (sizes) {
+        var offered = all.filter(function (s) { return !sizes[s.value] || sizes[s.value].available; });
+        $("ad-pick-size").innerHTML = options(offered);
+        if (!offered.length) {
+          $("ad-pick-cost").innerHTML = '<span class="ad-order-error">Le labo ne propose aucun format de ce produit pour une livraison dans ce pays.</span>';
+          return;
+        }
+      }
+      if (Array.prototype.some.call($("ad-pick-size").options, function (o) { return o.value === chosen; })) {
+        $("ad-pick-size").value = chosen;
+      }
+      fillOptions();
       requote();
     }
 
@@ -1136,9 +1198,9 @@
 
     $("ad-pick-category").addEventListener("change", fillProducts);
     $("ad-pick-product").addEventListener("change", fillSizesAndOptions);
-    $("ad-pick-size").addEventListener("change", requote);
+    $("ad-pick-size").addEventListener("change", function () { fillOptions(); requote(); });
     $("ad-pick-option").addEventListener("change", requote);
-    $("ad-shop-country").addEventListener("change", requote);
+    $("ad-shop-country").addEventListener("change", fillSizesAndOptions);
     $("ad-pick-margin").addEventListener("input", refreshPrice);
     $("ad-pick-add").addEventListener("click", async function () {
       var product = findProduct();

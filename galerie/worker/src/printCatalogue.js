@@ -6,8 +6,11 @@
 // simplement signalé « indisponible »).
 //
 // Sources : catalogue Prodigi vérifié contre leur API (projet open source
-// jonasdhunter/prodigi-direct, MIT, 2026-09-06) et devis réels passés depuis
-// l'admin (tirages photo, tirage d'art et toile 30 × 40, cadre 40 × 50).
+// jonasdhunter/prodigi-direct, MIT, 2026-09-06), fiches produits Prodigi
+// (plexiglas, aluminium, Photo Rag, mugs, coussins, cartes) et devis réels
+// passés depuis l'admin. Les formats listés ici sont des candidats : l'admin
+// ne propose que ceux que Prodigi confirme (route « availability », qui lit
+// la fiche de chaque SKU), puis chaque choix est encore vérifié par un devis.
 
 // Formats en pouces (référence Prodigi) → libellé en centimètres.
 const SIZE_CM = {
@@ -16,7 +19,20 @@ const SIZE_CM = {
   "16x16": "40 × 40", "16x20": "40 × 50", "18x24": "45 × 60", "20x20": "50 × 50", "20x30": "50 × 75",
   "24x24": "60 × 60", "24x30": "60 × 75", "24x32": "60 × 80", "24x36": "60 × 90", "28x28": "70 × 70",
   "30x30": "75 × 75", "30x40": "75 × 100", "32x32": "80 × 80",
+  "6x6": "15 × 15", "16x24": "40 × 60", "6x4": "10 × 15", "7x5": "13 × 18", "18x18": "45 × 45",
 };
+
+// Formats qui ne s'écrivent pas en pouces chez Prodigi.
+const SIZE_TEXT = {
+  A4: "A4 · 21 × 29,7 cm", A3: "A3 · 29,7 × 42 cm", A2: "A2 · 42 × 59,4 cm",
+  "11oz": "330 ml",
+};
+
+function sizeLabel(product, size) {
+  if (product.sizeLabels?.[size]) return product.sizeLabels[size];
+  if (SIZE_CM[size]) return `${SIZE_CM[size]} cm`;
+  return SIZE_TEXT[size] || size;
+}
 
 const FRAME_COLORS_CLASSIC = {
   black: "Noir", white: "Blanc", natural: "Bois naturel", brown: "Brun",
@@ -54,6 +70,13 @@ export const CATALOGUE = [
         description: "Impression giclée aux encres pigmentaires, qualité archive.",
         skuPattern: "GLOBAL-FAP-{size}",
         sizes: WALL_SIZES,
+      },
+      {
+        key: "art-photorag",
+        label: "Tirage d'art Hahnemühle Photo Rag",
+        description: "Papier 100 % coton 308 g, la référence des photographes : giclée aux encres pigmentaires, qualité musée.",
+        skuPattern: "GLOBAL-HPR-{size}",
+        sizes: ["8x10", "8x12", "11x14", "12x12", "12x16", "12x18", "16x20", "16x24", "18x24", "20x30", "24x36", "A4", "A3", "A2"],
       },
       {
         key: "art-budget-poster",
@@ -135,9 +158,79 @@ export const CATALOGUE = [
       },
     ],
   },
+  {
+    key: "panels",
+    label: "Plexiglas & aluminium",
+    products: [
+      {
+        key: "acrylic-panel",
+        label: "Photo sous plexiglas",
+        description: "Tirage d'art contrecollé sous plexiglas brillant de 10 mm, accroche invisible : effet galerie, couleurs profondes.",
+        skuPattern: "GLOBAL-MOU-ACRY-{size}",
+        sizes: ["8x8", "8x10", "8x12", "11x14", "12x12", "12x16", "12x18", "16x16", "16x20", "16x24", "18x24", "20x20", "20x30", "24x24", "24x36"],
+      },
+      {
+        key: "metal-aluminium",
+        label: "Photo sur aluminium",
+        description: "Impression par sublimation sur aluminium ChromaLuxe brillant : couleurs éclatantes, léger, résiste à l'humidité.",
+        skuPattern: "GLOBAL-MET-{size}",
+        sizes: ["4x6", "5x7", "8x8", "8x10", "8x12", "10x10", "11x14", "12x12", "12x16", "12x18", "16x16", "16x20", "16x24", "20x20", "20x30", "24x24", "24x36", "30x40"],
+      },
+    ],
+  },
+  {
+    key: "gifts",
+    label: "Objets & cadeaux",
+    products: [
+      {
+        key: "gift-board",
+        label: "Panneau photo rigide",
+        description: "Tirage contrecollé sur un panneau rigide, à poser ou à accrocher.",
+        skuPattern: "GLOBAL-BOARD-{size}",
+        sizes: ["4x6", "5x7", "6x6", "8x8", "8x10", "10x10", "11x14"],
+      },
+      {
+        key: "gift-mug",
+        label: "Mug en céramique blanc",
+        description: "Mug 330 ml imprimé par sublimation, compatible lave-vaisselle et micro-ondes. La photo entière est centrée sur le mug, sans recadrage.",
+        skuPattern: "GLOBAL-MUG-W",
+        sizes: ["11oz"],
+        sizing: "fitPrintArea",
+      },
+      {
+        key: "gift-cushion",
+        label: "Coussin en suédine",
+        description: "Housse douce effet velours imprimée sur une face, dos uni, avec garnissage.",
+        skuPattern: "GLOBAL-CUSH-{size}-SUE",
+        sizes: ["12x12", "16x16", "18x18", "20x20", "24x24"],
+      },
+    ],
+  },
+  {
+    key: "cards",
+    label: "Cartes",
+    products: [
+      {
+        key: "card-matte",
+        label: "Carte de vœux mate",
+        description: "Carte pliée sur papier d'art Mohawk 324 g, votre photo en couverture.",
+        skuPattern: "GLOBAL-GRE-MOH-{size}-BLA",
+        sizes: ["6x4", "7x5", "6x6"],
+        sizeLabels: { "6x6": "14 × 14 cm" },
+      },
+      {
+        key: "card-gloss",
+        label: "Carte de vœux brillante",
+        description: "Carte pliée pelliculée brillante 280 g, votre photo en couverture.",
+        skuPattern: "GLOBAL-GRE-GLOS-{size}-BLA",
+        sizes: ["6x4", "7x5", "6x6"],
+        sizeLabels: { "6x6": "14 × 14 cm" },
+      },
+    ],
+  },
 ];
 
-function findProduct(productKey) {
+export function findProduct(productKey) {
   for (const category of CATALOGUE) {
     for (const product of category.products) {
       if (product.key === productKey) return { category, product };
@@ -164,13 +257,35 @@ export function resolveSelection({ product: productKey, size, option }) {
   } else if (option) {
     return { error: "Ce produit n'a pas d'option" };
   }
-  const sizeLabel = SIZE_CM[size] || size;
   return {
-    sku: product.skuPattern.replace("{size}", size),
+    sku: skuFor(product, size),
     attributes,
-    label: `${product.label} ${sizeLabel} cm${optionLabel ? ` — ${optionLabel.toLowerCase()}` : ""}`,
+    label: `${product.label} ${sizeLabel(product, size)}${optionLabel ? ` — ${optionLabel.toLowerCase()}` : ""}`,
     ref: [product.key, size, product.option ? attributes[product.option.attribute] : ""].join("|"),
   };
+}
+
+// Début fixe du SKU (avant le format) : sert à reconnaître un produit
+// ajouté hors menus d'après sa seule référence.
+function skuPrefix(product) {
+  return product.skuPattern.split("{size}")[0].toUpperCase();
+}
+
+export function skuFor(product, size) {
+  return product.skuPattern.replace("{size}", size);
+}
+
+// Recadrage demandé au labo : la photo remplit la zone d'impression (tirages,
+// toiles…), sauf pour les produits dont la zone est très allongée (mug), où
+// elle est posée en entier au centre.
+export function sizingForSku(sku) {
+  const upper = String(sku || "").toUpperCase();
+  for (const category of CATALOGUE) {
+    for (const product of category.products) {
+      if (product.sizing && upper.startsWith(skuPrefix(product))) return product.sizing;
+    }
+  }
+  return "fillPrintArea";
 }
 
 // Version envoyée à l'admin pour construire les menus (libellés en cm).
@@ -182,7 +297,7 @@ export function catalogueForAdmin() {
       key: p.key,
       label: p.label,
       description: p.description,
-      sizes: p.sizes.map((s) => ({ key: s, label: `${SIZE_CM[s] || s} cm` })),
+      sizes: p.sizes.map((s) => ({ key: s, label: sizeLabel(p, s) })),
       option: p.option ? { label: p.option.label, choices: Object.entries(p.option.choices).map(([value, label]) => ({ value, label })) } : null,
     })),
   }));
@@ -200,7 +315,7 @@ export function categoryLabelFor(row) {
   let best = null;
   for (const category of CATALOGUE) {
     for (const product of category.products) {
-      const prefix = product.skuPattern.replace("{size}", "").toUpperCase();
+      const prefix = skuPrefix(product);
       if (sku.startsWith(prefix) && (!best || prefix.length > best.prefix.length)) best = { prefix, label: category.label };
     }
   }

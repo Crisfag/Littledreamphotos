@@ -10,7 +10,7 @@
 // réseau (tests/prodigi.test.mjs).
 
 import { b64url, unb64url, randomBytes, timingSafeEqual } from "./auth.js";
-import { SUGGESTED_SELECTIONS, resolveSelection } from "./printCatalogue.js";
+import { SUGGESTED_SELECTIONS, resolveSelection, sizingForSku } from "./printCatalogue.js";
 
 const enc = new TextEncoder();
 const dec = new TextDecoder();
@@ -180,7 +180,7 @@ export function buildOrderPayload({ order, lines, recipient, assetUrlFor, callba
       merchantReference: `${order.id}-${index + 1}`,
       sku: line.sku,
       copies: line.copies,
-      sizing: "fillPrintArea",
+      sizing: sizingForSku(line.sku),
       ...(line.attributes && Object.keys(line.attributes).length ? { attributes: line.attributes } : {}),
       assets: [{ printArea: "default", url: assetUrlFor(line.photoId) }],
     })),
@@ -245,6 +245,31 @@ export async function prodigiRequest(env, { apiKey, environment }, method, path,
     throw err;
   }
   return data;
+}
+
+// Lit la fiche d'un SKU (GET /products/{sku}) : le produit est-il commandable
+// avec une seule photo (zone « default », aucune autre zone obligatoire),
+// livrable dans `countryCode`, et quelles valeurs accepte son option
+// (finition, couleur, bords…) ? `allowed` vaut null si la fiche ne le dit pas.
+export function availabilityFromDetails(data, { optionAttribute, countryCode } = {}) {
+  const product = data?.product;
+  if (!product) return { available: false, reason: "Fiche produit illisible" };
+  const areas = product.printAreas || {};
+  if (Object.keys(areas).length && !areas.default) return { available: false, reason: "Demande une mise en page spéciale" };
+  const otherRequired = Object.entries(areas).some(([name, area]) => name !== "default" && area?.required);
+  if (otherRequired) return { available: false, reason: "Demande plusieurs images" };
+  const variants = Array.isArray(product.variants) ? product.variants : [];
+  const country = String(countryCode || "").toUpperCase();
+  const shipping = variants.filter((v) => !country || !Array.isArray(v.shipsTo) || v.shipsTo.includes(country));
+  if (variants.length && !shipping.length) return { available: false, reason: "Non livré dans ce pays" };
+  let allowed = null;
+  if (optionAttribute) {
+    const fromVariants = shipping.map((v) => v.attributes?.[optionAttribute]).filter((x) => typeof x === "string");
+    const fromProduct = Array.isArray(product.attributes?.[optionAttribute]) ? product.attributes[optionAttribute] : [];
+    const values = fromVariants.length ? fromVariants : fromProduct;
+    if (values.length) allowed = [...new Set(values.map((x) => x.toLowerCase()))];
+  }
+  return { available: true, allowed };
 }
 
 // Coût facturé par Prodigi pour une unité livrée dans `countryCode` :

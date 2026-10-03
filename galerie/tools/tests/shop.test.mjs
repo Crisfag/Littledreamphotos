@@ -3,7 +3,7 @@
 // branché par PRODIGI_API_BASE dans worker/.dev.vars). Autonome : crée son
 // compte, sa galerie et ses photos, nettoie derrière lui.
 //
-//   npx wrangler dev --local --port 8788   (depuis worker/)
+//   npm run dev:local                      (depuis worker/)
 //   node tests/shop.test.mjs               (depuis tools/)
 
 import { chromium } from "playwright";

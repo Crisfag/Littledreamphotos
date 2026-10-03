@@ -7,9 +7,9 @@
 import {
   encryptApiKey, decryptApiKey, signFor, verifySignature, normalizeRecipient, buildOrderLines,
   buildOrderPayload, buildQuotePayload, costFromQuote, statusFromProdigiOrder, prodigiErrorMessage,
-  prodigiBase, SUGGESTED_PRODUCTS,
+  prodigiBase, SUGGESTED_PRODUCTS, availabilityFromDetails,
 } from "../src/prodigi.js";
-import { CATALOGUE, resolveSelection, catalogueForAdmin, categoryLabelFor } from "../src/printCatalogue.js";
+import { CATALOGUE, resolveSelection, catalogueForAdmin, categoryLabelFor, sizingForSku } from "../src/printCatalogue.js";
 
 const checks = [];
 function check(label, ok, detail) {
@@ -136,11 +136,31 @@ check("les formats suggérés ont tous un SKU et un prix", SUGGESTED_PRODUCTS.ev
 
 /* ---------- Catalogue en menus déroulants ---------- */
 
-check("le catalogue propose 4 catégories (tirages photo, tirages d'art & posters, toiles, cadres)",
-      CATALOGUE.length === 4 && CATALOGUE.map((c) => c.key).join(",") === "photo,art,canvas,frames");
+check("le catalogue propose 7 catégories (tirages, art, toiles, cadres, plexiglas & alu, objets, cartes)",
+      CATALOGUE.length === 7 && CATALOGUE.map((c) => c.key).join(",") === "photo,art,canvas,frames,panels,gifts,cards");
 const adminCatalogue = catalogueForAdmin();
-check("chaque format est présenté en centimètres, jamais en référence Prodigi",
-      adminCatalogue.every((c) => c.products.every((p) => p.sizes.every((s) => /cm$/.test(s.label) && !/GLOBAL/.test(s.label)))));
+check("chaque format est présenté en centimètres (ou en ml pour un mug), jamais en référence Prodigi",
+      adminCatalogue.every((c) => c.products.every((p) => p.sizes.every((s) => /(cm|ml)$/.test(s.label) && !/GLOBAL|x\d/.test(s.label)))),
+      JSON.stringify(adminCatalogue.flatMap((c) => c.products.flatMap((p) => p.sizes.map((s) => s.label))).filter((l) => !/(cm|ml)$/.test(l))));
+const keys = CATALOGUE.flatMap((c) => c.products.map((p) => p.key));
+check("chaque produit a une clé unique", new Set(keys).size === keys.length);
+const acrylic = resolveSelection({ product: "acrylic-panel", size: "16x20" });
+const mug = resolveSelection({ product: "gift-mug", size: "11oz" });
+const cushion = resolveSelection({ product: "gift-cushion", size: "16x16" });
+const card = resolveSelection({ product: "card-matte", size: "7x5" });
+const rag = resolveSelection({ product: "art-photorag", size: "A3" });
+check("les nouveaux produits donnent les bonnes références Prodigi",
+      acrylic.sku === "GLOBAL-MOU-ACRY-16x20" && mug.sku === "GLOBAL-MUG-W" && cushion.sku === "GLOBAL-CUSH-16x16-SUE" &&
+      card.sku === "GLOBAL-GRE-MOH-7x5-BLA" && rag.sku === "GLOBAL-HPR-A3",
+      [acrylic.sku, mug.sku, cushion.sku, card.sku, rag.sku].join(" "));
+check("leurs libellés restent lisibles",
+      mug.label === "Mug en céramique blanc 330 ml" && card.label === "Carte de vœux mate 13 × 18 cm" &&
+      rag.label === "Tirage d'art Hahnemühle Photo Rag A3 · 29,7 × 42 cm" &&
+      resolveSelection({ product: "card-gloss", size: "6x6" }).label === "Carte de vœux brillante 14 × 14 cm",
+      [mug.label, card.label, rag.label].join(" | "));
+check("la photo est posée en entier sur un mug, et remplit la zone partout ailleurs",
+      sizingForSku("GLOBAL-MUG-W") === "fitPrintArea" && sizingForSku("global-mug-w") === "fitPrintArea" &&
+      sizingForSku("GLOBAL-CAN-16x20") === "fillPrintArea" && sizingForSku("GLOBAL-GRE-MOH-7x5-BLA") === "fillPrintArea");
 const canvas = resolveSelection({ product: "canvas-stretched", size: "12x16", option: "ImageWrap" });
 check("un choix de menus devient la bonne référence Prodigi, ses options et un libellé lisible",
       canvas.sku === "GLOBAL-CAN-12x16" && canvas.attributes.wrap === "ImageWrap" && canvas.label === "Toile sur châssis 30 × 40 cm — image prolongée",
@@ -159,7 +179,35 @@ check("la catégorie d'un produit se retrouve, y compris pour une référence sa
       categoryLabelFor({ catalog_ref: "frame-classic|16x20|black" }) === "Cadres" &&
       categoryLabelFor({ sku: "GLOBAL-CAN-ROL-SC-16x20" }) === "Toiles" &&
       categoryLabelFor({ sku: "GLOBAL-CFPM-16x20" }) === "Cadres" &&
-      categoryLabelFor({ sku: "PRODUIT-MAISON" }) === "Autres produits");
+      categoryLabelFor({ sku: "PRODUIT-MAISON" }) === "Autres produits" &&
+      categoryLabelFor({ sku: "GLOBAL-CUSH-16X16-SUE" }) === "Objets & cadeaux" &&
+      categoryLabelFor({ sku: "GLOBAL-GRE-GLOS-7X5-BLA" }) === "Cartes" &&
+      categoryLabelFor({ sku: "GLOBAL-MET-8X10" }) === "Plexiglas & aluminium");
+
+/* ---------- Fiche produit Prodigi (formats réellement proposés) ---------- */
+
+const details = (product) => ({ outcome: "Ok", product });
+const frameDetails = details({
+  sku: "GLOBAL-CFPM-16X20",
+  attributes: { color: ["black", "white", "natural"] },
+  printAreas: { default: { required: true } },
+  variants: [
+    { attributes: { color: "black" }, shipsTo: ["BE", "FR"] },
+    { attributes: { color: "white" }, shipsTo: ["BE"] },
+    { attributes: { color: "natural" }, shipsTo: ["US"] },
+  ],
+});
+const frameBE = availabilityFromDetails(frameDetails, { optionAttribute: "color", countryCode: "BE" });
+check("une fiche produit donne les options vraiment livrables dans le pays",
+      frameBE.available === true && frameBE.allowed.join(",") === "black,white", JSON.stringify(frameBE));
+check("un produit qui n'est livré nulle part dans le pays est écarté",
+      availabilityFromDetails(frameDetails, { optionAttribute: "color", countryCode: "LU" }).available === false);
+check("un produit qui exige plusieurs images (recto, verso…) est écarté : la boutique n'en envoie qu'une",
+      availabilityFromDetails(details({ printAreas: { default: { required: true }, back: { required: true } }, variants: [] })).available === false &&
+      availabilityFromDetails(details({ printAreas: { front: { required: true } }, variants: [] })).available === false);
+const plain = availabilityFromDetails(details({ attributes: {}, printAreas: { default: { required: true }, inside: { required: false } }, variants: [{ attributes: {}, shipsTo: ["BE"] }] }), { countryCode: "BE" });
+check("une zone facultative en plus n'empêche rien, et sans option rien n'est filtré", plain.available === true && plain.allowed === null, JSON.stringify(plain));
+check("une réponse sans fiche est considérée indisponible", availabilityFromDetails({}).available === false);
 
 const failed = checks.filter((c) => !c.ok);
 console.log(failed.length ? `\n${failed.length} vérification(s) en échec.` : `\n${checks.length} vérifications, toutes passent.`);

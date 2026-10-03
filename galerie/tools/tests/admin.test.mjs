@@ -5,7 +5,7 @@
 // cloisonnement est créé directement via le Worker, pour ne pas retester
 // l'inscription une seconde fois.
 //
-//   npx wrangler dev --local --port 8788                     (depuis worker/)
+//   npm run dev:local                                         (depuis worker/)
 //   GALERIE_API=http://127.0.0.1:8788 GALERIE_FORENSIC_KEY=… \
 //     node admin-server.mjs                                  (depuis tools/)
 //   node tests/admin.test.mjs
@@ -699,6 +699,10 @@ check("aucune référence Prodigi ni option technique n'est affichée pour les p
       !(await page.textContent("#ad-shop-products")).includes("GLOBAL-"));
 
 // Ajout en menus déroulants : catégorie → produit → format → (option).
+check("les menus proposent 7 catégories, dont plexiglas & aluminium, objets & cadeaux et cartes",
+      (await page.locator("#ad-pick-category option").allTextContents()).join("|") ===
+        "Tirages photo|Tirages d'art & posters|Toiles|Cadres|Plexiglas & aluminium|Objets & cadeaux|Cartes",
+      (await page.locator("#ad-pick-category option").allTextContents()).join("|"));
 await page.selectOption("#ad-pick-category", "canvas");
 await page.selectOption("#ad-pick-product", "canvas-rolled");
 check("une toile roulée n'a pas d'option : le menu d'option disparaît", await page.isHidden("#ad-pick-option-wrap"));
@@ -717,13 +721,26 @@ check("le produit ajouté apparaît dans « Mes produits », avec son coût et s
       (await pickedRow.locator('[data-field="price"]').inputValue()) === "32.50" && (await pickedRow.locator(".ad-margin-cell").textContent()).includes("20,00"));
 
 await page.selectOption("#ad-pick-category", "frames");
-check("les cadres proposent la couleur du cadre", (await page.textContent("#ad-pick-option-label")) === "Couleur du cadre" &&
-      (await page.locator("#ad-pick-option option").count()) === 8);
+await page.waitForFunction(() => (document.getElementById("ad-pick-cost") || {}).textContent?.includes("12,50"), { timeout: 10000 });
+// Le faux labo ne fabrique ce cadre qu'en noir et blanc, et le 30 × 30 n'est
+// livré qu'aux États-Unis : les menus ne montrent que ce qui existe.
+check("les cadres proposent la couleur du cadre, limitée à celles que le labo fabrique",
+      (await page.textContent("#ad-pick-option-label")) === "Couleur du cadre" &&
+      (await page.locator("#ad-pick-option option").allTextContents()).join("|") === "Noir|Blanc",
+      (await page.locator("#ad-pick-option option").allTextContents()).join("|"));
+check("un format que le labo ne livre pas dans le pays choisi disparaît des menus",
+      !(await page.locator("#ad-pick-size option").allTextContents()).includes("30 × 30 cm") &&
+      (await page.locator("#ad-pick-size option").allTextContents()).includes("40 × 50 cm"));
 await page.selectOption("#ad-pick-category", "art");
 await page.selectOption("#ad-pick-product", "art-budget-poster");
-await page.waitForFunction(() => (document.getElementById("ad-pick-cost") || {}).textContent?.includes("Indisponible"), { timeout: 10000 });
-check("un produit que le labo refuse est signalé « indisponible » et ne peut pas être ajouté",
-      (await page.textContent("#ad-pick-cost")).includes("Unknown SKU") && await page.isDisabled("#ad-pick-add"));
+await page.waitForFunction(() => (document.getElementById("ad-pick-cost") || {}).textContent?.includes("aucun format"), { timeout: 10000 });
+check("un produit que le labo ne fabrique pas est signalé et ne peut pas être ajouté",
+      (await page.locator("#ad-pick-size option").count()) === 0 && await page.isDisabled("#ad-pick-add"));
+await page.selectOption("#ad-pick-category", "gifts");
+await page.selectOption("#ad-pick-product", "gift-mug");
+await page.waitForFunction(() => (document.getElementById("ad-pick-cost") || {}).textContent?.includes("12,50"), { timeout: 10000 });
+check("un mug se choisit comme le reste (contenance au lieu d'un format)",
+      (await page.locator("#ad-pick-size option").allTextContents()).join("|") === "330 ml" && await page.isHidden("#ad-pick-option-wrap"));
 
 // Mode avancé : référence saisie à la main.
 await page.click(".ad-advanced summary");

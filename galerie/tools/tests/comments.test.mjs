@@ -2,7 +2,7 @@
 // dans un vrai navigateur, contre le vrai Worker local. Autonome : crée sa
 // propre galerie, sert la page cliente, nettoie derrière elle.
 //
-//   npx wrangler dev --local --port 8788   (depuis worker/)
+//   npm run dev:local                      (depuis worker/)
 //   node tests/comments.test.mjs           (depuis tools/)
 
 import { chromium } from "playwright";
