@@ -7,7 +7,10 @@
 //  - clé d'API qui ne commence pas par "test-key" → 401 ;
 //  - SKU contenant "INVALID" (ou motif `rejectSku`) → 400 avec un détail
 //    d'erreur au format Prodigi ;
-//  - sinon : devis 12,50 € + 4,95 € de port, commande créée en "InProgress".
+//  - sinon : devis 12,50 € + 4,95 € de port, commande créée en "InProgress" ;
+//  - fiche produit (GET /products/:sku) : 404 pour un SKU rejeté ; un cadre
+//    (CFPM) n'existe qu'en noir et blanc ; un SKU contenant "-12X12" n'est
+//    livré qu'aux États-Unis.
 
 import { createServer } from "node:http";
 
@@ -15,6 +18,7 @@ export async function startFakeProdigi(port = Number(process.env.FAKE_PRODIGI_PO
   const orders = new Map(); // id -> commande (format Prodigi)
   const received = [];      // corps des POST /orders, dans l'ordre
   const quotes = [];        // corps des POST /quotes
+  const productLookups = []; // SKU des fiches produit demandées
   let counter = 0;
 
   const send = (res, status, body) => {
@@ -65,6 +69,23 @@ export async function startFakeProdigi(port = Number(process.env.FAKE_PRODIGI_PO
       orders.set(order.id, order);
       return send(res, 200, { outcome: "Created", order });
     }
+    const productMatch = /^\/v4\.0\/products\/([^/]+)$/.exec(path);
+    if (req.method === "GET" && productMatch) {
+      const sku = decodeURIComponent(productMatch[1]);
+      productLookups.push(sku);
+      if (rejectSku.test(sku)) return send(res, 404, { statusCode: 404, statusText: "NotFound" });
+      const colors = /CFPM/i.test(sku) ? ["black", "white"] : null;
+      const shipsTo = /-12X12/i.test(sku) ? ["US"] : ["BE", "FR", "NL", "LU", "DE", "GB", "US"];
+      const variants = (colors || [null]).map((color) => ({
+        attributes: color ? { color } : {},
+        shipsTo,
+        printAreaSizes: { default: { horizontalResolution: 3000, verticalResolution: 2400 } },
+      }));
+      return send(res, 200, {
+        outcome: "Ok",
+        product: { sku, description: "Fake", attributes: colors ? { color: colors } : {}, printAreas: { default: { required: true } }, variants },
+      });
+    }
     const match = /^\/v4\.0\/orders\/([^/]+)$/.exec(path);
     if (req.method === "GET" && match) {
       const order = orders.get(decodeURIComponent(match[1]));
@@ -83,6 +104,7 @@ export async function startFakeProdigi(port = Number(process.env.FAKE_PRODIGI_PO
     orders,
     received,
     quotes,
+    productLookups,
     // Simule l'expédition par le labo.
     ship(orderId, trackingUrl) {
       const order = orders.get(orderId);

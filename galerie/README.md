@@ -393,11 +393,17 @@ Le tableau de bord s'organise en trois onglets, chacun avec son propre lien
   d'API Prodigi (mode test « sandbox » où rien n'est imprimé, puis
   production) et les frais de port facturés au client. Ajouter un produit
   se fait **en menus déroulants** : catégorie (tirages photo, tirages d'art
-  & posters, toiles, cadres), produit, format en centimètres, puis finition,
-  bords ou couleur du cadre selon le produit. Le coût réel chez Prodigi
-  s'affiche aussitôt (produit et livraison), le photographe indique sa
-  marge et le prix client se calcule tout seul ; un produit que le labo ne
-  propose pas est signalé « indisponible » et ne peut pas être ajouté.
+  & posters dont Hahnemühle Photo Rag, toiles, cadres, plexiglas &
+  aluminium, objets & cadeaux — panneau photo, mug, coussin —, cartes de
+  vœux), produit, format en centimètres, puis finition, bords ou couleur du
+  cadre selon le produit. Les menus ne montrent que les formats et options
+  que Prodigi fabrique et livre dans le pays choisi (fiche de chaque
+  référence lue chez le labo, gardée quelques heures en mémoire). Le coût
+  réel chez Prodigi s'affiche aussitôt (produit et livraison), le
+  photographe indique sa marge et le prix client se calcule tout seul ; un
+  produit que le labo refuse malgré tout est signalé « indisponible » et ne
+  peut pas être ajouté. Sur un mug, la photo est posée entière au centre
+  (pas de recadrage en bandeau) ; partout ailleurs elle remplit le format.
   Aucune référence Prodigi n'est à connaître (un mode avancé permet encore
   d'en saisir une à la main). « Mes produits » les range par catégorie, avec
   coût labo, prix client et marge recalculée à la frappe ; « Mettre à jour
@@ -711,7 +717,7 @@ des tuiles, refus du mauvais mot de passe, absence de toute balise `<img>`,
 neutralisation du menu contextuel et de la copie, voile sur « Impr. écran » et
 sur perte de focus, consignation au journal.
 
-**API du Worker** — 309 vérifications contre le vrai moteur Cloudflare (D1 et R2
+**API du Worker** — 312 vérifications contre le vrai moteur Cloudflare (D1 et R2
 émulés localement par `wrangler dev`) : comptes photographes (inscription,
 connexion, session, mot de passe oublié — même réponse générique qu'un
 compte existe ou non), cloisonnement strict entre comptes (un photographe ne
@@ -786,7 +792,9 @@ sans doublon, SKU, options et prix invalides refusés, devis avec coût réel
 et marge, coût mémorisé sur chaque produit, format refusé par le labo avec
 sa raison ; catalogue en menus envoyé à l'admin, produits rangés par
 catégorie, devis instantané d'un choix de menus, format hors catalogue
-refusé avant d'interroger le labo, ajout depuis les menus avec la
+refusé avant d'interroger le labo, formats et couleurs filtrés d'après la
+fiche produit du labo (format non livré dans le pays écarté, fiche lue une
+seule fois), ajout depuis les menus avec la
 référence déduite par le serveur (jamais celle envoyée par la page) ; côté client, boutique
 invisible tant qu'elle n'est pas ouverte sur la galerie, que Stripe n'est
 pas actif ou que la photo n'a pas de fichier d'impression, références
@@ -831,7 +839,7 @@ ou invitation à choisir, lien vers la galerie présent dans le HTML et le
 texte — ou aucun bouton du tout sans adresse publique configurée —, e-mail
 de sélection validée avec nombre de photos et supplément dû.
 
-**Boutique de tirages (logique)** — 42 vérifications sans réseau ni D1 :
+**Boutique de tirages (logique)** — 51 vérifications sans réseau ni D1 :
 clé Prodigi chiffrée (jamais en clair, illisible avec un autre secret, IV
 aléatoire), URLs signées propres à une commande et une photo, adresse de
 livraison nettoyée et validée (e-mail, ville, pays proposé), lignes figées
@@ -842,10 +850,13 @@ idempotence par tentative, `postalOrZipCode`, `fillPrintArea`, options),
 coût d'un devis lu en centimes, statuts Prodigi traduits (en fabrication,
 expédiée avec suivi, annulée), erreurs Prodigi rendues lisibles quel que soit leur format (clé du
 mauvais environnement expliquée), finition précisée sur les tirages photo
-suggérés ; catalogue en menus (4 catégories, formats en centimètres), choix
-traduit en référence Prodigi et options (options imposées comprises),
-produit, format ou option hors catalogue refusés, catégorie retrouvée même
-pour une référence saisie à la main.
+suggérés ; catalogue en menus (7 catégories, formats en centimètres ou en
+ml, clés uniques), choix traduit en référence Prodigi et options (options
+imposées comprises, nouveaux produits : plexiglas, aluminium, Photo Rag,
+mug, coussin, cartes), mug imprimé sans recadrage, produit, format ou
+option hors catalogue refusés, catégorie retrouvée même pour une référence
+saisie à la main ; lecture d'une fiche produit Prodigi (options livrables
+dans le pays, produit à plusieurs images ou non livré écarté).
 
 **Boutique de tirages (page client)** — 17 vérifications dans un vrai
 navigateur, contre le faux laboratoire : boutique annoncée, bouton
@@ -885,7 +896,7 @@ appliqué sinon, HT + TVA se recomposant exactement au centime près en TTC
 même sur un montant qui ne se divise pas rond, et un vrai PDF valide généré
 aussi bien avec des coordonnées complètes qu'avec des champs vides.
 
-**Interface d'administration** — 112 vérifications dans un vrai navigateur,
+**Interface d'administration** — 115 vérifications dans un vrai navigateur,
 contre le vrai Worker local : demande de lien de réinitialisation de mot de
 passe (message générique affiché), création de compte et connexion depuis
 le formulaire (pas de session présupposée), barre d'onglets Galeries /
@@ -946,9 +957,10 @@ Prodigi » à faire puis cochée après enregistrement (clé jamais réaffichée
 frais de port relus, formats suggérés rangés par catégorie sans aucune
 référence Prodigi affichée, ajout en menus (option masquée quand le
 produit n'en a pas, coût du labo affiché aussitôt, marge proposée, prix
-client recalculé, produit ajouté avec son coût et sa marge, couleurs de
-cadre proposées, produit refusé par le labo signalé et impossible à
-ajouter), référence ajoutée en mode avancé, mise à jour des coûts labo avec
+client recalculé, produit ajouté avec son coût et sa marge, 7 catégories,
+couleurs de cadre limitées à celles du labo, format non livré masqué,
+produit absent du labo signalé et impossible à ajouter, mug proposé en
+330 ml), référence ajoutée en mode avancé, mise à jour des coûts labo avec
 la raison d'un refus, marge recalculée à la frappe et prix enregistré, aucune commande au départ, et boutique ouverte depuis la
 fiche galerie avec l'explication des photos commandables.
 
@@ -1015,7 +1027,7 @@ node tests/reminders.test.mjs         # décision des relances automatiques, san
 node tests/prodigi.test.mjs           # boutique de tirages (Prodigi), sans réseau
 node tests/stripe.test.mjs            # signature de webhook + encodage des sessions Stripe, sans réseau
 node tests/invoices.test.mjs          # calcul de TVA + génération du PDF de facture, sans réseau
-npx wrangler dev --local --port 8788  # dans un autre terminal
+npm run dev:local                     # dans un autre terminal (Worker local sur le port 8788)
 BASE=http://127.0.0.1:8788 node tests/api.test.mjs
 ```
 

@@ -16,9 +16,9 @@ import {
   SUGGESTED_PRODUCTS, SHOP_COUNTRIES, ORDER_STATUS_LABELS,
   encryptApiKey, decryptApiKey, signFor, verifySignature,
   normalizeRecipient, buildOrderLines, buildOrderPayload, buildQuotePayload,
-  prodigiRequest, costFromQuote, statusFromProdigiOrder,
+  prodigiRequest, costFromQuote, statusFromProdigiOrder, availabilityFromDetails,
 } from "./prodigi.js";
-import { resolveSelection, catalogueForAdmin, categoryLabelFor } from "./printCatalogue.js";
+import { resolveSelection, catalogueForAdmin, categoryLabelFor, findProduct, skuFor } from "./printCatalogue.js";
 
 const MAX_ORIGINAL_BYTES = 60 * 1024 * 1024;
 const MAX_PRODUCTS = 40;
@@ -317,6 +317,62 @@ async function quoteSelection(request, env, photographerId) {
   }
 }
 
+// Fiches produits Prodigi déjà lues, gardées quelques heures par instance du
+// Worker : le catalogue du labo bouge rarement et l'admin redemande souvent
+// la même catégorie. Une fiche introuvable est mémorisée aussi (null).
+const DETAILS_TTL_MS = 6 * 60 * 60 * 1000;
+const detailsCache = new Map();
+
+async function productDetails(env, creds, sku) {
+  const key = `${creds.environment}:${sku.toUpperCase()}`;
+  const hit = detailsCache.get(key);
+  if (hit && Date.now() - hit.at < DETAILS_TTL_MS) return hit.data;
+  try {
+    const data = await prodigiRequest(env, creds, "GET", `/products/${encodeURIComponent(sku)}`);
+    detailsCache.set(key, { at: Date.now(), data });
+    return data;
+  } catch (err) {
+    if (err.prodigiStatus === 404 || err.prodigiStatus === 400) {
+      detailsCache.set(key, { at: Date.now(), data: null });
+      return null;
+    }
+    throw err;
+  }
+}
+
+// Formats réellement proposés par Prodigi pour un produit du catalogue :
+// l'admin n'affiche que ceux-là dans ses menus, avec les options valides
+// pour chacun. Une fiche qui n'a pas pu être lue (panne réseau) laisse le
+// format affiché : le devis qui suit tranchera.
+async function catalogueAvailability(request, env, photographerId) {
+  const body = await request.json().catch(() => null);
+  const found = findProduct(String(body?.product || ""));
+  if (!found) return fail(400, "Produit inconnu");
+  const { product } = found;
+  const countryCode = SHOP_COUNTRIES[String(body?.countryCode || "").toUpperCase()] ? String(body.countryCode).toUpperCase() : "BE";
+  const photographer = await photographerRow(env, photographerId);
+  const creds = await credentialsFor(env, photographer);
+  if (!creds.apiKey) return fail(409, "Enregistrez d'abord votre clé Prodigi");
+  const optionAttribute = product.option?.attribute;
+  const sizes = {};
+  try {
+    await Promise.all(product.sizes.map(async (size) => {
+      try {
+        const data = await productDetails(env, creds, skuFor(product, size));
+        sizes[size] = data
+          ? availabilityFromDetails(data, { optionAttribute, countryCode })
+          : { available: false, reason: "Format absent du catalogue du labo" };
+      } catch (err) {
+        if (err.prodigiStatus === 401) throw err;
+        sizes[size] = { available: true, allowed: null, unchecked: true };
+      }
+    }));
+  } catch (err) {
+    return fail(502, err.message);
+  }
+  return json({ product: product.key, countryCode, sizes });
+}
+
 async function setGalleryShop(request, env, gallery) {
   const body = await request.json().catch(() => null);
   if (!body || typeof body.enabled !== "boolean") return fail(400, "Requête invalide");
@@ -373,6 +429,7 @@ export async function handleShopAdmin(request, env, photographerId, parts, helpe
     if (parts.length === 4 && parts[3] === "settings" && method === "POST") return updateShopSettings(request, env, photographerId);
     if (parts.length === 4 && parts[3] === "quote" && method === "POST") return quoteProducts(request, env, photographerId);
     if (parts.length === 4 && parts[3] === "quote-item" && method === "POST") return quoteSelection(request, env, photographerId);
+    if (parts.length === 4 && parts[3] === "availability" && method === "POST") return catalogueAvailability(request, env, photographerId);
     if (parts.length === 4 && parts[3] === "products" && method === "POST") return createProduct(request, env, photographerId);
     if (parts.length === 5 && parts[3] === "products" && parts[4] === "suggested" && method === "POST") return addSuggestedProducts(env, photographerId);
     if (parts.length === 5 && parts[3] === "products" && method === "PUT") return updateProduct(request, env, photographerId, parts[4]);

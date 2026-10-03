@@ -2,7 +2,7 @@
 // son empreinte invisible), contre un admin-server.mjs et un Worker locaux
 // déjà lancés :
 //
-//   npx wrangler dev --local --port 8788                     (depuis worker/)
+//   npm run dev:local                                         (depuis worker/)
 //   GALERIE_API=http://127.0.0.1:8788 GALERIE_FORENSIC_KEY=… \
 //     node admin-server.mjs                                  (depuis tools/)
 //   node tests/detect.test.mjs

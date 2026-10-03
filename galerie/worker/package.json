@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
+    "dev:local": "node scripts/dev-local.mjs",
     "deploy": "wrangler deploy",
     "db:init": "wrangler d1 execute galerie-protegee --remote --file=schema.sql",
     "db:init:local": "wrangler d1 execute galerie-protegee --local --file=schema.sql"
