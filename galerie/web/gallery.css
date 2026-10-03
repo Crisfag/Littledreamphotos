@@ -488,6 +488,9 @@ h1 { font-family: var(--serif); font-weight: 500; font-size: clamp(1.9rem, 4vw, 
   padding: 1rem 1.25rem 3rem;
 }
 .gp-footer { border-top: 1px solid var(--line); padding-top: 1.75rem; }
+.gp-footer-links { display: flex; flex-wrap: wrap; gap: .3rem 1.2rem; margin-top: .5rem; font-size: .8rem; }
+.gp-footer-links a, .gp-privacy-note a { color: var(--muted); }
+.gp-privacy-note { margin: 1rem 0 0; font-size: .75rem; color: var(--muted); line-height: 1.5; }
 
 /* ---------- Visionneuse ---------- */
 

@@ -12,6 +12,7 @@ import { hashPassword, randomBytes, b64url } from "./auth.js";
 import { listLibrary, setMusicChoice, musicForAdmin } from "./music.js";
 import { handleDeliveryAdmin, deliveryForAdmin } from "./delivery.js";
 import { sendDeliveryReady } from "./notify.js";
+import { exportAccount, deleteAccount } from "./privacy.js";
 import { galleryUrlFor } from "./reminders.js";
 import { authenticatePhotographer } from "./authPhotographer.js";
 import { connectStripe, refreshStripeStatus, setBillingProfile } from "./billing.js";
@@ -433,7 +434,13 @@ async function setQuota(request, env, photographerId, slug) {
 async function deleteGallery(env, photographerId, slug) {
   const gallery = await ownedGallery(env, photographerId, slug);
   if (!gallery) return fail(404, "Galerie introuvable");
+  await eraseGallery(env, gallery);
+  return json({ ok: true });
+}
 
+// Efface une galerie et tout ce qui en dépend (fichiers R2 et lignes D1) —
+// utilisé aussi par la suppression du compte entier (voir privacy.js).
+async function eraseGallery(env, gallery) {
   // R2 ne supprime pas récursivement : on liste puis on efface par lots.
   let cursor;
   do {
@@ -454,8 +461,6 @@ async function deleteGallery(env, photographerId, slug) {
     env.DB.prepare("DELETE FROM delivery_files WHERE gallery_id = ?").bind(gallery.id),
     env.DB.prepare("DELETE FROM galleries WHERE id = ?").bind(gallery.id),
   ]);
-
-  return json({ ok: true });
 }
 
 async function addPhoto(request, env, photographerId, slug) {
@@ -807,6 +812,13 @@ export async function handleAdmin(request, env, ctx, path) {
   // confirmation), présentation par défaut des futures galeries.
   if (section === "account" && parts.length === 3 && request.method === "POST") {
     return updateStudioName(request, env, photographerId);
+  }
+  // Droits RGPD : export de toutes les données du compte, suppression définitive.
+  if (section === "account" && parts[3] === "export" && parts.length === 4 && request.method === "GET") {
+    return exportAccount(env, photographerId);
+  }
+  if (section === "account" && parts[3] === "delete" && parts.length === 4 && request.method === "POST") {
+    return deleteAccount(request, env, photographerId, (gallery) => eraseGallery(env, gallery));
   }
   if (section === "account" && parts[3] === "name" && parts.length === 4 && request.method === "POST") {
     return updateName(request, env, photographerId);

@@ -14,6 +14,10 @@ CREATE TABLE IF NOT EXISTS photographers (
   -- photographe ne les renseigne pas depuis Paramètres.
   first_name     TEXT NOT NULL DEFAULT '',
   last_name      TEXT NOT NULL DEFAULT '',
+  -- Acceptation des conditions d'utilisation et de la politique de
+  -- confidentialité à l'inscription (epoch secondes) et version des textes.
+  terms_accepted_at INTEGER,
+  terms_version  TEXT NOT NULL DEFAULT '',
   -- Paiement en ligne des suppléments (Stripe Connect, comptes « Express ») :
   -- chaque photographe connecte son propre compte, l'argent lui arrive
   -- directement, jamais via un compte pivot. stripe_charges_enabled reflète
@@ -421,6 +425,8 @@ CREATE INDEX IF NOT EXISTS idx_email_changes_photographer ON email_changes(photo
 --   ALTER TABLE galleries ADD COLUMN delivery_opened_at INTEGER;
 --   ALTER TABLE galleries ADD COLUMN delivery_notified_at INTEGER;
 --   puis la table delivery_files (fin de ce fichier).
+--   ALTER TABLE photographers ADD COLUMN terms_accepted_at INTEGER;
+--   ALTER TABLE photographers ADD COLUMN terms_version TEXT NOT NULL DEFAULT '';
 
 -- Relances déjà envoyées, pour ne jamais relancer deux fois pour la même
 -- échéance : une ligne par galerie et par type (client_j7, client_j2,

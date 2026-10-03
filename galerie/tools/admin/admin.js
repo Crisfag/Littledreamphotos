@@ -611,7 +611,44 @@
       '<input type="password" name="newPassword" required minlength="10" autocomplete="new-password" /></label>' +
       '<p class="ad-error" id="ad-password-change-error" hidden></p>' +
       '<button type="submit" class="ad-btn ad-btn-primary" id="ad-password-change-save">Changer le mot de passe</button>' +
-      "</form></section>";
+      "</form></section>" +
+
+      '<section class="ad-mydata"><div class="ad-section-header"><h3>Mes données</h3></div>' +
+      '<p class="ad-hint">Toutes les données de votre compte (galeries, sélections de vos clients, paiements, commandes, journaux) dans un fichier, ' +
+      'conformément au RGPD. Voir la <a href="https://www.holypixx.com/confidentialite.html" target="_blank" rel="noopener">politique de confidentialité</a>.</p>' +
+      '<a class="ad-btn" href="/local/account/export" download>Exporter mes données</a>' +
+      '<details class="ad-danger-zone"><summary>Supprimer mon compte</summary>' +
+      '<p class="ad-hint">Suppression <strong>définitive et immédiate</strong> de votre compte, de toutes vos galeries, photos, fichiers livrés et des données de vos clients. ' +
+      "Téléchargez d'abord vos factures et l'export ci-dessus : rien ne pourra être récupéré. Pensez aussi à déconnecter Stripe et Prodigi de leur côté si vous ne les utilisez plus.</p>" +
+      '<form id="ad-delete-account-form">' +
+      '<label class="ad-field"><span>Mot de passe</span><input type="password" name="password" required autocomplete="current-password" /></label>' +
+      '<label class="ad-field"><span>Tapez SUPPRIMER pour confirmer</span><input type="text" name="confirm" required autocomplete="off" /></label>' +
+      '<p class="ad-error" id="ad-delete-account-error" hidden></p>' +
+      '<button type="submit" class="ad-btn ad-btn-danger" id="ad-delete-account-submit">Supprimer définitivement mon compte</button>' +
+      "</form></details></section>";
+
+    document.getElementById("ad-delete-account-form").addEventListener("submit", async function (event) {
+      event.preventDefault();
+      var form = event.target;
+      var errorBox = document.getElementById("ad-delete-account-error");
+      errorBox.hidden = true;
+      if (form.confirm.value.trim() !== "SUPPRIMER") {
+        errorBox.textContent = "Tapez SUPPRIMER en majuscules pour confirmer.";
+        errorBox.hidden = false;
+        return;
+      }
+      var btn = document.getElementById("ad-delete-account-submit");
+      btn.disabled = true;
+      try {
+        var result = await api("POST", "/account/delete", { password: form.password.value, confirm: "SUPPRIMER" });
+        toast("Compte supprimé (" + result.deletedGalleries + " galerie" + (result.deletedGalleries > 1 ? "s" : "") + "). Au revoir !");
+        showLogin();
+      } catch (err) {
+        errorBox.textContent = err.message;
+        errorBox.hidden = false;
+        btn.disabled = false;
+      }
+    });
 
     document.getElementById("ad-studio-form").addEventListener("submit", async function (event) {
       event.preventDefault();
@@ -2687,6 +2724,7 @@
           studioName: form.studioName.value.trim(),
           firstName: form.firstName.value.trim(),
           lastName: form.lastName.value.trim(),
+          acceptTerms: form.acceptTerms.checked,
         }),
       });
       var data = await response.json().catch(function () { return {}; });

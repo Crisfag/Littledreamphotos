@@ -16,6 +16,7 @@ import { handleOwner } from "./owner.js";
 import { handleLibraryAudio } from "./music.js";
 import { handleStripeWebhook } from "./billing.js";
 import { runReminders } from "./reminders.js";
+import { purgeOldAccessLogs } from "./privacy.js";
 import { studioSubdomainOf, handleStudioHost } from "./studio.js";
 import { handlePrintAsset, handleProdigiCallback } from "./shop.js";
 import { json, fail } from "./http.js";
@@ -117,6 +118,12 @@ export default {
     ctx.waitUntil(
       runReminders(env).catch((err) => {
         console.error("Relances : échec de la passe planifiée :", err && err.stack ? err.stack : err);
+      })
+    );
+    // Conservation limitée des journaux d'accès (voir privacy.js).
+    ctx.waitUntil(
+      purgeOldAccessLogs(env).catch((err) => {
+        console.error("Purge des journaux : échec :", err && err.stack ? err.stack : err);
       })
     );
   },

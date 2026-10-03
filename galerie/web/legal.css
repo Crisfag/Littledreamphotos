@@ -1,0 +1,69 @@
+/* Pages légales (conditions, confidentialité, mentions légales). */
+
+:root {
+  --ivory: #fbf8f4;
+  --sand: #f1e9df;
+  --line: #e6dcd0;
+  --ink: #1f1915;
+  --text: #3d342e;
+  --muted: #7a6e66;
+  --rose: #c49380;
+  --rose-deep: #a46a57;
+  --night: #14100d;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+* { margin: 0; padding: 0; }
+
+body {
+  font-family: "Jost", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-weight: 400;
+  font-size: 1rem;
+  line-height: 1.7;
+  color: var(--text);
+  background: var(--ivory);
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: var(--rose-deep); }
+a:hover { color: var(--ink); }
+:focus-visible { outline: 2px solid var(--rose); outline-offset: 3px; border-radius: 4px; }
+
+.legal-top { background: var(--night); color: #f6efe7; }
+.legal-top .wrap { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding-top: 18px; padding-bottom: 18px; }
+.legal-brand { display: inline-flex; align-items: center; gap: 10px; color: #f6efe7; text-decoration: none; font-weight: 500; letter-spacing: -.01em; font-size: 1.05rem; }
+.legal-brand span:first-child {
+  display: grid; place-items: center; width: 30px; height: 30px; border-radius: 9px;
+  background: linear-gradient(140deg, #e2b29c, #b97b66 60%, #93594a); color: #fff; font-weight: 600;
+}
+.legal-top nav { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: .9rem; }
+.legal-top nav a { color: rgba(246, 239, 231, .75); text-decoration: none; }
+.legal-top nav a:hover, .legal-top nav a[aria-current="page"] { color: #fff; }
+
+.wrap { width: 100%; max-width: 820px; margin: 0 auto; padding-left: 16px; padding-right: 16px; }
+
+main.wrap { padding-top: clamp(36px, 7vw, 72px); padding-bottom: 72px; }
+h1 { font-size: clamp(1.8rem, 4vw, 2.5rem); line-height: 1.15; color: var(--ink); font-weight: 500; letter-spacing: -.02em; }
+.legal-updated { margin-top: .6rem; color: var(--muted); font-size: .9rem; }
+.legal-intro { margin-top: 1.4rem; font-size: 1.08rem; }
+h2 { margin-top: 2.4rem; font-size: 1.25rem; color: var(--ink); font-weight: 500; }
+h3 { margin-top: 1.4rem; font-size: 1.02rem; color: var(--ink); font-weight: 500; }
+p, ul, ol, table { margin-top: .8rem; }
+ul, ol { padding-left: 1.3rem; }
+li + li { margin-top: .3rem; }
+strong { color: var(--ink); font-weight: 500; }
+
+.legal-card { margin-top: 1rem; padding: 1rem 1.2rem; background: #fff; border: 1px solid var(--line); border-radius: 12px; }
+.legal-card p:first-child { margin-top: 0; }
+
+table { width: 100%; border-collapse: collapse; font-size: .92rem; background: #fff; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; display: block; overflow-x: auto; }
+th, td { text-align: left; vertical-align: top; padding: .6rem .8rem; border-bottom: 1px solid var(--line); }
+th { background: var(--sand); color: var(--ink); font-weight: 500; }
+tr:last-child td { border-bottom: 0; }
+
+/* Coordonnées pas encore renseignées : bien visibles tant qu'elles manquent. */
+.legal-missing { background: #fff3c4; color: #6b4e00; border-radius: 4px; padding: 0 .3em; font-style: normal; }
+
+.legal-foot { border-top: 1px solid var(--line); color: var(--muted); font-size: .88rem; }
+.legal-foot .wrap { display: flex; flex-wrap: wrap; gap: .4rem 1.2rem; padding-top: 24px; padding-bottom: 32px; }
+.legal-foot a { color: var(--muted); }

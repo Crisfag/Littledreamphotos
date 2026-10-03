@@ -311,13 +311,16 @@ async function handleAuth(req, res, parts) {
     const firstName = String(body.firstName || "").trim();
     const lastName = String(body.lastName || "").trim();
     if (!email || !password) return json(res, 400, { error: "E-mail et mot de passe requis" });
+    // Consentement explicite aux conditions et à la politique de
+    // confidentialité, horodaté par le Worker (voir worker/src/privacy.js).
+    if (body.acceptTerms !== true) return json(res, 400, { error: "Merci d'accepter les conditions d'utilisation et la politique de confidentialité" });
 
     let signupRes;
     try {
       signupRes = await fetch(`${config.api}/api/auth/signup`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email, password, studioName, firstName, lastName }),
+        body: JSON.stringify({ email, password, studioName, firstName, lastName, acceptTerms: true }),
       });
     } catch {
       return json(res, 502, { error: "Worker injoignable" });
@@ -647,6 +650,35 @@ async function handleApi(req, res, url) {
   }
 
   // POST /local/account/name — prénom/nom de la personne derrière le compte.
+  // GET /local/account/export — toutes les données du compte (RGPD), en fichier.
+  if (parts.length === 2 && parts[0] === "account" && parts[1] === "export" && req.method === "GET") {
+    try {
+      const data = await client.request("GET", "/api/admin/account/export");
+      const day = new Date().toISOString().slice(0, 10);
+      res.writeHead(200, {
+        "content-type": "application/json; charset=utf-8",
+        "content-disposition": `attachment; filename="holypixx-mes-donnees-${day}.json"`,
+        "cache-control": "no-store",
+      });
+      return res.end(JSON.stringify(data, null, 2));
+    } catch (err) {
+      return relayError(res, err, "Impossible d'exporter vos données");
+    }
+  }
+
+  // POST /local/account/delete — suppression définitive du compte, puis
+  // fin de la session dans ce navigateur.
+  if (parts.length === 2 && parts[0] === "account" && parts[1] === "delete" && req.method === "POST") {
+    const body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
+    try {
+      const result = await client.request("POST", "/api/admin/account/delete", body);
+      clearSessionCookie(req, res);
+      return json(res, 200, result);
+    } catch (err) {
+      return relayError(res, err, "Impossible de supprimer le compte");
+    }
+  }
+
   if (parts.length === 2 && parts[0] === "account" && parts[1] === "name" && req.method === "POST") {
     const body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
     try {

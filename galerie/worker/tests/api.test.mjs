@@ -1618,6 +1618,58 @@ check("le photographe retire un fichier (un autre compte ne peut pas)",
       deliveryRemoved.ok && peerRemove.status === 404 && (await (await admin("GET", deliveryBase)).json()).files.length === 1);
 await admin("DELETE", `/api/admin/galleries/${deliverySlug}`);
 
+/* ---------- Droits RGPD : consentement, export, suppression du compte ---------- */
+
+const rgpdEmail = `rgpd-${RUN}@test.invalid`;
+const rgpdPassword = "mot-de-passe-rgpd-1234";
+const rgpdSignup = await (await fetch(`${BASE}/api/auth/signup`, {
+  method: "POST", headers: { "content-type": "application/json" },
+  body: JSON.stringify({ email: rgpdEmail, password: rgpdPassword, studioName: "Studio RGPD", acceptTerms: true }),
+})).json();
+const rgpd = adminClient(rgpdSignup.token);
+const rgpdSlug = `${SLUG}-rgpd`;
+await rgpd("POST", "/api/admin/galleries", { slug: rgpdSlug, password: "mot-de-passe-solide", title: "Séance RGPD", clientName: "Famille RGPD", clientEmail: "famille-rgpd@test.invalid" });
+const rgpdPhotoId = `pho_Rgpd${RUN}`;
+await rgpd("POST", `/api/admin/galleries/${rgpdSlug}/photos`, {
+  id: rgpdPhotoId, position: 0, width: 800, height: 600, cols: 2, rows: 2, previewWidth: 400, previewHeight: 300, forensicId: "987654321",
+});
+await rgpd("PUT", `/api/admin/tiles/${rgpdPhotoId}/0/0/0`, new Uint8Array([1, 2, 3]), true);
+
+const exportResponse = await rgpd("GET", "/api/admin/account/export");
+const exportData = await exportResponse.json();
+check("l'export contient le compte, ses galeries, photos et clients, et l'acceptation des conditions horodatée",
+      exportResponse.ok && (exportResponse.headers.get("content-disposition") || "").includes("holypixx-mes-donnees-") &&
+      exportData.account?.email === rgpdEmail && typeof exportData.account.terms_accepted_at === "number" &&
+      exportData.account.terms_version === "2026-10-03" &&
+      exportData.galleries?.[0]?.client_email === "famille-rgpd@test.invalid" && exportData.galleries[0].photos?.length === 1,
+      JSON.stringify({ terms: exportData.account?.terms_accepted_at, g: exportData.galleries?.length }));
+check("l'export ne contient jamais de secret (empreintes de mot de passe, clé Prodigi chiffrée)",
+      !JSON.stringify(exportData).includes("password_hash") && !JSON.stringify(exportData).includes("password_salt") &&
+      !("prodigi_api_key_enc" in exportData.account));
+check("sans acceptation explicite, rien n'est horodaté (le compte de test principal n'a pas coché)",
+      (await (await admin("GET", "/api/admin/account/export")).json()).account?.terms_accepted_at === null);
+
+const deleteNoConfirm = await rgpd("POST", "/api/admin/account/delete", { password: rgpdPassword });
+const deleteBadPassword = await rgpd("POST", "/api/admin/account/delete", { password: "faux", confirm: "SUPPRIMER" });
+check("supprimer le compte exige la confirmation et le bon mot de passe", deleteNoConfirm.status === 400 && deleteBadPassword.status === 400);
+const deleteOk = await (await rgpd("POST", "/api/admin/account/delete", { password: rgpdPassword, confirm: "SUPPRIMER" })).json();
+const loginAfterDelete = await fetch(`${BASE}/api/auth/login`, {
+  method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: rgpdEmail, password: rgpdPassword }),
+});
+const galleryAfterDelete = await fetch(`${BASE}/api/gallery/${rgpdSlug}/login`, {
+  method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ password: "mot-de-passe-solide" }),
+});
+// Les identifiants de photo sont uniques sur toute la plateforme : pouvoir
+// réutiliser celui-ci prouve que la photo a bien été effacée.
+await admin("POST", "/api/admin/galleries", { slug: `${SLUG}-apres-rgpd`, password: "mot-de-passe-solide", title: "Après RGPD" });
+const reusedPhotoId = await admin("POST", `/api/admin/galleries/${SLUG}-apres-rgpd/photos`, {
+  id: rgpdPhotoId, position: 9, width: 800, height: 600, cols: 2, rows: 2, previewWidth: 400, previewHeight: 300, forensicId: "987654322",
+});
+check("la suppression efface le compte, ses galeries, photos et accès client",
+      deleteOk.ok === true && deleteOk.deletedGalleries === 1 && loginAfterDelete.status === 401 && galleryAfterDelete.status !== 200 &&
+      reusedPhotoId.status === 201, `${loginAfterDelete.status} ${galleryAfterDelete.status} ${reusedPhotoId.status}`);
+await admin("DELETE", `/api/admin/galleries/${SLUG}-apres-rgpd`);
+
 /* ---------- « Valider ma sélection » ---------- */
 
 const validateSlug = `${SLUG}-validation`;
@@ -1821,11 +1873,16 @@ const lookupsBefore = lab.productLookups.length;
 const avail = await (await admin("POST", "/api/admin/shop/availability", { product: "frame-classic-mount", countryCode: "BE" })).json();
 check("les menus ne gardent que les formats que le labo fabrique et livre, avec les couleurs proposées",
       avail.sizes?.["16x20"]?.available === true && avail.sizes["16x20"].allowed?.join(",") === "black,white" &&
-      avail.sizes["12x12"]?.available === false && lab.productLookups.includes("GLOBAL-CFPM-16x20"),
+      avail.sizes["12x12"]?.available === false,
       JSON.stringify({ a: avail.sizes?.["16x20"], b: avail.sizes?.["12x12"] }));
+// Le Worker garde les fiches en mémoire quelques heures : au premier passage
+// (Worker tout juste démarré) les 13 formats sont demandés au labo, ensuite
+// plus aucun — un autre pays ne redemande rien non plus.
+const lookupsAfterFirst = lab.productLookups.length;
 await admin("POST", "/api/admin/shop/availability", { product: "frame-classic-mount", countryCode: "FR" });
 check("la fiche d'un produit n'est demandée qu'une fois au labo, même pour un autre pays",
-      lab.productLookups.length - lookupsBefore === 13, String(lab.productLookups.length - lookupsBefore));
+      [0, 13].includes(lookupsAfterFirst - lookupsBefore) && lab.productLookups.length === lookupsAfterFirst,
+      `${lookupsAfterFirst - lookupsBefore} puis ${lab.productLookups.length - lookupsAfterFirst}`);
 const availBad = await admin("POST", "/api/admin/shop/availability", { product: "inconnu" });
 const availNoKey = await peerAdmin("POST", "/api/admin/shop/availability", { product: "gift-mug" });
 check("vérifier les formats : produit inconnu refusé (400), clé Prodigi exigée (409)", availBad.status === 400 && availNoKey.status === 409);

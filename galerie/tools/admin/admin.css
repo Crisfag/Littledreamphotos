@@ -695,3 +695,11 @@ h3 { font-size: 1.15rem; margin-bottom: .9rem; }
 .ad-delivery-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ad-delivery-remove { border: 0; background: transparent; color: var(--danger); font-size: 1.1rem; cursor: pointer; }
 .ad-check { display: flex; align-items: center; gap: .5rem; font-size: .88rem; margin: 0 0 .8rem; }
+
+/* ---------- Conditions à l'inscription, « Mes données » ---------- */
+.ad-terms { display: flex; gap: .55rem; align-items: flex-start; font-size: .85rem; color: var(--charcoal); margin: 0 0 1rem; line-height: 1.5; }
+.ad-terms input { margin-top: .2rem; flex: none; }
+.ad-terms a { color: var(--rose-deep); }
+.ad-danger-zone { margin-top: 1.2rem; border-top: 1px solid var(--line); padding-top: .9rem; }
+.ad-danger-zone summary { cursor: pointer; color: var(--danger); font-size: .9rem; }
+.ad-danger-zone form { margin-top: .8rem; max-width: 420px; }

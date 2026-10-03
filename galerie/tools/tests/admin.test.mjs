@@ -78,6 +78,14 @@ await page.fill('#ad-signup-form [name="lastName"]', "Testeuse");
 await page.fill('#ad-signup-form [name="studioName"]', "Studio de test");
 await page.fill('#ad-signup-form [name="email"]', email);
 await page.fill('#ad-signup-form [name="password"]', password);
+const refusedWithoutTerms = await page.evaluate(async () => (await fetch("/local/auth/signup", {
+  method: "POST", headers: { "content-type": "application/json" },
+  body: JSON.stringify({ email: "sans-conditions@test.invalid", password: "mot-de-passe-assez-long" }),
+})).status);
+check("l'inscription exige d'accepter les conditions et la politique de confidentialité",
+      refusedWithoutTerms === 400 && await page.getAttribute('#ad-signup-form [name="acceptTerms"]', "required") !== null &&
+      (await page.textContent("#ad-signup-form")).includes("politique de confidentialité"));
+await page.check('#ad-signup-form [name="acceptTerms"]');
 await page.click("#ad-signup-submit");
 await page.waitForSelector("#ad-new-gallery", { timeout: 10000 });
 check("créer un compte depuis le formulaire connecte automatiquement au tableau de bord",
@@ -939,6 +947,31 @@ await page.click("#ad-login-submit");
 await page.waitForSelector("#ad-new-gallery", { timeout: 10000 });
 check("le compte créé depuis le formulaire d'inscription se reconnecte ensuite normalement",
       await page.isVisible("#ad-new-gallery"));
+
+/* ---------- Mes données : export puis suppression du compte ---------- */
+
+await page.click("#ad-tab-settings");
+await page.waitForSelector(".ad-mydata", { timeout: 10000 });
+const [exportDownload] = await Promise.all([page.waitForEvent("download", { timeout: 15000 }), page.click('.ad-mydata a[href="/local/account/export"]')]);
+const exported = JSON.parse(readFileSync(await exportDownload.path(), "utf8"));
+check("« Exporter mes données » télécharge toutes les données du compte, sans aucun secret",
+      exported.format === "holypixx-export-1" && exported.account?.email === email && Array.isArray(exported.galleries) &&
+      typeof exported.account.terms_accepted_at === "number" &&
+      !("password_hash" in exported.account) && !JSON.stringify(exported).includes("password_salt"),
+      exportDownload.suggestedFilename());
+await page.click(".ad-danger-zone summary");
+await page.fill('#ad-delete-account-form [name="password"]', "mauvais-mot-de-passe");
+await page.fill('#ad-delete-account-form [name="confirm"]', "SUPPRIMER");
+await page.click("#ad-delete-account-submit");
+await page.waitForSelector("#ad-delete-account-error:not([hidden])", { timeout: 10000 });
+check("supprimer le compte exige le bon mot de passe", (await page.textContent("#ad-delete-account-error")).includes("incorrect"));
+await page.fill('#ad-delete-account-form [name="password"]', password);
+await page.click("#ad-delete-account-submit");
+await page.waitForSelector("#ad-login-form", { timeout: 15000 });
+const loginAfterDelete = await page.evaluate(async ({ email, password }) => (await fetch("/local/auth/login", {
+  method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, password }),
+})).status, { email, password });
+check("une fois supprimé, le compte n'existe plus (connexion refusée)", loginAfterDelete === 401, String(loginAfterDelete));
 
 check("aucune exception JavaScript", exceptions.length === 0, exceptions.join(" | "));
 

@@ -386,6 +386,23 @@ Le tableau de bord s'organise en trois onglets, chacun avec son propre lien
   propres à un fichier (ou au ZIP) et signés avec une clé distincte des
   sessions ; fermer la livraison les coupe aussitôt. Chaque téléchargement
   est inscrit au journal d'accès. Les fichiers sont effacés avec la galerie.
+- **Volet légal (RGPD)** : pages *Conditions d'utilisation*,
+  *Politique de confidentialité* et *Mentions légales* (`web/conditions.html`,
+  `web/confidentialite.html`, `web/mentions-legales.html`), liées depuis le
+  pied de page du site, la page de connexion et le pied des galeries, et
+  l'inscription. Les coordonnées de l'éditeur (nom, adresse, BCE, TVA,
+  e-mail, tribunal) se renseignent à un seul endroit, `web/legal.js` ; tant
+  qu'un champ est vide, il s'affiche surligné « à compléter ». L'inscription
+  exige de cocher l'acceptation des conditions et de la politique
+  (horodatée en base avec la version des textes). Dans *Paramètres →
+  Mes données*, le photographe exporte toutes ses données (fichier JSON :
+  compte, galeries, sélections et remarques de ses clients, paiements,
+  commandes, journaux — jamais de mot de passe ni de clé) et peut supprimer
+  définitivement son compte (mot de passe + « SUPPRIMER » tapé) : galeries,
+  photos, fichiers livrés et données des clients sont effacés. Les journaux
+  d'accès aux galeries sont purgés automatiquement après 13 mois (passe
+  quotidienne du Worker). Ces textes sont des modèles sérieux mais ne
+  remplacent pas l'avis d'un juriste.
 - **Forfait et suppléments** : le nombre de photos déjà payées par le
   client (optionnel — sans forfait défini, aucun supplément n'est jamais
   calculé) et le prix de chaque photo au-delà. Le supplément se calcule
@@ -751,7 +768,7 @@ des tuiles, refus du mauvais mot de passe, absence de toute balise `<img>`,
 neutralisation du menu contextuel et de la copie, voile sur « Impr. écran » et
 sur perte de focus, consignation au journal.
 
-**API du Worker** — 342 vérifications contre le vrai moteur Cloudflare (D1 et R2
+**API du Worker** — 347 vérifications contre le vrai moteur Cloudflare (D1 et R2
 émulés localement par `wrangler dev`) : comptes photographes (inscription,
 connexion, session, mot de passe oublié — même réponse générique qu'un
 compte existe ou non), cloisonnement strict entre comptes (un photographe ne
@@ -819,7 +836,11 @@ par Python `zipfile`) à la taille annoncée et nommé d'après la galerie,
 photo seule identique en pièce jointe, lien qui ne vaut ni pour un autre
 fichier, ni falsifié, ni comme session, ni sur une autre galerie,
 téléchargements au journal, liens coupés à la fermeture, retrait d'un
-fichier. Bibliothèque musicale : ajout réservé à la propriétaire
+fichier. RGPD : export complet (compte, galeries, photos, clients,
+acceptation des conditions horodatée et versionnée) sans aucun secret,
+aucune acceptation enregistrée sans case cochée, suppression du compte
+refusée sans confirmation ou avec un mauvais mot de passe, puis compte,
+galeries, photos et accès clients effacés. Bibliothèque musicale : ajout réservé à la propriétaire
 (403 sinon), titre et ambiance obligatoires, liste visible de chaque
 photographe, écoute d'un morceau (lecture partielle comprise), morceau
 inconnu non servi ; choix d'un morceau (refusé depuis un autre compte) qui
@@ -948,7 +969,7 @@ appliqué sinon, HT + TVA se recomposant exactement au centime près en TTC
 même sur un montant qui ne se divise pas rond, et un vrai PDF valide généré
 aussi bien avec des coordonnées complètes qu'avec des champs vides.
 
-**Interface d'administration** — 124 vérifications dans un vrai navigateur,
+**Interface d'administration** — 128 vérifications dans un vrai navigateur,
 contre le vrai Worker local : demande de lien de réinitialisation de mot de
 passe (message générique affiché), création de compte et connexion depuis
 le formulaire (pas de session présupposée), barre d'onglets Galeries /
@@ -998,7 +1019,10 @@ Admin (titre, ambiance et crédit affichés), le photographe le retrouve dans
 sa fiche avec un bouton d'écoute et le choisit, un lien d'un autre site est
 refusé, un lien Spotify devient le lecteur de la galerie. Livraison : rien
 à ouvrir sans fichier, deux photos ajoutées avec leur poids, ouverture
-après confirmation, fermeture d'un clic.
+après confirmation, fermeture d'un clic. Inscription refusée sans
+acceptation des conditions ; export de « Mes données » téléchargé sans
+aucun secret ; suppression du compte refusée avec un mauvais mot de passe,
+puis compte supprimé (reconnexion impossible).
 Codes couleur et repères posés par le client (via l'API, comme le ferait sa
 page) : pastille jaune et compteur de repères sur la vignette, légende de
 la galerie, photo ouverte en grand avec le repère dessus, sa note listée et

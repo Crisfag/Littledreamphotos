@@ -6,6 +6,7 @@
 // inversement, puisque les deux sont signés avec des clés différentes.
 
 import { json, fail } from "./http.js";
+import { TERMS_VERSION } from "./privacy.js";
 import {
   hashPassword,
   verifyPassword,
@@ -116,10 +117,14 @@ async function signup(request, env) {
   const id = newId();
 
   await env.DB.prepare(
-    `INSERT INTO photographers (id, email, password_hash, password_salt, studio_name, first_name, last_name, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO photographers (id, email, password_hash, password_salt, studio_name, first_name, last_name, created_at, terms_accepted_at, terms_version)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   )
-    .bind(id, email, hash, salt, studioName, firstName, lastName, now())
+    // Acceptation des conditions et de la politique de confidentialité :
+    // exigée par l'écran d'inscription (admin-server), horodatée ici avec la
+    // version des textes acceptés.
+    .bind(id, email, hash, salt, studioName, firstName, lastName, now(),
+      body.acceptTerms === true ? now() : null, body.acceptTerms === true ? TERMS_VERSION : "")
     .run();
 
   const photographer = { id, email, studio_name: studioName, first_name: firstName, last_name: lastName };
