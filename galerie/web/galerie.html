@@ -73,6 +73,23 @@
       <p class="gp-music-credit" id="gp-music-credit" hidden></p>
     </header>
 
+    <!-- Livraison des photos définitives, quand le photographe l'a ouverte. -->
+    <section class="gp-delivery" id="gp-delivery" hidden aria-labelledby="gp-delivery-title">
+      <div class="gp-delivery-main">
+        <p class="gp-delivery-eyebrow">Livraison</p>
+        <h2 id="gp-delivery-title">Vos photos sont prêtes</h2>
+        <p class="gp-delivery-summary" id="gp-delivery-summary"></p>
+      </div>
+      <div class="gp-delivery-actions">
+        <button type="button" class="gp-btn gp-delivery-zip" id="gp-delivery-zip">Tout télécharger</button>
+        <p class="gp-delivery-status" id="gp-delivery-status" aria-live="polite"></p>
+      </div>
+      <details class="gp-delivery-files">
+        <summary>Télécharger une par une</summary>
+        <ul id="gp-delivery-list"></ul>
+      </details>
+    </section>
+
     <!--
       Transparence : le client doit savoir que ses photos portent une marque.
       C'est ce qui rend la dissuasion efficace — et c'est aussi la seule

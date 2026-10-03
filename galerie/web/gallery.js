@@ -1067,6 +1067,83 @@
     }
   }
 
+  /* ---------- Livraison des photos définitives ---------- */
+  // Les fichiers se téléchargent par un lien signé valable quelques minutes,
+  // demandé au moment du clic (un lien de navigateur ne peut pas porter le
+  // jeton de session) : rien n'est préparé tant que le client ne clique pas.
+
+  function formatBytes(bytes) {
+    if (bytes >= 1024 * 1024 * 1024) return (bytes / (1024 * 1024 * 1024)).toFixed(1).replace(".", ",") + " Go";
+    if (bytes >= 1024 * 1024) return Math.round(bytes / (1024 * 1024)) + " Mo";
+    return Math.max(1, Math.round(bytes / 1024)) + " Ko";
+  }
+
+  function startDownload(fileId, button) {
+    if (button) button.disabled = true;
+    el.deliveryStatus.textContent = fileId ? "Préparation du téléchargement…" : "Préparation du fichier ZIP…";
+    return fetch(apiUrl("/delivery/link"), {
+      method: "POST",
+      headers: Object.assign({ "content-type": "application/json" }, authHeaders()),
+      body: JSON.stringify(fileId ? { fileId: fileId } : {}),
+    })
+      .then(function (response) {
+        if (response.status === 401) throw new Error("session");
+        if (!response.ok) throw new Error("Téléchargement impossible pour le moment.");
+        return response.json();
+      })
+      .then(function (data) {
+        var link = document.createElement("a");
+        link.href = data.url;
+        link.rel = "noopener";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        el.deliveryStatus.textContent = fileId
+          ? "Téléchargement lancé."
+          : "Téléchargement lancé — selon la taille, il peut prendre quelques minutes.";
+      })
+      .catch(function (err) {
+        if (err.message === "session") return sessionLost("Votre session a expiré. Saisissez à nouveau le mot de passe.");
+        el.deliveryStatus.textContent = err.message;
+      })
+      .then(function () {
+        if (button) button.disabled = false;
+      });
+  }
+
+  function setupDelivery() {
+    if (!el.delivery) return;
+    var d = state.gallery && state.gallery.delivery;
+    if (!d || !d.files || !d.files.length) {
+      el.delivery.hidden = true;
+      return;
+    }
+    var n = d.files.length;
+    el.deliverySummary.textContent = n + " photo" + (n > 1 ? "s" : "") + " en haute définition, sans filigrane · " + formatBytes(d.totalBytes);
+    el.deliveryZip.textContent = n > 1 ? "Tout télécharger (" + formatBytes(d.totalBytes) + ")" : "Télécharger";
+    el.deliveryStatus.textContent = "";
+    el.deliveryList.innerHTML = "";
+    d.files.forEach(function (file) {
+      var li = document.createElement("li");
+      var name = document.createElement("span");
+      name.textContent = file.name;
+      var size = document.createElement("span");
+      size.className = "gp-delivery-size";
+      size.textContent = formatBytes(file.size);
+      var button = document.createElement("button");
+      button.type = "button";
+      button.className = "gp-delivery-one";
+      button.textContent = "Télécharger";
+      button.addEventListener("click", function () { startDownload(file.id, button); });
+      li.appendChild(name);
+      li.appendChild(size);
+      li.appendChild(button);
+      el.deliveryList.appendChild(li);
+    });
+    el.deliveryFiles.hidden = n < 2;
+    el.delivery.hidden = false;
+  }
+
   /* ---------- Musique d'ambiance ---------- */
   // Un décor choisi par le photographe, jamais imposé : lancée d'elle-même
   // seulement en mise en page « défilement » (le rendu éditorial, pensé pour
@@ -1727,6 +1804,7 @@
           buildGrid();
         }
         setupMusic();
+        setupDelivery();
         setupShop();
 
         // La session expire : on prévient avant que les tuiles cessent d'arriver.
@@ -1817,6 +1895,12 @@
       music: $("gp-music"),
       musicLabel: $("gp-music-label"),
       musicCredit: $("gp-music-credit"),
+      delivery: $("gp-delivery"),
+      deliverySummary: $("gp-delivery-summary"),
+      deliveryZip: $("gp-delivery-zip"),
+      deliveryStatus: $("gp-delivery-status"),
+      deliveryList: $("gp-delivery-list"),
+      deliveryFiles: document.querySelector(".gp-delivery-files"),
       musicPlayer: $("gp-music-player"),
       musicPlayerFrame: $("gp-music-player-frame"),
       musicPlayerTitle: $("gp-music-player-title"),
@@ -1909,6 +1993,13 @@
     }
     if (el.music) {
       el.music.addEventListener("click", toggleMusic);
+    }
+    if (el.deliveryZip) {
+      el.deliveryZip.addEventListener("click", function () {
+        var d = state.gallery && state.gallery.delivery;
+        // Un seul fichier : inutile de passer par un ZIP.
+        startDownload(d && d.files.length === 1 ? d.files[0].id : "", el.deliveryZip);
+      });
     }
     if (el.musicPlayer) {
       $("gp-music-player-min").addEventListener("click", minimizeEmbedPlayer);

@@ -761,6 +761,118 @@
   // /owner/* est revérifié côté serveur (voir worker/src/owner.js), jamais
   // sur la seule foi de ce qui est affiché ici.
 
+  /* ---------- Livraison des photos définitives ---------- */
+  // Fichiers finaux (haute définition, sans filigrane) que le client
+  // télécharge une fois la livraison ouverte. Envoyés un par un, bruts :
+  // admin-server calcule leur CRC-32 (nécessaire au ZIP du Worker).
+
+  function formatBytes(bytes) {
+    if (bytes >= 1024 * 1024 * 1024) return (bytes / (1024 * 1024 * 1024)).toFixed(1).replace(".", ",") + " Go";
+    if (bytes >= 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1).replace(".", ",") + " Mo";
+    return Math.max(1, Math.round(bytes / 1024)) + " Ko";
+  }
+
+  function deliverySectionHtml(gallery) {
+    var d = gallery.delivery || { open: false, files: [], totalBytes: 0 };
+    var n = d.files.length;
+    var status = d.open
+      ? '<span class="ad-badge ad-badge-selected">✓ Livraison ouverte</span> depuis le ' + esc(formatDate(d.openedAt)) +
+        (d.notifiedAt ? " · client prévenu par e-mail le " + esc(formatDate(d.notifiedAt)) : "")
+      : '<span class="ad-hint">Pas encore ouverte : le client ne voit rien tant que vous ne l\'ouvrez pas.</span>';
+    var rows = d.files.map(function (f) {
+      return (
+        '<li data-delivery-file="' + esc(f.id) + '"><span class="ad-delivery-name">' + esc(f.name) + "</span>" +
+        '<span class="ad-hint">' + esc(formatBytes(f.size)) + "</span>" +
+        '<button type="button" class="ad-delivery-remove" data-remove-delivery="' + esc(f.id) + '" aria-label="Retirer ' + esc(f.name) + '">&times;</button></li>'
+      );
+    }).join("");
+    var notify = gallery.client_email
+      ? '<label class="ad-check"><input type="checkbox" id="ad-delivery-notify" checked /> Prévenir le client par e-mail (' + esc(gallery.client_email) + ")</label>"
+      : '<p class="ad-hint">Aucun e-mail client renseigné : pensez à prévenir votre client vous-même.</p>';
+    return (
+      '<section class="ad-delivery">' +
+      '<div class="ad-section-header"><h3>Livraison des photos définitives</h3></div>' +
+      '<p class="ad-hint">Déposez ici les photos finales, en haute définition et sans filigrane (JPEG, PNG, TIFF… 80 Mo maximum chacune). ' +
+      "Une fois la livraison ouverte, le client les télécharge depuis sa galerie, une par une ou toutes d'un coup (ZIP).</p>" +
+      '<p class="ad-delivery-status">' + status + "</p>" +
+      '<div class="ad-bg-custom"><label class="ad-btn">Ajouter des photos' +
+      '<input type="file" id="ad-delivery-input" accept="image/jpeg,image/png,image/tiff,image/webp,.heic,.tif,.tiff" multiple hidden /></label>' +
+      '<span class="ad-hint" id="ad-delivery-progress">' + (n ? n + " photo" + (n > 1 ? "s" : "") + " · " + esc(formatBytes(d.totalBytes)) : "Aucune photo déposée.") + "</span></div>" +
+      (n ? '<ul class="ad-delivery-list">' + rows + "</ul>" : "") +
+      (d.open
+        ? '<button type="button" class="ad-btn" id="ad-delivery-close">Fermer la livraison</button>'
+        : (n ? notify + '<button type="button" class="ad-btn ad-btn-primary" id="ad-delivery-open">Ouvrir la livraison au client</button>' : "")) +
+      "</section>"
+    );
+  }
+
+  function wireDeliverySection(slug) {
+    var input = document.getElementById("ad-delivery-input");
+    if (!input) return;
+    input.addEventListener("change", async function () {
+      var files = Array.prototype.slice.call(input.files || []);
+      input.value = "";
+      if (!files.length) return;
+      var progress = document.getElementById("ad-delivery-progress");
+      var failed = [];
+      for (var i = 0; i < files.length; i++) {
+        progress.textContent = "Envoi " + (i + 1) + " / " + files.length + " : " + files[i].name + "…";
+        try {
+          var response = await fetch("/local/galleries/" + encodeURIComponent(slug) + "/delivery/files?name=" + encodeURIComponent(files[i].name), {
+            method: "POST",
+            headers: { "content-type": "application/octet-stream" },
+            body: files[i],
+          });
+          var result = await response.json().catch(function () { return {}; });
+          if (!response.ok) throw new Error(result.error || "Échec de l'envoi");
+        } catch (err) {
+          failed.push(files[i].name + " (" + err.message + ")");
+        }
+      }
+      if (failed.length) toast("Non envoyées : " + failed.join(", "), true);
+      else toast(files.length + " photo" + (files.length > 1 ? "s" : "") + " ajoutée" + (files.length > 1 ? "s" : "") + " à la livraison.");
+      renderDetail(slug, true);
+    });
+    document.querySelectorAll("[data-remove-delivery]").forEach(function (btn) {
+      btn.addEventListener("click", async function () {
+        try {
+          await api("DELETE", "/galleries/" + encodeURIComponent(slug) + "/delivery/files/" + encodeURIComponent(btn.getAttribute("data-remove-delivery")));
+          renderDetail(slug, true);
+        } catch (err) {
+          toast(err.message, true);
+        }
+      });
+    });
+    var openBtn = document.getElementById("ad-delivery-open");
+    if (openBtn) {
+      openBtn.addEventListener("click", function () {
+        var notifyBox = document.getElementById("ad-delivery-notify");
+        var notify = Boolean(notifyBox && notifyBox.checked);
+        confirmAction("Ouvrir la livraison ? Le client pourra télécharger ces photos en haute définition, sans filigrane." + (notify ? " Il sera prévenu par e-mail." : ""), async function () {
+          try {
+            var result = await api("POST", "/galleries/" + encodeURIComponent(slug) + "/delivery", { open: true, notify: notify });
+            toast(result.notified ? "Livraison ouverte, client prévenu par e-mail." : "Livraison ouverte.");
+            renderDetail(slug, true);
+          } catch (err) {
+            toast(err.message, true);
+          }
+        });
+      });
+    }
+    var closeBtn = document.getElementById("ad-delivery-close");
+    if (closeBtn) {
+      closeBtn.addEventListener("click", async function () {
+        try {
+          await api("POST", "/galleries/" + encodeURIComponent(slug) + "/delivery", { open: false });
+          toast("Livraison fermée : le client ne peut plus télécharger.");
+          renderDetail(slug, true);
+        } catch (err) {
+          toast(err.message, true);
+        }
+      });
+    }
+  }
+
   /* ---------- Musique : bibliothèque commune ---------- */
   // Morceaux libres de droits ajoutés par la propriétaire (onglet Admin) et
   // choisis par chaque photographe pour ses galeries. L'écoute passe par un
@@ -2155,6 +2267,7 @@
       '<div class="ad-layout-options" id="ad-layout-options">' + layoutOptionsHtml(data.gallery) + "</div>" +
       "</section>" +
       musicSectionHtml(data.gallery) +
+      deliverySectionHtml(data.gallery) +
       gallerySectionShopHtml(data) +
       '<section class="ad-dropzone" id="ad-dropzone">' +
       '<p><strong>Glissez vos photos ici</strong>, ou</p>' +
@@ -2326,6 +2439,7 @@
       }
     });
     wireMusicSection(slug, data.gallery);
+    wireDeliverySection(slug);
     var shopToggle = document.getElementById("ad-gallery-shop-toggle");
     if (shopToggle) {
       shopToggle.addEventListener("change", async function () {

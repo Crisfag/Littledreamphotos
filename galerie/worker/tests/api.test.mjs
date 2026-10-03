@@ -1518,6 +1518,106 @@ const noneChoice = await admin("POST", `/api/admin/galleries/${musicSlug}/music-
 check("« Aucune musique » est un choix possible", noneChoice.ok && (await musicLogin()).gallery?.music === null);
 await admin("DELETE", `/api/admin/galleries/${musicSlug}`);
 
+/* ---------- Livraison des photos définitives ---------- */
+
+const { crc32: zipCrc32 } = await import("../src/delivery.js");
+const deliverySlug = `${SLUG}-livraison`;
+await admin("POST", "/api/admin/galleries", {
+  slug: deliverySlug, password: "mot-de-passe-solide", title: "Séance livrée", clientName: "Famille Livrée", clientEmail: "client-livraison@test.invalid",
+});
+const deliveryLogin = async () => (await fetch(`${BASE}/api/gallery/${deliverySlug}/login`, {
+  method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ password: "mot-de-passe-solide" }),
+})).json();
+const HD1 = new Uint8Array(150000).map((_, i) => (i * 17 + 3) & 0xff);
+const HD2 = new Uint8Array(4321).map((_, i) => (i * 5 + 1) & 0xff);
+const hex = (bytes) => zipCrc32(bytes).toString(16).padStart(8, "0");
+const deliveryBase = `/api/admin/galleries/${deliverySlug}/delivery`;
+
+const peerDeliveryPut = await peerAdmin("PUT", `${deliveryBase}/files?name=a.jpg&crc=${hex(HD1)}`, HD1, true);
+check("un autre compte ne peut pas déposer de fichier à livrer (404)", peerDeliveryPut.status === 404);
+const noCrc = await admin("PUT", `${deliveryBase}/files?name=a.jpg`, HD1, true);
+const badExt = await admin("PUT", `${deliveryBase}/files?name=script.exe&crc=${hex(HD1)}`, HD1, true);
+check("un fichier sans empreinte CRC ou d'un format non photo est refusé (400)", noCrc.status === 400 && badExt.status === 400);
+const openEmpty = await admin("POST", deliveryBase, { open: true });
+check("impossible d'ouvrir une livraison vide (409)", openEmpty.status === 409);
+
+const put1 = await admin("PUT", `${deliveryBase}/files?name=${encodeURIComponent("IMG_0001.jpg")}&crc=${hex(HD1)}`, HD1, true);
+const put2 = await admin("PUT", `${deliveryBase}/files?name=${encodeURIComponent("../Séance été.jpg")}&crc=${hex(HD2)}`, HD2, true);
+const file1 = (await put1.json()).file;
+const file2 = (await put2.json()).file;
+check("le photographe dépose les fichiers définitifs (nom nettoyé, taille relue dans R2)",
+      put1.status === 201 && put2.status === 201 && file1.size === HD1.length && file2.name === "Séance été.jpg", JSON.stringify(file2));
+const deliveryAdmin = await (await admin("GET", deliveryBase)).json();
+const deliveryInDetail = (await (await admin("GET", `/api/admin/galleries/${deliverySlug}`)).json()).gallery?.delivery;
+check("la fiche galerie liste les fichiers à livrer et leur poids total, livraison encore fermée",
+      deliveryAdmin.files.length === 2 && deliveryAdmin.totalBytes === HD1.length + HD2.length && deliveryAdmin.open === false &&
+      deliveryInDetail?.files?.length === 2);
+
+const closedSession = await deliveryLogin();
+const closedLink = await fetch(`${BASE}/api/gallery/${deliverySlug}/delivery/link`, {
+  method: "POST", headers: { authorization: `Bearer ${closedSession.token}`, "content-type": "application/json" }, body: "{}",
+});
+check("tant que la livraison est fermée, le client n'en sait rien et ne peut rien télécharger",
+      closedSession.gallery?.delivery === null && closedLink.status === 404);
+
+const opened = await (await admin("POST", deliveryBase, { open: true, notify: true })).json();
+check("ouvrir la livraison prévient le client par e-mail", opened.open === true && opened.notified === true, JSON.stringify(opened));
+const openSession = await deliveryLogin();
+check("le client voit la livraison à la connexion : fichiers et poids total",
+      openSession.gallery?.delivery?.files?.length === 2 && openSession.gallery.delivery.totalBytes === HD1.length + HD2.length);
+
+const linkNoAuth = await fetch(`${BASE}/api/gallery/${deliverySlug}/delivery/link`, { method: "POST", body: "{}" });
+check("un lien de téléchargement exige la session du client (401)", linkNoAuth.status === 401);
+const clientBearer = { authorization: `Bearer ${openSession.token}`, "content-type": "application/json" };
+const zipLink = await (await fetch(`${BASE}/api/gallery/${deliverySlug}/delivery/link`, { method: "POST", headers: clientBearer, body: "{}" })).json();
+const zipResponse = await fetch(zipLink.url);
+const zipBytes = new Uint8Array(await zipResponse.arrayBuffer());
+let zipCheck = "";
+try {
+  const { writeFileSync, mkdtempSync } = await import("node:fs");
+  const { execFileSync } = await import("node:child_process");
+  const { tmpdir } = await import("node:os");
+  const zipPath = `${mkdtempSync(`${tmpdir()}/livraison-`)}/photos.zip`;
+  writeFileSync(zipPath, zipBytes);
+  zipCheck = execFileSync("python3", ["-c", "import zipfile,sys,json;z=zipfile.ZipFile(sys.argv[1]);print(json.dumps([z.testzip(),z.namelist(),[i.file_size for i in z.infolist()]]))", zipPath]).toString().trim();
+} catch (err) {
+  zipCheck = String(err.message);
+}
+check("« Tout télécharger » donne un ZIP valide (CRC vérifiés), à la taille annoncée, nommé d'après la galerie",
+      zipResponse.status === 200 && Number(zipResponse.headers.get("content-length")) === zipBytes.length &&
+      (() => { try { const z = JSON.parse(zipCheck); return z[0] === null && z[1].join("|") === "IMG_0001.jpg|Séance été.jpg" && z[2].join(",") === `${HD1.length},${HD2.length}`; } catch { return false; } })() &&
+      (zipResponse.headers.get("content-disposition") || "").includes("filename*=UTF-8''S%C3%A9ance%20livr%C3%A9e.zip"),
+      `${zipResponse.status} ${zipCheck} ${zipResponse.headers.get("content-disposition")}`);
+
+const oneLink = await (await fetch(`${BASE}/api/gallery/${deliverySlug}/delivery/link`, { method: "POST", headers: clientBearer, body: JSON.stringify({ fileId: file2.id }) })).json();
+const oneResponse = await fetch(oneLink.url);
+const oneBytes = new Uint8Array(await oneResponse.arrayBuffer());
+check("une photo se télécharge seule, à l'identique, en pièce jointe",
+      oneResponse.status === 200 && oneBytes.length === HD2.length && oneBytes.every((b, i) => b === HD2[i]) &&
+      (oneResponse.headers.get("content-disposition") || "").startsWith("attachment;"));
+const oneUrl = new URL(oneLink.url);
+const deliverySwapped = await fetch(`${BASE}/api/gallery/${deliverySlug}/delivery/file/${file1.id}?t=${encodeURIComponent(oneUrl.searchParams.get("t"))}`);
+const deliveryTampered = await fetch(`${BASE}/api/gallery/${deliverySlug}/delivery/zip?t=${encodeURIComponent(oneUrl.searchParams.get("t") + "x")}`);
+const linkAsSession = await fetch(`${BASE}/api/gallery/${deliverySlug}/tile/${"x"}/0/0/0`, { headers: { authorization: `Bearer ${oneUrl.searchParams.get("t")}` } });
+check("un lien ne vaut que pour son fichier, ne se falsifie pas et ne vaut jamais session",
+      deliverySwapped.status === 403 && deliveryTampered.status === 403 && linkAsSession.status === 401,
+      `${deliverySwapped.status} ${deliveryTampered.status} ${linkAsSession.status}`);
+const otherGalleryUse = await fetch(`${BASE}/api/gallery/${SLUG}/delivery/zip?t=${encodeURIComponent(new URL(zipLink.url).searchParams.get("t"))}`);
+check("un lien d'une galerie ne sert pas sur une autre", [403, 404].includes(otherGalleryUse.status));
+
+const deliveryLog = await (await admin("GET", `/api/admin/galleries/${deliverySlug}/log`)).json();
+check("les téléchargements apparaissent dans le journal d'accès",
+      (deliveryLog.log || []).filter((e) => e.event === "download").length >= 2, JSON.stringify((deliveryLog.log || []).map((e) => e.event)));
+
+await admin("POST", deliveryBase, { open: false });
+const afterClose = await fetch(zipLink.url);
+check("fermer la livraison coupe aussitôt les liens déjà distribués", afterClose.status === 404);
+const deliveryRemoved = await admin("DELETE", `${deliveryBase}/files/${file1.id}`);
+const peerRemove = await peerAdmin("DELETE", `${deliveryBase}/files/${file2.id}`);
+check("le photographe retire un fichier (un autre compte ne peut pas)",
+      deliveryRemoved.ok && peerRemove.status === 404 && (await (await admin("GET", deliveryBase)).json()).files.length === 1);
+await admin("DELETE", `/api/admin/galleries/${deliverySlug}`);
+
 /* ---------- « Valider ma sélection » ---------- */
 
 const validateSlug = `${SLUG}-validation`;

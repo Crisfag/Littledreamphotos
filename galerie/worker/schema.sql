@@ -105,6 +105,12 @@ CREATE TABLE IF NOT EXISTS galleries (
   -- vide les deux autres (voir worker/src/music.js).
   music_track_id         TEXT NOT NULL DEFAULT '',
   music_embed            TEXT NOT NULL DEFAULT '',
+  -- Livraison des photos définitives (fichiers dans R2 sous
+  -- {galleryId}/delivery/{fileId}, liste dans delivery_files) : ouverte au
+  -- client ou non, quand, et quand il a été prévenu par e-mail.
+  delivery_open          INTEGER NOT NULL DEFAULT 0,
+  delivery_opened_at     INTEGER,
+  delivery_notified_at   INTEGER,
   -- Moment où le client a cliqué « Valider ma sélection » (epoch secondes) ;
   -- NULL tant qu'il ne l'a pas fait. Arrête les relances automatiques.
   selection_done_at      INTEGER,
@@ -411,6 +417,10 @@ CREATE INDEX IF NOT EXISTS idx_email_changes_photographer ON email_changes(photo
 --   ALTER TABLE galleries ADD COLUMN music_track_id TEXT NOT NULL DEFAULT '';
 --   ALTER TABLE galleries ADD COLUMN music_embed TEXT NOT NULL DEFAULT '';
 --   puis la table music_tracks (fin de ce fichier).
+--   ALTER TABLE galleries ADD COLUMN delivery_open INTEGER NOT NULL DEFAULT 0;
+--   ALTER TABLE galleries ADD COLUMN delivery_opened_at INTEGER;
+--   ALTER TABLE galleries ADD COLUMN delivery_notified_at INTEGER;
+--   puis la table delivery_files (fin de ce fichier).
 
 -- Relances déjà envoyées, pour ne jamais relancer deux fois pour la même
 -- échéance : une ligne par galerie et par type (client_j7, client_j2,
@@ -494,3 +504,19 @@ CREATE TABLE IF NOT EXISTS music_tracks (
   duration_s  INTEGER NOT NULL DEFAULT 0,
   created_at  INTEGER NOT NULL
 );
+
+-- Photos définitives livrées au client (haute définition, sans filigrane).
+-- `crc32` est calculé à l'envoi par l'outil d'administration : il permet au
+-- Worker de fabriquer le ZIP de téléchargement au fil de l'eau, sans relire
+-- les fichiers (voir worker/src/delivery.js).
+CREATE TABLE IF NOT EXISTS delivery_files (
+  id           TEXT PRIMARY KEY,
+  gallery_id   TEXT NOT NULL REFERENCES galleries(id) ON DELETE CASCADE,
+  name         TEXT NOT NULL,
+  size         INTEGER NOT NULL,
+  crc32        INTEGER NOT NULL,
+  content_type TEXT NOT NULL DEFAULT 'image/jpeg',
+  position     INTEGER NOT NULL DEFAULT 0,
+  created_at   INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_delivery_files_gallery ON delivery_files(gallery_id, position);

@@ -373,6 +373,19 @@ Le tableau de bord s'organise en trois onglets, chacun avec son propre lien
   mise en page *Défilement* la lecture démarre d'elle-même quand le
   navigateur l'autorise, et le choix du client (coupée ou non) est retenu le
   temps de sa visite. Une galerie sans musique ne montre rien de plus.
+- **Livraison des photos définitives** : sur la fiche galerie, le
+  photographe dépose les fichiers finaux (haute définition, sans filigrane ;
+  JPEG, PNG, TIFF, WebP ou HEIC, 80 Mo maximum chacun, 4 Go par galerie),
+  puis ouvre la livraison — avec, au choix, un e-mail « Vos photos sont
+  prêtes » au client. Le client voit alors un encart en tête de sa galerie
+  et télécharge tout d'un coup (ZIP) ou une photo à la fois. Le ZIP est
+  fabriqué au fil de l'eau par le Worker, sans compression ni relecture des
+  fichiers : leur CRC-32 est calculé à l'envoi par l'admin et stocké avec
+  eux, et la taille du ZIP est connue d'avance (vraie barre de progression).
+  Les téléchargements passent par des liens signés valables 15 minutes,
+  propres à un fichier (ou au ZIP) et signés avec une clé distincte des
+  sessions ; fermer la livraison les coupe aussitôt. Chaque téléchargement
+  est inscrit au journal d'accès. Les fichiers sont effacés avec la galerie.
 - **Forfait et suppléments** : le nombre de photos déjà payées par le
   client (optionnel — sans forfait défini, aucun supplément n'est jamais
   calculé) et le prix de chaque photo au-delà. Le supplément se calcule
@@ -738,7 +751,7 @@ des tuiles, refus du mauvais mot de passe, absence de toute balise `<img>`,
 neutralisation du menu contextuel et de la copie, voile sur « Impr. écran » et
 sur perte de focus, consignation au journal.
 
-**API du Worker** — 326 vérifications contre le vrai moteur Cloudflare (D1 et R2
+**API du Worker** — 342 vérifications contre le vrai moteur Cloudflare (D1 et R2
 émulés localement par `wrangler dev`) : comptes photographes (inscription,
 connexion, session, mot de passe oublié — même réponse générique qu'un
 compte existe ou non), cloisonnement strict entre comptes (un photographe ne
@@ -798,7 +811,15 @@ passe). Musique d'ambiance : dépôt refusé depuis un autre compte, piste
 annoncée au client à la connexion puis servie octet pour octet en
 `audio/mpeg`, lecture progressive par morceaux (`Range` → 206), retrait
 refusé depuis un autre compte, et plus rien de servi ni d'annoncé une fois
-la piste retirée. Bibliothèque musicale : ajout réservé à la propriétaire
+la piste retirée. Livraison : dépôt refusé depuis un autre compte, sans
+CRC ou hors format photo, ouverture impossible à vide, fichiers et poids
+listés sur la fiche, rien de visible ni de téléchargeable côté client tant
+que c'est fermé, e-mail au client à l'ouverture, ZIP valide (CRC vérifiés
+par Python `zipfile`) à la taille annoncée et nommé d'après la galerie,
+photo seule identique en pièce jointe, lien qui ne vaut ni pour un autre
+fichier, ni falsifié, ni comme session, ni sur une autre galerie,
+téléchargements au journal, liens coupés à la fermeture, retrait d'un
+fichier. Bibliothèque musicale : ajout réservé à la propriétaire
 (403 sinon), titre et ambiance obligatoires, liste visible de chaque
 photographe, écoute d'un morceau (lecture partielle comprise), morceau
 inconnu non servi ; choix d'un morceau (refusé depuis un autre compte) qui
@@ -927,7 +948,7 @@ appliqué sinon, HT + TVA se recomposant exactement au centime près en TTC
 même sur un montant qui ne se divise pas rond, et un vrai PDF valide généré
 aussi bien avec des coordonnées complètes qu'avec des champs vides.
 
-**Interface d'administration** — 120 vérifications dans un vrai navigateur,
+**Interface d'administration** — 124 vérifications dans un vrai navigateur,
 contre le vrai Worker local : demande de lien de réinitialisation de mot de
 passe (message générique affiché), création de compte et connexion depuis
 le formulaire (pas de session présupposée), barre d'onglets Galeries /
@@ -975,7 +996,9 @@ est pas un (la piste existante est conservée), retrait après confirmation ;
 la propriétaire ajoute un morceau à la bibliothèque musicale depuis l'onglet
 Admin (titre, ambiance et crédit affichés), le photographe le retrouve dans
 sa fiche avec un bouton d'écoute et le choisit, un lien d'un autre site est
-refusé, un lien Spotify devient le lecteur de la galerie.
+refusé, un lien Spotify devient le lecteur de la galerie. Livraison : rien
+à ouvrir sans fichier, deux photos ajoutées avec leur poids, ouverture
+après confirmation, fermeture d'un clic.
 Codes couleur et repères posés par le client (via l'API, comme le ferait sa
 page) : pastille jaune et compteur de repères sur la vignette, légende de
 la galerie, photo ouverte en grand avec le repère dessus, sa note listée et
@@ -1040,6 +1063,17 @@ chez Spotify avant le clic, lecteur officiel ouvert sur la bonne playlist,
 « Réduire » qui le garde, « Fermer » qui le retire, aucun bouton sans
 musique, aucune exception.
 
+**Livraison côté client** — 5 vérifications dans un vrai navigateur :
+aucun encart tant que la livraison est fermée, encart « Vos photos sont
+prêtes » avec nombre et poids une fois ouverte, ZIP enregistré sous le nom
+de la galerie, photo seule téléchargée à l'identique, aucune exception.
+
+**ZIP de livraison (logique)** — 7 vérifications sans réseau ni D1 : CRC-32
+de référence, taille annoncée égale au ZIP produit, archive ouverte et
+vérifiée par un lecteur standard (Python `zipfile`), noms accentués et
+tailles conservés, contenu identique, doublons de noms renommés, noms de
+fichiers nettoyés (chemin, guillemets, caractères de contrôle).
+
 **Musique (logique)** — 22 vérifications sans réseau ni D1 : liens
 Spotify (titre, playlist, album, adresse `intl-fr`, URI `spotify:`),
 Deezer, SoundCloud (morceau, playlist) et YouTube (vidéo, `youtu.be`, YouTube
@@ -1071,12 +1105,14 @@ node tests/marks.test.mjs             # codes couleur + repères client, autonom
 node tests/subdomain.test.mjs         # sous-domaine par studio, autonome (PUBLIC_SITE_ORIGIN=http://localhost:8000 dans worker/.dev.vars)
 node tests/shop.test.mjs              # boutique de tirages côté client, autonome (PRODIGI_API_BASE=http://127.0.0.1:8790/v4.0 dans worker/.dev.vars)
 node tests/music.test.mjs             # musique côté client (bibliothèque, lien Spotify), autonome
+node tests/delivery.test.mjs          # livraison des photos définitives côté client, autonome
 
 cd ../worker
 node tests/notify.test.mjs            # e-mails (alerte de capture, relances…), sans réseau
 node tests/reminders.test.mjs         # décision des relances automatiques, sans réseau
 node tests/prodigi.test.mjs           # boutique de tirages (Prodigi), sans réseau
 node tests/music.test.mjs             # liens Spotify / Deezer / SoundCloud / YouTube, sans réseau
+node tests/delivery.test.mjs          # ZIP de livraison (en-têtes, CRC, noms), sans réseau
 node tests/stripe.test.mjs            # signature de webhook + encodage des sessions Stripe, sans réseau
 node tests/invoices.test.mjs          # calcul de TVA + génération du PDF de facture, sans réseau
 npm run dev:local                     # dans un autre terminal (Worker local sur le port 8788)

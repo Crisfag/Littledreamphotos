@@ -954,3 +954,34 @@ body.gp-veiled #gp-viewer-canvas {
 }
 .gp-mock-mug canvas { border-radius: 2px; }
 .gp-mock-mug .gp-mock-obj::after { background: linear-gradient(90deg, rgba(0, 0, 0, .16), transparent 24%, transparent 72%, rgba(0, 0, 0, .18)); }
+
+/* ---------- Livraison des photos définitives ---------- */
+
+.gp-delivery {
+  max-width: 760px; margin: 0 auto 1.6rem; padding: 1.3rem 1.4rem;
+  display: grid; grid-template-columns: 1fr auto; gap: .8rem 1.2rem; align-items: center;
+  background: linear-gradient(135deg, #fff, var(--cream)); border: 1px solid var(--line); border-radius: 16px;
+  box-shadow: 0 14px 34px -24px rgba(43, 37, 33, .45);
+}
+.gp-delivery[hidden] { display: none; }
+.gp-delivery-eyebrow { margin: 0; font-size: .7rem; letter-spacing: .22em; text-transform: uppercase; color: var(--rose-deep); }
+.gp-delivery h2 { margin: .2rem 0 .3rem; font-family: var(--serif); font-weight: 500; font-size: 1.6rem; color: var(--ink); }
+.gp-delivery-summary { margin: 0; font-size: .88rem; color: var(--muted); }
+.gp-delivery-actions { text-align: right; }
+.gp-delivery-zip { white-space: nowrap; }
+.gp-delivery-status { margin: .4rem 0 0; font-size: .78rem; color: var(--muted); min-height: 1em; }
+.gp-delivery-files { grid-column: 1 / -1; font-size: .88rem; }
+.gp-delivery-files summary { cursor: pointer; color: var(--rose-deep); }
+.gp-delivery-files ul { list-style: none; margin: .6rem 0 0; padding: 0; max-height: 260px; overflow-y: auto; }
+.gp-delivery-files li { display: grid; grid-template-columns: 1fr auto auto; gap: .8rem; align-items: center; padding: .4rem 0; border-bottom: 1px solid var(--line); }
+.gp-delivery-files li span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gp-delivery-size { color: var(--muted); font-size: .8rem; }
+.gp-delivery-one {
+  font-family: var(--sans); font-size: .78rem; padding: .3rem .8rem; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--rose); background: transparent; color: var(--rose-deep);
+}
+.gp-delivery-one:hover { background: var(--rose); color: #fff; }
+@media (max-width: 600px) {
+  .gp-delivery { grid-template-columns: 1fr; margin-left: 1rem; margin-right: 1rem; }
+  .gp-delivery-actions { text-align: left; }
+}

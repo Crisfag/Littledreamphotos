@@ -210,6 +210,26 @@ await page.waitForFunction(
 );
 check("retirer la musique (après confirmation) ramène la fiche à « aucune musique »", true);
 
+/* ---------- Livraison des photos définitives ---------- */
+
+check("sans fichier déposé, la livraison n'est pas ouverte et rien ne peut être ouvert",
+      ((await page.textContent(".ad-delivery-status")) || "").includes("Pas encore ouverte") && (await page.locator("#ad-delivery-open").count()) === 0);
+await page.setInputFiles("#ad-delivery-input", [
+  { name: "final-01.jpg", mimeType: "image/jpeg", buffer: Buffer.alloc(200000, 1) },
+  { name: "final-02.jpg", mimeType: "image/jpeg", buffer: Buffer.alloc(50000, 2) },
+]);
+await page.waitForFunction(() => document.querySelectorAll(".ad-delivery-list li").length === 2, { timeout: 20000 });
+check("les photos définitives s'ajoutent à la livraison, avec leur poids",
+      (await page.textContent("#ad-delivery-progress")).includes("2 photos") && (await page.textContent(".ad-delivery-list")).includes("final-02.jpg"));
+await page.click("#ad-delivery-open");
+await page.waitForSelector("#ad-confirm-modal:not([hidden])");
+await page.click("#ad-confirm-ok");
+await page.waitForFunction(() => (document.querySelector(".ad-delivery-status") || {}).textContent?.includes("Livraison ouverte"), { timeout: 15000 });
+check("ouvrir la livraison (après confirmation) l'indique sur la fiche", await page.isVisible("#ad-delivery-close"));
+await page.click("#ad-delivery-close");
+await page.waitForFunction(() => (document.querySelector(".ad-delivery-status") || {}).textContent?.includes("Pas encore ouverte"), { timeout: 15000 });
+check("la livraison se referme d'un clic", await page.isVisible("#ad-delivery-open"));
+
 /* ---------- Forfait et suppléments ---------- */
 
 check("aucun forfait n'est défini par défaut",
@@ -393,6 +413,8 @@ check("la bibliothèque est proposée dans la fiche galerie, avec écoute",
       (await page.locator("#ad-music-library .ad-track-play").count()) >= 1);
 await page.locator("#ad-music-library .ad-track", { hasText: libraryTitle }).locator("[data-pick-track]").click();
 await page.waitForFunction((t) => (document.getElementById("ad-music-state") || {}).textContent?.includes(t), libraryTitle, { timeout: 15000 });
+// La liste de la bibliothèque se recharge juste après la fiche.
+await page.waitForSelector("#ad-music-library .ad-track-current", { timeout: 15000 });
 check("choisir un morceau de la bibliothèque en fait la musique de la galerie",
       (await page.textContent("#ad-music-state")).includes("bibliothèque") &&
       (await page.locator("#ad-music-library .ad-track-current", { hasText: libraryTitle }).count()) === 1);

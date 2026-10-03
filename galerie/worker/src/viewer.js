@@ -9,6 +9,7 @@ import { supplementFor } from "./admin.js";
 import { shopForClient, handlePrintOrder } from "./shop.js";
 import { createCheckoutSession } from "./stripe.js";
 import { musicForClient, audioKeyFor, serveAudio, getTrack } from "./music.js";
+import { deliveryForClient, createDownloadLink, downloadFile, downloadZip } from "./delivery.js";
 
 const SESSION_TTL_SECONDS = 2 * 60 * 60; // 2 h
 const MAX_FAILED_LOGINS = 10;
@@ -159,6 +160,7 @@ async function handleLogin(request, env, slug) {
       watermark: gallery.watermark_text,
       expiresAt: gallery.expires_at,
       layout: gallery.layout || "grille",
+      delivery: await deliveryForClient(env, gallery),
       hasMusic: music?.kind === "audio",
       music,
       selectionDoneAt: gallery.selection_done_at || null,
@@ -725,6 +727,22 @@ export async function handleViewer(request, env, ctx, path) {
   }
   if (action === "checkout" && request.method === "POST") {
     return handleCheckout(request, env, slug);
+  }
+  // Livraison des photos définitives : lien signé, puis téléchargement.
+  if (action === "delivery") {
+    if (parts[4] === "link" && parts.length === 5 && request.method === "POST") {
+      const auth = await authorize(request, env, slug);
+      if (auth.error) return auth.error;
+      return createDownloadLink(request, env, auth.gallery, auth.viewerId, new URL(request.url).origin);
+    }
+    if (request.method === "GET" && ((parts[4] === "file" && parts.length === 6) || (parts[4] === "zip" && parts.length === 5))) {
+      const gallery = await getGallery(env, slug);
+      if (!gallery || isExpired(gallery)) return fail(404, "Aucune livraison");
+      const log = (entry) => logAccess(env, { galleryId: gallery.id, ...entry, userAgent: request.headers.get("user-agent") || "" });
+      return parts[4] === "zip"
+        ? downloadZip(request, env, ctx, gallery, log)
+        : downloadFile(request, env, gallery, decodeURIComponent(parts[5]), log);
+    }
   }
   // /api/gallery/<slug>/invoice/<invoiceId>
   if (action === "invoice" && request.method === "GET" && parts.length === 5) {

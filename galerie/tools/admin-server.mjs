@@ -16,6 +16,7 @@
 // : une galerie créée depuis le navigateur ou depuis la ligne de commande
 // produit des tuiles identiques.
 
+import zlib from "node:zlib";
 import { createServer } from "node:http";
 import { readFile, stat } from "node:fs/promises";
 import { randomBytes } from "node:crypto";
@@ -38,6 +39,26 @@ const HOST = process.env.GALERIE_ADMIN_HOST || "127.0.0.1";
 // via cette variable plutôt que de laisser le service choisir.
 const PORT = Number(process.env.GALERIE_ADMIN_PORT || process.env.PORT || 4000);
 const MAX_UPLOAD_BYTES = 60 * 1024 * 1024;
+// Photos définitives à livrer : pleine définition, donc plus lourdes.
+const MAX_DELIVERY_BYTES = 80 * 1024 * 1024;
+
+// CRC-32 d'un fichier livré, exigé par le ZIP que le Worker fabrique au fil
+// de l'eau sans relire les fichiers (voir worker/src/delivery.js).
+let crcTable = null;
+function crc32(buffer) {
+  if (typeof zlib.crc32 === "function") return zlib.crc32(buffer) >>> 0;
+  if (!crcTable) {
+    crcTable = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) {
+      let c = n;
+      for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+      crcTable[n] = c >>> 0;
+    }
+  }
+  let crc = 0xffffffff;
+  for (let i = 0; i < buffer.length; i++) crc = crcTable[(crc ^ buffer[i]) & 0xff] ^ (crc >>> 8);
+  return (crc ^ 0xffffffff) >>> 0;
+}
 const MAX_MUSIC_BYTES = 15 * 1024 * 1024;
 const SESSION_COOKIE = "galerie_session";
 const SESSION_MAX_AGE = 30 * 24 * 60 * 60; // aligné sur la durée du jeton côté Worker
@@ -145,12 +166,12 @@ function nodeRequestToWebRequest(req, body) {
   return new Request(`http://${HOST}${req.url}`, { method: req.method, headers, body });
 }
 
-async function readBody(req) {
+async function readBody(req, limit = MAX_UPLOAD_BYTES) {
   const chunks = [];
   let size = 0;
   for await (const chunk of req) {
     size += chunk.length;
-    if (size > MAX_UPLOAD_BYTES) throw Object.assign(new Error("Fichier trop volumineux"), { status: 413 });
+    if (size > limit) throw Object.assign(new Error("Fichier trop volumineux"), { status: 413 });
     chunks.push(chunk);
   }
   return Buffer.concat(chunks);
@@ -923,6 +944,39 @@ async function handleApi(req, res, url) {
       return json(res, 200, result);
     } catch (err) {
       return relayError(res, err, "Impossible d'enregistrer la musique");
+    }
+  }
+
+  // /local/galleries/:slug/delivery… — livraison des photos définitives.
+  // L'envoi d'un fichier arrive brut (corps = le fichier, ?name=…) : on en
+  // calcule le CRC-32 ici puis on le transmet au Worker.
+  if (parts[2] === "delivery") {
+    const base = `/api/admin/galleries/${encodeURIComponent(slug)}/delivery`;
+    try {
+      if (parts.length === 3 && req.method === "GET") return json(res, 200, await client.request("GET", base));
+      if (parts.length === 3 && req.method === "POST") {
+        const body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
+        return json(res, 200, await client.request("POST", base, body));
+      }
+      if (parts.length === 4 && parts[3] === "files" && req.method === "POST") {
+        const contentLength = Number(req.headers["content-length"] || 0);
+        if (contentLength > MAX_DELIVERY_BYTES) return json(res, 413, { error: "Fichier trop volumineux (80 Mo maximum)" });
+        const name = new URL(req.url, "http://x").searchParams.get("name") || "photo.jpg";
+        let buffer;
+        try {
+          buffer = await readBody(req, MAX_DELIVERY_BYTES);
+        } catch (err) {
+          return json(res, err.status || 400, { error: err.status ? "Fichier trop volumineux (80 Mo maximum)" : "Fichier illisible" });
+        }
+        if (!buffer.length) return json(res, 400, { error: "Fichier vide" });
+        const crc = crc32(buffer).toString(16).padStart(8, "0");
+        return json(res, 201, await client.request("PUT", `${base}/files?name=${encodeURIComponent(name)}&crc=${crc}`, buffer, true));
+      }
+      if (parts.length === 5 && parts[3] === "files" && req.method === "DELETE") {
+        return json(res, 200, await client.request("DELETE", `${base}/files/${encodeURIComponent(decodeURIComponent(parts[4]))}`));
+      }
+    } catch (err) {
+      return relayError(res, err, "La livraison n'a pas pu traiter la demande");
     }
   }
 

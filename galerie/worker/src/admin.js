@@ -10,6 +10,9 @@ import { parseMarks } from "./marks.js";
 import { handleShopAdmin, listPrintOrders } from "./shop.js";
 import { hashPassword, randomBytes, b64url } from "./auth.js";
 import { listLibrary, setMusicChoice, musicForAdmin } from "./music.js";
+import { handleDeliveryAdmin, deliveryForAdmin } from "./delivery.js";
+import { sendDeliveryReady } from "./notify.js";
+import { galleryUrlFor } from "./reminders.js";
 import { authenticatePhotographer } from "./authPhotographer.js";
 import { connectStripe, refreshStripeStatus, setBillingProfile } from "./billing.js";
 import { updateStudioName, updateName, changePassword, requestEmailChange, updateDefaults, updateReminders, updateSubdomain } from "./account.js";
@@ -231,6 +234,7 @@ async function getGallery(env, photographerId, slug) {
       layout: gallery.layout,
       music_name: gallery.music_name || "",
       music: await musicForAdmin(env, gallery),
+      delivery: await deliveryForAdmin(env, gallery),
       selection_done_at: gallery.selection_done_at,
       shop_enabled: Boolean(gallery.shop_enabled),
       included_photos: gallery.included_photos,
@@ -447,6 +451,7 @@ async function deleteGallery(env, photographerId, slug) {
   await env.DB.batch([
     env.DB.prepare("DELETE FROM photos WHERE gallery_id = ?").bind(gallery.id),
     env.DB.prepare("DELETE FROM access_log WHERE gallery_id = ?").bind(gallery.id),
+    env.DB.prepare("DELETE FROM delivery_files WHERE gallery_id = ?").bind(gallery.id),
     env.DB.prepare("DELETE FROM galleries WHERE id = ?").bind(gallery.id),
   ]);
 
@@ -716,6 +721,25 @@ export async function handleAdmin(request, env, ctx, path) {
     }
     if (parts.length === 5 && parts[4] === "music" && request.method === "DELETE") {
       return deleteMusic(env, photographerId, slug);
+    }
+    // /api/admin/galleries/<slug>/delivery[/files[/<id>]] — livraison HD.
+    if (parts.length >= 5 && parts[4] === "delivery") {
+      const gallery = await ownedGallery(env, photographerId, slug);
+      if (!gallery) return fail(404, "Galerie introuvable");
+      return handleDeliveryAdmin(request, env, gallery, parts.slice(5), {
+        notifyClient: async (g) => {
+          const photographer = await env.DB.prepare("SELECT studio_name FROM photographers WHERE id = ?").bind(photographerId).first();
+          const { results } = await env.DB.prepare("SELECT COUNT(*) AS n FROM delivery_files WHERE gallery_id = ?").bind(g.id).all();
+          await sendDeliveryReady(env, {
+            to: g.client_email,
+            studioName: photographer?.studio_name || "",
+            galleryTitle: g.title,
+            clientName: g.client_name,
+            count: results[0]?.n || 0,
+            galleryUrl: galleryUrlFor(env, g.slug),
+          });
+        },
+      });
     }
     if (parts.length === 5 && parts[4] === "music-choice" && request.method === "POST") {
       const gallery = await ownedGallery(env, photographerId, slug);

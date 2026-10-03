@@ -358,6 +358,23 @@ export function buildPrintOrderPhotographerEmail({ galleryTitle, recipientName, 
 }
 
 // Au client : ses tirages sont expédiés.
+export function buildDeliveryReadyEmail({ studioName, galleryTitle, clientName, count, galleryUrl }) {
+  const subject = `Vos photos « ${galleryTitle} » sont prêtes`;
+  const countText = `${count} photo${count > 1 ? "s" : ""}`;
+  const bodyHtml =
+    eyebrow(studioName || "Vos photos") +
+    heading("Vos photos sont prêtes") +
+    paragraph(`${clientName ? escapeHtml(clientName) + ", v" : "V"}os photos définitives de « <strong>${escapeHtml(galleryTitle)}</strong> » vous attendent : ${escapeHtml(countText)} en haute définition, à télécharger une par une ou toutes d'un coup.`) +
+    (galleryUrl ? emailButton(galleryUrl, "Télécharger mes photos") : "") +
+    paragraph("Connectez-vous avec le mot de passe habituel de votre galerie. Pensez à enregistrer vos photos avant la fermeture de la galerie.", { small: true });
+  const text = [
+    `Vos photos définitives de « ${galleryTitle} » sont prêtes : ${countText} en haute définition.`,
+    galleryUrl ? `\nTélécharger mes photos : ${galleryUrl}` : "",
+    "\nConnectez-vous avec le mot de passe habituel de votre galerie.",
+  ].join("\n");
+  return { subject, html: emailShell({ preheader: subject, bodyHtml }), text };
+}
+
 export function buildPrintOrderShippedEmail({ studioName, galleryTitle, recipientName, trackingUrl }) {
   const subject = `Vos tirages sont en route — ${galleryTitle}`;
   const bodyHtml =
@@ -460,4 +477,8 @@ export async function sendPrintOrderPhotographer(env, params) {
 
 export async function sendPrintOrderShipped(env, params) {
   await sendEmail(env, { to: params.to, ...buildPrintOrderShippedEmail(params) });
+}
+
+export async function sendDeliveryReady(env, params) {
+  await sendEmail(env, { to: params.to, ...buildDeliveryReadyEmail(params) });
 }
