@@ -14,6 +14,19 @@ CREATE TABLE IF NOT EXISTS photographers (
   -- photographe ne les renseigne pas depuis Paramètres.
   first_name     TEXT NOT NULL DEFAULT '',
   last_name      TEXT NOT NULL DEFAULT '',
+  -- Acceptation des conditions d'utilisation et de la politique de
+  -- confidentialité à l'inscription (epoch secondes) et version des textes.
+  terms_accepted_at INTEGER,
+  terms_version  TEXT NOT NULL DEFAULT '',
+  -- Abonnement Holypixx (voir worker/src/subscription.js) : formule
+  -- souscrite (free, essentiel, pro), statut Stripe de l'abonnement, fin de
+  -- la période en cours, résiliation programmée, identifiants Stripe.
+  plan           TEXT NOT NULL DEFAULT 'free',
+  plan_status    TEXT NOT NULL DEFAULT '',
+  plan_renews_at INTEGER,
+  plan_cancel_at_period_end INTEGER NOT NULL DEFAULT 0,
+  stripe_customer_id     TEXT NOT NULL DEFAULT '',
+  stripe_subscription_id TEXT NOT NULL DEFAULT '',
   -- Paiement en ligne des suppléments (Stripe Connect, comptes « Express ») :
   -- chaque photographe connecte son propre compte, l'argent lui arrive
   -- directement, jamais via un compte pivot. stripe_charges_enabled reflète
@@ -99,6 +112,23 @@ CREATE TABLE IF NOT EXISTS galleries (
   -- sous music/{id}.mp3. Jouée côté client en mise en page « défilement »,
   -- proposée en pause dans les autres — jamais imposée.
   music_name             TEXT NOT NULL DEFAULT '',
+  -- Ou bien une piste de la bibliothèque commune (music_tracks.id), ou bien
+  -- un lien Spotify / Deezer / SoundCloud / YouTube déjà converti en adresse
+  -- de lecteur intégré officiel. Une seule source à la fois : choisir l'une
+  -- vide les deux autres (voir worker/src/music.js).
+  music_track_id         TEXT NOT NULL DEFAULT '',
+  music_embed            TEXT NOT NULL DEFAULT '',
+  -- Livraison des photos définitives (fichiers dans R2 sous
+  -- {galleryId}/delivery/{fileId}, liste dans delivery_files) : ouverte au
+  -- client ou non, quand, et quand il a été prévenu par e-mail.
+  delivery_open          INTEGER NOT NULL DEFAULT 0,
+  delivery_opened_at     INTEGER,
+  delivery_notified_at   INTEGER,
+  -- Promotion sur les tirages : remise en % (0 = aucune), date de fin, et
+  -- quand elle a été annoncée au client par e-mail (voir campaigns.js).
+  promo_percent          INTEGER NOT NULL DEFAULT 0,
+  promo_ends_at          INTEGER,
+  promo_sent_at          INTEGER,
   -- Moment où le client a cliqué « Valider ma sélection » (epoch secondes) ;
   -- NULL tant qu'il ne l'a pas fait. Arrête les relances automatiques.
   selection_done_at      INTEGER,
@@ -402,6 +432,25 @@ CREATE INDEX IF NOT EXISTS idx_email_changes_photographer ON email_changes(photo
 --   ALTER TABLE print_products ADD COLUMN cost_cents INTEGER NOT NULL DEFAULT 0;
 --   ALTER TABLE print_products ADD COLUMN ship_cost_cents INTEGER NOT NULL DEFAULT 0;
 --   CREATE UNIQUE INDEX IF NOT EXISTS idx_photographers_subdomain ON photographers(subdomain) WHERE subdomain != '';
+--   ALTER TABLE galleries ADD COLUMN music_track_id TEXT NOT NULL DEFAULT '';
+--   ALTER TABLE galleries ADD COLUMN music_embed TEXT NOT NULL DEFAULT '';
+--   puis la table music_tracks (fin de ce fichier).
+--   ALTER TABLE galleries ADD COLUMN delivery_open INTEGER NOT NULL DEFAULT 0;
+--   ALTER TABLE galleries ADD COLUMN delivery_opened_at INTEGER;
+--   ALTER TABLE galleries ADD COLUMN delivery_notified_at INTEGER;
+--   puis la table delivery_files (fin de ce fichier).
+--   ALTER TABLE photographers ADD COLUMN terms_accepted_at INTEGER;
+--   ALTER TABLE photographers ADD COLUMN terms_version TEXT NOT NULL DEFAULT '';
+--   ALTER TABLE photographers ADD COLUMN plan TEXT NOT NULL DEFAULT 'free';
+--   ALTER TABLE photographers ADD COLUMN plan_status TEXT NOT NULL DEFAULT '';
+--   ALTER TABLE photographers ADD COLUMN plan_renews_at INTEGER;
+--   ALTER TABLE photographers ADD COLUMN plan_cancel_at_period_end INTEGER NOT NULL DEFAULT 0;
+--   ALTER TABLE photographers ADD COLUMN stripe_customer_id TEXT NOT NULL DEFAULT '';
+--   ALTER TABLE photographers ADD COLUMN stripe_subscription_id TEXT NOT NULL DEFAULT '';
+--   ALTER TABLE galleries ADD COLUMN promo_percent INTEGER NOT NULL DEFAULT 0;
+--   ALTER TABLE galleries ADD COLUMN promo_ends_at INTEGER;
+--   ALTER TABLE galleries ADD COLUMN promo_sent_at INTEGER;
+--   puis la table print_carts (fin de ce fichier).
 
 -- Relances déjà envoyées, pour ne jamais relancer deux fois pour la même
 -- échéance : une ligne par galerie et par type (client_j7, client_j2,
@@ -470,3 +519,91 @@ CREATE TABLE IF NOT EXISTS print_orders (
 
 CREATE INDEX IF NOT EXISTS idx_print_orders_gallery ON print_orders(gallery_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_print_orders_photographer ON print_orders(photographer_id, created_at);
+
+-- Bibliothèque musicale commune : morceaux libres de droits ajoutés par la
+-- propriétaire de la plateforme (onglet Admin), que chaque photographe peut
+-- choisir pour ses galeries. Le fichier vit dans R2 sous
+-- library/music/{id}.mp3 ; `credit` est la mention exigée par la licence
+-- (ex. « Kevin MacLeod — CC BY 4.0 »), affichée discrètement au client.
+CREATE TABLE IF NOT EXISTS music_tracks (
+  id          TEXT PRIMARY KEY,
+  title       TEXT NOT NULL,
+  artist      TEXT NOT NULL DEFAULT '',
+  mood        TEXT NOT NULL DEFAULT '',
+  credit      TEXT NOT NULL DEFAULT '',
+  duration_s  INTEGER NOT NULL DEFAULT 0,
+  created_at  INTEGER NOT NULL
+);
+
+-- Photos définitives livrées au client (haute définition, sans filigrane).
+-- `crc32` est calculé à l'envoi par l'outil d'administration : il permet au
+-- Worker de fabriquer le ZIP de téléchargement au fil de l'eau, sans relire
+-- les fichiers (voir worker/src/delivery.js).
+CREATE TABLE IF NOT EXISTS delivery_files (
+  id           TEXT PRIMARY KEY,
+  gallery_id   TEXT NOT NULL REFERENCES galleries(id) ON DELETE CASCADE,
+  name         TEXT NOT NULL,
+  size         INTEGER NOT NULL,
+  crc32        INTEGER NOT NULL,
+  content_type TEXT NOT NULL DEFAULT 'image/jpeg',
+  position     INTEGER NOT NULL DEFAULT 0,
+  created_at   INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_delivery_files_gallery ON delivery_files(gallery_id, position);
+
+-- Panier de tirages du client, enregistré côté serveur (une ligne par
+-- galerie) : retrouvé sur un autre appareil, et rappelé par e-mail s'il est
+-- laissé 24 h sans commande (reminded_at, remis à zéro quand il change).
+CREATE TABLE IF NOT EXISTS print_carts (
+  gallery_id  TEXT PRIMARY KEY REFERENCES galleries(id) ON DELETE CASCADE,
+  lines       TEXT NOT NULL,
+  updated_at  INTEGER NOT NULL,
+  reminded_at INTEGER
+);
+
+-- Mini-site portfolio du photographe (voir worker/src/portfolio.js) : une
+-- ligne par compte. `handle` est l'identifiant de l'adresse publique
+-- (www.holypixx.com/portfolio.html?s=<handle>) ; les photos de vitrine
+-- vivent dans R2 sous portfolio/{photographer_id}/{id}.webp.
+CREATE TABLE IF NOT EXISTS portfolios (
+  photographer_id TEXT PRIMARY KEY REFERENCES photographers(id) ON DELETE CASCADE,
+  handle          TEXT NOT NULL UNIQUE,
+  published       INTEGER NOT NULL DEFAULT 0,
+  headline        TEXT NOT NULL DEFAULT '',
+  bio             TEXT NOT NULL DEFAULT '',
+  city            TEXT NOT NULL DEFAULT '',
+  services        TEXT NOT NULL DEFAULT '[]',
+  phone           TEXT NOT NULL DEFAULT '',
+  instagram       TEXT NOT NULL DEFAULT '',
+  website         TEXT NOT NULL DEFAULT '',
+  contact_enabled INTEGER NOT NULL DEFAULT 1,
+  updated_at      INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS portfolio_photos (
+  id              TEXT PRIMARY KEY,
+  photographer_id TEXT NOT NULL REFERENCES photographers(id) ON DELETE CASCADE,
+  position        INTEGER NOT NULL DEFAULT 0,
+  width           INTEGER NOT NULL,
+  height          INTEGER NOT NULL,
+  bytes           INTEGER NOT NULL,
+  created_at      INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_portfolio_photos ON portfolio_photos(photographer_id, position);
+
+-- Messages reçus par le formulaire de contact du portfolio, conservés un an.
+-- ip_hash (empreinte salée, jamais l'IP) sert seulement à plafonner les envois.
+CREATE TABLE IF NOT EXISTS portfolio_messages (
+  id              TEXT PRIMARY KEY,
+  photographer_id TEXT NOT NULL REFERENCES photographers(id) ON DELETE CASCADE,
+  name            TEXT NOT NULL,
+  email           TEXT NOT NULL,
+  phone           TEXT NOT NULL DEFAULT '',
+  event_date      TEXT NOT NULL DEFAULT '',
+  message         TEXT NOT NULL,
+  ip_hash         TEXT NOT NULL,
+  read_at         INTEGER,
+  created_at      INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_portfolio_messages ON portfolio_messages(photographer_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_portfolio_messages_ip ON portfolio_messages(ip_hash, created_at);

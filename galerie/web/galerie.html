@@ -45,6 +45,11 @@
         <p class="gp-error" id="gp-error" hidden></p>
         <button type="submit" class="gp-btn" id="gp-submit">Voir mes photos</button>
       </form>
+      <p class="gp-privacy-note">
+        Pour protéger les photos, votre visite de la galerie est journalisée
+        (adresse IP jamais conservée en clair).
+        <a href="https://www.holypixx.com/confidentialite.html" target="_blank" rel="noopener">Confidentialité</a>
+      </p>
     </section>
   </main>
 
@@ -70,7 +75,25 @@
         <span class="gp-music-icon" aria-hidden="true">♪</span>
         <span id="gp-music-label">Lancer la musique</span>
       </button>
+      <p class="gp-music-credit" id="gp-music-credit" hidden></p>
     </header>
+
+    <!-- Livraison des photos définitives, quand le photographe l'a ouverte. -->
+    <section class="gp-delivery" id="gp-delivery" hidden aria-labelledby="gp-delivery-title">
+      <div class="gp-delivery-main">
+        <p class="gp-delivery-eyebrow">Livraison</p>
+        <h2 id="gp-delivery-title">Vos photos sont prêtes</h2>
+        <p class="gp-delivery-summary" id="gp-delivery-summary"></p>
+      </div>
+      <div class="gp-delivery-actions">
+        <button type="button" class="gp-btn gp-delivery-zip" id="gp-delivery-zip">Tout télécharger</button>
+        <p class="gp-delivery-status" id="gp-delivery-status" aria-live="polite"></p>
+      </div>
+      <details class="gp-delivery-files">
+        <summary>Télécharger une par une</summary>
+        <ul id="gp-delivery-list"></ul>
+      </details>
+    </section>
 
     <!--
       Transparence : le client doit savoir que ses photos portent une marque.
@@ -99,6 +122,7 @@
         <button type="button" class="gp-invoice-btn" id="gp-download-invoice" hidden>Télécharger ma facture</button>
         <div class="gp-shop-bar" id="gp-shop-bar" hidden>
           <button type="button" class="gp-cart-btn" id="gp-cart-btn">Mes tirages <span id="gp-cart-count">(0)</span></button>
+          <span class="gp-shop-promo" id="gp-shop-promo" hidden></span>
           <span class="gp-shop-hint">Ouvrez une photo puis « Tirages ».</span>
         </div>
         <ul class="gp-print-orders" id="gp-print-orders" hidden></ul>
@@ -121,6 +145,10 @@
 
     <footer class="gp-footer">
       <p>Holypixx — toutes les images de cette page sont protégées par le droit d'auteur.</p>
+      <p class="gp-footer-links">
+        <a href="https://www.holypixx.com/confidentialite.html" target="_blank" rel="noopener">Confidentialité</a>
+        <a href="https://www.holypixx.com/mentions-legales.html" target="_blank" rel="noopener">Mentions légales</a>
+      </p>
     </footer>
   </div>
 
@@ -182,6 +210,17 @@
   </div>
 
   <!-- ============ Panier de tirages ============ -->
+  <!-- Lecteur officiel (Spotify, Deezer, SoundCloud, YouTube) choisi par le
+       photographe : chargé seulement quand le client l'ouvre. -->
+  <div class="gp-music-player" id="gp-music-player" hidden role="region" aria-label="Lecteur de musique">
+    <div class="gp-music-player-bar">
+      <span id="gp-music-player-title">Musique</span>
+      <button type="button" class="gp-music-player-btn" id="gp-music-player-min" aria-label="Réduire le lecteur" title="Réduire (la musique continue)">–</button>
+      <button type="button" class="gp-music-player-btn" id="gp-music-player-close" aria-label="Fermer le lecteur" title="Fermer (arrête la musique)">&times;</button>
+    </div>
+    <div class="gp-music-player-frame" id="gp-music-player-frame"></div>
+  </div>
+
   <div class="gp-cart" id="gp-cart" hidden role="dialog" aria-modal="true" aria-labelledby="gp-cart-title">
     <div class="gp-cart-card">
       <button type="button" class="gp-cart-close" id="gp-cart-close" aria-label="Fermer">&times;</button>

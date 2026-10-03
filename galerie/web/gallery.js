@@ -781,15 +781,42 @@
     try { raw = window.localStorage.getItem(cartKey()); } catch (e) { raw = null; }
     var lines = [];
     try { lines = JSON.parse(raw || "[]") || []; } catch (e) { lines = []; }
+    // Panier vide dans ce navigateur : on reprend celui enregistré côté
+    // serveur (préparé sur un autre appareil, ou rappelé par e-mail).
+    var saved = state.gallery && state.gallery.shop && state.gallery.shop.savedCart;
+    if (!lines.length && saved && saved.length) lines = saved;
     shop.cart = lines.filter(function (l) {
       var photo = photoById(l.photoId);
       return photo && photo.printable && shopProduct(l.productId) && l.copies >= 1 && l.copies <= 10;
     });
   }
 
+  // Copie du panier côté serveur, regroupée (un envoi par rafale de clics)
+  // et envoyée tout de suite si la page se ferme avant.
+  var cartSync = { timer: null, pending: null };
+
+  function flushCartSync() {
+    clearTimeout(cartSync.timer);
+    var lines = cartSync.pending;
+    cartSync.pending = null;
+    if (!lines || !state.token) return;
+    fetch(apiUrl("/cart"), {
+      method: "POST",
+      headers: Object.assign({ "content-type": "application/json" }, authHeaders()),
+      body: JSON.stringify({ lines: lines }),
+      keepalive: true,
+    }).catch(function () {});
+  }
+
   function saveCart() {
     try { window.localStorage.setItem(cartKey(), JSON.stringify(shop.cart)); } catch (e) { /* navigation privée */ }
+    if (!state.token) return;
+    cartSync.pending = shop.cart.map(function (l) { return { photoId: l.photoId, productId: l.productId, copies: l.copies }; });
+    clearTimeout(cartSync.timer);
+    cartSync.timer = setTimeout(flushCartSync, 600);
   }
+
+  window.addEventListener("pagehide", flushCartSync);
 
   function cartCount() {
     return shop.cart.reduce(function (n, l) { return n + l.copies; }, 0);
@@ -847,6 +874,13 @@
       var price = document.createElement("span");
       price.className = "gp-print-price";
       price.textContent = formatEuros(product.priceCents);
+      if (product.listPriceCents && product.listPriceCents > product.priceCents) {
+        var was = document.createElement("s");
+        was.className = "gp-print-was";
+        was.textContent = formatEuros(product.listPriceCents);
+        price.insertBefore(was, price.firstChild);
+        price.classList.add("gp-print-promo");
+      }
       var add = document.createElement("button");
       add.type = "button";
       add.className = "gp-print-add";
@@ -1038,6 +1072,14 @@
   function setupShop() {
     var open = Boolean(state.gallery.shop);
     if (el.shopBar) el.shopBar.hidden = !open;
+    var promo = open && state.gallery.shop.promo;
+    if (el.shopPromo) {
+      el.shopPromo.hidden = !promo;
+      if (promo) {
+        var until = new Date(promo.endsAt * 1000).toLocaleDateString("fr-FR", { day: "numeric", month: "long" });
+        el.shopPromo.textContent = "−" + promo.percent + " % sur tous les tirages jusqu'au " + until;
+      }
+    }
     renderPrintOrders();
     if (open) {
       var countries = state.gallery.shop.countries || {};
@@ -1050,6 +1092,9 @@
       });
       loadCart();
       updateCartUI();
+      // Le panier de ce navigateur fait foi : on resynchronise la copie
+      // serveur (au cas où une modification ne serait pas partie).
+      if (shop.cart.length) saveCart();
     }
     // Retour de la page de paiement Stripe.
     var result = new URLSearchParams(window.location.search).get("tirages");
@@ -1065,6 +1110,83 @@
       var url = window.location.href.replace(/([?&])tirages=[^&]*&?/, "$1").replace(/[?&]$/, "");
       try { window.history.replaceState(null, "", url); } catch (e) { /* ignoré */ }
     }
+  }
+
+  /* ---------- Livraison des photos définitives ---------- */
+  // Les fichiers se téléchargent par un lien signé valable quelques minutes,
+  // demandé au moment du clic (un lien de navigateur ne peut pas porter le
+  // jeton de session) : rien n'est préparé tant que le client ne clique pas.
+
+  function formatBytes(bytes) {
+    if (bytes >= 1024 * 1024 * 1024) return (bytes / (1024 * 1024 * 1024)).toFixed(1).replace(".", ",") + " Go";
+    if (bytes >= 1024 * 1024) return Math.round(bytes / (1024 * 1024)) + " Mo";
+    return Math.max(1, Math.round(bytes / 1024)) + " Ko";
+  }
+
+  function startDownload(fileId, button) {
+    if (button) button.disabled = true;
+    el.deliveryStatus.textContent = fileId ? "Préparation du téléchargement…" : "Préparation du fichier ZIP…";
+    return fetch(apiUrl("/delivery/link"), {
+      method: "POST",
+      headers: Object.assign({ "content-type": "application/json" }, authHeaders()),
+      body: JSON.stringify(fileId ? { fileId: fileId } : {}),
+    })
+      .then(function (response) {
+        if (response.status === 401) throw new Error("session");
+        if (!response.ok) throw new Error("Téléchargement impossible pour le moment.");
+        return response.json();
+      })
+      .then(function (data) {
+        var link = document.createElement("a");
+        link.href = data.url;
+        link.rel = "noopener";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        el.deliveryStatus.textContent = fileId
+          ? "Téléchargement lancé."
+          : "Téléchargement lancé — selon la taille, il peut prendre quelques minutes.";
+      })
+      .catch(function (err) {
+        if (err.message === "session") return sessionLost("Votre session a expiré. Saisissez à nouveau le mot de passe.");
+        el.deliveryStatus.textContent = err.message;
+      })
+      .then(function () {
+        if (button) button.disabled = false;
+      });
+  }
+
+  function setupDelivery() {
+    if (!el.delivery) return;
+    var d = state.gallery && state.gallery.delivery;
+    if (!d || !d.files || !d.files.length) {
+      el.delivery.hidden = true;
+      return;
+    }
+    var n = d.files.length;
+    el.deliverySummary.textContent = n + " photo" + (n > 1 ? "s" : "") + " en haute définition, sans filigrane · " + formatBytes(d.totalBytes);
+    el.deliveryZip.textContent = n > 1 ? "Tout télécharger (" + formatBytes(d.totalBytes) + ")" : "Télécharger";
+    el.deliveryStatus.textContent = "";
+    el.deliveryList.innerHTML = "";
+    d.files.forEach(function (file) {
+      var li = document.createElement("li");
+      var name = document.createElement("span");
+      name.textContent = file.name;
+      var size = document.createElement("span");
+      size.className = "gp-delivery-size";
+      size.textContent = formatBytes(file.size);
+      var button = document.createElement("button");
+      button.type = "button";
+      button.className = "gp-delivery-one";
+      button.textContent = "Télécharger";
+      button.addEventListener("click", function () { startDownload(file.id, button); });
+      li.appendChild(name);
+      li.appendChild(size);
+      li.appendChild(button);
+      el.deliveryList.appendChild(li);
+    });
+    el.deliveryFiles.hidden = n < 2;
+    el.delivery.hidden = false;
   }
 
   /* ---------- Musique d'ambiance ---------- */
@@ -1124,11 +1246,94 @@
     if (remember) rememberMusicPref("off");
   }
 
+  // Lecteur officiel d'un service de musique (lien collé par le
+  // photographe). Rien n'est chargé chez le service tant que le client n'a
+  // pas ouvert le lecteur ; « Réduire » le cache sans couper la musique,
+  // « Fermer » le retire (et l'arrête).
+  var EMBED_PREFIXES = [
+    "https://open.spotify.com/embed/",
+    "https://widget.deezer.com/widget/auto/",
+    "https://w.soundcloud.com/player/?url=",
+    "https://www.youtube-nocookie.com/embed/",
+  ];
+  var EMBED_HEIGHTS = { spotify: 152, deezer: 150, soundcloud: 166 };
+
+  function currentEmbed() {
+    var m = state.gallery && state.gallery.music;
+    if (!m || m.kind !== "embed") return null;
+    var allowed = EMBED_PREFIXES.some(function (prefix) { return String(m.embedUrl || "").indexOf(prefix) === 0; });
+    return allowed ? m : null;
+  }
+
+  function reflectEmbedUI() {
+    if (!el.music || !el.musicPlayer) return;
+    var open = !el.musicPlayer.hidden;
+    el.music.setAttribute("aria-pressed", open || el.musicPlayerFrame.firstChild ? "true" : "false");
+    el.music.setAttribute("aria-expanded", open ? "true" : "false");
+  }
+
+  function openEmbedPlayer() {
+    var m = currentEmbed();
+    if (!m || !el.musicPlayer) return;
+    if (!el.musicPlayerFrame.firstChild) {
+      var frame = document.createElement("iframe");
+      frame.src = m.embedUrl;
+      frame.title = "Lecteur " + (m.providerLabel || "de musique");
+      frame.setAttribute("allow", "autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture");
+      frame.setAttribute("loading", "lazy");
+      frame.setAttribute("referrerpolicy", "strict-origin-when-cross-origin");
+      if (EMBED_HEIGHTS[m.provider]) frame.style.height = EMBED_HEIGHTS[m.provider] + "px";
+      else frame.className = "gp-music-player-video";
+      el.musicPlayerFrame.appendChild(frame);
+    }
+    el.musicPlayer.hidden = false;
+    reflectEmbedUI();
+  }
+
+  function minimizeEmbedPlayer() {
+    if (el.musicPlayer) el.musicPlayer.hidden = true;
+    reflectEmbedUI();
+  }
+
+  function closeEmbedPlayer() {
+    if (!el.musicPlayer) return;
+    el.musicPlayer.hidden = true;
+    el.musicPlayerFrame.innerHTML = "";
+    reflectEmbedUI();
+  }
+
+  function toggleMusic() {
+    if (currentEmbed()) {
+      if (el.musicPlayer.hidden) openEmbedPlayer();
+      else minimizeEmbedPlayer();
+      return;
+    }
+    if (music.audio && !music.audio.paused) stopMusic(true);
+    else startMusic();
+  }
+
   function setupMusic() {
     if (!el.music) return;
+    closeEmbedPlayer();
+    if (el.musicCredit) el.musicCredit.hidden = true;
+    var embed = currentEmbed();
+    if (embed) {
+      if (music.audio) music.audio.pause();
+      el.music.hidden = false;
+      if (el.musicLabel) el.musicLabel.textContent = "Écouter la musique · " + (embed.providerLabel || "lecteur");
+      if (el.musicPlayerTitle) el.musicPlayerTitle.textContent = "Musique · " + (embed.providerLabel || "");
+      reflectEmbedUI();
+      return;
+    }
+    el.music.removeAttribute("aria-expanded");
     if (!(state.gallery && state.gallery.hasMusic)) {
       el.music.hidden = true;
       return;
+    }
+    var info = state.gallery.music || {};
+    if (el.musicCredit && info.title) {
+      el.musicCredit.textContent = "« " + info.title + " »" + (info.artist ? " — " + info.artist : "") + (info.credit ? " · " + info.credit : "");
+      el.musicCredit.hidden = false;
     }
     if (!music.audio) {
       music.audio = new Audio();
@@ -1175,6 +1380,7 @@
     state.token = null;
     state.drawn = {};
     stopMusic(false);
+    closeEmbedPlayer();
     closeViewer();
     show(el.login);
     hide(el.gallery);
@@ -1643,6 +1849,7 @@
           buildGrid();
         }
         setupMusic();
+        setupDelivery();
         setupShop();
 
         // La session expire : on prévient avant que les tuiles cessent d'arriver.
@@ -1732,6 +1939,17 @@
       commentStatus: $("gp-comment-status"),
       music: $("gp-music"),
       musicLabel: $("gp-music-label"),
+      musicCredit: $("gp-music-credit"),
+      delivery: $("gp-delivery"),
+      deliverySummary: $("gp-delivery-summary"),
+      deliveryZip: $("gp-delivery-zip"),
+      deliveryStatus: $("gp-delivery-status"),
+      deliveryList: $("gp-delivery-list"),
+      deliveryFiles: document.querySelector(".gp-delivery-files"),
+      shopPromo: $("gp-shop-promo"),
+      musicPlayer: $("gp-music-player"),
+      musicPlayerFrame: $("gp-music-player-frame"),
+      musicPlayerTitle: $("gp-music-player-title"),
       viewerFrame: $("gp-viewer-frame"),
       pins: $("gp-pins"),
       pinToggle: $("gp-pin-toggle"),
@@ -1820,10 +2038,18 @@
       el.commentToggle.addEventListener("click", toggleCommentPanel);
     }
     if (el.music) {
-      el.music.addEventListener("click", function () {
-        if (music.audio && !music.audio.paused) stopMusic(true);
-        else startMusic();
+      el.music.addEventListener("click", toggleMusic);
+    }
+    if (el.deliveryZip) {
+      el.deliveryZip.addEventListener("click", function () {
+        var d = state.gallery && state.gallery.delivery;
+        // Un seul fichier : inutile de passer par un ZIP.
+        startDownload(d && d.files.length === 1 ? d.files[0].id : "", el.deliveryZip);
       });
+    }
+    if (el.musicPlayer) {
+      $("gp-music-player-min").addEventListener("click", minimizeEmbedPlayer);
+      $("gp-music-player-close").addEventListener("click", closeEmbedPlayer);
     }
     wireCommentInput();
     el.tagButtons.forEach(function (button) {

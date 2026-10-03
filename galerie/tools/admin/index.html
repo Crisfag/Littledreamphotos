@@ -111,6 +111,11 @@
           <span>Mot de passe <em>(10 caractères minimum)</em></span>
           <input type="password" name="password" required minlength="10" autocomplete="new-password" />
         </label>
+        <label class="ad-terms">
+          <input type="checkbox" name="acceptTerms" required />
+          <span>J'accepte les <a href="https://www.holypixx.com/conditions.html" target="_blank" rel="noopener">conditions d'utilisation</a>
+          et la <a href="https://www.holypixx.com/confidentialite.html" target="_blank" rel="noopener">politique de confidentialité</a>.</span>
+        </label>
         <p class="ad-error" id="ad-signup-error" hidden></p>
         <button type="submit" class="ad-btn ad-btn-primary" id="ad-signup-submit">Créer mon compte</button>
       </form>
@@ -132,8 +137,11 @@
       </div>
       <nav class="ad-tabs" id="ad-tabs" aria-label="Sections du tableau de bord">
         <button type="button" class="ad-tab" id="ad-tab-galleries" data-tab="galleries">Galeries</button>
+        <button type="button" class="ad-tab" id="ad-tab-sales" data-tab="sales">Ventes</button>
         <button type="button" class="ad-tab" id="ad-tab-billing" data-tab="billing">Facturation</button>
         <button type="button" class="ad-tab" id="ad-tab-shop" data-tab="shop">Boutique</button>
+        <button type="button" class="ad-tab" id="ad-tab-portfolio" data-tab="portfolio">Portfolio</button>
+        <button type="button" class="ad-tab" id="ad-tab-subscription" data-tab="subscription">Abonnement</button>
         <button type="button" class="ad-tab" id="ad-tab-settings" data-tab="settings">Paramètres</button>
         <button type="button" class="ad-tab" id="ad-tab-owner" data-tab="owner" hidden>Admin</button>
       </nav>

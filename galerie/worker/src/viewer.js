@@ -8,6 +8,9 @@ import { sendCaptureAlert, sendSelectionValidated } from "./notify.js";
 import { supplementFor } from "./admin.js";
 import { shopForClient, handlePrintOrder } from "./shop.js";
 import { createCheckoutSession } from "./stripe.js";
+import { musicForClient, audioKeyFor, serveAudio, getTrack } from "./music.js";
+import { deliveryForClient, createDownloadLink, downloadFile, downloadZip } from "./delivery.js";
+import { saveCart } from "./campaigns.js";
 
 const SESSION_TTL_SECONDS = 2 * 60 * 60; // 2 h
 const MAX_FAILED_LOGINS = 10;
@@ -145,6 +148,7 @@ async function handleLogin(request, env, slug) {
     .all();
 
   const { shop, printOrders } = await shopForClient(env, gallery);
+  const music = musicForClient(gallery, gallery.music_track_id ? await getTrack(env, gallery.music_track_id) : null);
 
   return json({
     token,
@@ -157,7 +161,9 @@ async function handleLogin(request, env, slug) {
       watermark: gallery.watermark_text,
       expiresAt: gallery.expires_at,
       layout: gallery.layout || "grille",
-      hasMusic: Boolean(gallery.music_name),
+      delivery: await deliveryForClient(env, gallery),
+      hasMusic: music?.kind === "audio",
+      music,
       selectionDoneAt: gallery.selection_done_at || null,
       studioName: photographer?.studio_name || "",
       includedPhotos: gallery.included_photos,
@@ -666,34 +672,9 @@ async function handleBackgroundImage(env, slug) {
 // partielles (Range) sont honorées : Safari refuse de lire un média sans ça.
 async function handleMusic(request, env, slug) {
   const gallery = await getGallery(env, slug);
-  if (!gallery || isExpired(gallery) || !gallery.music_name) {
-    return fail(404, "Aucune musique");
-  }
-
-  const key = `music/${gallery.id}.mp3`;
-  const wantsRange = request.headers.has("range");
-  let object;
-  try {
-    object = await env.TILES.get(key, wantsRange ? { range: request.headers } : undefined);
-  } catch {
-    return new Response(null, { status: 416, headers: { "content-range": "bytes */*" } });
-  }
-  if (!object) return fail(404, "Aucune musique");
-
-  const headers = new Headers({
-    "content-type": "audio/mpeg",
-    "accept-ranges": "bytes",
-    "cache-control": "public, max-age=3600",
-  });
-  if (wantsRange && object.range && typeof object.range.offset === "number") {
-    const start = object.range.offset;
-    const length = object.range.length ?? object.size - start;
-    headers.set("content-range", `bytes ${start}-${start + length - 1}/${object.size}`);
-    headers.set("content-length", String(length));
-    return new Response(object.body, { status: 206, headers });
-  }
-  headers.set("content-length", String(object.size));
-  return new Response(object.body, { headers });
+  const key = gallery && !isExpired(gallery) ? audioKeyFor(gallery) : null;
+  if (!key) return fail(404, "Aucune musique");
+  return serveAudio(request, env, key);
 }
 
 export async function handleViewer(request, env, ctx, path) {
@@ -737,6 +718,13 @@ export async function handleViewer(request, env, ctx, path) {
   if (action === "validate" && request.method === "POST") {
     return handleValidate(request, env, ctx, slug);
   }
+  // Panier de tirages enregistré côté serveur (retrouvé sur un autre
+  // appareil, rappel s'il est oublié — voir campaigns.js).
+  if (action === "cart" && request.method === "POST" && parts.length === 4) {
+    const auth = await authorize(request, env, slug);
+    if (auth.error) return auth.error;
+    return saveCart(request, env, auth.gallery);
+  }
   if (action === "print-order" && request.method === "POST" && parts.length === 4) {
     const auth = await authorize(request, env, slug);
     if (auth.error) return auth.error;
@@ -747,6 +735,22 @@ export async function handleViewer(request, env, ctx, path) {
   }
   if (action === "checkout" && request.method === "POST") {
     return handleCheckout(request, env, slug);
+  }
+  // Livraison des photos définitives : lien signé, puis téléchargement.
+  if (action === "delivery") {
+    if (parts[4] === "link" && parts.length === 5 && request.method === "POST") {
+      const auth = await authorize(request, env, slug);
+      if (auth.error) return auth.error;
+      return createDownloadLink(request, env, auth.gallery, auth.viewerId, new URL(request.url).origin);
+    }
+    if (request.method === "GET" && ((parts[4] === "file" && parts.length === 6) || (parts[4] === "zip" && parts.length === 5))) {
+      const gallery = await getGallery(env, slug);
+      if (!gallery || isExpired(gallery)) return fail(404, "Aucune livraison");
+      const log = (entry) => logAccess(env, { galleryId: gallery.id, ...entry, userAgent: request.headers.get("user-agent") || "" });
+      return parts[4] === "zip"
+        ? downloadZip(request, env, ctx, gallery, log)
+        : downloadFile(request, env, gallery, decodeURIComponent(parts[5]), log);
+    }
   }
   // /api/gallery/<slug>/invoice/<invoiceId>
   if (action === "invoice" && request.method === "GET" && parts.length === 5) {

@@ -9,6 +9,15 @@ import { json, fail } from "./http.js";
 import { parseMarks } from "./marks.js";
 import { handleShopAdmin, listPrintOrders } from "./shop.js";
 import { hashPassword, randomBytes, b64url } from "./auth.js";
+import { listLibrary, setMusicChoice, musicForAdmin } from "./music.js";
+import { handleDeliveryAdmin, deliveryForAdmin } from "./delivery.js";
+import { sendDeliveryReady } from "./notify.js";
+import { exportAccount, deleteAccount } from "./privacy.js";
+import { galleryQuotaRefusal, subscriptionForAdmin, startSubscriptionCheckout, openBillingPortal } from "./subscription.js";
+import { setPromo, sendPromoToClient, promoForAdmin } from "./campaigns.js";
+import { galleryUrlFor } from "./reminders.js";
+import { salesForAdmin } from "./sales.js";
+import { handlePortfolioAdmin, deletePortfolioFiles } from "./portfolio.js";
 import { authenticatePhotographer } from "./authPhotographer.js";
 import { connectStripe, refreshStripeStatus, setBillingProfile } from "./billing.js";
 import { updateStudioName, updateName, changePassword, requestEmailChange, updateDefaults, updateReminders, updateSubdomain } from "./account.js";
@@ -94,6 +103,10 @@ async function createGallery(request, env, photographerId) {
   if (!SLUG_RE.test(slug)) {
     return fail(400, "Slug invalide (minuscules, chiffres et tirets, 2 à 61 caractères)");
   }
+  // Nombre de galeries actives limité selon la formule (voir subscription.js).
+  const owner = await env.DB.prepare("SELECT * FROM photographers WHERE id = ?").bind(photographerId).first();
+  const quotaRefusal = await galleryQuotaRefusal(env, owner);
+  if (quotaRefusal) return quotaRefusal;
   const password = String(body.password || "");
   if (password.length < 8) return fail(400, "Mot de passe trop court (8 caractères minimum)");
 
@@ -229,6 +242,9 @@ async function getGallery(env, photographerId, slug) {
       login_background_color: gallery.login_background_color,
       layout: gallery.layout,
       music_name: gallery.music_name || "",
+      music: await musicForAdmin(env, gallery),
+      delivery: await deliveryForAdmin(env, gallery),
+      sales: await promoForAdmin(env, gallery),
       selection_done_at: gallery.selection_done_at,
       shop_enabled: Boolean(gallery.shop_enabled),
       included_photos: gallery.included_photos,
@@ -352,7 +368,8 @@ async function setMusic(request, env, photographerId, slug) {
   await env.TILES.put(`music/${gallery.id}.mp3`, request.body, {
     httpMetadata: { contentType: "audio/mpeg" },
   });
-  await env.DB.prepare("UPDATE galleries SET music_name = ? WHERE id = ?")
+  // Un MP3 importé remplace une éventuelle piste de bibliothèque ou un lien.
+  await env.DB.prepare("UPDATE galleries SET music_name = ?, music_track_id = '', music_embed = '' WHERE id = ?")
     .bind(name, gallery.id)
     .run();
 
@@ -364,7 +381,7 @@ async function deleteMusic(env, photographerId, slug) {
   if (!gallery) return fail(404, "Galerie introuvable");
 
   await env.TILES.delete(`music/${gallery.id}.mp3`);
-  await env.DB.prepare("UPDATE galleries SET music_name = '' WHERE id = ?")
+  await env.DB.prepare("UPDATE galleries SET music_name = '', music_track_id = '', music_embed = '' WHERE id = ?")
     .bind(gallery.id)
     .run();
 
@@ -426,7 +443,13 @@ async function setQuota(request, env, photographerId, slug) {
 async function deleteGallery(env, photographerId, slug) {
   const gallery = await ownedGallery(env, photographerId, slug);
   if (!gallery) return fail(404, "Galerie introuvable");
+  await eraseGallery(env, gallery);
+  return json({ ok: true });
+}
 
+// Efface une galerie et tout ce qui en dépend (fichiers R2 et lignes D1) —
+// utilisé aussi par la suppression du compte entier (voir privacy.js).
+async function eraseGallery(env, gallery) {
   // R2 ne supprime pas récursivement : on liste puis on efface par lots.
   let cursor;
   do {
@@ -444,10 +467,10 @@ async function deleteGallery(env, photographerId, slug) {
   await env.DB.batch([
     env.DB.prepare("DELETE FROM photos WHERE gallery_id = ?").bind(gallery.id),
     env.DB.prepare("DELETE FROM access_log WHERE gallery_id = ?").bind(gallery.id),
+    env.DB.prepare("DELETE FROM delivery_files WHERE gallery_id = ?").bind(gallery.id),
+    env.DB.prepare("DELETE FROM print_carts WHERE gallery_id = ?").bind(gallery.id),
     env.DB.prepare("DELETE FROM galleries WHERE id = ?").bind(gallery.id),
   ]);
-
-  return json({ ok: true });
 }
 
 async function addPhoto(request, env, photographerId, slug) {
@@ -673,6 +696,15 @@ export async function handleAdmin(request, env, ctx, path) {
   const shopResponse = await handleShopAdmin(request, env, photographerId, parts, { ownedGallery, ownedPhoto });
   if (shopResponse) return shopResponse;
 
+  // Mini-site portfolio : présentation, photos de vitrine, messages reçus.
+  if (section === "portfolio") return handlePortfolioAdmin(request, env, photographerId, parts, new URL(request.url));
+
+  // Tableau de bord des ventes (12 derniers mois).
+  if (section === "sales" && parts.length === 3 && request.method === "GET") return salesForAdmin(env, photographerId);
+
+  // Bibliothèque musicale commune, lue par tous les photographes.
+  if (section === "music-library" && parts.length === 3 && request.method === "GET") return listLibrary(env);
+
   if (section === "galleries") {
     if (parts.length === 3) {
       if (request.method === "POST") return createGallery(request, env, photographerId);
@@ -710,6 +742,38 @@ export async function handleAdmin(request, env, ctx, path) {
     }
     if (parts.length === 5 && parts[4] === "music" && request.method === "DELETE") {
       return deleteMusic(env, photographerId, slug);
+    }
+    // /api/admin/galleries/<slug>/promo[/send] — promotion sur les tirages.
+    if ((parts.length === 5 || (parts.length === 6 && parts[5] === "send")) && parts[4] === "promo" && request.method === "POST") {
+      const gallery = await ownedGallery(env, photographerId, slug);
+      if (!gallery) return fail(404, "Galerie introuvable");
+      if (parts.length === 5) return setPromo(request, env, gallery);
+      const photographer = await env.DB.prepare("SELECT studio_name FROM photographers WHERE id = ?").bind(photographerId).first();
+      return sendPromoToClient(env, gallery, photographer?.studio_name || "");
+    }
+    // /api/admin/galleries/<slug>/delivery[/files[/<id>]] — livraison HD.
+    if (parts.length >= 5 && parts[4] === "delivery") {
+      const gallery = await ownedGallery(env, photographerId, slug);
+      if (!gallery) return fail(404, "Galerie introuvable");
+      return handleDeliveryAdmin(request, env, gallery, parts.slice(5), {
+        notifyClient: async (g) => {
+          const photographer = await env.DB.prepare("SELECT studio_name FROM photographers WHERE id = ?").bind(photographerId).first();
+          const { results } = await env.DB.prepare("SELECT COUNT(*) AS n FROM delivery_files WHERE gallery_id = ?").bind(g.id).all();
+          await sendDeliveryReady(env, {
+            to: g.client_email,
+            studioName: photographer?.studio_name || "",
+            galleryTitle: g.title,
+            clientName: g.client_name,
+            count: results[0]?.n || 0,
+            galleryUrl: galleryUrlFor(env, g.slug),
+          });
+        },
+      });
+    }
+    if (parts.length === 5 && parts[4] === "music-choice" && request.method === "POST") {
+      const gallery = await ownedGallery(env, photographerId, slug);
+      if (!gallery) return fail(404, "Galerie introuvable");
+      return setMusicChoice(request, env, gallery);
     }
     if (parts.length === 5 && parts[4] === "quota" && request.method === "POST") {
       return setQuota(request, env, photographerId, slug);
@@ -772,6 +836,21 @@ export async function handleAdmin(request, env, ctx, path) {
   // confirmation), présentation par défaut des futures galeries.
   if (section === "account" && parts.length === 3 && request.method === "POST") {
     return updateStudioName(request, env, photographerId);
+  }
+  // Abonnement Holypixx du photographe (formules, paiement mensuel Stripe).
+  if (section === "subscription") {
+    const photographer = await env.DB.prepare("SELECT * FROM photographers WHERE id = ?").bind(photographerId).first();
+    if (!photographer) return fail(401, "Session invalide");
+    if (parts.length === 3 && request.method === "GET") return subscriptionForAdmin(env, photographer);
+    if (parts.length === 4 && parts[3] === "checkout" && request.method === "POST") return startSubscriptionCheckout(request, env, photographer);
+    if (parts.length === 4 && parts[3] === "portal" && request.method === "POST") return openBillingPortal(request, env, photographer);
+  }
+  // Droits RGPD : export de toutes les données du compte, suppression définitive.
+  if (section === "account" && parts[3] === "export" && parts.length === 4 && request.method === "GET") {
+    return exportAccount(env, photographerId);
+  }
+  if (section === "account" && parts[3] === "delete" && parts.length === 4 && request.method === "POST") {
+    return deleteAccount(request, env, photographerId, (gallery) => eraseGallery(env, gallery), () => deletePortfolioFiles(env, photographerId));
   }
   if (section === "account" && parts[3] === "name" && parts.length === 4 && request.method === "POST") {
     return updateName(request, env, photographerId);

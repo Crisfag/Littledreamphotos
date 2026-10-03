@@ -358,6 +358,90 @@ export function buildPrintOrderPhotographerEmail({ galleryTitle, recipientName, 
 }
 
 // Au client : ses tirages sont expédiés.
+export function buildDeliveryReadyEmail({ studioName, galleryTitle, clientName, count, galleryUrl }) {
+  const subject = `Vos photos « ${galleryTitle} » sont prêtes`;
+  const countText = `${count} photo${count > 1 ? "s" : ""}`;
+  const bodyHtml =
+    eyebrow(studioName || "Vos photos") +
+    heading("Vos photos sont prêtes") +
+    paragraph(`${clientName ? escapeHtml(clientName) + ", v" : "V"}os photos définitives de « <strong>${escapeHtml(galleryTitle)}</strong> » vous attendent : ${escapeHtml(countText)} en haute définition, à télécharger une par une ou toutes d'un coup.`) +
+    (galleryUrl ? emailButton(galleryUrl, "Télécharger mes photos") : "") +
+    paragraph("Connectez-vous avec le mot de passe habituel de votre galerie. Pensez à enregistrer vos photos avant la fermeture de la galerie.", { small: true });
+  const text = [
+    `Vos photos définitives de « ${galleryTitle} » sont prêtes : ${countText} en haute définition.`,
+    galleryUrl ? `\nTélécharger mes photos : ${galleryUrl}` : "",
+    "\nConnectez-vous avec le mot de passe habituel de votre galerie.",
+  ].join("\n");
+  return { subject, html: emailShell({ preheader: subject, bodyHtml }), text };
+}
+
+function formatDay(ts) {
+  return new Date(ts * 1000).toLocaleDateString("fr-FR", { day: "numeric", month: "long", timeZone: "Europe/Brussels" });
+}
+
+function promoLine(promo) {
+  return promo ? `−${promo.percent} % sur tous les tirages jusqu'au ${formatDay(promo.endsAt)}` : "";
+}
+
+export function buildPrintPromoEmail({ studioName, galleryTitle, clientName, percent, endsAt, favoritesCount, galleryUrl }) {
+  const until = formatDay(endsAt);
+  const subject = `−${percent} % sur vos tirages jusqu'au ${until}`;
+  const favorites = favoritesCount > 0
+    ? `Vos ${favoritesCount} coup${favoritesCount > 1 ? "s" : ""} de cœur n'attendent que ça : tirage photo, toile, cadre…`
+    : "Tirages photo, toiles, cadres : choisissez vos préférées et recevez-les chez vous.";
+  const bodyHtml =
+    eyebrow(studioName || "Vos photos") +
+    heading(`−${percent} % sur vos tirages`) +
+    paragraph(`${clientName ? escapeHtml(clientName) + ", j" : "J"}usqu'au <strong>${escapeHtml(until)}</strong>, tous les tirages de votre galerie « <strong>${escapeHtml(galleryTitle)}</strong> » sont à −${percent} %.`) +
+    paragraph(escapeHtml(favorites)) +
+    (galleryUrl ? emailButton(galleryUrl, "Choisir mes tirages") : "") +
+    paragraph("Ouvrez une photo, puis « Tirages » : la remise est appliquée automatiquement. Livraison à domicile.", { small: true });
+  const text = [
+    `Jusqu'au ${until}, tous les tirages de votre galerie « ${galleryTitle} » sont à −${percent} %.`,
+    favorites,
+    galleryUrl ? `\nChoisir mes tirages : ${galleryUrl}` : "",
+  ].join("\n");
+  return { subject, html: emailShell({ preheader: subject, bodyHtml }), text };
+}
+
+export function buildCartReminderEmail({ studioName, galleryTitle, clientName, items, promo, galleryUrl }) {
+  const count = items.reduce((n, i) => n + i.copies, 0);
+  const subject = `Votre panier vous attend : ${count} tirage${count > 1 ? "s" : ""}`;
+  const list = items.map((i) => `${i.copies} × ${i.label}`);
+  const bodyHtml =
+    eyebrow(studioName || "Vos tirages") +
+    heading("Votre panier vous attend") +
+    paragraph(`${clientName ? escapeHtml(clientName) + ", v" : "V"}ous avez préparé une commande de tirages dans votre galerie « <strong>${escapeHtml(galleryTitle)}</strong> » sans la finaliser :`) +
+    `<ul style="margin:0 0 18px;padding-left:20px;color:#3a332e;font-size:15px;line-height:1.6;">${list.map((l) => `<li>${escapeHtml(l)}</li>`).join("")}</ul>` +
+    (promo ? paragraph(`<strong>${escapeHtml(promoLine(promo))}</strong>`) : "") +
+    (galleryUrl ? emailButton(galleryUrl, "Finaliser ma commande") : "") +
+    paragraph("Votre panier est enregistré : il vous suffit d'ouvrir votre galerie, puis « Mes tirages ».", { small: true });
+  const text = [
+    `Vous avez préparé une commande de tirages dans votre galerie « ${galleryTitle} » sans la finaliser :`,
+    ...list.map((l) => `- ${l}`),
+    promo ? `\n${promoLine(promo)}` : "",
+    galleryUrl ? `\nFinaliser ma commande : ${galleryUrl}` : "",
+  ].join("\n");
+  return { subject, html: emailShell({ preheader: subject, bodyHtml }), text };
+}
+
+export function buildFavoritesPrintEmail({ studioName, galleryTitle, clientName, favoritesCount, promo, galleryUrl }) {
+  const subject = "Vos coups de cœur méritent d'être imprimés";
+  const bodyHtml =
+    eyebrow(studioName || "Vos photos") +
+    heading("Et si vous les imprimiez ?") +
+    paragraph(`${clientName ? escapeHtml(clientName) + ", v" : "V"}ous avez choisi ${favoritesCount} coup${favoritesCount > 1 ? "s" : ""} de cœur dans « <strong>${escapeHtml(galleryTitle)}</strong> ». Tirage photo, toile, cadre ou plexiglas : vos photos préférées méritent mieux qu'un écran.`) +
+    (promo ? paragraph(`<strong>${escapeHtml(promoLine(promo))}</strong>`) : "") +
+    (galleryUrl ? emailButton(galleryUrl, "Voir les tirages") : "") +
+    paragraph("Fabriqués par notre laboratoire partenaire et livrés chez vous.", { small: true });
+  const text = [
+    `Vous avez choisi ${favoritesCount} coup${favoritesCount > 1 ? "s" : ""} de cœur dans « ${galleryTitle} ». Tirage photo, toile, cadre : vos photos préférées méritent mieux qu'un écran.`,
+    promo ? promoLine(promo) : "",
+    galleryUrl ? `\nVoir les tirages : ${galleryUrl}` : "",
+  ].join("\n");
+  return { subject, html: emailShell({ preheader: subject, bodyHtml }), text };
+}
+
 export function buildPrintOrderShippedEmail({ studioName, galleryTitle, recipientName, trackingUrl }) {
   const subject = `Vos tirages sont en route — ${galleryTitle}`;
   const bodyHtml =
@@ -366,6 +450,30 @@ export function buildPrintOrderShippedEmail({ studioName, galleryTitle, recipien
     paragraph(`${recipientName ? escapeHtml(recipientName) + ", v" : "V"}os tirages de « <strong>${escapeHtml(galleryTitle)}</strong> » viennent d'être expédiés.`) +
     (trackingUrl ? emailButton(trackingUrl, "Suivre mon colis") : paragraph("Le transporteur ne fournit pas de lien de suivi pour cet envoi.", { small: true }));
   const text = `Vos tirages de « ${galleryTitle} » viennent d'être expédiés.${trackingUrl ? `\n\nSuivi : ${trackingUrl}` : ""}`;
+  return { subject, html: emailShell({ preheader: subject, bodyHtml }), text };
+}
+
+export function buildPortfolioContactEmail({ studioName, name, email, phone, eventDate, message }) {
+  const subject = `Nouveau message de ${name} via votre portfolio`;
+  const details = [
+    `<strong>E-mail :</strong> <a href="mailto:${escapeHtml(email)}" style="color:${ROSE_DEEP};">${escapeHtml(email)}</a>`,
+    phone ? `<strong>Téléphone :</strong> ${escapeHtml(phone)}` : "",
+    eventDate ? `<strong>Date souhaitée :</strong> ${escapeHtml(eventDate)}` : "",
+  ].filter(Boolean).join("<br>");
+  const bodyHtml =
+    eyebrow(studioName || "Votre portfolio") +
+    heading(`${escapeHtml(name)} vous a écrit`) +
+    paragraph(details) +
+    `<div style="margin:0 0 14px;padding:14px 16px;background:${CREAM};border-radius:10px;font-family:${SANS};font-size:15px;line-height:1.6;color:${CHARCOAL};white-space:pre-wrap;">${escapeHtml(message)}</div>` +
+    paragraph("Répondez directement à cet e-mail : votre réponse partira vers l'adresse du visiteur. Le message est aussi enregistré dans l'onglet Portfolio de votre tableau de bord.", { small: true });
+  const text = [
+    `${name} vous a écrit depuis votre portfolio.`,
+    `E-mail : ${email}`,
+    phone ? `Téléphone : ${phone}` : "",
+    eventDate ? `Date souhaitée : ${eventDate}` : "",
+    "",
+    message,
+  ].filter((l, i) => l !== "" || i === 4).join("\n");
   return { subject, html: emailShell({ preheader: subject, bodyHtml }), text };
 }
 
@@ -386,7 +494,7 @@ export async function sendInvoiceEmail(env, { to, galleryTitle, number, amountCe
   });
 }
 
-async function sendEmail(env, { to, subject, html, text, attachments }) {
+async function sendEmail(env, { to, subject, html, text, attachments, replyTo }) {
   if (!env.RESEND_API_KEY || !to) return;
   try {
     const response = await fetch("https://api.resend.com/emails", {
@@ -402,6 +510,7 @@ async function sendEmail(env, { to, subject, html, text, attachments }) {
         html,
         text,
         ...(attachments ? { attachments } : {}),
+        ...(replyTo ? { reply_to: replyTo } : {}),
       }),
     });
     // `fetch` ne lève une exception qu'en cas de panne réseau — un refus de
@@ -460,4 +569,24 @@ export async function sendPrintOrderPhotographer(env, params) {
 
 export async function sendPrintOrderShipped(env, params) {
   await sendEmail(env, { to: params.to, ...buildPrintOrderShippedEmail(params) });
+}
+
+export async function sendDeliveryReady(env, params) {
+  await sendEmail(env, { to: params.to, ...buildDeliveryReadyEmail(params) });
+}
+
+export async function sendPrintPromo(env, params) {
+  await sendEmail(env, { to: params.to, ...buildPrintPromoEmail(params) });
+}
+
+export async function sendCartReminder(env, params) {
+  await sendEmail(env, { to: params.to, ...buildCartReminderEmail(params) });
+}
+
+export async function sendFavoritesPrint(env, params) {
+  await sendEmail(env, { to: params.to, ...buildFavoritesPrintEmail(params) });
+}
+
+export async function sendPortfolioContact(env, params) {
+  await sendEmail(env, { to: params.to, replyTo: params.replyTo, ...buildPortfolioContactEmail(params) });
 }

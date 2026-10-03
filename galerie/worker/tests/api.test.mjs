@@ -24,6 +24,23 @@ async function signup(email, password) {
   return { response, data };
 }
 
+// Formule d'abonnement posée directement dans la base locale (comme le
+// ferait le webhook Stripe) : les comptes de test passent en Pro pour ne pas
+// buter sur les limites de la formule gratuite, testées à part plus bas.
+const { execFileSync: execSync } = await import("node:child_process");
+const { fileURLToPath: pathOf } = await import("node:url");
+const WORKER_ROOT = new URL("..", import.meta.url);
+async function setPlan(email, plan, status = "active") {
+  execSync("npx", ["wrangler", "d1", "execute", "galerie-protegee", "--local", "--command",
+    `UPDATE photographers SET plan = '${plan}', plan_status = '${status}' WHERE email = '${email}'`], { cwd: pathOf(WORKER_ROOT), stdio: "pipe" });
+  for (let i = 0; i < 20; i++) {
+    try {
+      if ((await fetch(`${BASE}/health`, { headers: { connection: "close" } })).ok) return;
+    } catch { /* pas encore prêt */ }
+    await new Promise((r) => setTimeout(r, 500));
+  }
+}
+
 function adminClient(token) {
   return (method, path, body, raw = false) =>
     fetch(BASE + path, {
@@ -42,6 +59,7 @@ const EMAIL = `photographe-${RUN}@test.invalid`;
 const PASSWORD = "mot-de-passe-de-test-1234";
 
 const { response: signupResponse, data: signupData } = await signup(EMAIL, PASSWORD);
+if (signupResponse.status === 201) await setPlan(EMAIL, "pro");
 check("l'inscription crée un compte et ouvre une session",
       signupResponse.status === 201 && Boolean(signupData.token) && signupData.photographer?.email === EMAIL);
 
@@ -682,6 +700,7 @@ check("les empreintes sont consultables",
 
 const peerEmail = `voisin-${RUN}@test.invalid`;
 const { data: peerSignup } = await signup(peerEmail, "mot-de-passe-du-voisin-1234");
+await setPlan(peerEmail, "pro");
 const peerAdmin = adminClient(peerSignup.token);
 
 const foreignList = await (await peerAdmin("GET", "/api/admin/galleries")).json();
@@ -1445,6 +1464,282 @@ check("un compte créé plus haut dans ce test apparaît dans la liste, avec son
 check("les mots de passe ne figurent jamais dans la liste",
       !JSON.stringify(ownerPhotographers).toLowerCase().includes("password"));
 
+/* ---------- Bibliothèque musicale et liens Spotify & co ---------- */
+
+const TRACK = new Uint8Array(6000);
+for (let i = 0; i < TRACK.length; i++) TRACK[i] = (i * 13 + 5) & 0xff;
+const trackQuery = `title=${encodeURIComponent("Matin doux")}&artist=Test&mood=douce&credit=${encodeURIComponent("Artiste — CC BY 4.0")}&duration=95`;
+const trackForbidden = await admin("PUT", `/api/owner/music?${trackQuery}`, TRACK, true);
+check("seule la propriétaire peut ajouter un morceau à la bibliothèque (403)", trackForbidden.status === 403);
+const trackBadMood = await ownerClient("PUT", "/api/owner/music?title=X&mood=inconnue", TRACK, true);
+const trackNoTitle = await ownerClient("PUT", "/api/owner/music?mood=douce", TRACK, true);
+check("un morceau sans titre ou d'ambiance inconnue est refusé (400)", trackBadMood.status === 400 && trackNoTitle.status === 400);
+const trackAddedResponse = await ownerClient("PUT", `/api/owner/music?${trackQuery}`, TRACK, true);
+const trackAdded = (await trackAddedResponse.json()).track;
+check("la propriétaire ajoute un morceau libre de droits à la bibliothèque",
+      trackAddedResponse.status === 201 && /^mus_/.test(trackAdded?.id || "") && trackAdded.moodLabel === "Douce", JSON.stringify(trackAdded));
+const library = await (await admin("GET", "/api/admin/music-library")).json();
+check("chaque photographe voit la bibliothèque (titre, artiste, ambiance, durée, crédit)",
+      library.tracks.some((t) => t.id === trackAdded.id && t.title === "Matin doux" && t.durationSeconds === 95 && t.credit === "Artiste — CC BY 4.0") &&
+      library.moods?.piano === "Piano");
+const trackPreview = await fetch(`${BASE}/api/music-library/${trackAdded.id}`, { headers: { range: "bytes=0-9" } });
+const trackPreviewBytes = new Uint8Array(await trackPreview.arrayBuffer());
+check("un morceau de la bibliothèque s'écoute avant d'être choisi (lecture partielle comprise)",
+      trackPreview.status === 206 && trackPreviewBytes.length === 10 && trackPreviewBytes.every((b, i) => b === TRACK[i]));
+check("un morceau inconnu de la bibliothèque n'est pas servi (404)",
+      (await fetch(`${BASE}/api/music-library/mus_inconnu00`)).status === 404 && (await fetch(`${BASE}/api/music-library/..%2Fmusic`)).status === 404);
+
+const musicSlug = `${SLUG}-musique`;
+await admin("POST", "/api/admin/galleries", { slug: musicSlug, password: "mot-de-passe-solide", title: "Séance musique", clientName: "Famille Musique" });
+const musicLogin = async () => (await fetch(`${BASE}/api/gallery/${musicSlug}/login`, {
+  method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ password: "mot-de-passe-solide" }),
+})).json();
+
+const peerChoice = await peerAdmin("POST", `/api/admin/galleries/${musicSlug}/music-choice`, { source: "library", trackId: trackAdded.id });
+check("un autre compte ne peut pas choisir la musique de cette galerie (404)", peerChoice.status === 404);
+await admin("PUT", `/api/admin/galleries/${musicSlug}/music?name=avant.mp3`, MUSIC, true);
+const libraryChoice = await admin("POST", `/api/admin/galleries/${musicSlug}/music-choice`, { source: "library", trackId: trackAdded.id });
+const afterLibrary = await (await admin("GET", `/api/admin/galleries/${musicSlug}`)).json();
+const libraryAudio = new Uint8Array(await (await fetch(`${BASE}/api/gallery/${musicSlug}/music`)).arrayBuffer());
+const libraryLogin = await musicLogin();
+check("choisir un morceau de la bibliothèque remplace le MP3 importé, et la fiche l'indique",
+      libraryChoice.ok && afterLibrary.gallery?.music?.source === "library" && afterLibrary.gallery.music.track?.id === trackAdded.id &&
+      afterLibrary.gallery.music_name === "", JSON.stringify(afterLibrary.gallery?.music));
+check("le client entend le morceau choisi, avec son titre et son crédit",
+      libraryAudio.length === TRACK.length && libraryAudio.every((b, i) => b === TRACK[i]) &&
+      libraryLogin.gallery?.hasMusic === true && libraryLogin.gallery.music?.kind === "audio" &&
+      libraryLogin.gallery.music.title === "Matin doux" && libraryLogin.gallery.music.credit === "Artiste — CC BY 4.0",
+      JSON.stringify(libraryLogin.gallery?.music));
+
+const badLink = await admin("POST", `/api/admin/galleries/${musicSlug}/music-choice`, { source: "link", url: "https://example.com/ma-musique" });
+const badLinkBody = await badLink.json();
+check("un lien qui n'est ni Spotify, ni Deezer, ni SoundCloud, ni YouTube est refusé avec une explication",
+      badLink.status === 400 && /Spotify/.test(badLinkBody.error || ""), badLinkBody.error);
+const spotifyChoice = await (await admin("POST", `/api/admin/galleries/${musicSlug}/music-choice`, {
+  source: "link", url: "https://open.spotify.com/intl-fr/playlist/37i9dQZF1DX4sWSpwq3LiO?si=1234",
+})).json();
+const spotifyLogin = await musicLogin();
+check("un lien Spotify devient le lecteur officiel : le client reçoit son adresse, plus de MP3 servi",
+      spotifyChoice.provider === "spotify" &&
+      spotifyLogin.gallery?.music?.kind === "embed" && spotifyLogin.gallery.music.embedUrl === "https://open.spotify.com/embed/playlist/37i9dQZF1DX4sWSpwq3LiO" &&
+      spotifyLogin.gallery.music.providerLabel === "Spotify" && spotifyLogin.gallery.hasMusic === false &&
+      (await fetch(`${BASE}/api/gallery/${musicSlug}/music`)).status === 404,
+      JSON.stringify(spotifyLogin.gallery?.music));
+
+await admin("POST", `/api/admin/galleries/${musicSlug}/music-choice`, { source: "library", trackId: trackAdded.id });
+const trackDeleteForbidden = await admin("DELETE", `/api/owner/music/${trackAdded.id}`);
+const trackDeleted = await ownerClient("DELETE", `/api/owner/music/${trackAdded.id}`);
+const afterTrackDelete = await musicLogin();
+check("retirer un morceau de la bibliothèque (propriétaire seulement) laisse les galeries qui l'utilisaient sans musique",
+      trackDeleteForbidden.status === 403 && trackDeleted.ok && afterTrackDelete.gallery?.music === null &&
+      (await fetch(`${BASE}/api/music-library/${trackAdded.id}`)).status === 404);
+const noneChoice = await admin("POST", `/api/admin/galleries/${musicSlug}/music-choice`, { source: "none" });
+check("« Aucune musique » est un choix possible", noneChoice.ok && (await musicLogin()).gallery?.music === null);
+await admin("DELETE", `/api/admin/galleries/${musicSlug}`);
+
+/* ---------- Livraison des photos définitives ---------- */
+
+const { crc32: zipCrc32 } = await import("../src/delivery.js");
+const deliverySlug = `${SLUG}-livraison`;
+await admin("POST", "/api/admin/galleries", {
+  slug: deliverySlug, password: "mot-de-passe-solide", title: "Séance livrée", clientName: "Famille Livrée", clientEmail: "client-livraison@test.invalid",
+});
+const deliveryLogin = async () => (await fetch(`${BASE}/api/gallery/${deliverySlug}/login`, {
+  method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ password: "mot-de-passe-solide" }),
+})).json();
+const HD1 = new Uint8Array(150000).map((_, i) => (i * 17 + 3) & 0xff);
+const HD2 = new Uint8Array(4321).map((_, i) => (i * 5 + 1) & 0xff);
+const hex = (bytes) => zipCrc32(bytes).toString(16).padStart(8, "0");
+const deliveryBase = `/api/admin/galleries/${deliverySlug}/delivery`;
+
+const peerDeliveryPut = await peerAdmin("PUT", `${deliveryBase}/files?name=a.jpg&crc=${hex(HD1)}`, HD1, true);
+check("un autre compte ne peut pas déposer de fichier à livrer (404)", peerDeliveryPut.status === 404);
+const noCrc = await admin("PUT", `${deliveryBase}/files?name=a.jpg`, HD1, true);
+const badExt = await admin("PUT", `${deliveryBase}/files?name=script.exe&crc=${hex(HD1)}`, HD1, true);
+check("un fichier sans empreinte CRC ou d'un format non photo est refusé (400)", noCrc.status === 400 && badExt.status === 400);
+const openEmpty = await admin("POST", deliveryBase, { open: true });
+check("impossible d'ouvrir une livraison vide (409)", openEmpty.status === 409);
+
+const put1 = await admin("PUT", `${deliveryBase}/files?name=${encodeURIComponent("IMG_0001.jpg")}&crc=${hex(HD1)}`, HD1, true);
+const put2 = await admin("PUT", `${deliveryBase}/files?name=${encodeURIComponent("../Séance été.jpg")}&crc=${hex(HD2)}`, HD2, true);
+const file1 = (await put1.json()).file;
+const file2 = (await put2.json()).file;
+check("le photographe dépose les fichiers définitifs (nom nettoyé, taille relue dans R2)",
+      put1.status === 201 && put2.status === 201 && file1.size === HD1.length && file2.name === "Séance été.jpg", JSON.stringify(file2));
+const deliveryAdmin = await (await admin("GET", deliveryBase)).json();
+const deliveryInDetail = (await (await admin("GET", `/api/admin/galleries/${deliverySlug}`)).json()).gallery?.delivery;
+check("la fiche galerie liste les fichiers à livrer et leur poids total, livraison encore fermée",
+      deliveryAdmin.files.length === 2 && deliveryAdmin.totalBytes === HD1.length + HD2.length && deliveryAdmin.open === false &&
+      deliveryInDetail?.files?.length === 2);
+
+const closedSession = await deliveryLogin();
+const closedLink = await fetch(`${BASE}/api/gallery/${deliverySlug}/delivery/link`, {
+  method: "POST", headers: { authorization: `Bearer ${closedSession.token}`, "content-type": "application/json" }, body: "{}",
+});
+check("tant que la livraison est fermée, le client n'en sait rien et ne peut rien télécharger",
+      closedSession.gallery?.delivery === null && closedLink.status === 404);
+
+const opened = await (await admin("POST", deliveryBase, { open: true, notify: true })).json();
+check("ouvrir la livraison prévient le client par e-mail", opened.open === true && opened.notified === true, JSON.stringify(opened));
+const openSession = await deliveryLogin();
+check("le client voit la livraison à la connexion : fichiers et poids total",
+      openSession.gallery?.delivery?.files?.length === 2 && openSession.gallery.delivery.totalBytes === HD1.length + HD2.length);
+
+const linkNoAuth = await fetch(`${BASE}/api/gallery/${deliverySlug}/delivery/link`, { method: "POST", body: "{}" });
+check("un lien de téléchargement exige la session du client (401)", linkNoAuth.status === 401);
+const clientBearer = { authorization: `Bearer ${openSession.token}`, "content-type": "application/json" };
+const zipLink = await (await fetch(`${BASE}/api/gallery/${deliverySlug}/delivery/link`, { method: "POST", headers: clientBearer, body: "{}" })).json();
+const zipResponse = await fetch(zipLink.url);
+const zipBytes = new Uint8Array(await zipResponse.arrayBuffer());
+let zipCheck = "";
+try {
+  const { writeFileSync, mkdtempSync } = await import("node:fs");
+  const { execFileSync } = await import("node:child_process");
+  const { tmpdir } = await import("node:os");
+  const zipPath = `${mkdtempSync(`${tmpdir()}/livraison-`)}/photos.zip`;
+  writeFileSync(zipPath, zipBytes);
+  zipCheck = execFileSync("python3", ["-c", "import zipfile,sys,json;z=zipfile.ZipFile(sys.argv[1]);print(json.dumps([z.testzip(),z.namelist(),[i.file_size for i in z.infolist()]]))", zipPath]).toString().trim();
+} catch (err) {
+  zipCheck = String(err.message);
+}
+check("« Tout télécharger » donne un ZIP valide (CRC vérifiés), à la taille annoncée, nommé d'après la galerie",
+      zipResponse.status === 200 && Number(zipResponse.headers.get("content-length")) === zipBytes.length &&
+      (() => { try { const z = JSON.parse(zipCheck); return z[0] === null && z[1].join("|") === "IMG_0001.jpg|Séance été.jpg" && z[2].join(",") === `${HD1.length},${HD2.length}`; } catch { return false; } })() &&
+      (zipResponse.headers.get("content-disposition") || "").includes("filename*=UTF-8''S%C3%A9ance%20livr%C3%A9e.zip"),
+      `${zipResponse.status} ${zipCheck} ${zipResponse.headers.get("content-disposition")}`);
+
+const oneLink = await (await fetch(`${BASE}/api/gallery/${deliverySlug}/delivery/link`, { method: "POST", headers: clientBearer, body: JSON.stringify({ fileId: file2.id }) })).json();
+const oneResponse = await fetch(oneLink.url);
+const oneBytes = new Uint8Array(await oneResponse.arrayBuffer());
+check("une photo se télécharge seule, à l'identique, en pièce jointe",
+      oneResponse.status === 200 && oneBytes.length === HD2.length && oneBytes.every((b, i) => b === HD2[i]) &&
+      (oneResponse.headers.get("content-disposition") || "").startsWith("attachment;"));
+const oneUrl = new URL(oneLink.url);
+const deliverySwapped = await fetch(`${BASE}/api/gallery/${deliverySlug}/delivery/file/${file1.id}?t=${encodeURIComponent(oneUrl.searchParams.get("t"))}`);
+const deliveryTampered = await fetch(`${BASE}/api/gallery/${deliverySlug}/delivery/zip?t=${encodeURIComponent(oneUrl.searchParams.get("t") + "x")}`);
+const linkAsSession = await fetch(`${BASE}/api/gallery/${deliverySlug}/tile/${"x"}/0/0/0`, { headers: { authorization: `Bearer ${oneUrl.searchParams.get("t")}` } });
+check("un lien ne vaut que pour son fichier, ne se falsifie pas et ne vaut jamais session",
+      deliverySwapped.status === 403 && deliveryTampered.status === 403 && linkAsSession.status === 401,
+      `${deliverySwapped.status} ${deliveryTampered.status} ${linkAsSession.status}`);
+const otherGalleryUse = await fetch(`${BASE}/api/gallery/${SLUG}/delivery/zip?t=${encodeURIComponent(new URL(zipLink.url).searchParams.get("t"))}`);
+check("un lien d'une galerie ne sert pas sur une autre", [403, 404].includes(otherGalleryUse.status));
+
+const deliveryLog = await (await admin("GET", `/api/admin/galleries/${deliverySlug}/log`)).json();
+check("les téléchargements apparaissent dans le journal d'accès",
+      (deliveryLog.log || []).filter((e) => e.event === "download").length >= 2, JSON.stringify((deliveryLog.log || []).map((e) => e.event)));
+
+await admin("POST", deliveryBase, { open: false });
+const afterClose = await fetch(zipLink.url);
+check("fermer la livraison coupe aussitôt les liens déjà distribués", afterClose.status === 404);
+const deliveryRemoved = await admin("DELETE", `${deliveryBase}/files/${file1.id}`);
+const peerRemove = await peerAdmin("DELETE", `${deliveryBase}/files/${file2.id}`);
+check("le photographe retire un fichier (un autre compte ne peut pas)",
+      deliveryRemoved.ok && peerRemove.status === 404 && (await (await admin("GET", deliveryBase)).json()).files.length === 1);
+await admin("DELETE", `/api/admin/galleries/${deliverySlug}`);
+
+/* ---------- Abonnements : formule gratuite, limites, formules payées ---------- */
+
+const freeEmail = `gratuit-${RUN}@test.invalid`;
+const freeSignup = (await signup(freeEmail, "mot-de-passe-gratuit-1234")).data;
+const free = adminClient(freeSignup.token);
+const freeSub = await (await free("GET", "/api/admin/subscription")).json();
+check("un nouveau compte démarre en formule Découverte (gratuite), avec les 3 formules proposées",
+      freeSub.plan?.key === "free" && freeSub.plan.maxActiveGalleries === 3 && freeSub.usage?.activeGalleries === 0 &&
+      freeSub.plans?.map((p) => p.key).join(",") === "free,essentiel,pro" && freeSub.canManage === false,
+      JSON.stringify(freeSub.plan));
+for (let i = 1; i <= 3; i++) {
+  await free("POST", "/api/admin/galleries", { slug: `${SLUG}-gratuit-${i}`, password: "mot-de-passe-solide", title: `Gratuite ${i}` });
+}
+const fourth = await free("POST", "/api/admin/galleries", { slug: `${SLUG}-gratuit-4`, password: "mot-de-passe-solide", title: "Gratuite 4" });
+const fourthBody = await fourth.json();
+check("la 4e galerie active est refusée en formule gratuite, avec la marche à suivre (402)",
+      fourth.status === 402 && /Abonnement/.test(fourthBody.error || ""), fourthBody.error);
+const expiredOk = await (async () => {
+  await free("DELETE", `/api/admin/galleries/${SLUG}-gratuit-3`);
+  return (await free("POST", "/api/admin/galleries", { slug: `${SLUG}-gratuit-4`, password: "mot-de-passe-solide", title: "Gratuite 4" })).status;
+})();
+check("supprimer une galerie libère une place", expiredOk === 201);
+const freeShop = await free("POST", `/api/admin/galleries/${SLUG}-gratuit-1/shop`, { enabled: true });
+const freeSubdomain = await free("POST", "/api/admin/account/subdomain", { subdomain: `gratuit-${RUN}`.slice(0, 30) });
+check("la boutique et l'adresse à son nom sont réservées aux formules qui les incluent (402)",
+      freeShop.status === 402 && freeSubdomain.status === 402 && /Essentiel/.test((await freeShop.json()).error || ""));
+const badPlan = await free("POST", "/api/admin/subscription/checkout", { plan: "free", returnUrl: "http://localhost/" });
+const noStripe = await free("POST", "/api/admin/subscription/checkout", { plan: "pro", returnUrl: "http://localhost/" });
+const noPortal = await free("POST", "/api/admin/subscription/portal", { returnUrl: "http://localhost/" });
+check("souscrire : formule inconnue refusée, Stripe non configuré signalé clairement, rien à gérer sans abonnement",
+      badPlan.status === 400 && noStripe.status === 503 && noPortal.status === 409, `${badPlan.status} ${noStripe.status} ${noPortal.status}`);
+
+await setPlan(freeEmail, "essentiel", "active");
+const essentielSub = await (await free("GET", "/api/admin/subscription")).json();
+const essentielShop = await free("POST", `/api/admin/galleries/${SLUG}-gratuit-1/shop`, { enabled: true });
+const essentielSubdomain = await free("POST", "/api/admin/account/subdomain", { subdomain: `gratuit-${RUN}`.slice(0, 30) });
+const essentielFifth = await free("POST", "/api/admin/galleries", { slug: `${SLUG}-gratuit-5`, password: "mot-de-passe-solide", title: "Gratuite 5" });
+check("abonnement Essentiel actif : plus de galeries et la boutique, mais pas encore l'adresse à son nom",
+      essentielSub.plan?.key === "essentiel" && essentielShop.ok && essentielFifth.status === 201 && essentielSubdomain.status === 402);
+await setPlan(freeEmail, "essentiel", "past_due");
+check("pendant que Stripe retente un prélèvement (past_due), la formule reste acquise",
+      (await (await free("GET", "/api/admin/subscription")).json()).plan?.key === "essentiel");
+await setPlan(freeEmail, "free", "canceled");
+const afterCancel = await (await free("GET", "/api/admin/subscription")).json();
+const afterCancelSixth = await free("POST", "/api/admin/galleries", { slug: `${SLUG}-gratuit-6`, password: "mot-de-passe-solide", title: "Gratuite 6" });
+check("abonnement résilié : retour à la formule gratuite (plus de nouvelle galerie au-delà de 3)",
+      afterCancel.plan?.key === "free" && afterCancelSixth.status === 402);
+const ownerSub = await (await ownerClient("GET", "/api/admin/subscription")).json();
+check("le compte propriétaire a toutes les fonctionnalités, sans abonnement", ownerSub.owner === true && ownerSub.plan?.key === "pro");
+for (const n of [1, 2, 4, 5]) await free("DELETE", `/api/admin/galleries/${SLUG}-gratuit-${n}`);
+
+/* ---------- Droits RGPD : consentement, export, suppression du compte ---------- */
+
+const rgpdEmail = `rgpd-${RUN}@test.invalid`;
+const rgpdPassword = "mot-de-passe-rgpd-1234";
+const rgpdSignup = await (await fetch(`${BASE}/api/auth/signup`, {
+  method: "POST", headers: { "content-type": "application/json" },
+  body: JSON.stringify({ email: rgpdEmail, password: rgpdPassword, studioName: "Studio RGPD", acceptTerms: true }),
+})).json();
+const rgpd = adminClient(rgpdSignup.token);
+const rgpdSlug = `${SLUG}-rgpd`;
+await rgpd("POST", "/api/admin/galleries", { slug: rgpdSlug, password: "mot-de-passe-solide", title: "Séance RGPD", clientName: "Famille RGPD", clientEmail: "famille-rgpd@test.invalid" });
+const rgpdPhotoId = `pho_Rgpd${RUN}`;
+await rgpd("POST", `/api/admin/galleries/${rgpdSlug}/photos`, {
+  id: rgpdPhotoId, position: 0, width: 800, height: 600, cols: 2, rows: 2, previewWidth: 400, previewHeight: 300, forensicId: "987654321",
+});
+await rgpd("PUT", `/api/admin/tiles/${rgpdPhotoId}/0/0/0`, new Uint8Array([1, 2, 3]), true);
+
+const exportResponse = await rgpd("GET", "/api/admin/account/export");
+const exportData = await exportResponse.json();
+check("l'export contient le compte, ses galeries, photos et clients, et l'acceptation des conditions horodatée",
+      exportResponse.ok && (exportResponse.headers.get("content-disposition") || "").includes("holypixx-mes-donnees-") &&
+      exportData.account?.email === rgpdEmail && typeof exportData.account.terms_accepted_at === "number" &&
+      exportData.account.terms_version === "2026-10-03" &&
+      exportData.galleries?.[0]?.client_email === "famille-rgpd@test.invalid" && exportData.galleries[0].photos?.length === 1,
+      JSON.stringify({ terms: exportData.account?.terms_accepted_at, g: exportData.galleries?.length }));
+check("l'export ne contient jamais de secret (empreintes de mot de passe, clé Prodigi chiffrée)",
+      !JSON.stringify(exportData).includes("password_hash") && !JSON.stringify(exportData).includes("password_salt") &&
+      !("prodigi_api_key_enc" in exportData.account));
+check("sans acceptation explicite, rien n'est horodaté (le compte de test principal n'a pas coché)",
+      (await (await admin("GET", "/api/admin/account/export")).json()).account?.terms_accepted_at === null);
+
+const deleteNoConfirm = await rgpd("POST", "/api/admin/account/delete", { password: rgpdPassword });
+const deleteBadPassword = await rgpd("POST", "/api/admin/account/delete", { password: "faux", confirm: "SUPPRIMER" });
+check("supprimer le compte exige la confirmation et le bon mot de passe", deleteNoConfirm.status === 400 && deleteBadPassword.status === 400);
+const deleteOk = await (await rgpd("POST", "/api/admin/account/delete", { password: rgpdPassword, confirm: "SUPPRIMER" })).json();
+const loginAfterDelete = await fetch(`${BASE}/api/auth/login`, {
+  method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: rgpdEmail, password: rgpdPassword }),
+});
+const galleryAfterDelete = await fetch(`${BASE}/api/gallery/${rgpdSlug}/login`, {
+  method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ password: "mot-de-passe-solide" }),
+});
+// Les identifiants de photo sont uniques sur toute la plateforme : pouvoir
+// réutiliser celui-ci prouve que la photo a bien été effacée.
+await admin("POST", "/api/admin/galleries", { slug: `${SLUG}-apres-rgpd`, password: "mot-de-passe-solide", title: "Après RGPD" });
+const reusedPhotoId = await admin("POST", `/api/admin/galleries/${SLUG}-apres-rgpd/photos`, {
+  id: rgpdPhotoId, position: 9, width: 800, height: 600, cols: 2, rows: 2, previewWidth: 400, previewHeight: 300, forensicId: "987654322",
+});
+check("la suppression efface le compte, ses galeries, photos et accès client",
+      deleteOk.ok === true && deleteOk.deletedGalleries === 1 && loginAfterDelete.status === 401 && galleryAfterDelete.status !== 200 &&
+      reusedPhotoId.status === 201, `${loginAfterDelete.status} ${galleryAfterDelete.status} ${reusedPhotoId.status}`);
+await admin("DELETE", `/api/admin/galleries/${SLUG}-apres-rgpd`);
+
 /* ---------- « Valider ma sélection » ---------- */
 
 const validateSlug = `${SLUG}-validation`;
@@ -1648,11 +1943,16 @@ const lookupsBefore = lab.productLookups.length;
 const avail = await (await admin("POST", "/api/admin/shop/availability", { product: "frame-classic-mount", countryCode: "BE" })).json();
 check("les menus ne gardent que les formats que le labo fabrique et livre, avec les couleurs proposées",
       avail.sizes?.["16x20"]?.available === true && avail.sizes["16x20"].allowed?.join(",") === "black,white" &&
-      avail.sizes["12x12"]?.available === false && lab.productLookups.includes("GLOBAL-CFPM-16x20"),
+      avail.sizes["12x12"]?.available === false,
       JSON.stringify({ a: avail.sizes?.["16x20"], b: avail.sizes?.["12x12"] }));
+// Le Worker garde les fiches en mémoire quelques heures : au premier passage
+// (Worker tout juste démarré) les 13 formats sont demandés au labo, ensuite
+// plus aucun — un autre pays ne redemande rien non plus.
+const lookupsAfterFirst = lab.productLookups.length;
 await admin("POST", "/api/admin/shop/availability", { product: "frame-classic-mount", countryCode: "FR" });
 check("la fiche d'un produit n'est demandée qu'une fois au labo, même pour un autre pays",
-      lab.productLookups.length - lookupsBefore === 13, String(lab.productLookups.length - lookupsBefore));
+      [0, 13].includes(lookupsAfterFirst - lookupsBefore) && lab.productLookups.length === lookupsAfterFirst,
+      `${lookupsAfterFirst - lookupsBefore} puis ${lab.productLookups.length - lookupsAfterFirst}`);
 const availBad = await admin("POST", "/api/admin/shop/availability", { product: "inconnu" });
 const availNoKey = await peerAdmin("POST", "/api/admin/shop/availability", { product: "gift-mug" });
 check("vérifier les formats : produit inconnu refusé (400), clé Prodigi exigée (409)", availBad.status === 400 && availNoKey.status === 409);
@@ -1748,6 +2048,68 @@ check("une commande valide part vers le paiement Stripe — sans Stripe configur
 // Commande payée, posée comme le ferait le webhook Stripe.
 const shopGalleryId = galleryNoOrder.gallery.id;
 const nowS = Math.floor(Date.now() / 1000);
+
+/* ---------- Campagnes de vente : promotion, panier enregistré, relances ---------- */
+
+const promoBase = `/api/admin/galleries/${shopSlug}/promo`;
+const promoBadPercent = await admin("POST", promoBase, { percent: 33, endsAt: nowS + 3 * 86400 });
+const promoPast = await admin("POST", promoBase, { percent: 20, endsAt: nowS - 10 });
+const promoPeer = await peerAdmin("POST", promoBase, { percent: 20, endsAt: nowS + 3 * 86400 });
+check("promotion : remise hors liste ou date passée refusées (400), autre compte refusé (404)",
+      promoBadPercent.status === 400 && promoPast.status === 400 && promoPeer.status === 404);
+const promoSet = await (await admin("POST", promoBase, { percent: 20, endsAt: nowS + 3 * 86400 })).json();
+const promoSession = await shopLogin();
+const promoProducts = promoSession.gallery?.shop?.products || [];
+const bigProduct = promoProducts.slice().sort((a, b) => b.listPriceCents - a.listPriceCents)[0];
+const promoTirage = promoProducts.find((p) => p.id === tirage.id);
+check("pendant la promotion, le client voit les prix barrés et la date de fin",
+      promoSet.promo?.percent === 20 && promoSession.gallery.shop.promo?.percent === 20 &&
+      bigProduct && bigProduct.priceCents === Math.round(bigProduct.listPriceCents * 0.8) && bigProduct.priceCents < bigProduct.listPriceCents,
+      JSON.stringify(bigProduct));
+check("un format dont la remise passerait sous le coût du labo reste à prix coûtant ou plus",
+      promoTirage && promoTirage.priceCents >= Math.min(promoTirage.listPriceCents, 1250), JSON.stringify(promoTirage));
+
+const promoSendNoEmail = await admin("POST", `${promoBase}/send`);
+check("annoncer la promotion exige un e-mail client (409)", promoSendNoEmail.status === 409);
+await d1(`UPDATE galleries SET client_email = 'client-boutique@test.invalid' WHERE id = '${shopGalleryId}'`);
+const promoSent = await admin("POST", `${promoBase}/send`);
+const promoSentAgain = await admin("POST", `${promoBase}/send`);
+const promoDetail = (await (await admin("GET", `/api/admin/galleries/${shopSlug}`)).json()).gallery?.sales;
+check("la promotion s'annonce au client par e-mail, une seule fois, et la fiche l'indique",
+      promoSent.ok && promoSentAgain.status === 409 && typeof promoDetail?.promo?.sentAt === "number");
+
+const cartUrl = `${BASE}/api/gallery/${shopSlug}/cart`;
+const cartNoAuth = await fetch(cartUrl, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+const cartSaved = await (await fetch(cartUrl, {
+  method: "POST", headers: { authorization: `Bearer ${promoSession.token}`, "content-type": "application/json" },
+  body: JSON.stringify({ lines: [{ photoId: shopPhoto, productId: bigProduct.id, copies: 2 }, { photoId: "../x", productId: "y", copies: 1 }] }),
+})).json();
+const cartSession = await shopLogin();
+const cartDetail = (await (await admin("GET", `/api/admin/galleries/${shopSlug}`)).json()).gallery?.sales;
+check("le panier du client est enregistré (lignes invalides écartées) et retrouvé à la connexion, sur n'importe quel appareil",
+      cartNoAuth.status === 401 && cartSaved.items === 2 && cartSession.gallery?.shop?.savedCart?.length === 1 &&
+      cartSession.gallery.shop.savedCart[0].copies === 2 && cartDetail?.cart?.items === 2);
+
+await d1(`UPDATE print_carts SET updated_at = ${nowS - 2 * 86400} WHERE gallery_id = '${shopGalleryId}'`);
+const salesRun1 = await (await ownerClient("POST", "/api/owner/reminders/run")).json();
+const salesRun2 = await (await ownerClient("POST", "/api/owner/reminders/run")).json();
+check("un panier laissé 24 h sans commande est rappelé au client par e-mail, une seule fois",
+      salesRun1.sent?.some((r) => r.slug === shopSlug && r.kind === "cart") && !salesRun2.sent?.some((r) => r.slug === shopSlug && r.kind === "cart"),
+      JSON.stringify(salesRun1.sent?.filter((r) => r.slug === shopSlug)));
+
+await d1(`UPDATE photos SET selected = 1 WHERE id = '${shopPhoto}'; UPDATE galleries SET selection_done_at = ${nowS - 4 * 86400} WHERE id = '${shopGalleryId}'`);
+const favRun1 = await (await ownerClient("POST", "/api/owner/reminders/run")).json();
+const favRun2 = await (await ownerClient("POST", "/api/owner/reminders/run")).json();
+check("3 jours après la sélection validée, sans commande, les coups de cœur imprimables sont relancés une fois",
+      favRun1.sent?.some((r) => r.slug === shopSlug && r.kind === "print_favorites") && !favRun2.sent?.some((r) => r.slug === shopSlug && r.kind === "print_favorites"),
+      JSON.stringify(favRun1.sent?.filter((r) => r.slug === shopSlug)));
+
+await admin("POST", promoBase, { percent: 0 });
+await fetch(cartUrl, { method: "POST", headers: { authorization: `Bearer ${promoSession.token}`, "content-type": "application/json" }, body: JSON.stringify({ lines: [] }) });
+const afterPromo = await shopLogin();
+check("arrêter la promotion rétablit les prix ; un panier vidé n'est plus enregistré",
+      afterPromo.gallery.shop.promo === null && afterPromo.gallery.shop.products.find((p) => p.id === bigProduct.id)?.priceCents === bigProduct.listPriceCents &&
+      afterPromo.gallery.shop.savedCart.length === 0);
 const paidLines = JSON.stringify([{ photoId: shopPhoto, photoNumber: 1, productId: tirage.id, label: tirage.label, sku: "GLOBAL-PHO-4x6", attributes: {}, copies: 2, unitCents: 450, lineCents: 900 }]);
 const insertPaidOrder = (orderId, paymentId, lines) => d1(
   `INSERT INTO payments (id, gallery_id, stripe_checkout_session_id, extra_count, amount_cents, status, kind, created_at, paid_at) ` +

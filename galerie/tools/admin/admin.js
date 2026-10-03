@@ -58,9 +58,16 @@
   // raccourci qui reflète, et met à jour, ce même état.
 
   function setActiveTab(name) {
+    stopTrackPreview();
     if (!el.tabs) return;
     el.tabs.querySelectorAll(".ad-tab").forEach(function (btn) {
-      btn.classList.toggle("ad-tab-active", btn.getAttribute("data-tab") === name);
+      var active = btn.getAttribute("data-tab") === name;
+      btn.classList.toggle("ad-tab-active", active);
+      // Sur téléphone, la barre défile : l'onglet ouvert reste visible.
+      if (active && el.tabs.scrollWidth > el.tabs.clientWidth) {
+        var offset = btn.getBoundingClientRect().left - el.tabs.getBoundingClientRect().left;
+        el.tabs.scrollLeft += offset - (el.tabs.clientWidth - btn.offsetWidth) / 2;
+      }
     });
   }
 
@@ -70,8 +77,11 @@
       if (!btn) return;
       var tab = btn.getAttribute("data-tab");
       if (tab === "galleries") renderList();
+      else if (tab === "sales") renderSales();
+      else if (tab === "portfolio") renderPortfolio();
       else if (tab === "billing") renderBilling();
       else if (tab === "shop") renderShop();
+      else if (tab === "subscription") renderSubscription();
       else if (tab === "settings") renderSettings();
       else if (tab === "owner") renderOwner();
     });
@@ -610,7 +620,44 @@
       '<input type="password" name="newPassword" required minlength="10" autocomplete="new-password" /></label>' +
       '<p class="ad-error" id="ad-password-change-error" hidden></p>' +
       '<button type="submit" class="ad-btn ad-btn-primary" id="ad-password-change-save">Changer le mot de passe</button>' +
-      "</form></section>";
+      "</form></section>" +
+
+      '<section class="ad-mydata"><div class="ad-section-header"><h3>Mes données</h3></div>' +
+      '<p class="ad-hint">Toutes les données de votre compte (galeries, sélections de vos clients, paiements, commandes, journaux) dans un fichier, ' +
+      'conformément au RGPD. Voir la <a href="https://www.holypixx.com/confidentialite.html" target="_blank" rel="noopener">politique de confidentialité</a>.</p>' +
+      '<a class="ad-btn" href="/local/account/export" download>Exporter mes données</a>' +
+      '<details class="ad-danger-zone"><summary>Supprimer mon compte</summary>' +
+      '<p class="ad-hint">Suppression <strong>définitive et immédiate</strong> de votre compte, de toutes vos galeries, photos, fichiers livrés et des données de vos clients. ' +
+      "Téléchargez d'abord vos factures et l'export ci-dessus : rien ne pourra être récupéré. Pensez aussi à déconnecter Stripe et Prodigi de leur côté si vous ne les utilisez plus.</p>" +
+      '<form id="ad-delete-account-form">' +
+      '<label class="ad-field"><span>Mot de passe</span><input type="password" name="password" required autocomplete="current-password" /></label>' +
+      '<label class="ad-field"><span>Tapez SUPPRIMER pour confirmer</span><input type="text" name="confirm" required autocomplete="off" /></label>' +
+      '<p class="ad-error" id="ad-delete-account-error" hidden></p>' +
+      '<button type="submit" class="ad-btn ad-btn-danger" id="ad-delete-account-submit">Supprimer définitivement mon compte</button>' +
+      "</form></details></section>";
+
+    document.getElementById("ad-delete-account-form").addEventListener("submit", async function (event) {
+      event.preventDefault();
+      var form = event.target;
+      var errorBox = document.getElementById("ad-delete-account-error");
+      errorBox.hidden = true;
+      if (form.confirm.value.trim() !== "SUPPRIMER") {
+        errorBox.textContent = "Tapez SUPPRIMER en majuscules pour confirmer.";
+        errorBox.hidden = false;
+        return;
+      }
+      var btn = document.getElementById("ad-delete-account-submit");
+      btn.disabled = true;
+      try {
+        var result = await api("POST", "/account/delete", { password: form.password.value, confirm: "SUPPRIMER" });
+        toast("Compte supprimé (" + result.deletedGalleries + " galerie" + (result.deletedGalleries > 1 ? "s" : "") + "). Au revoir !");
+        showLogin();
+      } catch (err) {
+        errorBox.textContent = err.message;
+        errorBox.hidden = false;
+        btn.disabled = false;
+      }
+    });
 
     document.getElementById("ad-studio-form").addEventListener("submit", async function (event) {
       event.preventDefault();
@@ -760,6 +807,952 @@
   // /owner/* est revérifié côté serveur (voir worker/src/owner.js), jamais
   // sur la seule foi de ce qui est affiché ici.
 
+  /* ---------- Abonnement Holypixx ---------- */
+  // Formule du photographe (Découverte gratuite, Essentiel, Pro), payée
+  // chaque mois par Stripe Billing. Souscrire passe par une page de paiement
+  // Stripe ; changer de formule, de carte ou résilier, par le portail Stripe.
+
+  function planPrice(plan) {
+    return plan.priceCents ? formatEuros(plan.priceCents).replace(",00", "") + " / mois" : "Gratuit";
+  }
+
+  /* ---------- Portfolio : mini-site public du photographe ---------- */
+
+  function portfolioPublicUrl(data) {
+    return data.urls.studio && data.published ? data.urls.studio : data.urls.site;
+  }
+
+  function portfolioPhotoTile(photo, index, count) {
+    return '<li class="ad-pf-photo" data-id="' + esc(photo.id) + '">' +
+      '<img src="/local/portfolio/photos/' + encodeURIComponent(photo.id) + '" alt="Photo ' + (index + 1) + '" loading="lazy" />' +
+      (index === 0 ? '<span class="ad-pf-cover">Couverture</span>' : "") +
+      '<div class="ad-pf-actions">' +
+      '<button type="button" class="ad-btn ad-btn-small" data-move="-1" aria-label="Avancer la photo ' + (index + 1) + '"' + (index === 0 ? " disabled" : "") + ">←</button>" +
+      '<button type="button" class="ad-btn ad-btn-small" data-move="1" aria-label="Reculer la photo ' + (index + 1) + '"' + (index === count - 1 ? " disabled" : "") + ">→</button>" +
+      '<button type="button" class="ad-btn ad-btn-small ad-btn-danger" data-remove aria-label="Retirer la photo ' + (index + 1) + '">Retirer</button>' +
+      "</div></li>";
+  }
+
+  function portfolioMessageHtml(m) {
+    var when = new Date(m.createdAt * 1000).toLocaleString("fr-BE", { dateStyle: "medium", timeStyle: "short" });
+    return '<li class="ad-pf-message" data-id="' + esc(m.id) + '">' +
+      '<div class="ad-pf-message-head"><strong>' + esc(m.name) + "</strong>" + (m.unread ? ' <span class="ad-badge">Nouveau</span>' : "") +
+      '<span class="ad-hint">' + esc(when) + "</span></div>" +
+      '<p class="ad-pf-message-meta"><a href="mailto:' + esc(m.email) + '">' + esc(m.email) + "</a>" +
+      (m.phone ? " · " + esc(m.phone) : "") + (m.eventDate ? " · date souhaitée : " + esc(m.eventDate) : "") + "</p>" +
+      '<p class="ad-pf-message-body">' + esc(m.message) + "</p>" +
+      '<button type="button" class="ad-btn ad-btn-small" data-delete-message>Supprimer</button></li>';
+  }
+
+  async function renderPortfolio(skipHash) {
+    if (!skipHash && location.hash !== "#/portfolio") history.pushState(null, "", "#/portfolio");
+    setActiveTab("portfolio");
+    el.view.innerHTML = '<p class="ad-loading">Chargement…</p>';
+    var data;
+    try {
+      data = await api("GET", "/portfolio");
+    } catch (err) {
+      el.view.innerHTML = '<div class="ad-error-panel"><h2>Portfolio indisponible</h2><p>' + esc(err.message) + "</p></div>";
+      return;
+    }
+    if (location.hash !== "#/portfolio") return;
+    drawPortfolio(data);
+  }
+
+  function drawPortfolio(data) {
+    var url = portfolioPublicUrl(data);
+    var photos = data.photos;
+    var status = data.published
+      ? '<p class="ad-banner">Votre portfolio est en ligne : <a href="' + esc(url) + '" target="_blank" rel="noopener" id="ad-pf-link">' + esc(url.replace(/^https?:\/\//, "")) + "</a></p>"
+      : '<p class="ad-banner ad-banner-muted">' + (data.exists ? "Votre portfolio n'est pas publié : personne ne peut le voir." : "Présentez votre travail sur une page à vous : vos plus belles photos, quelques mots, et un formulaire pour vous contacter.") + "</p>";
+    var unread = data.messages.filter(function (m) { return m.unread; }).length;
+
+    el.view.innerHTML =
+      '<header class="ad-detail-header"><div><h2>Portfolio</h2>' +
+      '<p class="ad-hint">Votre mini-site public, inclus dans toutes les formules' +
+      (data.urls.studio ? " — avec la formule Pro, il s'affiche aussi à l'adresse de votre studio." : ".") + "</p>" +
+      "</div></header>" + status +
+
+      '<section><div class="ad-section-header"><h3>Photos <span class="ad-hint" id="ad-pf-count">' + photos.length + " / " + data.maxPhotos + "</span></h3>" +
+      '<label class="ad-btn ad-btn-primary ad-pf-upload"' + (photos.length >= data.maxPhotos ? " hidden" : "") + ">Ajouter des photos" +
+      '<input type="file" id="ad-pf-files" accept="image/jpeg,image/png,image/webp" multiple hidden /></label></div>' +
+      '<p class="ad-hint">La première photo sert de couverture. Elles sont réduites à 2000 px et débarrassées de leurs données EXIF (appareil, lieu) avant d\'être publiées.</p>' +
+      '<p class="ad-hint" id="ad-pf-progress" hidden></p>' +
+      (photos.length ? '<ol class="ad-pf-photos" id="ad-pf-photos">' + photos.map(function (p, i) { return portfolioPhotoTile(p, i, photos.length); }).join("") + "</ol>"
+        : '<p class="ad-hint">Aucune photo pour l\'instant : ajoutez entre 10 et 30 images qui vous ressemblent.</p>') +
+      "</section>" +
+
+      '<section><div class="ad-section-header"><h3>Présentation</h3></div>' +
+      '<form id="ad-pf-form">' +
+      '<label class="ad-field"><span>Adresse du portfolio</span>' +
+      '<span class="ad-pf-handle"><span class="ad-pf-handle-prefix">www.holypixx.com/portfolio.html?s=</span>' +
+      '<input type="text" name="handle" value="' + esc(data.handle) + '" required maxlength="30" autocapitalize="off" spellcheck="false" /></span></label>' +
+      '<label class="ad-field"><span>Accroche <em>(une phrase, sous votre nom)</em></span>' +
+      '<input type="text" name="headline" value="' + esc(data.headline) + '" maxlength="120" placeholder="Photographe de mariage et de famille, en lumière naturelle" /></label>' +
+      '<div class="ad-field-row">' +
+      '<label class="ad-field"><span>Ville ou région</span><input type="text" name="city" value="' + esc(data.city) + '" maxlength="80" placeholder="Liège" /></label>' +
+      '<label class="ad-field"><span>Téléphone <em>(facultatif, affiché)</em></span><input type="tel" name="phone" value="' + esc(data.phone) + '" maxlength="30" /></label>' +
+      "</div>" +
+      '<label class="ad-field"><span>À propos</span><textarea name="bio" rows="6" maxlength="2000" placeholder="Qui vous êtes, votre façon de travailler…">' + esc(data.bio) + "</textarea></label>" +
+      '<label class="ad-field"><span>Prestations <em>(une par ligne, 8 au plus)</em></span><textarea name="services" rows="4" placeholder="Mariages&#10;Séances famille&#10;Portraits">' + esc(data.services.join("\n")) + "</textarea></label>" +
+      '<div class="ad-field-row">' +
+      '<label class="ad-field"><span>Instagram <em>(facultatif)</em></span><input type="text" name="instagram" value="' + esc(data.instagram ? "@" + data.instagram : "") + '" placeholder="@votre.studio" /></label>' +
+      '<label class="ad-field"><span>Site web <em>(facultatif)</em></span><input type="text" inputmode="url" autocapitalize="off" spellcheck="false" name="website" value="' + esc(data.website) + '" placeholder="votre-site.be" /></label>' +
+      "</div>" +
+      '<label class="ad-check"><input type="checkbox" name="contactEnabled"' + (data.contactEnabled ? " checked" : "") + " /> Formulaire de contact (les messages arrivent par e-mail et ci-dessous)</label>" +
+      '<label class="ad-check"><input type="checkbox" name="published"' + (data.published ? " checked" : "") + " /> Publier le portfolio</label>" +
+      '<p class="ad-error" id="ad-pf-error" hidden></p>' +
+      '<div class="ad-pf-buttons"><button type="submit" class="ad-btn ad-btn-primary" id="ad-pf-save">Enregistrer</button>' +
+      (data.urls.site ? '<a class="ad-btn" href="' + esc(url) + '" target="_blank" rel="noopener">Voir la page</a>' : "") + "</div>" +
+      "</form></section>" +
+
+      '<section><div class="ad-section-header"><h3>Messages reçus' + (unread ? ' <span class="ad-badge">' + unread + " nouveau" + (unread > 1 ? "x" : "") + "</span>" : "") + "</h3></div>" +
+      (data.messages.length ? '<ul class="ad-pf-messages">' + data.messages.map(portfolioMessageHtml).join("") + "</ul>"
+        : '<p class="ad-hint">Aucun message pour l\'instant. Ils sont conservés un an.</p>') +
+      "</section>";
+
+    wirePortfolio(data);
+  }
+
+  function wirePortfolio(data) {
+    var form = document.getElementById("ad-pf-form");
+    form.addEventListener("submit", async function (event) {
+      event.preventDefault();
+      var error = document.getElementById("ad-pf-error");
+      var button = document.getElementById("ad-pf-save");
+      error.hidden = true;
+      button.disabled = true;
+      try {
+        var saved = await api("PUT", "/portfolio", {
+          handle: form.elements.handle.value,
+          headline: form.elements.headline.value,
+          city: form.elements.city.value,
+          phone: form.elements.phone.value,
+          bio: form.elements.bio.value,
+          services: form.elements.services.value.split("\n"),
+          instagram: form.elements.instagram.value,
+          website: form.elements.website.value,
+          contactEnabled: form.elements.contactEnabled.checked,
+          published: form.elements.published.checked,
+        });
+        if (location.hash !== "#/portfolio") return;
+        drawPortfolio(saved);
+        toast(saved.published ? "Portfolio enregistré et en ligne" : "Portfolio enregistré");
+      } catch (err) {
+        error.textContent = err.message;
+        error.hidden = false;
+        button.disabled = false;
+      }
+    });
+
+    var input = document.getElementById("ad-pf-files");
+    if (input) {
+      input.addEventListener("change", async function () {
+        var files = Array.prototype.slice.call(input.files || []);
+        if (!files.length) return;
+        var room = data.maxPhotos - data.photos.length;
+        var progress = document.getElementById("ad-pf-progress");
+        var failures = [];
+        if (files.length > room) {
+          failures.push((files.length - room) + " photo" + (files.length - room > 1 ? "s" : "") + " au-delà de la limite de " + data.maxPhotos);
+          files = files.slice(0, room);
+        }
+        for (var i = 0; i < files.length; i++) {
+          if (!document.body.contains(progress)) return;
+          progress.hidden = false;
+          progress.textContent = "Envoi de la photo " + (i + 1) + " sur " + files.length + "…";
+          var body = new FormData();
+          body.append("file", files[i]);
+          try {
+            var response = await fetch("/local/portfolio/photos", { method: "POST", body: body });
+            if (response.status === 401) { showLogin(); return; }
+            if (!response.ok) {
+              var detail = await response.json().catch(function () { return {}; });
+              failures.push(files[i].name + " : " + (detail.error || "refusée"));
+            }
+          } catch (err) {
+            failures.push(files[i].name + " : envoi interrompu");
+          }
+        }
+        if (location.hash !== "#/portfolio") return;
+        await renderPortfolio(true);
+        if (failures.length) toast(failures.join(" · "), true);
+        else toast(files.length > 1 ? files.length + " photos ajoutées" : "Photo ajoutée");
+      });
+    }
+
+    var list = document.getElementById("ad-pf-photos");
+    if (list) {
+      list.addEventListener("click", async function (event) {
+        var item = event.target.closest(".ad-pf-photo");
+        if (!item) return;
+        var id = item.getAttribute("data-id");
+        var move = event.target.closest("[data-move]");
+        try {
+          if (move) {
+            var ids = data.photos.map(function (p) { return p.id; });
+            var from = ids.indexOf(id);
+            var to = from + Number(move.getAttribute("data-move"));
+            if (to < 0 || to >= ids.length) return;
+            ids.splice(to, 0, ids.splice(from, 1)[0]);
+            await api("POST", "/portfolio/order", { ids: ids });
+            data.photos = ids.map(function (pid) { return data.photos.find(function (p) { return p.id === pid; }); });
+            if (location.hash !== "#/portfolio") return;
+            drawPortfolio(data);
+            var moved = document.querySelector('.ad-pf-photo[data-id="' + id + '"] [data-move="' + move.getAttribute("data-move") + '"]');
+            if (moved && !moved.disabled) moved.focus();
+          } else if (event.target.closest("[data-remove]")) {
+            if (!confirm("Retirer cette photo du portfolio ?")) return;
+            var result = await api("DELETE", "/portfolio/photos/" + encodeURIComponent(id));
+            if (location.hash !== "#/portfolio") return;
+            await renderPortfolio(true);
+            toast(result.unpublished ? "Photo retirée — le portfolio, vide, a été dépublié" : "Photo retirée");
+          }
+        } catch (err) {
+          toast(err.message, true);
+        }
+      });
+    }
+
+    el.view.querySelectorAll("[data-delete-message]").forEach(function (btn) {
+      btn.addEventListener("click", async function () {
+        var item = btn.closest(".ad-pf-message");
+        if (!confirm("Supprimer définitivement ce message ?")) return;
+        try {
+          await api("DELETE", "/portfolio/messages/" + encodeURIComponent(item.getAttribute("data-id")));
+          item.remove();
+          toast("Message supprimé");
+        } catch (err) {
+          toast(err.message, true);
+        }
+      });
+    });
+  }
+
+  /* ---------- Ventes : tableau de bord des 12 derniers mois ---------- */
+  // Graphique en colonnes empilées (suppléments en bas, tirages au-dessus),
+  // dessiné en SVG à la taille réelle du conteneur : redessiné quand la
+  // fenêtre change de largeur, pour garder un texte lisible sur téléphone.
+  // Les couleurs ne servent qu'à identifier la série ; montants et libellés
+  // restent dans les couleurs du texte, et une vue tableau donne les mêmes
+  // chiffres sans graphique.
+
+  var SALES_SERIES = [
+    { key: "supplementCents", label: "Suppléments photos", color: "#1f7fa8" },
+    { key: "printCents", label: "Tirages", color: "#d0603a" },
+  ];
+  var salesData = null;
+  var salesMode = "chart";
+
+  function formatEurosShort(cents) {
+    return Math.round((cents || 0) / 100).toLocaleString("fr-BE") + " €";
+  }
+
+  function percentText(ratio) {
+    return Math.round((ratio || 0) * 100) + " %";
+  }
+
+  // Graduation « ronde » (1, 2, 5 × 10ⁿ euros) pour l'axe vertical.
+  function niceStep(maxCents, ticks) {
+    var raw = Math.max(maxCents / 100 / ticks, 1);
+    var pow = Math.pow(10, Math.floor(Math.log10(raw)));
+    var unit = [1, 2, 5, 10].find(function (m) { return m * pow >= raw; });
+    return unit * pow * 100;
+  }
+
+  // Colonne dont seul le haut est arrondi (le pied reste posé sur l'axe).
+  function topRoundedPath(x, y, w, h, r) {
+    r = Math.min(r, w / 2, h);
+    return "M" + x + "," + (y + h) + "V" + (y + r) + "Q" + x + "," + y + " " + (x + r) + "," + y +
+      "H" + (x + w - r) + "Q" + (x + w) + "," + y + " " + (x + w) + "," + (y + r) + "V" + (y + h) + "Z";
+  }
+
+  function salesChartSvg(months, width) {
+    var height = 260, padTop = 26, padBottom = 30, padLeft = 64, padRight = 8;
+    var plotW = Math.max(width - padLeft - padRight, 120);
+    var plotH = height - padTop - padBottom;
+    var totals = months.map(function (m) { return m.supplementCents + m.printCents; });
+    var maxTotal = Math.max.apply(null, totals.concat([0]));
+    var step = niceStep(maxTotal || 10000, 4);
+    var top = Math.max(step * Math.ceil(maxTotal / step), step);
+    var y = function (cents) { return padTop + plotH - (cents / top) * plotH; };
+    var slot = plotW / months.length;
+    var barW = Math.min(24, Math.max(8, slot * 0.6));
+    var narrow = slot < 40;
+
+    var grid = "";
+    for (var v = 0; v <= top; v += step) {
+      grid += '<line class="ad-chart-grid" x1="' + padLeft + '" x2="' + (padLeft + plotW) + '" y1="' + y(v) + '" y2="' + y(v) + '"/>' +
+        '<text class="ad-chart-tick" x="' + (padLeft - 8) + '" y="' + (y(v) + 4) + '" text-anchor="end">' + esc(formatEurosShort(v)) + "</text>";
+    }
+
+    var peak = totals.indexOf(maxTotal);
+    var cols = months.map(function (m, i) {
+      var cx = padLeft + slot * i + slot / 2;
+      var x = cx - barW / 2;
+      var shapes = "";
+      var base = 0;
+      var stacked = SALES_SERIES.filter(function (s) { return m[s.key] > 0; });
+      stacked.forEach(function (s, j) {
+        var yTop = y(base + m[s.key]);
+        var yBottom = y(base) - (j > 0 ? 2 : 0); // 2 px de fond entre deux segments
+        var h = Math.max(yBottom - yTop, 1);
+        shapes += j === stacked.length - 1
+          ? '<path d="' + topRoundedPath(x, yTop, barW, h, 4) + '" fill="' + s.color + '"/>'
+          : '<rect x="' + x + '" y="' + yTop + '" width="' + barW + '" height="' + h + '" fill="' + s.color + '"/>';
+        base += m[s.key];
+      });
+      var parts = m.label.split(" ");
+      var label = narrow ? parts[0].charAt(0).toUpperCase() : parts[0];
+      var showYear = i === 0 || parts[0] === "janv.";
+      var peakLabel = i === peak && maxTotal > 0
+        ? '<text class="ad-chart-value" x="' + cx + '" y="' + (y(maxTotal) - 8) + '" text-anchor="middle">' + esc(formatEurosShort(maxTotal)) + "</text>"
+        : "";
+      return '<g class="ad-chart-col" data-index="' + i + '" tabindex="0" role="img" aria-label="' +
+        esc(m.label + " : " + formatEuros(totals[i]) + " (" + m.orders + " paiement" + (m.orders > 1 ? "s" : "") + ")") + '">' +
+        '<rect class="ad-chart-hit" x="' + (padLeft + slot * i) + '" y="' + padTop + '" width="' + slot + '" height="' + plotH + '"/>' +
+        shapes + peakLabel +
+        '<text class="ad-chart-tick" x="' + cx + '" y="' + (height - 12) + '" text-anchor="middle">' + esc(label) + "</text>" +
+        (showYear && !narrow ? '<text class="ad-chart-tick ad-chart-year" x="' + cx + '" y="' + (height - 0) + '" text-anchor="middle">' + esc(parts[1]) + "</text>" : "") +
+        "</g>";
+    }).join("");
+
+    return '<svg class="ad-chart-svg" width="' + width + '" height="' + (height + 4) + '" viewBox="0 0 ' + width + " " + (height + 4) + '">' +
+      grid + '<line class="ad-chart-axis" x1="' + padLeft + '" x2="' + (padLeft + plotW) + '" y1="' + y(0) + '" y2="' + y(0) + '"/>' +
+      cols + "</svg>";
+  }
+
+  function salesTableHtml(months) {
+    var rows = months.slice().reverse().map(function (m) {
+      return "<tr><th scope=\"row\">" + esc(m.label) + "</th><td>" + esc(formatEuros(m.supplementCents)) + "</td><td>" +
+        esc(formatEuros(m.printCents)) + "</td><td><strong>" + esc(formatEuros(m.supplementCents + m.printCents)) + "</strong></td><td>" + m.orders + "</td></tr>";
+    }).join("");
+    return '<div class="ad-table-wrap"><table class="ad-table ad-sales-table"><thead><tr><th>Mois</th><th>Suppléments</th><th>Tirages</th><th>Total</th><th>Paiements</th></tr></thead><tbody>' +
+      rows + "</tbody></table></div>";
+  }
+
+  function drawSalesChart() {
+    var host = document.getElementById("ad-sales-chart");
+    if (!host || !salesData) return;
+    if (salesMode === "table") {
+      host.innerHTML = salesTableHtml(salesData.months);
+      return;
+    }
+    host.innerHTML = salesChartSvg(salesData.months, Math.max(host.clientWidth, 280)) +
+      '<div class="ad-chart-tip" id="ad-sales-tip" hidden></div>';
+    var tip = document.getElementById("ad-sales-tip");
+    function show(col) {
+      var m = salesData.months[Number(col.getAttribute("data-index"))];
+      tip.innerHTML = "<strong>" + esc(m.label) + "</strong>" +
+        SALES_SERIES.map(function (s) {
+          return '<span class="ad-chart-tip-row"><i style="background:' + s.color + '"></i>' + esc(s.label) + "<b>" + esc(formatEuros(m[s.key])) + "</b></span>";
+        }).join("") +
+        '<span class="ad-chart-tip-row ad-chart-tip-total">Total<b>' + esc(formatEuros(m.supplementCents + m.printCents)) + "</b></span>" +
+        '<span class="ad-chart-tip-row ad-chart-tip-muted">' + m.orders + " paiement" + (m.orders > 1 ? "s" : "") + "</span>";
+      tip.hidden = false;
+      // À côté de la colonne (à droite, sinon à gauche) pour ne jamais
+      // masquer la colonne survolée ni ses voisines immédiates.
+      var hit = col.querySelector(".ad-chart-hit").getBoundingClientRect();
+      var box = host.getBoundingClientRect();
+      var right = hit.right - box.left + 4;
+      var left = right + tip.offsetWidth <= host.clientWidth ? right : hit.left - box.left - tip.offsetWidth - 4;
+      tip.style.left = Math.max(0, left) + "px";
+      tip.style.top = "8px";
+      host.querySelectorAll(".ad-chart-col").forEach(function (c) { c.classList.toggle("ad-chart-col-active", c === col); });
+    }
+    function hide() {
+      tip.hidden = true;
+      host.querySelectorAll(".ad-chart-col").forEach(function (c) { c.classList.remove("ad-chart-col-active"); });
+    }
+    host.querySelectorAll(".ad-chart-col").forEach(function (col) {
+      col.addEventListener("mouseenter", function () { show(col); });
+      col.addEventListener("focus", function () { show(col); });
+      col.addEventListener("click", function () { show(col); });
+      col.addEventListener("blur", hide);
+    });
+    host.querySelector("svg").addEventListener("mouseleave", hide);
+  }
+
+  var salesResizeTimer = null;
+  window.addEventListener("resize", function () {
+    clearTimeout(salesResizeTimer);
+    salesResizeTimer = setTimeout(function () {
+      if (salesMode === "chart" && document.getElementById("ad-sales-chart")) drawSalesChart();
+    }, 150);
+  });
+
+  function salesStatHtml(label, value, note) {
+    return '<div class="ad-stat"><p class="ad-stat-value">' + esc(value) + '</p><p class="ad-stat-label">' + esc(label) + "</p>" +
+      (note ? '<p class="ad-stat-sub">' + esc(note) + "</p>" : "") + "</div>";
+  }
+
+  function salesRankHtml(title, rows, empty, cells) {
+    return '<section><div class="ad-section-header"><h3>' + esc(title) + "</h3></div>" +
+      (rows.length ? '<ol class="ad-rank">' + rows.map(cells).join("") + "</ol>" : '<p class="ad-hint">' + esc(empty) + "</p>") +
+      "</section>";
+  }
+
+  async function renderSales(skipHash) {
+    if (!skipHash && location.hash !== "#/ventes") history.pushState(null, "", "#/ventes");
+    setActiveTab("sales");
+    el.view.innerHTML = '<p class="ad-loading">Chargement…</p>';
+    var data;
+    try {
+      data = await api("GET", "/sales");
+    } catch (err) {
+      el.view.innerHTML = '<div class="ad-error-panel"><h2>Ventes indisponibles</h2><p>' + esc(err.message) + "</p></div>";
+      return;
+    }
+    if (location.hash !== "#/ventes") return;
+    salesData = data;
+    var t = data.totals;
+    var margin = data.printMargin;
+    var marginNote = margin.lineRevenueCents
+      ? (margin.coverage < 0.999 ? "Sur " + percentText(margin.coverage) + " des tirages (coût connu), " : "") + "hors port et frais Stripe"
+      : "Aucun tirage vendu";
+
+    el.view.innerHTML =
+      '<header class="ad-detail-header"><div><h2>Ventes</h2>' +
+      '<p class="ad-hint">Les 12 derniers mois, paiements encaissés (suppléments photos et commandes de tirages), montants TTC.</p>' +
+      "</div></header>" +
+      '<div class="ad-stats">' +
+      salesStatHtml("Chiffre d'affaires", formatEuros(t.revenueCents),
+        formatEurosShort(t.supplementCents) + " suppléments · " + formatEurosShort(t.printCents) + " tirages") +
+      salesStatHtml("Paiements", String(t.orders), t.orders ? "Panier moyen " + formatEuros(t.averageOrderCents) : "") +
+      salesStatHtml("Marge estimée sur les tirages", margin.lineRevenueCents ? formatEuros(margin.marginCents) : "—", marginNote) +
+      salesStatHtml("Galeries qui vendent", data.conversion.galleries ? percentText(data.conversion.rate) : "—",
+        data.conversion.withSales + " sur " + data.conversion.galleries + " galerie" + (data.conversion.galleries > 1 ? "s" : "") + " créée" + (data.conversion.galleries > 1 ? "s" : "") + " sur la période") +
+      "</div>" +
+      '<section><div class="ad-section-header"><h3>Chiffre d\'affaires par mois</h3>' +
+      '<div class="ad-seg" role="group" aria-label="Affichage">' +
+      '<button type="button" class="ad-seg-btn" data-sales-mode="chart">Graphique</button>' +
+      '<button type="button" class="ad-seg-btn" data-sales-mode="table">Tableau</button></div></div>' +
+      '<ul class="ad-legend">' + SALES_SERIES.slice().reverse().map(function (s) {
+        return '<li><i style="background:' + s.color + '"></i>' + esc(s.label) + "</li>";
+      }).join("") + "</ul>" +
+      (t.revenueCents ? "" : '<p class="ad-hint">Pas encore de vente sur cette période : les montants apparaîtront ici dès le premier paiement.</p>') +
+      '<div class="ad-chart" id="ad-sales-chart"></div></section>' +
+      '<div class="ad-sales-ranks">' +
+      salesRankHtml("Formats les plus vendus", data.topProducts, "Aucun tirage vendu sur la période.", function (p) {
+        return "<li><span>" + esc(p.label) + '</span><span class="ad-rank-meta">' + p.copies + " ex. · " + esc(formatEuros(p.revenueCents)) + "</span></li>";
+      }) +
+      salesRankHtml("Galeries qui rapportent le plus", data.topGalleries, "Aucune vente sur la période.", function (g) {
+        var name = g.slug ? '<a href="#/g/' + encodeURIComponent(g.slug) + '">' + esc(g.title) + "</a>" : esc(g.title);
+        return "<li><span>" + name + '</span><span class="ad-rank-meta">' + g.orders + " paiement" + (g.orders > 1 ? "s" : "") + " · " + esc(formatEuros(g.revenueCents)) + "</span></li>";
+      }) +
+      "</div>";
+
+    el.view.querySelectorAll("[data-sales-mode]").forEach(function (btn) {
+      btn.setAttribute("aria-pressed", String(btn.getAttribute("data-sales-mode") === salesMode));
+      btn.addEventListener("click", function () {
+        salesMode = btn.getAttribute("data-sales-mode");
+        el.view.querySelectorAll("[data-sales-mode]").forEach(function (b) {
+          b.setAttribute("aria-pressed", String(b === btn));
+        });
+        drawSalesChart();
+      });
+    });
+    drawSalesChart();
+  }
+
+  function planFeaturesHtml(plan) {
+    var items = [
+      plan.maxActiveGalleries === null ? "Galeries actives illimitées" : plan.maxActiveGalleries + " galeries actives",
+      "Protection, sélection, musique et livraison HD",
+      (plan.features.shop ? "✓ " : "— ") + "Boutique de tirages",
+      (plan.features.subdomain ? "✓ " : "— ") + "Vos galeries à votre nom",
+    ];
+    return '<ul class="ad-plan-features">' + items.map(function (t) { return "<li>" + esc(t) + "</li>"; }).join("") + "</ul>";
+  }
+
+  async function renderSubscription(skipHash) {
+    var returned = /abonnement=(merci|annule)/.exec(location.hash);
+    if (!skipHash && location.hash.indexOf("#/abonnement") !== 0) history.pushState(null, "", "#/abonnement");
+    if (returned) history.replaceState(null, "", "#/abonnement");
+    setActiveTab("subscription");
+    el.view.innerHTML = '<p class="ad-loading">Chargement…</p>';
+
+    var data;
+    try {
+      data = await api("GET", "/subscription");
+      // Retour de Stripe : le webhook peut arriver quelques secondes après.
+      if (returned && returned[1] === "merci" && data.plan.key === "free") {
+        await new Promise(function (r) { setTimeout(r, 2500); });
+        data = await api("GET", "/subscription");
+      }
+    } catch (err) {
+      toast(err.message, true);
+      return renderList();
+    }
+
+    var current = data.plan;
+    var status = "";
+    if (data.owner) status = "Compte propriétaire : toutes les fonctionnalités sont incluses.";
+    else if (current.key !== "free" && data.cancelAtPeriodEnd && data.renewsAt) status = "Résiliation programmée : votre formule reste active jusqu'au " + formatDate(data.renewsAt) + ".";
+    else if (current.key !== "free" && data.status === "past_due") status = "Le dernier prélèvement a échoué : mettez à jour votre carte depuis « Gérer mon abonnement ».";
+    else if (current.key !== "free" && data.renewsAt) status = "Prochain renouvellement le " + formatDate(data.renewsAt) + ".";
+    var usage = current.maxActiveGalleries === null
+      ? data.usage.activeGalleries + " galerie" + (data.usage.activeGalleries > 1 ? "s" : "") + " active" + (data.usage.activeGalleries > 1 ? "s" : "")
+      : data.usage.activeGalleries + " / " + current.maxActiveGalleries + " galeries actives";
+
+    var cards = data.plans.map(function (plan) {
+      var isCurrent = plan.key === current.key;
+      var action;
+      if (isCurrent) action = '<span class="ad-badge ad-badge-selected">✓ Votre formule</span>';
+      else if (data.owner) action = "";
+      else if (data.canManage) action = '<button type="button" class="ad-btn" data-portal>Changer de formule</button>';
+      else if (plan.key === "free") action = "";
+      else action = '<button type="button" class="ad-btn ad-btn-primary" data-subscribe="' + esc(plan.key) + '"' + (data.stripeConfigured ? "" : " disabled") + ">Choisir " + esc(plan.label) + "</button>";
+      return (
+        '<article class="ad-plan' + (isCurrent ? " ad-plan-current" : "") + (plan.key === "pro" ? " ad-plan-featured" : "") + '">' +
+        "<h3>" + esc(plan.label) + "</h3>" +
+        '<p class="ad-plan-price">' + esc(planPrice(plan)) + "</p>" +
+        '<p class="ad-hint">' + esc(plan.pitch) + "</p>" +
+        planFeaturesHtml(plan) + action + "</article>"
+      );
+    }).join("");
+
+    el.view.innerHTML =
+      '<header class="ad-detail-header"><div><h2>Abonnement</h2>' +
+      '<p class="ad-hint">Votre formule Holypixx. Sans engagement : résiliable à tout moment, effet à la fin du mois payé.</p>' +
+      "</div></header>" +
+      (returned ? '<p class="ad-banner' + (returned[1] === "merci" ? "" : " ad-banner-muted") + '">' +
+        (returned[1] === "merci" ? "Merci ! Votre abonnement est enregistré." : "Paiement annulé : votre formule n'a pas changé.") + "</p>" : "") +
+      '<section class="ad-plan-summary"><div><p class="ad-hint">Formule actuelle</p><p class="ad-plan-name">' + esc(current.label) + "</p>" +
+      (status ? '<p class="ad-hint">' + esc(status) + "</p>" : "") + "</div>" +
+      '<div><p class="ad-hint">Utilisation</p><p class="ad-plan-usage">' + esc(usage) + "</p></div>" +
+      (data.canManage ? '<button type="button" class="ad-btn" data-portal>Gérer mon abonnement</button>' : "") +
+      "</section>" +
+      (data.stripeConfigured || data.owner ? "" : '<p class="ad-hint">Le paiement des abonnements n\'est pas encore ouvert sur la plateforme.</p>') +
+      '<div class="ad-plans">' + cards + "</div>" +
+      '<p class="ad-hint">Prix TTC. Paiement sécurisé par Stripe ; factures disponibles dans « Gérer mon abonnement ». ' +
+      'Voir les <a href="https://www.holypixx.com/conditions.html" target="_blank" rel="noopener">conditions d\'utilisation</a>.</p>';
+
+    el.view.querySelectorAll("[data-subscribe]").forEach(function (btn) {
+      btn.addEventListener("click", async function () {
+        btn.disabled = true;
+        try {
+          var result = await api("POST", "/subscription/checkout", { plan: btn.getAttribute("data-subscribe") });
+          window.location.href = result.url;
+        } catch (err) {
+          toast(err.message, true);
+          btn.disabled = false;
+        }
+      });
+    });
+    el.view.querySelectorAll("[data-portal]").forEach(function (btn) {
+      btn.addEventListener("click", async function () {
+        btn.disabled = true;
+        try {
+          var result = await api("POST", "/subscription/portal", {});
+          window.location.href = result.url;
+        } catch (err) {
+          toast(err.message, true);
+          btn.disabled = false;
+        }
+      });
+    });
+  }
+
+  /* ---------- Livraison des photos définitives ---------- */
+  // Fichiers finaux (haute définition, sans filigrane) que le client
+  // télécharge une fois la livraison ouverte. Envoyés un par un, bruts :
+  // admin-server calcule leur CRC-32 (nécessaire au ZIP du Worker).
+
+  function formatBytes(bytes) {
+    if (bytes >= 1024 * 1024 * 1024) return (bytes / (1024 * 1024 * 1024)).toFixed(1).replace(".", ",") + " Go";
+    if (bytes >= 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1).replace(".", ",") + " Mo";
+    return Math.max(1, Math.round(bytes / 1024)) + " Ko";
+  }
+
+  function deliverySectionHtml(gallery) {
+    var d = gallery.delivery || { open: false, files: [], totalBytes: 0 };
+    var n = d.files.length;
+    var status = d.open
+      ? '<span class="ad-badge ad-badge-selected">✓ Livraison ouverte</span> depuis le ' + esc(formatDate(d.openedAt)) +
+        (d.notifiedAt ? " · client prévenu par e-mail le " + esc(formatDate(d.notifiedAt)) : "")
+      : '<span class="ad-hint">Pas encore ouverte : le client ne voit rien tant que vous ne l\'ouvrez pas.</span>';
+    var rows = d.files.map(function (f) {
+      return (
+        '<li data-delivery-file="' + esc(f.id) + '"><span class="ad-delivery-name">' + esc(f.name) + "</span>" +
+        '<span class="ad-hint">' + esc(formatBytes(f.size)) + "</span>" +
+        '<button type="button" class="ad-delivery-remove" data-remove-delivery="' + esc(f.id) + '" aria-label="Retirer ' + esc(f.name) + '">&times;</button></li>'
+      );
+    }).join("");
+    var notify = gallery.client_email
+      ? '<label class="ad-check"><input type="checkbox" id="ad-delivery-notify" checked /> Prévenir le client par e-mail (' + esc(gallery.client_email) + ")</label>"
+      : '<p class="ad-hint">Aucun e-mail client renseigné : pensez à prévenir votre client vous-même.</p>';
+    return (
+      '<section class="ad-delivery">' +
+      '<div class="ad-section-header"><h3>Livraison des photos définitives</h3></div>' +
+      '<p class="ad-hint">Déposez ici les photos finales, en haute définition et sans filigrane (JPEG, PNG, TIFF… 80 Mo maximum chacune). ' +
+      "Une fois la livraison ouverte, le client les télécharge depuis sa galerie, une par une ou toutes d'un coup (ZIP).</p>" +
+      '<p class="ad-delivery-status">' + status + "</p>" +
+      '<div class="ad-bg-custom"><label class="ad-btn">Ajouter des photos' +
+      '<input type="file" id="ad-delivery-input" accept="image/jpeg,image/png,image/tiff,image/webp,.heic,.tif,.tiff" multiple hidden /></label>' +
+      '<span class="ad-hint" id="ad-delivery-progress">' + (n ? n + " photo" + (n > 1 ? "s" : "") + " · " + esc(formatBytes(d.totalBytes)) : "Aucune photo déposée.") + "</span></div>" +
+      (n ? '<ul class="ad-delivery-list">' + rows + "</ul>" : "") +
+      (d.open
+        ? '<button type="button" class="ad-btn" id="ad-delivery-close">Fermer la livraison</button>'
+        : (n ? notify + '<button type="button" class="ad-btn ad-btn-primary" id="ad-delivery-open">Ouvrir la livraison au client</button>' : "")) +
+      "</section>"
+    );
+  }
+
+  function wireDeliverySection(slug) {
+    var input = document.getElementById("ad-delivery-input");
+    if (!input) return;
+    input.addEventListener("change", async function () {
+      var files = Array.prototype.slice.call(input.files || []);
+      input.value = "";
+      if (!files.length) return;
+      var progress = document.getElementById("ad-delivery-progress");
+      var failed = [];
+      for (var i = 0; i < files.length; i++) {
+        progress.textContent = "Envoi " + (i + 1) + " / " + files.length + " : " + files[i].name + "…";
+        try {
+          var response = await fetch("/local/galleries/" + encodeURIComponent(slug) + "/delivery/files?name=" + encodeURIComponent(files[i].name), {
+            method: "POST",
+            headers: { "content-type": "application/octet-stream" },
+            body: files[i],
+          });
+          var result = await response.json().catch(function () { return {}; });
+          if (!response.ok) throw new Error(result.error || "Échec de l'envoi");
+        } catch (err) {
+          failed.push(files[i].name + " (" + err.message + ")");
+        }
+      }
+      if (failed.length) toast("Non envoyées : " + failed.join(", "), true);
+      else toast(files.length + " photo" + (files.length > 1 ? "s" : "") + " ajoutée" + (files.length > 1 ? "s" : "") + " à la livraison.");
+      renderDetail(slug, true);
+    });
+    document.querySelectorAll("[data-remove-delivery]").forEach(function (btn) {
+      btn.addEventListener("click", async function () {
+        try {
+          await api("DELETE", "/galleries/" + encodeURIComponent(slug) + "/delivery/files/" + encodeURIComponent(btn.getAttribute("data-remove-delivery")));
+          renderDetail(slug, true);
+        } catch (err) {
+          toast(err.message, true);
+        }
+      });
+    });
+    var openBtn = document.getElementById("ad-delivery-open");
+    if (openBtn) {
+      openBtn.addEventListener("click", function () {
+        var notifyBox = document.getElementById("ad-delivery-notify");
+        var notify = Boolean(notifyBox && notifyBox.checked);
+        confirmAction("Ouvrir la livraison ? Le client pourra télécharger ces photos en haute définition, sans filigrane." + (notify ? " Il sera prévenu par e-mail." : ""), async function () {
+          try {
+            var result = await api("POST", "/galleries/" + encodeURIComponent(slug) + "/delivery", { open: true, notify: notify });
+            toast(result.notified ? "Livraison ouverte, client prévenu par e-mail." : "Livraison ouverte.");
+            renderDetail(slug, true);
+          } catch (err) {
+            toast(err.message, true);
+          }
+        });
+      });
+    }
+    var closeBtn = document.getElementById("ad-delivery-close");
+    if (closeBtn) {
+      closeBtn.addEventListener("click", async function () {
+        try {
+          await api("POST", "/galleries/" + encodeURIComponent(slug) + "/delivery", { open: false });
+          toast("Livraison fermée : le client ne peut plus télécharger.");
+          renderDetail(slug, true);
+        } catch (err) {
+          toast(err.message, true);
+        }
+      });
+    }
+  }
+
+  /* ---------- Musique : bibliothèque commune ---------- */
+  // Morceaux libres de droits ajoutés par la propriétaire (onglet Admin) et
+  // choisis par chaque photographe pour ses galeries. L'écoute passe par un
+  // seul lecteur partagé, coupé dès qu'on change d'écran.
+
+  var trackPreview = { audio: null, id: null };
+  // Mêmes clés que MUSIC_MOODS côté Worker (worker/src/music.js).
+  var MUSIC_MOODS = {
+    douce: "Douce", joyeuse: "Joyeuse", romantique: "Romantique", piano: "Piano",
+    acoustique: "Acoustique", cinematique: "Cinématique", enfance: "Enfance",
+  };
+
+  function formatDuration(seconds) {
+    if (!seconds) return "";
+    return Math.floor(seconds / 60) + ":" + String(seconds % 60).padStart(2, "0");
+  }
+
+  function reflectTrackPreview() {
+    var playing = trackPreview.audio && !trackPreview.audio.paused ? trackPreview.id : null;
+    document.querySelectorAll("[data-preview]").forEach(function (btn) {
+      var on = btn.getAttribute("data-preview") === playing;
+      btn.setAttribute("aria-pressed", on ? "true" : "false");
+      btn.textContent = on ? "❚❚" : "▶";
+    });
+  }
+
+  function toggleTrackPreview(trackId) {
+    if (!trackPreview.audio) {
+      trackPreview.audio = new Audio();
+      ["play", "pause", "ended"].forEach(function (name) { trackPreview.audio.addEventListener(name, reflectTrackPreview); });
+    }
+    if (trackPreview.id === trackId && !trackPreview.audio.paused) {
+      trackPreview.audio.pause();
+      return;
+    }
+    trackPreview.id = trackId;
+    trackPreview.audio.src = state.config.api + "/api/music-library/" + encodeURIComponent(trackId);
+    trackPreview.audio.play().catch(function () { toast("Lecture impossible dans ce navigateur.", true); });
+    reflectTrackPreview();
+  }
+
+  function stopTrackPreview() {
+    if (trackPreview.audio) trackPreview.audio.pause();
+  }
+
+  // Liste de morceaux ; `mode` : "pick" (fiche galerie, bouton « Choisir »)
+  // ou "manage" (onglet Admin, bouton « Retirer » et crédit affiché).
+  function trackListHtml(library, mode, currentId) {
+    if (!library.tracks.length) {
+      return '<p class="ad-hint">' + (mode === "manage"
+        ? "La bibliothèque est vide : ajoutez un premier morceau ci-dessus."
+        : "La bibliothèque est encore vide — elle se remplit depuis l'onglet Admin de la plateforme.") + "</p>";
+    }
+    var moods = {};
+    library.tracks.forEach(function (t) { moods[t.mood] = t.moodLabel || t.mood; });
+    var chips = Object.keys(moods).length > 1
+      ? '<div class="ad-music-moods" role="group" aria-label="Ambiance">' +
+        '<button type="button" class="ad-chip ad-chip-active" data-mood-filter="">Toutes</button>' +
+        Object.keys(moods).map(function (m) {
+          return '<button type="button" class="ad-chip" data-mood-filter="' + esc(m) + '">' + esc(moods[m]) + "</button>";
+        }).join("") + "</div>"
+      : "";
+    var items = library.tracks.map(function (t) {
+      var meta = [t.artist, t.moodLabel, formatDuration(t.durationSeconds)].filter(Boolean).map(esc).join(" · ");
+      var action;
+      if (mode === "manage") {
+        action = '<button type="button" class="ad-btn ad-btn-small ad-btn-danger" data-remove-track="' + esc(t.id) + '">Retirer</button>';
+      } else if (t.id === currentId) {
+        action = '<span class="ad-badge ad-badge-selected">✓ Choisie</span>';
+      } else {
+        action = '<button type="button" class="ad-btn ad-btn-small" data-pick-track="' + esc(t.id) + '">Choisir</button>';
+      }
+      return (
+        '<li class="ad-track' + (t.id === currentId ? " ad-track-current" : "") + '" data-mood="' + esc(t.mood) + '">' +
+        '<button type="button" class="ad-track-play" data-preview="' + esc(t.id) + '" aria-pressed="false" aria-label="Écouter « ' + esc(t.title) + ' »">▶</button>' +
+        '<div class="ad-track-info"><strong>' + esc(t.title) + "</strong><span>" + meta + "</span>" +
+        (mode === "manage" && t.credit ? '<span class="ad-track-credit">Crédit : ' + esc(t.credit) + "</span>" : "") +
+        "</div>" + action + "</li>"
+      );
+    });
+    return chips + '<ul class="ad-track-list">' + items.join("") + "</ul>";
+  }
+
+  // Écoute et filtre par ambiance, communs aux deux listes.
+  function wireTrackList(container) {
+    container.querySelectorAll("[data-preview]").forEach(function (btn) {
+      btn.addEventListener("click", function () { toggleTrackPreview(btn.getAttribute("data-preview")); });
+    });
+    container.querySelectorAll("[data-mood-filter]").forEach(function (chip) {
+      chip.addEventListener("click", function () {
+        var mood = chip.getAttribute("data-mood-filter");
+        container.querySelectorAll("[data-mood-filter]").forEach(function (c) { c.classList.toggle("ad-chip-active", c === chip); });
+        container.querySelectorAll(".ad-track").forEach(function (li) {
+          li.hidden = Boolean(mood) && li.getAttribute("data-mood") !== mood;
+        });
+      });
+    });
+    reflectTrackPreview();
+  }
+
+  function musicSectionHtml(gallery) {
+    var m = gallery.music || { source: gallery.music_name ? "file" : "none", name: gallery.music_name };
+    var current;
+    if (m.source === "library" && m.track) current = "Morceau de la bibliothèque : <strong>" + esc(m.track.title) + "</strong>" + (m.track.artist ? " — " + esc(m.track.artist) : "");
+    else if (m.source === "link") current = "Lecteur <strong>" + esc(m.providerLabel || "intégré") + "</strong> affiché dans la galerie";
+    else if (m.source === "file") current = "Fichier MP3 : <strong>" + esc(m.name) + "</strong>";
+    else current = '<span class="ad-hint">Aucune musique pour cette galerie.</span>';
+    var tab = m.source === "link" ? "link" : m.source === "file" ? "file" : "library";
+    var tabButton = function (key, label) {
+      return '<button type="button" class="ad-music-tab' + (key === tab ? " ad-music-tab-active" : "") + '" data-music-tab="' + key + '" aria-pressed="' + (key === tab) + '">' + label + "</button>";
+    };
+    return (
+      '<section class="ad-music">' +
+      '<div class="ad-section-header"><h3>Musique d\'ambiance</h3></div>' +
+      '<p class="ad-hint">Lancée automatiquement en mise en page « Défilement », proposée en pause dans les autres — le client garde toujours la main.</p>' +
+      '<p class="ad-music-state" id="ad-music-state">' + current + "</p>" +
+      '<div class="ad-music-tabs">' +
+      tabButton("library", "Bibliothèque") + tabButton("link", "Spotify, Deezer, YouTube…") + tabButton("file", "Mon fichier MP3") +
+      "</div>" +
+      '<div class="ad-music-pane" data-music-pane="library"' + (tab === "library" ? "" : " hidden") + ">" +
+      '<p class="ad-hint">Morceaux libres de droits, utilisables sans souci pour un usage professionnel. Écoutez, puis choisissez.</p>' +
+      '<div id="ad-music-library"><p class="ad-hint">Chargement de la bibliothèque…</p></div>' +
+      "</div>" +
+      '<div class="ad-music-pane" data-music-pane="link"' + (tab === "link" ? "" : " hidden") + ">" +
+      '<p class="ad-hint">Collez le lien d\'un morceau ou d\'une playlist (Partager → Copier le lien). Le lecteur officiel s\'affiche discrètement dans la galerie et le client lance lui-même la lecture. ' +
+      "Avec Spotify, un client sans compte Spotify n'entend qu'un extrait de 30 secondes ; YouTube, SoundCloud et Deezer jouent le morceau en entier.</p>" +
+      '<div class="ad-music-link"><input type="url" id="ad-music-link-input" placeholder="https://open.spotify.com/playlist/…" autocomplete="off" />' +
+      '<button type="button" class="ad-btn ad-btn-primary" id="ad-music-link-save">Enregistrer</button></div>' +
+      "</div>" +
+      '<div class="ad-music-pane" data-music-pane="file"' + (tab === "file" ? "" : " hidden") + ">" +
+      '<p class="ad-hint">Un morceau dont vous avez les droits (MP3, 15 Mo maximum), joué en boucle.</p>' +
+      '<div class="ad-bg-custom">' +
+      '<label class="ad-btn">' + (m.source === "file" ? "Remplacer le MP3" : "Importer un MP3") +
+      '<input type="file" id="ad-music-file-input" accept="audio/mpeg,.mp3" hidden /></label>' +
+      "</div></div>" +
+      (m.source !== "none" ? '<p><button type="button" class="ad-btn" id="ad-music-remove">Retirer la musique</button></p>' : "") +
+      "</section>"
+    );
+  }
+
+  async function wireMusicSection(slug, gallery) {
+    var section = document.querySelector(".ad-music");
+    if (!section) return;
+    section.querySelectorAll("[data-music-tab]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var key = btn.getAttribute("data-music-tab");
+        section.querySelectorAll("[data-music-tab]").forEach(function (b) {
+          var on = b === btn;
+          b.classList.toggle("ad-music-tab-active", on);
+          b.setAttribute("aria-pressed", on ? "true" : "false");
+        });
+        section.querySelectorAll("[data-music-pane]").forEach(function (pane) { pane.hidden = pane.getAttribute("data-music-pane") !== key; });
+        if (key !== "library") stopTrackPreview();
+      });
+    });
+
+    async function choose(body, message) {
+      try {
+        await api("POST", "/galleries/" + encodeURIComponent(slug) + "/music-choice", body);
+        stopTrackPreview();
+        toast(message);
+        renderDetail(slug, true);
+      } catch (err) {
+        toast(err.message, true);
+      }
+    }
+    document.getElementById("ad-music-link-save").addEventListener("click", function () {
+      var url = document.getElementById("ad-music-link-input").value.trim();
+      if (!url) return toast("Collez d'abord un lien.", true);
+      choose({ source: "link", url: url }, "Lecteur enregistré : il s'affichera dans la galerie.");
+    });
+
+    var box = document.getElementById("ad-music-library");
+    try {
+      var library = await api("GET", "/music-library");
+      if (!document.body.contains(box)) return; // fiche quittée entre-temps
+      var currentId = gallery.music && gallery.music.source === "library" && gallery.music.track ? gallery.music.track.id : null;
+      box.innerHTML = trackListHtml(library, "pick", currentId);
+      wireTrackList(box);
+      box.querySelectorAll("[data-pick-track]").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          choose({ source: "library", trackId: btn.getAttribute("data-pick-track") }, "Musique choisie pour cette galerie.");
+        });
+      });
+    } catch (err) {
+      if (document.body.contains(box)) box.innerHTML = '<p class="ad-hint">Bibliothèque indisponible : ' + esc(err.message) + "</p>";
+    }
+  }
+
+  // Onglet Admin : ajout et retrait de morceaux dans la bibliothèque.
+  function ownerMusicSectionHtml() {
+    return (
+      '<section><div class="ad-section-header"><h3>Bibliothèque musicale</h3></div>' +
+      '<p class="ad-hint">Les morceaux ajoutés ici sont proposés à tous les photographes pour leurs galeries. ' +
+      "N'ajoutez que de la musique dont la licence autorise un usage commercial sur un site : par exemple les morceaux sous licence " +
+      "<strong>CC BY</strong> (incompetech.com, freemusicarchive.org — indiquez le crédit demandé, il sera affiché discrètement au client) " +
+      "ou des morceaux achetés avec une licence qui le permet.</p>" +
+      '<form class="ad-music-upload" id="ad-owner-music-form">' +
+      '<label class="ad-field"><span>Fichier MP3 (15 Mo max.)</span><input type="file" name="file" accept="audio/mpeg,.mp3" required /></label>' +
+      '<label class="ad-field"><span>Titre</span><input type="text" name="title" maxlength="120" required /></label>' +
+      '<label class="ad-field"><span>Artiste</span><input type="text" name="artist" maxlength="120" /></label>' +
+      '<label class="ad-field"><span>Ambiance</span><select name="mood">' +
+      Object.keys(MUSIC_MOODS).map(function (k) { return '<option value="' + esc(k) + '">' + esc(MUSIC_MOODS[k]) + "</option>"; }).join("") +
+      "</select></label>" +
+      '<label class="ad-field ad-field-wide"><span>Crédit / licence</span><input type="text" name="credit" maxlength="200" placeholder="Ex. « Kevin MacLeod (incompetech.com) — CC BY 4.0 »" /></label>' +
+      '<button type="submit" class="ad-btn ad-btn-primary" id="ad-owner-music-submit">Ajouter à la bibliothèque</button>' +
+      "</form>" +
+      '<div id="ad-owner-music-list"><p class="ad-hint">Chargement…</p></div>' +
+      "</section>"
+    );
+  }
+
+  function audioDuration(file) {
+    return new Promise(function (resolve) {
+      var url = URL.createObjectURL(file);
+      var probe = new Audio();
+      var settled = false;
+      var done = function (value) {
+        if (settled) return;
+        settled = true;
+        URL.revokeObjectURL(url);
+        resolve(value);
+      };
+      probe.addEventListener("loadedmetadata", function () { done(isFinite(probe.duration) ? Math.round(probe.duration) : 0); });
+      probe.addEventListener("error", function () { done(0); });
+      setTimeout(function () { done(0); }, 5000);
+      probe.preload = "metadata";
+      probe.src = url;
+    });
+  }
+
+  async function refreshOwnerMusic() {
+    var box = document.getElementById("ad-owner-music-list");
+    if (!box) return;
+    try {
+      var library = await api("GET", "/music-library");
+      if (!document.body.contains(box)) return;
+      box.innerHTML = trackListHtml(library, "manage", null);
+      wireTrackList(box);
+      box.querySelectorAll("[data-remove-track]").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          confirmAction("Retirer ce morceau de la bibliothèque ? Les galeries qui l'utilisent repasseront sans musique.", async function () {
+            try {
+              stopTrackPreview();
+              await api("DELETE", "/owner/music/" + encodeURIComponent(btn.getAttribute("data-remove-track")));
+              toast("Morceau retiré.");
+              refreshOwnerMusic();
+            } catch (err) {
+              toast(err.message, true);
+            }
+          });
+        });
+      });
+    } catch (err) {
+      if (document.body.contains(box)) box.innerHTML = '<p class="ad-hint">Bibliothèque indisponible : ' + esc(err.message) + "</p>";
+    }
+  }
+
+  function wireOwnerMusic() {
+    var form = document.getElementById("ad-owner-music-form");
+    if (!form) return;
+    form.addEventListener("submit", async function (event) {
+      event.preventDefault();
+      var submit = document.getElementById("ad-owner-music-submit");
+      var file = form.file.files[0];
+      if (!file) return;
+      submit.disabled = true;
+      submit.textContent = "Envoi…";
+      try {
+        var data = new FormData(form);
+        data.set("duration", String(await audioDuration(file)));
+        var response = await fetch("/local/owner/music", { method: "POST", body: data });
+        var result = await response.json().catch(function () { return {}; });
+        if (!response.ok) throw new Error(result.error || "Échec de l'envoi");
+        toast("« " + result.track.title + " » ajouté à la bibliothèque.");
+        form.reset();
+        refreshOwnerMusic();
+      } catch (err) {
+        toast(err.message, true);
+      } finally {
+        submit.disabled = false;
+        submit.textContent = "Ajouter à la bibliothèque";
+      }
+    });
+    refreshOwnerMusic();
+  }
+
   function formatMonthLabel(month) {
     var parts = month.split("-");
     var date = new Date(Number(parts[0]), Number(parts[1]) - 1, 1);
@@ -879,6 +1872,8 @@
       photographersTableHtml(photographersData.photographers) +
       "</section>" +
 
+      ownerMusicSectionHtml() +
+
       '<section><div class="ad-section-header"><h3>Relances automatiques</h3></div>' +
       '<p class="ad-hint">Une passe tourne chaque jour sur le Worker (08:00 UTC) : rappel au client à J-7 et J-2 de l\'expiration tant que sa sélection n\'est pas validée, rappel au photographe à J-2. ' +
       "Chaque relance ne part qu'une fois. Vous pouvez lancer la passe tout de suite :</p>" +
@@ -890,6 +1885,7 @@
       trafficSectionHtml() +
       "</section>";
 
+    wireOwnerMusic();
     document.getElementById("ad-run-reminders").addEventListener("click", async function () {
       var btn = this;
       var out = document.getElementById("ad-run-reminders-result");
@@ -987,10 +1983,85 @@
         ? "Les photos importées tant que la boutique est ouverte gardent un fichier d'impression en pleine définition (jamais montré au client) ; réimportez les plus anciennes pour les proposer aussi."
         : "Ouvrez la boutique avant d'importer les photos : seules celles importées ensuite pourront être commandées.") +
       "</p>" +
+      (on ? promoBlockHtml(data.gallery) : "") +
       "<h4>Commandes de cette galerie</h4>" +
       printOrdersTableHtml(data.printOrders, false) +
       "</section>"
     );
+  }
+
+  // Campagnes de vente : promotion à durée limitée et panier en cours.
+  function promoBlockHtml(gallery) {
+    var sales = gallery.sales || { promo: null, percents: [10, 15, 20, 25, 30, 40, 50], cart: null };
+    var promo = sales.promo;
+    var html = '<div class="ad-promo"><h4>Promotion sur les tirages</h4>';
+    if (promo) {
+      html += '<p class="ad-promo-on"><strong>−' + promo.percent + " %</strong> sur tous les tirages jusqu'au " + esc(formatDate(promo.endsAt)) +
+        (promo.sentAt ? ' · <span class="ad-hint">annoncée au client le ' + esc(formatDate(promo.sentAt)) + "</span>" : "") + "</p>" +
+        '<div class="ad-promo-actions">' +
+        (!promo.sentAt && gallery.client_email ? '<button type="button" class="ad-btn ad-btn-primary" id="ad-promo-send">Annoncer au client par e-mail</button>' : "") +
+        '<button type="button" class="ad-btn" id="ad-promo-stop">Arrêter la promotion</button></div>';
+    } else {
+      var defaultEnd = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+      html += '<p class="ad-hint">Une remise sur tous les tirages de cette galerie, pour une durée limitée : prix barrés chez le client, ' +
+        "remise appliquée au paiement. Jamais en dessous de votre coût labo.</p>" +
+        '<div class="ad-promo-form"><label class="ad-field"><span>Remise</span><select id="ad-promo-percent">' +
+        sales.percents.map(function (p) { return '<option value="' + p + '"' + (p === 20 ? " selected" : "") + ">−" + p + " %</option>"; }).join("") +
+        '</select></label><label class="ad-field"><span>Jusqu\'au (inclus)</span><input type="date" id="ad-promo-end" value="' + defaultEnd + '" /></label>' +
+        '<button type="button" class="ad-btn ad-btn-primary" id="ad-promo-start">Lancer la promotion</button></div>';
+    }
+    if (sales.cart) {
+      html += '<p class="ad-hint">Panier en cours chez le client : <strong>' + sales.cart.items + " article" + (sales.cart.items > 1 ? "s" : "") +
+        "</strong> (mis à jour le " + esc(formatDate(sales.cart.updatedAt)) + ")" +
+        (sales.cart.remindedAt ? " · rappel envoyé le " + esc(formatDate(sales.cart.remindedAt)) : " · un rappel partira par e-mail après 24 h sans commande") + ".</p>";
+    }
+    return html + "</div>";
+  }
+
+  function wirePromoBlock(slug) {
+    var start = document.getElementById("ad-promo-start");
+    if (start) {
+      start.addEventListener("click", async function () {
+        var day = document.getElementById("ad-promo-end").value;
+        // Fin de la journée choisie, heure de Bruxelles approximée (23:59 locale).
+        var endsAt = Math.floor(new Date(day + "T23:59:00").getTime() / 1000);
+        try {
+          await api("POST", "/galleries/" + encodeURIComponent(slug) + "/promo", {
+            percent: Number(document.getElementById("ad-promo-percent").value), endsAt: endsAt,
+          });
+          toast("Promotion lancée : les prix remisés s'affichent chez le client.");
+          renderDetail(slug, true);
+        } catch (err) {
+          toast(err.message, true);
+        }
+      });
+    }
+    var stop = document.getElementById("ad-promo-stop");
+    if (stop) {
+      stop.addEventListener("click", async function () {
+        try {
+          await api("POST", "/galleries/" + encodeURIComponent(slug) + "/promo", { percent: 0 });
+          toast("Promotion arrêtée.");
+          renderDetail(slug, true);
+        } catch (err) {
+          toast(err.message, true);
+        }
+      });
+    }
+    var send = document.getElementById("ad-promo-send");
+    if (send) {
+      send.addEventListener("click", async function () {
+        send.disabled = true;
+        try {
+          await api("POST", "/galleries/" + encodeURIComponent(slug) + "/promo/send");
+          toast("Promotion annoncée au client par e-mail.");
+          renderDetail(slug, true);
+        } catch (err) {
+          toast(err.message, true);
+          send.disabled = false;
+        }
+      });
+    }
   }
 
   // Une ligne par produit de la boutique : seul le prix et l'activation se
@@ -1863,22 +2934,8 @@
       '<p class="ad-hint">Comment les photos s\'affichent chez le client — à choisir selon le type de séance.</p>' +
       '<div class="ad-layout-options" id="ad-layout-options">' + layoutOptionsHtml(data.gallery) + "</div>" +
       "</section>" +
-      '<section class="ad-music">' +
-      '<div class="ad-section-header"><h3>Musique d\'ambiance</h3></div>' +
-      '<p class="ad-hint">Un morceau (MP3, 15 Mo maximum) joué en boucle chez le client. Lancé automatiquement en mise en page « Défilement », proposé en pause dans les autres — le client garde toujours la main.</p>' +
-      '<p class="ad-music-state" id="ad-music-state">' +
-      (data.gallery.music_name
-        ? "Piste actuelle : <strong>" + esc(data.gallery.music_name) + "</strong>"
-        : '<span class="ad-hint">Aucune musique pour cette galerie.</span>') +
-      "</p>" +
-      '<div class="ad-bg-custom">' +
-      '<label class="ad-btn">' + (data.gallery.music_name ? "Remplacer le MP3" : "Importer un MP3") +
-      '<input type="file" id="ad-music-file-input" accept="audio/mpeg,.mp3" hidden /></label>' +
-      (data.gallery.music_name
-        ? '<button type="button" class="ad-btn" id="ad-music-remove">Retirer la musique</button>'
-        : "") +
-      "</div>" +
-      "</section>" +
+      musicSectionHtml(data.gallery) +
+      deliverySectionHtml(data.gallery) +
       gallerySectionShopHtml(data) +
       '<section class="ad-dropzone" id="ad-dropzone">' +
       '<p><strong>Glissez vos photos ici</strong>, ou</p>' +
@@ -2049,6 +3106,9 @@
         renderDetail(slug, true);
       }
     });
+    wireMusicSection(slug, data.gallery);
+    wireDeliverySection(slug);
+    wirePromoBlock(slug);
     var shopToggle = document.getElementById("ad-gallery-shop-toggle");
     if (shopToggle) {
       shopToggle.addEventListener("change", async function () {
@@ -2296,6 +3356,7 @@
           studioName: form.studioName.value.trim(),
           firstName: form.firstName.value.trim(),
           lastName: form.lastName.value.trim(),
+          acceptTerms: form.acceptTerms.checked,
         }),
       });
       var data = await response.json().catch(function () { return {}; });
@@ -2419,7 +3480,10 @@
     var match = /^#\/g\/(.+)$/.exec(location.hash);
     if (match) renderDetail(decodeURIComponent(match[1]), true);
     else if (location.hash === "#/detect") renderDetect(true);
+    else if (location.hash === "#/ventes") renderSales(true);
+    else if (location.hash === "#/portfolio") renderPortfolio(true);
     else if (location.hash.indexOf("#/facturation") === 0) renderBilling(true);
+    else if (location.hash.indexOf("#/abonnement") === 0) renderSubscription(true);
     else if (location.hash === "#/parametres") renderSettings(true);
     else if (location.hash === "#/boutique") renderShop(true);
     else if (location.hash === "#/proprietaire") renderOwner(true);

@@ -12,6 +12,9 @@ import { json, fail } from "./http.js";
 import { authenticatePhotographer } from "./authPhotographer.js";
 import { supplementFor } from "./admin.js";
 import { runReminders } from "./reminders.js";
+import { handleOwnerMusic } from "./music.js";
+import { runSalesReminders } from "./campaigns.js";
+import { shopState } from "./shop.js";
 
 async function requireOwner(env, photographerId) {
   if (!env.OWNER_EMAIL) return null;
@@ -127,7 +130,15 @@ export async function handleOwner(request, env, path) {
   if (action === "reminders" && parts[3] === "run" && parts.length === 4 && request.method === "POST") {
     const owner = await requireOwner(env, photographerId);
     if (!owner) return fail(403, "Accès réservé");
-    return json(await runReminders(env));
+    const result = await runReminders(env);
+    const sales = await runSalesReminders(env, shopState);
+    return json({ ...result, sent: [...result.sent, ...sales.sent] });
+  }
+  // Bibliothèque musicale commune : ajout et retrait de morceaux.
+  if (action === "music") {
+    const owner = await requireOwner(env, photographerId);
+    if (!owner) return fail(403, "Accès réservé");
+    return handleOwnerMusic(request, env, parts);
   }
   return fail(404, "Route inconnue");
 }
