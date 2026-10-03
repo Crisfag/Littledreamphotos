@@ -8,6 +8,7 @@
 // figée, l'envoi au labo et le suivi.
 
 import { json, fail } from "./http.js";
+import { hasFeature, featureRefusal } from "./subscription.js";
 import { randomBytes, b64url } from "./auth.js";
 import { createCheckoutSession } from "./stripe.js";
 import { createInvoiceForPayment, formatEuros } from "./invoices.js";
@@ -376,6 +377,10 @@ async function catalogueAvailability(request, env, photographerId) {
 async function setGalleryShop(request, env, gallery) {
   const body = await request.json().catch(() => null);
   if (!body || typeof body.enabled !== "boolean") return fail(400, "Requête invalide");
+  if (body.enabled) {
+    const photographer = await photographerRow(env, gallery.photographer_id);
+    if (!hasFeature(env, photographer, "shop")) return featureRefusal("shop");
+  }
   await env.DB.prepare("UPDATE galleries SET shop_enabled = ? WHERE id = ?").bind(body.enabled ? 1 : 0, gallery.id).run();
   return json({ ok: true, enabled: body.enabled });
 }
@@ -460,6 +465,9 @@ async function shopState(env, gallery) {
   if (!gallery.shop_enabled) return null;
   const photographer = await photographerRow(env, gallery.photographer_id);
   if (!photographer?.prodigi_api_key_enc) return null;
+  // Boutique réservée aux formules qui l'incluent : fermée côté client dès
+  // que l'abonnement ne la couvre plus.
+  if (!hasFeature(env, photographer, "shop")) return null;
   if (!photographer.stripe_account_id || !photographer.stripe_charges_enabled) return null;
   const products = (await listProducts(env, photographer.id)).filter((p) => p.active);
   if (!products.length) return null;

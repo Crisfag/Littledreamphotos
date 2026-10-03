@@ -10,6 +10,7 @@
 // rien. Le site principal (www, apex) et les noms réservés ne sont jamais
 // interceptés : la requête passe telle quelle à l'hébergement habituel.
 
+import { hasFeature } from "./subscription.js";
 import { json, fail } from "./http.js";
 
 export const RESERVED_SUBDOMAINS = new Set([
@@ -48,9 +49,13 @@ export function studioSubdomainOf(hostname, env) {
 }
 
 export async function studioBySubdomain(env, subdomain) {
-  return env.DB.prepare("SELECT id, studio_name, subdomain FROM photographers WHERE subdomain = ?")
+  const studio = await env.DB.prepare("SELECT id, studio_name, subdomain, email, plan, plan_status FROM photographers WHERE subdomain = ?")
     .bind(subdomain)
     .first();
+  // L'adresse à son nom fait partie de la formule Pro : sans elle (abonnement
+  // résilié…), le sous-domaine ne mène plus nulle part, comme un inconnu.
+  if (!studio || !hasFeature(env, studio, "subdomain")) return null;
+  return { id: studio.id, studio_name: studio.studio_name, subdomain: studio.subdomain };
 }
 
 const PAGE_FILES = {

@@ -3,6 +3,7 @@
 // jamais besoin d'une session (voir plus bas) : même logique que
 // forgot-password/reset-password dans authPhotographer.js.
 
+import { hasFeature, featureRefusal } from "./subscription.js";
 import { json, fail } from "./http.js";
 import { normalizeSubdomain } from "./studio.js";
 import { hashPassword, verifyPassword, randomBytes, b64url, hashToken } from "./auth.js";
@@ -223,6 +224,8 @@ export async function updateSubdomain(request, env, photographerId) {
   const { subdomain } = normalized;
 
   if (subdomain) {
+    const photographer = await env.DB.prepare("SELECT * FROM photographers WHERE id = ?").bind(photographerId).first();
+    if (!hasFeature(env, photographer, "subdomain")) return featureRefusal("subdomain");
     const taken = await env.DB.prepare("SELECT id FROM photographers WHERE subdomain = ? AND id != ?")
       .bind(subdomain, photographerId)
       .first();

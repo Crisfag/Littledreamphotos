@@ -15,7 +15,7 @@ import { readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createTestAccount } from "./lib/testAccount.mjs";
+import { createTestAccount, setTestPlan } from "./lib/testAccount.mjs";
 
 const BASE = process.env.ADMIN_BASE || "http://127.0.0.1:4000";
 const API = process.env.GALERIE_API || "http://127.0.0.1:8788";
@@ -88,6 +88,9 @@ check("l'inscription exige d'accepter les conditions et la politique de confiden
 await page.check('#ad-signup-form [name="acceptTerms"]');
 await page.click("#ad-signup-submit");
 await page.waitForSelector("#ad-new-gallery", { timeout: 10000 });
+// Formule Pro (comme après un abonnement) : boutique, adresse à son nom et
+// galeries sans limite sont testées plus bas.
+await setTestPlan(API, email, "pro");
 check("créer un compte depuis le formulaire connecte automatiquement au tableau de bord",
       await page.isVisible("#ad-new-gallery"));
 check("l'onglet Admin est masqué pour un compte qui n'est pas la propriétaire",
@@ -947,6 +950,16 @@ await page.click("#ad-login-submit");
 await page.waitForSelector("#ad-new-gallery", { timeout: 10000 });
 check("le compte créé depuis le formulaire d'inscription se reconnecte ensuite normalement",
       await page.isVisible("#ad-new-gallery"));
+
+/* ---------- Abonnement ---------- */
+
+await page.click("#ad-tab-subscription");
+await page.waitForSelector(".ad-plans", { timeout: 10000 });
+check("l'onglet Abonnement présente les 3 formules, la formule actuelle et l'utilisation",
+      (await page.locator(".ad-plan").count()) === 3 && (await page.textContent(".ad-plan-name")) === "Pro" &&
+      (await page.locator(".ad-plan-current", { hasText: "Pro" }).count()) === 1 &&
+      (await page.textContent(".ad-plan-usage")).includes("galerie") &&
+      (await page.evaluate(() => location.hash)) === "#/abonnement");
 
 /* ---------- Mes données : export puis suppression du compte ---------- */
 

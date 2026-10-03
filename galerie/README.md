@@ -403,6 +403,27 @@ Le tableau de bord s'organise en trois onglets, chacun avec son propre lien
   d'accès aux galeries sont purgés automatiquement après 13 mois (passe
   quotidienne du Worker). Ces textes sont des modèles sérieux mais ne
   remplacent pas l'avis d'un juriste.
+- **Abonnements Holypixx** : trois formules (`worker/src/subscription.js`,
+  prix à ajuster au même endroit et dans la section Tarifs de
+  `web/index.html`). *Découverte* (gratuite) : 3 galeries actives ;
+  *Essentiel* (12 €/mois) : 25 galeries actives et la boutique de tirages ;
+  *Pro* (24 €/mois) : galeries illimitées, boutique et adresse à son nom.
+  Une galerie expirée ne compte plus. Onglet *Abonnement* de l'admin :
+  formule actuelle, utilisation, souscription par une page de paiement
+  Stripe (abonnement mensuel sur le compte plateforme, prix créé à la volée),
+  puis « Gérer mon abonnement » ouvre le portail client Stripe (carte,
+  changement de formule, factures, résiliation). La formule n'est accordée
+  que tant que Stripe dit l'abonnement actif (ou en période de grâce après
+  un échec de prélèvement) ; résilié, le compte repasse en gratuit : plus de
+  nouvelle galerie au-delà de la limite, boutique fermée côté client,
+  sous-domaine qui ne mène plus nulle part. Le compte propriétaire a tout,
+  sans abonnement. **Réglages Stripe nécessaires** (une seule fois, dans le
+  tableau de bord Stripe) : ajouter au webhook du compte plateforme
+  (`STRIPE_WEBHOOK_SECRET_PLATFORM`) les évènements
+  `customer.subscription.created`, `customer.subscription.updated` et
+  `customer.subscription.deleted` (en plus de `checkout.session.completed`) ;
+  enregistrer une configuration du *portail client* (Paramètres → Billing →
+  Portail client), en y autorisant le changement de formule si souhaité.
 - **Forfait et suppléments** : le nombre de photos déjà payées par le
   client (optionnel — sans forfait défini, aucun supplément n'est jamais
   calculé) et le prix de chaque photo au-delà. Le supplément se calcule
@@ -768,7 +789,7 @@ des tuiles, refus du mauvais mot de passe, absence de toute balise `<img>`,
 neutralisation du menu contextuel et de la copie, voile sur « Impr. écran » et
 sur perte de focus, consignation au journal.
 
-**API du Worker** — 347 vérifications contre le vrai moteur Cloudflare (D1 et R2
+**API du Worker** — 356 vérifications contre le vrai moteur Cloudflare (D1 et R2
 émulés localement par `wrangler dev`) : comptes photographes (inscription,
 connexion, session, mot de passe oublié — même réponse générique qu'un
 compte existe ou non), cloisonnement strict entre comptes (un photographe ne
@@ -840,7 +861,14 @@ fichier. RGPD : export complet (compte, galeries, photos, clients,
 acceptation des conditions horodatée et versionnée) sans aucun secret,
 aucune acceptation enregistrée sans case cochée, suppression du compte
 refusée sans confirmation ou avec un mauvais mot de passe, puis compte,
-galeries, photos et accès clients effacés. Bibliothèque musicale : ajout réservé à la propriétaire
+galeries, photos et accès clients effacés. Abonnements : nouveau compte en
+formule gratuite avec les 3 formules proposées, 4e galerie active refusée
+(402) avec la marche à suivre, place libérée par une suppression, boutique
+et adresse à son nom refusées (402), souscription refusée pour une formule
+inconnue ou sans Stripe configuré (503), rien à gérer sans abonnement ;
+Essentiel actif : galeries et boutique débloquées mais pas l'adresse à son
+nom, formule conservée en `past_due`, retour au gratuit une fois résilié ;
+compte propriétaire illimité. Bibliothèque musicale : ajout réservé à la propriétaire
 (403 sinon), titre et ambiance obligatoires, liste visible de chaque
 photographe, écoute d'un morceau (lecture partielle comprise), morceau
 inconnu non servi ; choix d'un morceau (refusé depuis un autre compte) qui
@@ -969,7 +997,7 @@ appliqué sinon, HT + TVA se recomposant exactement au centime près en TTC
 même sur un montant qui ne se divise pas rond, et un vrai PDF valide généré
 aussi bien avec des coordonnées complètes qu'avec des champs vides.
 
-**Interface d'administration** — 128 vérifications dans un vrai navigateur,
+**Interface d'administration** — 129 vérifications dans un vrai navigateur,
 contre le vrai Worker local : demande de lien de réinitialisation de mot de
 passe (message générique affiché), création de compte et connexion depuis
 le formulaire (pas de session présupposée), barre d'onglets Galeries /
@@ -1022,7 +1050,8 @@ refusé, un lien Spotify devient le lecteur de la galerie. Livraison : rien
 après confirmation, fermeture d'un clic. Inscription refusée sans
 acceptation des conditions ; export de « Mes données » téléchargé sans
 aucun secret ; suppression du compte refusée avec un mauvais mot de passe,
-puis compte supprimé (reconnexion impossible).
+puis compte supprimé (reconnexion impossible). Onglet Abonnement : 3 formules,
+formule actuelle, utilisation et lien propre dans l'URL.
 Codes couleur et repères posés par le client (via l'API, comme le ferait sa
 page) : pastille jaune et compteur de repères sur la vignette, légende de
 la galerie, photo ouverte en grand avec le repère dessus, sa note listée et
@@ -1087,6 +1116,14 @@ chez Spotify avant le clic, lecteur officiel ouvert sur la bonne playlist,
 « Réduire » qui le garde, « Fermer » qui le retire, aucun bouton sans
 musique, aucune exception.
 
+**Abonnements (logique)** — 12 vérifications sans réseau ni D1 : formule
+effective selon le statut Stripe (active, essai, période de grâce ; tout le
+reste retombe en gratuit), formule inconnue ignorée, propriétaire illimitée,
+fonctionnalités par formule, formule retrouvée par métadonnées ou par prix,
+et traitement des évènements Stripe sur une base factice (paiement de
+l'abonnement, paiement d'autre chose ignoré, mise à jour, résiliation, ancien
+abonnement qui n'écrase pas un plus récent).
+
 **Livraison côté client** — 5 vérifications dans un vrai navigateur :
 aucun encart tant que la livraison est fermée, encart « Vos photos sont
 prêtes » avec nombre et poids une fois ouverte, ZIP enregistré sous le nom
@@ -1137,6 +1174,7 @@ node tests/reminders.test.mjs         # décision des relances automatiques, san
 node tests/prodigi.test.mjs           # boutique de tirages (Prodigi), sans réseau
 node tests/music.test.mjs             # liens Spotify / Deezer / SoundCloud / YouTube, sans réseau
 node tests/delivery.test.mjs          # ZIP de livraison (en-têtes, CRC, noms), sans réseau
+node tests/subscription.test.mjs      # formules d'abonnement et webhook Stripe, sans réseau
 node tests/stripe.test.mjs            # signature de webhook + encodage des sessions Stripe, sans réseau
 node tests/invoices.test.mjs          # calcul de TVA + génération du PDF de facture, sans réseau
 npm run dev:local                     # dans un autre terminal (Worker local sur le port 8788)

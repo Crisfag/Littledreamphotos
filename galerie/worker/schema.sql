@@ -18,6 +18,15 @@ CREATE TABLE IF NOT EXISTS photographers (
   -- confidentialité à l'inscription (epoch secondes) et version des textes.
   terms_accepted_at INTEGER,
   terms_version  TEXT NOT NULL DEFAULT '',
+  -- Abonnement Holypixx (voir worker/src/subscription.js) : formule
+  -- souscrite (free, essentiel, pro), statut Stripe de l'abonnement, fin de
+  -- la période en cours, résiliation programmée, identifiants Stripe.
+  plan           TEXT NOT NULL DEFAULT 'free',
+  plan_status    TEXT NOT NULL DEFAULT '',
+  plan_renews_at INTEGER,
+  plan_cancel_at_period_end INTEGER NOT NULL DEFAULT 0,
+  stripe_customer_id     TEXT NOT NULL DEFAULT '',
+  stripe_subscription_id TEXT NOT NULL DEFAULT '',
   -- Paiement en ligne des suppléments (Stripe Connect, comptes « Express ») :
   -- chaque photographe connecte son propre compte, l'argent lui arrive
   -- directement, jamais via un compte pivot. stripe_charges_enabled reflète
@@ -427,6 +436,12 @@ CREATE INDEX IF NOT EXISTS idx_email_changes_photographer ON email_changes(photo
 --   puis la table delivery_files (fin de ce fichier).
 --   ALTER TABLE photographers ADD COLUMN terms_accepted_at INTEGER;
 --   ALTER TABLE photographers ADD COLUMN terms_version TEXT NOT NULL DEFAULT '';
+--   ALTER TABLE photographers ADD COLUMN plan TEXT NOT NULL DEFAULT 'free';
+--   ALTER TABLE photographers ADD COLUMN plan_status TEXT NOT NULL DEFAULT '';
+--   ALTER TABLE photographers ADD COLUMN plan_renews_at INTEGER;
+--   ALTER TABLE photographers ADD COLUMN plan_cancel_at_period_end INTEGER NOT NULL DEFAULT 0;
+--   ALTER TABLE photographers ADD COLUMN stripe_customer_id TEXT NOT NULL DEFAULT '';
+--   ALTER TABLE photographers ADD COLUMN stripe_subscription_id TEXT NOT NULL DEFAULT '';
 
 -- Relances déjà envoyées, pour ne jamais relancer deux fois pour la même
 -- échéance : une ligne par galerie et par type (client_j7, client_j2,

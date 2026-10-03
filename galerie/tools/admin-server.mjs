@@ -593,6 +593,21 @@ async function handleApi(req, res, url) {
     }
   }
 
+  // /local/subscription — abonnement Holypixx du photographe. Les adresses
+  // de retour de Stripe pointent vers ce même tableau de bord.
+  if (parts[0] === "subscription") {
+    const back = `${isSecureRequest(req) ? "https" : "http"}://${req.headers.host}/#/abonnement`;
+    try {
+      if (parts.length === 1 && req.method === "GET") return json(res, 200, await client.request("GET", "/api/admin/subscription"));
+      if (parts.length === 2 && (parts[1] === "checkout" || parts[1] === "portal") && req.method === "POST") {
+        const body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
+        return json(res, 200, await client.request("POST", `/api/admin/subscription/${parts[1]}`, { plan: body.plan, returnUrl: back }));
+      }
+    } catch (err) {
+      return relayError(res, err, "L'abonnement n'a pas pu être traité");
+    }
+  }
+
   // POST /local/stripe/refresh — relit l'état réel du compte côté Stripe
   // (utile juste après l'onboarding : le webhook peut arriver après le retour).
   if (parts.length === 2 && parts[0] === "stripe" && parts[1] === "refresh" && req.method === "POST") {

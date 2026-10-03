@@ -73,6 +73,7 @@
       if (tab === "galleries") renderList();
       else if (tab === "billing") renderBilling();
       else if (tab === "shop") renderShop();
+      else if (tab === "subscription") renderSubscription();
       else if (tab === "settings") renderSettings();
       else if (tab === "owner") renderOwner();
     });
@@ -797,6 +798,114 @@
   // et même masqué, ce n'est qu'un confort d'affichage : chaque appel
   // /owner/* est revérifié côté serveur (voir worker/src/owner.js), jamais
   // sur la seule foi de ce qui est affiché ici.
+
+  /* ---------- Abonnement Holypixx ---------- */
+  // Formule du photographe (Découverte gratuite, Essentiel, Pro), payée
+  // chaque mois par Stripe Billing. Souscrire passe par une page de paiement
+  // Stripe ; changer de formule, de carte ou résilier, par le portail Stripe.
+
+  function planPrice(plan) {
+    return plan.priceCents ? formatEuros(plan.priceCents).replace(",00", "") + " / mois" : "Gratuit";
+  }
+
+  function planFeaturesHtml(plan) {
+    var items = [
+      plan.maxActiveGalleries === null ? "Galeries actives illimitées" : plan.maxActiveGalleries + " galeries actives",
+      "Protection, sélection, musique et livraison HD",
+      (plan.features.shop ? "✓ " : "— ") + "Boutique de tirages",
+      (plan.features.subdomain ? "✓ " : "— ") + "Vos galeries à votre nom",
+    ];
+    return '<ul class="ad-plan-features">' + items.map(function (t) { return "<li>" + esc(t) + "</li>"; }).join("") + "</ul>";
+  }
+
+  async function renderSubscription(skipHash) {
+    var returned = /abonnement=(merci|annule)/.exec(location.hash);
+    if (!skipHash && location.hash.indexOf("#/abonnement") !== 0) history.pushState(null, "", "#/abonnement");
+    if (returned) history.replaceState(null, "", "#/abonnement");
+    setActiveTab("subscription");
+    el.view.innerHTML = '<p class="ad-loading">Chargement…</p>';
+
+    var data;
+    try {
+      data = await api("GET", "/subscription");
+      // Retour de Stripe : le webhook peut arriver quelques secondes après.
+      if (returned && returned[1] === "merci" && data.plan.key === "free") {
+        await new Promise(function (r) { setTimeout(r, 2500); });
+        data = await api("GET", "/subscription");
+      }
+    } catch (err) {
+      toast(err.message, true);
+      return renderList();
+    }
+
+    var current = data.plan;
+    var status = "";
+    if (data.owner) status = "Compte propriétaire : toutes les fonctionnalités sont incluses.";
+    else if (current.key !== "free" && data.cancelAtPeriodEnd && data.renewsAt) status = "Résiliation programmée : votre formule reste active jusqu'au " + formatDate(data.renewsAt) + ".";
+    else if (current.key !== "free" && data.status === "past_due") status = "Le dernier prélèvement a échoué : mettez à jour votre carte depuis « Gérer mon abonnement ».";
+    else if (current.key !== "free" && data.renewsAt) status = "Prochain renouvellement le " + formatDate(data.renewsAt) + ".";
+    var usage = current.maxActiveGalleries === null
+      ? data.usage.activeGalleries + " galerie" + (data.usage.activeGalleries > 1 ? "s" : "") + " active" + (data.usage.activeGalleries > 1 ? "s" : "")
+      : data.usage.activeGalleries + " / " + current.maxActiveGalleries + " galeries actives";
+
+    var cards = data.plans.map(function (plan) {
+      var isCurrent = plan.key === current.key;
+      var action;
+      if (isCurrent) action = '<span class="ad-badge ad-badge-selected">✓ Votre formule</span>';
+      else if (data.owner) action = "";
+      else if (data.canManage) action = '<button type="button" class="ad-btn" data-portal>Changer de formule</button>';
+      else if (plan.key === "free") action = "";
+      else action = '<button type="button" class="ad-btn ad-btn-primary" data-subscribe="' + esc(plan.key) + '"' + (data.stripeConfigured ? "" : " disabled") + ">Choisir " + esc(plan.label) + "</button>";
+      return (
+        '<article class="ad-plan' + (isCurrent ? " ad-plan-current" : "") + (plan.key === "pro" ? " ad-plan-featured" : "") + '">' +
+        "<h3>" + esc(plan.label) + "</h3>" +
+        '<p class="ad-plan-price">' + esc(planPrice(plan)) + "</p>" +
+        '<p class="ad-hint">' + esc(plan.pitch) + "</p>" +
+        planFeaturesHtml(plan) + action + "</article>"
+      );
+    }).join("");
+
+    el.view.innerHTML =
+      '<header class="ad-detail-header"><div><h2>Abonnement</h2>' +
+      '<p class="ad-hint">Votre formule Holypixx. Sans engagement : résiliable à tout moment, effet à la fin du mois payé.</p>' +
+      "</div></header>" +
+      (returned ? '<p class="ad-banner' + (returned[1] === "merci" ? "" : " ad-banner-muted") + '">' +
+        (returned[1] === "merci" ? "Merci ! Votre abonnement est enregistré." : "Paiement annulé : votre formule n'a pas changé.") + "</p>" : "") +
+      '<section class="ad-plan-summary"><div><p class="ad-hint">Formule actuelle</p><p class="ad-plan-name">' + esc(current.label) + "</p>" +
+      (status ? '<p class="ad-hint">' + esc(status) + "</p>" : "") + "</div>" +
+      '<div><p class="ad-hint">Utilisation</p><p class="ad-plan-usage">' + esc(usage) + "</p></div>" +
+      (data.canManage ? '<button type="button" class="ad-btn" data-portal>Gérer mon abonnement</button>' : "") +
+      "</section>" +
+      (data.stripeConfigured || data.owner ? "" : '<p class="ad-hint">Le paiement des abonnements n\'est pas encore ouvert sur la plateforme.</p>') +
+      '<div class="ad-plans">' + cards + "</div>" +
+      '<p class="ad-hint">Prix TTC. Paiement sécurisé par Stripe ; factures disponibles dans « Gérer mon abonnement ». ' +
+      'Voir les <a href="https://www.holypixx.com/conditions.html" target="_blank" rel="noopener">conditions d\'utilisation</a>.</p>';
+
+    el.view.querySelectorAll("[data-subscribe]").forEach(function (btn) {
+      btn.addEventListener("click", async function () {
+        btn.disabled = true;
+        try {
+          var result = await api("POST", "/subscription/checkout", { plan: btn.getAttribute("data-subscribe") });
+          window.location.href = result.url;
+        } catch (err) {
+          toast(err.message, true);
+          btn.disabled = false;
+        }
+      });
+    });
+    el.view.querySelectorAll("[data-portal]").forEach(function (btn) {
+      btn.addEventListener("click", async function () {
+        btn.disabled = true;
+        try {
+          var result = await api("POST", "/subscription/portal", {});
+          window.location.href = result.url;
+        } catch (err) {
+          toast(err.message, true);
+          btn.disabled = false;
+        }
+      });
+    });
+  }
 
   /* ---------- Livraison des photos définitives ---------- */
   // Fichiers finaux (haute définition, sans filigrane) que le client
@@ -2849,6 +2958,7 @@
     if (match) renderDetail(decodeURIComponent(match[1]), true);
     else if (location.hash === "#/detect") renderDetect(true);
     else if (location.hash.indexOf("#/facturation") === 0) renderBilling(true);
+    else if (location.hash.indexOf("#/abonnement") === 0) renderSubscription(true);
     else if (location.hash === "#/parametres") renderSettings(true);
     else if (location.hash === "#/boutique") renderShop(true);
     else if (location.hash === "#/proprietaire") renderOwner(true);

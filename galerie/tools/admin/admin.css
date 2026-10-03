@@ -703,3 +703,20 @@ h3 { font-size: 1.15rem; margin-bottom: .9rem; }
 .ad-danger-zone { margin-top: 1.2rem; border-top: 1px solid var(--line); padding-top: .9rem; }
 .ad-danger-zone summary { cursor: pointer; color: var(--danger); font-size: .9rem; }
 .ad-danger-zone form { margin-top: .8rem; max-width: 420px; }
+
+/* ---------- Abonnement ---------- */
+.ad-plan-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem 2.5rem; }
+.ad-plan-summary p { margin: 0; }
+.ad-plan-name { font-family: var(--serif); font-size: 1.6rem; color: var(--ink); }
+.ad-plan-usage { font-size: 1.05rem; color: var(--ink); }
+.ad-plan-summary .ad-btn { margin-left: auto; }
+.ad-plans { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin: 1.2rem 0; }
+.ad-plan { display: flex; flex-direction: column; gap: .5rem; padding: 1.3rem; background: #fff; border: 1px solid var(--line); border-radius: var(--radius); }
+.ad-plan h3 { margin: 0; font-size: 1.4rem; }
+.ad-plan-price { margin: 0; font-size: 1.15rem; color: var(--rose-deep); font-weight: 500; }
+.ad-plan-featured { border-color: var(--rose); box-shadow: 0 14px 30px -22px rgba(156, 111, 97, .7); }
+.ad-plan-current { background: var(--ivory); }
+.ad-plan-features { list-style: none; margin: .2rem 0 .6rem; padding: 0; font-size: .88rem; color: var(--charcoal); display: grid; gap: .3rem; }
+.ad-plan .ad-btn, .ad-plan .ad-badge { margin-top: auto; align-self: flex-start; }
+.ad-banner { padding: .8rem 1rem; border-radius: var(--radius); background: #eaf4ed; color: var(--success); margin: 0 0 1rem; }
+.ad-banner-muted { background: var(--sand); color: var(--charcoal); }

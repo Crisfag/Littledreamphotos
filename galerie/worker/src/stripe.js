@@ -134,6 +134,39 @@ export function createCheckoutSession(env, connectedAccountId, { label, unitAmou
   });
 }
 
+// Abonnement Holypixx du photographe (formule mensuelle), payé à la
+// PLATEFORME : pas de transfert, pas de compte connecté. Le prix est créé à
+// la volée (price_data + recurring). La formule voyage dans les métadonnées
+// de la session et de l'abonnement, relues par le webhook.
+export function createSubscriptionCheckout(env, { photographerId, email, customerId, planKey, label, unitAmountCents, successUrl, cancelUrl }) {
+  return stripeRequest(env, "POST", "/checkout/sessions", {
+    mode: "subscription",
+    line_items: [{
+      price_data: {
+        currency: "eur",
+        unit_amount: unitAmountCents,
+        recurring: { interval: "month" },
+        product_data: { name: label },
+      },
+      quantity: 1,
+    }],
+    client_reference_id: photographerId,
+    ...(customerId ? { customer: customerId } : { customer_email: email }),
+    metadata: { photographer_id: photographerId, plan: planKey },
+    subscription_data: { metadata: { photographer_id: photographerId, plan: planKey } },
+    allow_promotion_codes: true,
+    success_url: successUrl,
+    cancel_url: cancelUrl,
+  });
+}
+
+// Portail client Stripe : changer de carte, de formule, télécharger ses
+// factures, résilier. Nécessite d'avoir enregistré une fois la
+// configuration du portail dans le tableau de bord Stripe.
+export function createBillingPortalSession(env, { customerId, returnUrl }) {
+  return stripeRequest(env, "POST", "/billing_portal/sessions", { customer: customerId, return_url: returnUrl });
+}
+
 // Relit une session — utilisée pour vérifier son statut si jamais le webhook
 // tardait, jamais comme seule source de vérité (voir schema.sql). Vit sur la
 // plateforme (charge de destination, voir plus haut), donc sans Stripe-Account.

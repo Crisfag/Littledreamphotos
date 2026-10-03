@@ -13,6 +13,7 @@ import { listLibrary, setMusicChoice, musicForAdmin } from "./music.js";
 import { handleDeliveryAdmin, deliveryForAdmin } from "./delivery.js";
 import { sendDeliveryReady } from "./notify.js";
 import { exportAccount, deleteAccount } from "./privacy.js";
+import { galleryQuotaRefusal, subscriptionForAdmin, startSubscriptionCheckout, openBillingPortal } from "./subscription.js";
 import { galleryUrlFor } from "./reminders.js";
 import { authenticatePhotographer } from "./authPhotographer.js";
 import { connectStripe, refreshStripeStatus, setBillingProfile } from "./billing.js";
@@ -99,6 +100,10 @@ async function createGallery(request, env, photographerId) {
   if (!SLUG_RE.test(slug)) {
     return fail(400, "Slug invalide (minuscules, chiffres et tirets, 2 à 61 caractères)");
   }
+  // Nombre de galeries actives limité selon la formule (voir subscription.js).
+  const owner = await env.DB.prepare("SELECT * FROM photographers WHERE id = ?").bind(photographerId).first();
+  const quotaRefusal = await galleryQuotaRefusal(env, owner);
+  if (quotaRefusal) return quotaRefusal;
   const password = String(body.password || "");
   if (password.length < 8) return fail(400, "Mot de passe trop court (8 caractères minimum)");
 
@@ -812,6 +817,14 @@ export async function handleAdmin(request, env, ctx, path) {
   // confirmation), présentation par défaut des futures galeries.
   if (section === "account" && parts.length === 3 && request.method === "POST") {
     return updateStudioName(request, env, photographerId);
+  }
+  // Abonnement Holypixx du photographe (formules, paiement mensuel Stripe).
+  if (section === "subscription") {
+    const photographer = await env.DB.prepare("SELECT * FROM photographers WHERE id = ?").bind(photographerId).first();
+    if (!photographer) return fail(401, "Session invalide");
+    if (parts.length === 3 && request.method === "GET") return subscriptionForAdmin(env, photographer);
+    if (parts.length === 4 && parts[3] === "checkout" && request.method === "POST") return startSubscriptionCheckout(request, env, photographer);
+    if (parts.length === 4 && parts[3] === "portal" && request.method === "POST") return openBillingPortal(request, env, photographer);
   }
   // Droits RGPD : export de toutes les données du compte, suppression définitive.
   if (section === "account" && parts[3] === "export" && parts.length === 4 && request.method === "GET") {

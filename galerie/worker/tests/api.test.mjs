@@ -24,6 +24,23 @@ async function signup(email, password) {
   return { response, data };
 }
 
+// Formule d'abonnement posée directement dans la base locale (comme le
+// ferait le webhook Stripe) : les comptes de test passent en Pro pour ne pas
+// buter sur les limites de la formule gratuite, testées à part plus bas.
+const { execFileSync: execSync } = await import("node:child_process");
+const { fileURLToPath: pathOf } = await import("node:url");
+const WORKER_ROOT = new URL("..", import.meta.url);
+async function setPlan(email, plan, status = "active") {
+  execSync("npx", ["wrangler", "d1", "execute", "galerie-protegee", "--local", "--command",
+    `UPDATE photographers SET plan = '${plan}', plan_status = '${status}' WHERE email = '${email}'`], { cwd: pathOf(WORKER_ROOT), stdio: "pipe" });
+  for (let i = 0; i < 20; i++) {
+    try {
+      if ((await fetch(`${BASE}/health`, { headers: { connection: "close" } })).ok) return;
+    } catch { /* pas encore prêt */ }
+    await new Promise((r) => setTimeout(r, 500));
+  }
+}
+
 function adminClient(token) {
   return (method, path, body, raw = false) =>
     fetch(BASE + path, {
@@ -42,6 +59,7 @@ const EMAIL = `photographe-${RUN}@test.invalid`;
 const PASSWORD = "mot-de-passe-de-test-1234";
 
 const { response: signupResponse, data: signupData } = await signup(EMAIL, PASSWORD);
+if (signupResponse.status === 201) await setPlan(EMAIL, "pro");
 check("l'inscription crée un compte et ouvre une session",
       signupResponse.status === 201 && Boolean(signupData.token) && signupData.photographer?.email === EMAIL);
 
@@ -682,6 +700,7 @@ check("les empreintes sont consultables",
 
 const peerEmail = `voisin-${RUN}@test.invalid`;
 const { data: peerSignup } = await signup(peerEmail, "mot-de-passe-du-voisin-1234");
+await setPlan(peerEmail, "pro");
 const peerAdmin = adminClient(peerSignup.token);
 
 const foreignList = await (await peerAdmin("GET", "/api/admin/galleries")).json();
@@ -1617,6 +1636,57 @@ const peerRemove = await peerAdmin("DELETE", `${deliveryBase}/files/${file2.id}`
 check("le photographe retire un fichier (un autre compte ne peut pas)",
       deliveryRemoved.ok && peerRemove.status === 404 && (await (await admin("GET", deliveryBase)).json()).files.length === 1);
 await admin("DELETE", `/api/admin/galleries/${deliverySlug}`);
+
+/* ---------- Abonnements : formule gratuite, limites, formules payées ---------- */
+
+const freeEmail = `gratuit-${RUN}@test.invalid`;
+const freeSignup = (await signup(freeEmail, "mot-de-passe-gratuit-1234")).data;
+const free = adminClient(freeSignup.token);
+const freeSub = await (await free("GET", "/api/admin/subscription")).json();
+check("un nouveau compte démarre en formule Découverte (gratuite), avec les 3 formules proposées",
+      freeSub.plan?.key === "free" && freeSub.plan.maxActiveGalleries === 3 && freeSub.usage?.activeGalleries === 0 &&
+      freeSub.plans?.map((p) => p.key).join(",") === "free,essentiel,pro" && freeSub.canManage === false,
+      JSON.stringify(freeSub.plan));
+for (let i = 1; i <= 3; i++) {
+  await free("POST", "/api/admin/galleries", { slug: `${SLUG}-gratuit-${i}`, password: "mot-de-passe-solide", title: `Gratuite ${i}` });
+}
+const fourth = await free("POST", "/api/admin/galleries", { slug: `${SLUG}-gratuit-4`, password: "mot-de-passe-solide", title: "Gratuite 4" });
+const fourthBody = await fourth.json();
+check("la 4e galerie active est refusée en formule gratuite, avec la marche à suivre (402)",
+      fourth.status === 402 && /Abonnement/.test(fourthBody.error || ""), fourthBody.error);
+const expiredOk = await (async () => {
+  await free("DELETE", `/api/admin/galleries/${SLUG}-gratuit-3`);
+  return (await free("POST", "/api/admin/galleries", { slug: `${SLUG}-gratuit-4`, password: "mot-de-passe-solide", title: "Gratuite 4" })).status;
+})();
+check("supprimer une galerie libère une place", expiredOk === 201);
+const freeShop = await free("POST", `/api/admin/galleries/${SLUG}-gratuit-1/shop`, { enabled: true });
+const freeSubdomain = await free("POST", "/api/admin/account/subdomain", { subdomain: `gratuit-${RUN}`.slice(0, 30) });
+check("la boutique et l'adresse à son nom sont réservées aux formules qui les incluent (402)",
+      freeShop.status === 402 && freeSubdomain.status === 402 && /Essentiel/.test((await freeShop.json()).error || ""));
+const badPlan = await free("POST", "/api/admin/subscription/checkout", { plan: "free", returnUrl: "http://localhost/" });
+const noStripe = await free("POST", "/api/admin/subscription/checkout", { plan: "pro", returnUrl: "http://localhost/" });
+const noPortal = await free("POST", "/api/admin/subscription/portal", { returnUrl: "http://localhost/" });
+check("souscrire : formule inconnue refusée, Stripe non configuré signalé clairement, rien à gérer sans abonnement",
+      badPlan.status === 400 && noStripe.status === 503 && noPortal.status === 409, `${badPlan.status} ${noStripe.status} ${noPortal.status}`);
+
+await setPlan(freeEmail, "essentiel", "active");
+const essentielSub = await (await free("GET", "/api/admin/subscription")).json();
+const essentielShop = await free("POST", `/api/admin/galleries/${SLUG}-gratuit-1/shop`, { enabled: true });
+const essentielSubdomain = await free("POST", "/api/admin/account/subdomain", { subdomain: `gratuit-${RUN}`.slice(0, 30) });
+const essentielFifth = await free("POST", "/api/admin/galleries", { slug: `${SLUG}-gratuit-5`, password: "mot-de-passe-solide", title: "Gratuite 5" });
+check("abonnement Essentiel actif : plus de galeries et la boutique, mais pas encore l'adresse à son nom",
+      essentielSub.plan?.key === "essentiel" && essentielShop.ok && essentielFifth.status === 201 && essentielSubdomain.status === 402);
+await setPlan(freeEmail, "essentiel", "past_due");
+check("pendant que Stripe retente un prélèvement (past_due), la formule reste acquise",
+      (await (await free("GET", "/api/admin/subscription")).json()).plan?.key === "essentiel");
+await setPlan(freeEmail, "free", "canceled");
+const afterCancel = await (await free("GET", "/api/admin/subscription")).json();
+const afterCancelSixth = await free("POST", "/api/admin/galleries", { slug: `${SLUG}-gratuit-6`, password: "mot-de-passe-solide", title: "Gratuite 6" });
+check("abonnement résilié : retour à la formule gratuite (plus de nouvelle galerie au-delà de 3)",
+      afterCancel.plan?.key === "free" && afterCancelSixth.status === 402);
+const ownerSub = await (await ownerClient("GET", "/api/admin/subscription")).json();
+check("le compte propriétaire a toutes les fonctionnalités, sans abonnement", ownerSub.owner === true && ownerSub.plan?.key === "pro");
+for (const n of [1, 2, 4, 5]) await free("DELETE", `/api/admin/galleries/${SLUG}-gratuit-${n}`);
 
 /* ---------- Droits RGPD : consentement, export, suppression du compte ---------- */
 
