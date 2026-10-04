@@ -3,6 +3,7 @@
 // photographe, et directement depuis index.js pour le webhook Stripe
 // (jamais de session applicative : la signature en tient lieu).
 
+import { handleSubscriptionEvent } from "./subscription.js";
 import { json, fail } from "./http.js";
 import { handlePrintPaymentConfirmed } from "./shop.js";
 import { createConnectAccount, createAccountLink, retrieveAccount, verifyStripeSignature } from "./stripe.js";
@@ -120,6 +121,9 @@ export async function handleStripeWebhook(request, env) {
   } catch {
     return fail(400, "Charge utile illisible");
   }
+
+  // Abonnements Holypixx des photographes (voir subscription.js).
+  if (await handleSubscriptionEvent(env, event)) return json({ received: true });
 
   if (event.type === "account.updated") {
     const account = event.data && event.data.object;

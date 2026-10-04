@@ -10,6 +10,7 @@
 // rien. Le site principal (www, apex) et les noms réservés ne sont jamais
 // interceptés : la requête passe telle quelle à l'hébergement habituel.
 
+import { hasFeature } from "./subscription.js";
 import { json, fail } from "./http.js";
 
 export const RESERVED_SUBDOMAINS = new Set([
@@ -48,9 +49,13 @@ export function studioSubdomainOf(hostname, env) {
 }
 
 export async function studioBySubdomain(env, subdomain) {
-  return env.DB.prepare("SELECT id, studio_name, subdomain FROM photographers WHERE subdomain = ?")
+  const studio = await env.DB.prepare("SELECT id, studio_name, subdomain, email, plan, plan_status FROM photographers WHERE subdomain = ?")
     .bind(subdomain)
     .first();
+  // L'adresse à son nom fait partie de la formule Pro : sans elle (abonnement
+  // résilié…), le sous-domaine ne mène plus nulle part, comme un inconnu.
+  if (!studio || !hasFeature(env, studio, "subdomain")) return null;
+  return { id: studio.id, studio_name: studio.studio_name, subdomain: studio.subdomain };
 }
 
 const PAGE_FILES = {
@@ -58,7 +63,18 @@ const PAGE_FILES = {
   "/galerie.html": { file: "galerie.html", type: "text/html; charset=utf-8" },
   "/gallery.css": { file: "gallery.css", type: "text/css; charset=utf-8" },
   "/gallery.js": { file: "gallery.js", type: "text/javascript; charset=utf-8" },
+  "/portfolio.css": { file: "portfolio.css", type: "text/css; charset=utf-8" },
+  "/portfolio.js": { file: "portfolio.js", type: "text/javascript; charset=utf-8" },
 };
+const PORTFOLIO_PAGE = { file: "portfolio.html", type: "text/html; charset=utf-8" };
+
+// Identifiant du portfolio publié de ce studio, ou "" s'il n'en a pas.
+async function publishedHandle(env, photographerId) {
+  const row = await env.DB.prepare("SELECT handle FROM portfolios WHERE photographer_id = ? AND published = 1")
+    .bind(photographerId)
+    .first();
+  return row?.handle || "";
+}
 
 function studioNotFound() {
   return new Response(
@@ -74,8 +90,7 @@ function studioNotFound() {
 // dans la page est remplacée par l'hôte courant, sans schéma (« //julie.… ») :
 // la page appelle alors son API sur sa propre origine, en https dès que la
 // page l'est — aucun appel cross-origin, aucun contenu mixte.
-async function servePage(request, env, url) {
-  const entry = PAGE_FILES[url.pathname];
+async function servePage(request, env, url, { entry = PAGE_FILES[url.pathname], handle = "" } = {}) {
   if (!entry || request.method !== "GET") return fail(404, "Page inconnue");
   const origin = (env.PUBLIC_SITE_ORIGIN || "").replace(/\/+$/, "");
   if (!origin) return fail(503, "PUBLIC_SITE_ORIGIN n'est pas configuré");
@@ -89,13 +104,18 @@ async function servePage(request, env, url) {
   if (!upstream.ok) return fail(502, "Site principal injoignable");
 
   let body = await upstream.text();
-  if (entry.file === "galerie.html") {
+  const isHtml = entry.file.endsWith(".html");
+  if (isHtml) {
     body = body.replace(/api:\s*"[^"]*"/, `api: "//${url.host}"`);
+  }
+  // Le portfolio servi à la racine du studio sait d'avance lequel afficher.
+  if (handle) {
+    body = body.replace(/handle:\s*"[^"]*"/, `handle: ${JSON.stringify(handle)}`);
   }
   return new Response(body, {
     headers: {
       "content-type": entry.type,
-      "cache-control": entry.file === "galerie.html" ? "no-store" : "public, max-age=300",
+      "cache-control": isHtml ? "no-store" : "public, max-age=300",
     },
   });
 }
@@ -108,11 +128,20 @@ export async function handleStudioHost(request, env, url, subdomain, path) {
   if (!studio) return studioNotFound();
 
   if (!path.startsWith("/api/")) {
+    // Racine du studio sans lien de galerie : son portfolio, s'il est publié.
+    if (url.pathname === "/" && !url.searchParams.get("g")) {
+      const handle = await publishedHandle(env, studio.id);
+      if (handle) return servePage(request, env, url, { entry: PORTFOLIO_PAGE, handle });
+    }
     return servePage(request, env, url);
   }
 
-  // Une galerie d'un autre studio n'existe pas sous cette adresse.
+  // Une galerie (ou un portfolio) d'un autre studio n'existe pas sous cette adresse.
   const parts = path.split("/").filter(Boolean); // api, gallery, slug, …
+  if (parts[1] === "portfolio" && parts[2]) {
+    const own = await env.DB.prepare("SELECT photographer_id FROM portfolios WHERE handle = ?").bind(decodeURIComponent(parts[2])).first();
+    if (!own || own.photographer_id !== studio.id) return fail(404, "Portfolio introuvable");
+  }
   if (parts[1] === "gallery" && parts[2]) {
     const gallery = await env.DB.prepare("SELECT photographer_id FROM galleries WHERE slug = ?")
       .bind(parts[2])

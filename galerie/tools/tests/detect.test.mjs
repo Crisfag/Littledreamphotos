@@ -44,7 +44,7 @@ async function signupAndLogin(session, email, password, studioName) {
   const response = await fetch(`${ADMIN}/local/auth/signup`, {
     method: "POST",
     headers: session.headers({ "content-type": "application/json" }),
-    body: JSON.stringify({ email, password, studioName }),
+    body: JSON.stringify({ email, password, studioName, acceptTerms: true }),
   });
   session.capture(response);
   return response.ok;

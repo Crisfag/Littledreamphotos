@@ -176,6 +176,32 @@ await login();
 check("le panier survit à un rechargement complet (retour de la page de paiement)",
       (await page.textContent("#gp-cart-count")).trim() === "(2)");
 
+// Autre appareil (navigateur vierge, sans stockage local) : le panier est
+// retrouvé côté serveur.
+await page.waitForTimeout(1000); // envoi groupé du panier
+const otherContext = await browser.newContext({ viewport: { width: 1200, height: 900 } });
+const other = await otherContext.newPage();
+await other.goto(`${siteBase}/galerie.html?g=${slug}`, { waitUntil: "domcontentloaded" });
+await other.fill("#gp-password", PASSWORD);
+await other.click("#gp-submit");
+await other.waitForSelector("#gp-gallery:not([hidden])", { timeout: 10000 });
+await other.waitForTimeout(800);
+check("le panier se retrouve sur un autre appareil (enregistré côté serveur)",
+      (await other.textContent("#gp-cart-count")).trim() === "(2)", await other.textContent("#gp-cart-count"));
+await otherContext.close();
+
+// Promotion : bandeau et prix barrés.
+await client.request("POST", `/api/admin/galleries/${slug}/promo`, { percent: 20, endsAt: Math.floor(Date.now() / 1000) + 3 * 86400 });
+await login();
+await page.locator(".gp-open").first().click();
+await page.waitForSelector("#gp-viewer:not([hidden])");
+await page.click("#gp-print-toggle");
+check("pendant une promotion, le bandeau l'annonce et les prix sont barrés",
+      await page.isVisible("#gp-shop-promo") && (await page.textContent("#gp-shop-promo")).includes("−20 %") &&
+      (await page.locator("#gp-print-products .gp-print-was").count()) >= 1);
+await page.click("#gp-close");
+await client.request("POST", `/api/admin/galleries/${slug}/promo`, { percent: 0 });
+
 // Une commande déjà expédiée pour cette galerie, posée comme le ferait le circuit complet.
 const now = Math.floor(Date.now() / 1000);
 await d1(

@@ -351,13 +351,94 @@ Le tableau de bord s'organise en trois onglets, chacun avec son propre lien
   *Défilement* (une photo à la fois, en grand — rendu éditorial, pour
   raconter une séance plutôt que la survoler). Purement visuel : les trois
   rendus s'appuient sur les mêmes tuiles, protégées de la même façon.
-- **Musique d'ambiance** : un MP3 (15 Mo maximum) importé depuis la fiche
-  de la galerie, stocké à côté des tuiles et servi au client avec lecture
-  progressive. Côté client, un bouton « Lancer la musique » apparaît dans
-  l'en-tête dès qu'une piste existe ; en mise en page *Défilement* la lecture
-  démarre d'elle-même quand le navigateur l'autorise, et le choix du client
-  (coupée ou non) est retenu le temps de sa visite. Une galerie sans piste
-  ne montre rien de plus qu'avant.
+- **Musique d'ambiance** : trois sources au choix sur la fiche galerie,
+  une seule à la fois.
+  - **Bibliothèque** commune de morceaux libres de droits, classés par
+    ambiance (douce, joyeuse, romantique, piano, acoustique, cinématique,
+    enfance), écoutés en un clic puis choisis. La propriétaire de la
+    plateforme la remplit depuis l'onglet Admin (MP3, titre, artiste,
+    ambiance, crédit de licence) ; le crédit est affiché discrètement au
+    client. Retirer un morceau laisse sans musique les galeries qui
+    l'utilisaient.
+  - **Lien Spotify, Deezer, SoundCloud ou YouTube** (titre, album ou
+    playlist), converti en lecteur officiel du service — la seule façon
+    autorisée de diffuser leur catalogue sur un site. Le lecteur n'est
+    chargé qu'au clic du client, dans un petit encart flottant (« Réduire »
+    le cache sans couper la musique, « Fermer » l'arrête). Avec Spotify, un
+    client sans compte Spotify n'entend qu'un extrait de 30 secondes.
+  - **Fichier MP3** du photographe (15 Mo maximum), comme avant.
+
+  Les morceaux de la bibliothèque et les MP3 sont servis avec lecture
+  progressive ; un bouton « Lancer la musique » apparaît dans l'en-tête, en
+  mise en page *Défilement* la lecture démarre d'elle-même quand le
+  navigateur l'autorise, et le choix du client (coupée ou non) est retenu le
+  temps de sa visite. Une galerie sans musique ne montre rien de plus.
+- **Livraison des photos définitives** : sur la fiche galerie, le
+  photographe dépose les fichiers finaux (haute définition, sans filigrane ;
+  JPEG, PNG, TIFF, WebP ou HEIC, 80 Mo maximum chacun, 4 Go par galerie),
+  puis ouvre la livraison — avec, au choix, un e-mail « Vos photos sont
+  prêtes » au client. Le client voit alors un encart en tête de sa galerie
+  et télécharge tout d'un coup (ZIP) ou une photo à la fois. Le ZIP est
+  fabriqué au fil de l'eau par le Worker, sans compression ni relecture des
+  fichiers : leur CRC-32 est calculé à l'envoi par l'admin et stocké avec
+  eux, et la taille du ZIP est connue d'avance (vraie barre de progression).
+  Les téléchargements passent par des liens signés valables 15 minutes,
+  propres à un fichier (ou au ZIP) et signés avec une clé distincte des
+  sessions ; fermer la livraison les coupe aussitôt. Chaque téléchargement
+  est inscrit au journal d'accès. Les fichiers sont effacés avec la galerie.
+- **Volet légal (RGPD)** : pages *Conditions d'utilisation*,
+  *Politique de confidentialité* et *Mentions légales* (`web/conditions.html`,
+  `web/confidentialite.html`, `web/mentions-legales.html`), liées depuis le
+  pied de page du site, la page de connexion et le pied des galeries, et
+  l'inscription. Les coordonnées de l'éditeur (nom, adresse, BCE, TVA,
+  e-mail, tribunal) se renseignent à un seul endroit, `web/legal.js` ; tant
+  qu'un champ est vide, il s'affiche surligné « à compléter ». L'inscription
+  exige de cocher l'acceptation des conditions et de la politique
+  (horodatée en base avec la version des textes). Dans *Paramètres →
+  Mes données*, le photographe exporte toutes ses données (fichier JSON :
+  compte, galeries, sélections et remarques de ses clients, paiements,
+  commandes, journaux — jamais de mot de passe ni de clé) et peut supprimer
+  définitivement son compte (mot de passe + « SUPPRIMER » tapé) : galeries,
+  photos, fichiers livrés et données des clients sont effacés. Les journaux
+  d'accès aux galeries sont purgés automatiquement après 13 mois (passe
+  quotidienne du Worker). Ces textes sont des modèles sérieux mais ne
+  remplacent pas l'avis d'un juriste.
+- **Abonnements Holypixx** : trois formules (`worker/src/subscription.js`,
+  prix à ajuster au même endroit et dans la section Tarifs de
+  `web/index.html`). *Découverte* (gratuite) : 3 galeries actives ;
+  *Essentiel* (12 €/mois) : 25 galeries actives et la boutique de tirages ;
+  *Pro* (24 €/mois) : galeries illimitées, boutique et adresse à son nom.
+  Une galerie expirée ne compte plus. Onglet *Abonnement* de l'admin :
+  formule actuelle, utilisation, souscription par une page de paiement
+  Stripe (abonnement mensuel sur le compte plateforme, prix créé à la volée),
+  puis « Gérer mon abonnement » ouvre le portail client Stripe (carte,
+  changement de formule, factures, résiliation). La formule n'est accordée
+  que tant que Stripe dit l'abonnement actif (ou en période de grâce après
+  un échec de prélèvement) ; résilié, le compte repasse en gratuit : plus de
+  nouvelle galerie au-delà de la limite, boutique fermée côté client,
+  sous-domaine qui ne mène plus nulle part. Le compte propriétaire a tout,
+  sans abonnement. **Réglages Stripe nécessaires** (une seule fois, dans le
+  tableau de bord Stripe) : ajouter au webhook du compte plateforme
+  (`STRIPE_WEBHOOK_SECRET_PLATFORM`) les évènements
+  `customer.subscription.created`, `customer.subscription.updated` et
+  `customer.subscription.deleted` (en plus de `checkout.session.completed`) ;
+  enregistrer une configuration du *portail client* (Paramètres → Billing →
+  Portail client), en y autorisant le changement de formule si souhaité.
+- **Campagnes de vente des tirages** (`worker/src/campaigns.js`) :
+  - *Promotion à durée limitée* sur une galerie (−10 à −50 % jusqu'à une
+    date, depuis la section boutique de la fiche) : bandeau et prix barrés
+    chez le client, remise appliquée par le serveur au paiement, jamais en
+    dessous du coût du labo connu. Bouton « Annoncer au client par
+    e-mail » (une fois par promotion).
+  - *Panier enregistré côté serveur* : le client le retrouve sur un autre
+    appareil ; la fiche galerie indique le panier en cours.
+  - *Relances automatiques* (passe quotidienne, réglage « Relances
+    automatiques » du photographe, boutique réellement ouverte) : panier
+    laissé 24 h sans commande (une fois par panier, rappel de la promotion
+    en cours), et « Vos coups de cœur méritent d'être imprimés » 3 jours
+    après la sélection validée si rien n'a été commandé (une fois par
+    galerie). Le bouton « Lancer les relances maintenant » de l'onglet Admin
+    lance aussi ces relances.
 - **Forfait et suppléments** : le nombre de photos déjà payées par le
   client (optionnel — sans forfait défini, aucun supplément n'est jamais
   calculé) et le prix de chaque photo au-delà. Le supplément se calcule
@@ -444,6 +525,47 @@ touche à l'argent, toutes galeries confondues :
   supplément est réglé en ligne — numérotée en continu par année (ex.
   2026-0001), avec TVA belge (21 %) si un numéro de TVA est renseigné dans
   les Paramètres, ou mention d'exonération (régime de la franchise) sinon.
+
+#### Onglet Ventes
+
+Le chiffre d'affaires des douze derniers mois (mois du calendrier belge),
+calculé sur les paiements réellement encaissés, la même source que les
+factures :
+
+- **Indicateurs** : chiffre d'affaires (suppléments et tirages), nombre de
+  paiements et panier moyen, **marge estimée sur les tirages** (prix payé
+  moins le dernier coût Prodigi connu du produit, hors port et frais Stripe ;
+  la part des tirages couverte par l'estimation est indiquée), et part des
+  galeries créées sur la période qui ont vendu au moins une fois.
+- **Graphique mensuel** en colonnes empilées suppléments / tirages, avec le
+  détail au survol (ou au clavier) et une **vue tableau** des mêmes chiffres.
+- **Classements** : formats les plus vendus (exemplaires, montant) et
+  galeries qui rapportent le plus (un clic ouvre la fiche).
+
+#### Onglet Portfolio
+
+Un mini-site public pour présenter son travail, inclus dans toutes les
+formules, à l'adresse `www.holypixx.com/portfolio.html?s=<adresse>` — et, en
+formule Pro, directement à la racine de son sous-domaine
+(`julie.holypixx.com`, les liens de galerie `?g=…` y fonctionnant toujours).
+
+- **Photos** (40 au plus) : réduites à 2000 px et converties en WebP par le
+  serveur d'administration, **sans aucune métadonnée** (appareil, lieu GPS) ;
+  la première sert de couverture, l'ordre se change avec les flèches.
+- **Présentation** : adresse (mêmes règles qu'un sous-domaine, unique sur la
+  plateforme), accroche, ville, à propos, prestations (une par ligne),
+  téléphone, Instagram et site web (facultatifs), formulaire de contact
+  activable, publication (impossible sans photo ; retirer la dernière photo
+  dépublie).
+- **Messages reçus** : chaque message du formulaire est envoyé par e-mail
+  (répondre à l'e-mail répond au visiteur) et gardé ici un an. Un champ
+  piège écarte les robots ; 3 messages par heure au plus depuis une même
+  adresse, 50 par jour au plus par photographe.
+
+La page publique (`web/portfolio.html`) : couverture plein écran, travaux en
+mosaïque, visionneuse (flèches, Échap, glisser au doigt), à propos et
+prestations, contact. Le portfolio, ses photos et ses messages figurent dans
+l'export RGPD et disparaissent avec le compte.
 
 #### Onglet Paramètres
 
@@ -723,7 +845,7 @@ des tuiles, refus du mauvais mot de passe, absence de toute balise `<img>`,
 neutralisation du menu contextuel et de la copie, voile sur « Impr. écran » et
 sur perte de focus, consignation au journal.
 
-**API du Worker** — 313 vérifications contre le vrai moteur Cloudflare (D1 et R2
+**API du Worker** — 365 vérifications contre le vrai moteur Cloudflare (D1 et R2
 émulés localement par `wrangler dev`) : comptes photographes (inscription,
 connexion, session, mot de passe oublié — même réponse générique qu'un
 compte existe ou non), cloisonnement strict entre comptes (un photographe ne
@@ -783,7 +905,40 @@ passe). Musique d'ambiance : dépôt refusé depuis un autre compte, piste
 annoncée au client à la connexion puis servie octet pour octet en
 `audio/mpeg`, lecture progressive par morceaux (`Range` → 206), retrait
 refusé depuis un autre compte, et plus rien de servi ni d'annoncé une fois
-la piste retirée. « Valider ma sélection » : refusé sans jeton, horodaté et
+la piste retirée. Livraison : dépôt refusé depuis un autre compte, sans
+CRC ou hors format photo, ouverture impossible à vide, fichiers et poids
+listés sur la fiche, rien de visible ni de téléchargeable côté client tant
+que c'est fermé, e-mail au client à l'ouverture, ZIP valide (CRC vérifiés
+par Python `zipfile`) à la taille annoncée et nommé d'après la galerie,
+photo seule identique en pièce jointe, lien qui ne vaut ni pour un autre
+fichier, ni falsifié, ni comme session, ni sur une autre galerie,
+téléchargements au journal, liens coupés à la fermeture, retrait d'un
+fichier. RGPD : export complet (compte, galeries, photos, clients,
+acceptation des conditions horodatée et versionnée) sans aucun secret,
+aucune acceptation enregistrée sans case cochée, suppression du compte
+refusée sans confirmation ou avec un mauvais mot de passe, puis compte,
+galeries, photos et accès clients effacés. Abonnements : nouveau compte en
+formule gratuite avec les 3 formules proposées, 4e galerie active refusée
+(402) avec la marche à suivre, place libérée par une suppression, boutique
+et adresse à son nom refusées (402), souscription refusée pour une formule
+inconnue ou sans Stripe configuré (503), rien à gérer sans abonnement ;
+Essentiel actif : galeries et boutique débloquées mais pas l'adresse à son
+nom, formule conservée en `past_due`, retour au gratuit une fois résilié ;
+compte propriétaire illimité. Campagnes de vente : remise hors liste ou date
+passée refusées, autre compte refusé ; prix barrés et date de fin chez le
+client, format jamais vendu sous son coût labo ; annonce par e-mail exigeant
+un e-mail client, envoyée une seule fois et indiquée sur la fiche ; panier
+enregistré (lignes invalides écartées) et retrouvé à la connexion ; panier
+oublié 24 h rappelé une seule fois ; coups de cœur imprimables relancés une
+fois 3 jours après la sélection ; arrêt de la promotion et panier vidé. Bibliothèque musicale : ajout réservé à la propriétaire
+(403 sinon), titre et ambiance obligatoires, liste visible de chaque
+photographe, écoute d'un morceau (lecture partielle comprise), morceau
+inconnu non servi ; choix d'un morceau (refusé depuis un autre compte) qui
+remplace le MP3 importé et que le client entend avec titre et crédit ; lien
+d'un autre site refusé avec explication ; lien Spotify transmis au client
+comme lecteur officiel (plus de MP3 servi) ; morceau retiré par la
+propriétaire seulement, galeries concernées repassées sans musique ;
+« aucune musique ». « Valider ma sélection » : refusé sans jeton, horodaté et
 e-mail au photographe à la première validation mais pas à une seconde dans
 l'heure, relu sur la fiche, dans la liste, au journal et à la reconnexion
 du client. Relances automatiques (passe lancée par la propriétaire, refusée
@@ -864,7 +1019,7 @@ option hors catalogue refusés, catégorie retrouvée même pour une référence
 saisie à la main ; lecture d'une fiche produit Prodigi (options livrables
 dans le pays, produit à plusieurs images ou non livré écarté).
 
-**Boutique de tirages (page client)** — 20 vérifications dans un vrai
+**Boutique de tirages (page client)** — 22 vérifications dans un vrai
 navigateur, contre le faux laboratoire : boutique annoncée, bouton
 « Tirages » seulement sur une photo commandable, formats et prix, chaque
 format illustré avec la photo du client (cadre à sa couleur avec
@@ -872,7 +1027,8 @@ passe-partout, grand aperçu du format survolé, aperçu dans le panier),
 ajout au panier confirmé, compteur, détail du panier, total tirages +
 livraison, quantité modifiée et ligne retirée, Belgique par défaut, refus
 propre sans Stripe local avec panier conservé, panier qui survit à un
-rechargement, message de confirmation au retour du paiement (panier vidé,
+rechargement et se retrouve sur un autre appareil (navigateur vierge),
+bandeau et prix barrés pendant une promotion, message de confirmation au retour du paiement (panier vidé,
 paramètre retiré de l'adresse), commandes passées avec statut et suivi.
 
 **Décision des relances** — 11 vérifications sans réseau ni D1
@@ -904,7 +1060,7 @@ appliqué sinon, HT + TVA se recomposant exactement au centime près en TTC
 même sur un montant qui ne se divise pas rond, et un vrai PDF valide généré
 aussi bien avec des coordonnées complètes qu'avec des champs vides.
 
-**Interface d'administration** — 115 vérifications dans un vrai navigateur,
+**Interface d'administration** — 132 vérifications dans un vrai navigateur,
 contre le vrai Worker local : demande de lien de réinitialisation de mot de
 passe (message générique affiché), création de compte et connexion depuis
 le formulaire (pas de session présupposée), barre d'onglets Galeries /
@@ -948,7 +1104,19 @@ dans ce test apparaît dans la liste complète avec son prénom et son nom, et
 la section trafic explique comment brancher Cloudflare Web Analytics.
 Musique d'ambiance sur la fiche galerie : « aucune musique » au départ,
 import d'un MP3 qui devient la piste actuelle, refus d'un fichier qui n'en
-est pas un (la piste existante est conservée), retrait après confirmation.
+est pas un (la piste existante est conservée), retrait après confirmation ;
+la propriétaire ajoute un morceau à la bibliothèque musicale depuis l'onglet
+Admin (titre, ambiance et crédit affichés), le photographe le retrouve dans
+sa fiche avec un bouton d'écoute et le choisit, un lien d'un autre site est
+refusé, un lien Spotify devient le lecteur de la galerie. Livraison : rien
+à ouvrir sans fichier, deux photos ajoutées avec leur poids, ouverture
+après confirmation, fermeture d'un clic. Promotion : proposée une fois la
+boutique ouverte, lancée (remise et date de fin affichées), arrêtée d'un
+clic. Inscription refusée sans
+acceptation des conditions ; export de « Mes données » téléchargé sans
+aucun secret ; suppression du compte refusée avec un mauvais mot de passe,
+puis compte supprimé (reconnexion impossible). Onglet Abonnement : 3 formules,
+formule actuelle, utilisation et lien propre dans l'URL.
 Codes couleur et repères posés par le client (via l'API, comme le ferait sa
 page) : pastille jaune et compteur de repères sur la vignette, légende de
 la galerie, photo ouverte en grand avec le repère dessus, sa note listée et
@@ -1006,6 +1174,76 @@ repère existant mais retire un repère tout juste posé sans rien envoyer ;
 pastille et compteur dans la grille ; tout retrouvé après une reconnexion
 complète ; suppression répercutée côté Worker.
 
+**Musique côté client** — 10 vérifications dans un vrai navigateur, contre
+le vrai Worker local : morceau de la bibliothèque annoncé avec son titre et
+son crédit puis servi par le Worker, lien Spotify annoncé sans rien charger
+chez Spotify avant le clic, lecteur officiel ouvert sur la bonne playlist,
+« Réduire » qui le garde, « Fermer » qui le retire, aucun bouton sans
+musique, aucune exception.
+
+**Campagnes de vente (logique)** — 11 vérifications sans réseau ni D1 :
+période de promotion, remises proposées, arrondi, plancher au coût du labo,
+prix barré conservé, prix remisé encaissé à la commande, panier nettoyé,
+contenu des e-mails (promotion, panier, coups de cœur).
+
+**Abonnements (logique)** — 12 vérifications sans réseau ni D1 : formule
+effective selon le statut Stripe (active, essai, période de grâce ; tout le
+reste retombe en gratuit), formule inconnue ignorée, propriétaire illimitée,
+fonctionnalités par formule, formule retrouvée par métadonnées ou par prix,
+et traitement des évènements Stripe sur une base factice (paiement de
+l'abonnement, paiement d'autre chose ignoré, mise à jour, résiliation, ancien
+abonnement qui n'écrase pas un plus récent).
+
+**Livraison côté client** — 5 vérifications dans un vrai navigateur :
+aucun encart tant que la livraison est fermée, encart « Vos photos sont
+prêtes » avec nombre et poids une fois ouverte, ZIP enregistré sous le nom
+de la galerie, photo seule téléchargée à l'identique, aucune exception.
+
+**ZIP de livraison (logique)** — 7 vérifications sans réseau ni D1 : CRC-32
+de référence, taille annoncée égale au ZIP produit, archive ouverte et
+vérifiée par un lecteur standard (Python `zipfile`), noms accentués et
+tailles conservés, contenu identique, doublons de noms renommés, noms de
+fichiers nettoyés (chemin, guillemets, caractères de contrôle).
+
+**Musique (logique)** — 22 vérifications sans réseau ni D1 : liens
+Spotify (titre, playlist, album, adresse `intl-fr`, URI `spotify:`),
+Deezer, SoundCloud (morceau, playlist) et YouTube (vidéo, `youtu.be`, YouTube
+Music, playlist) convertis en lecteur officiel ; liens raccourcis refusés
+avec la marche à suivre ; tout autre site, identifiant invalide ou domaine
+piège refusé ; rien du lien collé recopié tel quel ; ce que reçoit la page
+client pour chaque source.
+
+**Tableau de bord des ventes (logique)** — 12 vérifications sans réseau
+ni D1 : douze mois calendaires (passage d'année, heure belge et non UTC),
+paiement rangé dans son mois et sa catégorie, paiements hors période
+ignorés, totaux et panier moyen, marge estimée limitée aux produits au coût
+connu (avec la part couverte), classements des formats et des galeries,
+conversion, et aucune division par zéro sans vente.
+
+**Onglet Ventes** — 16 vérifications dans un vrai navigateur, contre le vrai
+Worker local : seuls les paiements réglés des douze derniers mois comptent,
+marge, conversion, cloisonnement entre photographes, indicateurs affichés,
+douze colonnes de 24 px au plus avec légende, détail au survol, vue
+tableau, classements, lien vers la fiche d'une galerie, page tenant dans la
+largeur d'un téléphone, aucune exception.
+
+**Portfolio (logique)** — 8 vérifications sans réseau ni D1 : règles de
+l'adresse, adresse proposée, prestations, Instagram, site (https ajouté,
+schémas dangereux refusés), téléphone, adresse du studio réservée à la
+formule Pro, e-mail de contact échappé.
+
+**Portfolio** — 33 vérifications dans un vrai navigateur, contre le vrai
+Worker local : adresse proposée, publication refusée sans photo, envoi de
+trois photos (réduites à 2000 px, WebP sans bloc EXIF), ordre, champs
+nettoyés (prestations, Instagram, site), adresse unique ; page publique
+(titre, ville, accroche, couverture, grille, à propos, prestations, liens,
+visionneuse et clavier, largeur de téléphone) ; formulaire de contact
+(adresse invalide, envoi, champ piège, message trop court, plafond de 3 par
+heure) ; messages dans l'admin, nouveaux signalés, suppression ; racine du
+sous-domaine d'un studio Pro, galerie toujours servie avec `?g=`, portfolio
+d'un autre studio introuvable, adresse protégée comme sous-domaine ;
+dépublication ; export RGPD ; effacement avec le compte.
+
 **Sous-domaine par studio** — 8 vérifications dans un vrai navigateur, où
 Playwright rejoue toute requête vers `<studio>.holypixx.com` sur le Worker
 local avec l'en-tête `Host` du studio (ce que le Worker recevra derrière la
@@ -1028,11 +1266,21 @@ node tests/comments.test.mjs          # commentaires client, autonome (crée sa 
 node tests/marks.test.mjs             # codes couleur + repères client, autonome (crée sa propre galerie)
 node tests/subdomain.test.mjs         # sous-domaine par studio, autonome (PUBLIC_SITE_ORIGIN=http://localhost:8000 dans worker/.dev.vars)
 node tests/shop.test.mjs              # boutique de tirages côté client, autonome (PRODIGI_API_BASE=http://127.0.0.1:8790/v4.0 dans worker/.dev.vars)
+node tests/music.test.mjs             # musique côté client (bibliothèque, lien Spotify), autonome
+node tests/delivery.test.mjs          # livraison des photos définitives côté client, autonome
+node tests/sales.test.mjs             # onglet Ventes, autonome (admin-server.mjs lancé)
+node tests/portfolio.test.mjs         # portfolio (admin, page publique, contact, sous-domaine), autonome (admin-server.mjs lancé)
 
 cd ../worker
 node tests/notify.test.mjs            # e-mails (alerte de capture, relances…), sans réseau
 node tests/reminders.test.mjs         # décision des relances automatiques, sans réseau
 node tests/prodigi.test.mjs           # boutique de tirages (Prodigi), sans réseau
+node tests/music.test.mjs             # liens Spotify / Deezer / SoundCloud / YouTube, sans réseau
+node tests/delivery.test.mjs          # ZIP de livraison (en-têtes, CRC, noms), sans réseau
+node tests/subscription.test.mjs      # formules d'abonnement et webhook Stripe, sans réseau
+node tests/campaigns.test.mjs         # promotion, panier enregistré, e-mails de relance, sans réseau
+node tests/sales.test.mjs             # tableau de bord des ventes (mois, marge, classements), sans réseau
+node tests/portfolio.test.mjs         # règles du portfolio et e-mail de contact, sans réseau
 node tests/stripe.test.mjs            # signature de webhook + encodage des sessions Stripe, sans réseau
 node tests/invoices.test.mjs          # calcul de TVA + génération du PDF de facture, sans réseau
 npm run dev:local                     # dans un autre terminal (Worker local sur le port 8788)

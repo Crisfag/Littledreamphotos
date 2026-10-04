@@ -8,6 +8,8 @@
 // figée, l'envoi au labo et le suivi.
 
 import { json, fail } from "./http.js";
+import { hasFeature, featureRefusal } from "./subscription.js";
+import { applyPromo, activePromo, savedCartFor, clearCart } from "./campaigns.js";
 import { randomBytes, b64url } from "./auth.js";
 import { createCheckoutSession } from "./stripe.js";
 import { createInvoiceForPayment, formatEuros } from "./invoices.js";
@@ -376,6 +378,10 @@ async function catalogueAvailability(request, env, photographerId) {
 async function setGalleryShop(request, env, gallery) {
   const body = await request.json().catch(() => null);
   if (!body || typeof body.enabled !== "boolean") return fail(400, "Requête invalide");
+  if (body.enabled) {
+    const photographer = await photographerRow(env, gallery.photographer_id);
+    if (!hasFeature(env, photographer, "shop")) return featureRefusal("shop");
+  }
   await env.DB.prepare("UPDATE galleries SET shop_enabled = ? WHERE id = ?").bind(body.enabled ? 1 : 0, gallery.id).run();
   return json({ ok: true, enabled: body.enabled });
 }
@@ -456,14 +462,18 @@ export async function handleShopAdmin(request, env, photographerId, parts, helpe
    Client : boutique d'une galerie, commande
    ================================================================= */
 
-async function shopState(env, gallery) {
+export async function shopState(env, gallery) {
   if (!gallery.shop_enabled) return null;
   const photographer = await photographerRow(env, gallery.photographer_id);
   if (!photographer?.prodigi_api_key_enc) return null;
+  // Boutique réservée aux formules qui l'incluent : fermée côté client dès
+  // que l'abonnement ne la couvre plus.
+  if (!hasFeature(env, photographer, "shop")) return null;
   if (!photographer.stripe_account_id || !photographer.stripe_charges_enabled) return null;
   const products = (await listProducts(env, photographer.id)).filter((p) => p.active);
   if (!products.length) return null;
-  return { photographer, products };
+  // Promotion en cours : le prix remisé est celui affiché ET encaissé.
+  return { photographer, products: applyPromo(products, gallery), promo: activePromo(gallery) };
 }
 
 // Ce que la page cliente reçoit à la connexion : null si la boutique n'est
@@ -486,7 +496,11 @@ export async function shopForClient(env, gallery) {
     shop: {
       shippingCents: state.photographer.shop_shipping_cents || 0,
       countries: SHOP_COUNTRIES,
-      products: state.products.map((p) => ({ id: p.id, label: p.label, priceCents: p.price_cents, look: lookFor(p) })),
+      products: state.products.map((p) => ({
+        id: p.id, label: p.label, priceCents: p.price_cents, listPriceCents: p.list_price_cents, look: lookFor(p),
+      })),
+      promo: state.promo,
+      savedCart: await savedCartFor(env, gallery.id),
     },
     printOrders: ordersOut,
   };
@@ -628,6 +642,8 @@ export async function handlePrintPaymentConfirmed(env, payment, origin) {
 
   const gallery = await env.DB.prepare("SELECT * FROM galleries WHERE id = ?").bind(order.gallery_id).first();
   const photographer = await photographerRow(env, order.photographer_id);
+  // Commande payée : le panier enregistré a servi, plus de rappel.
+  await clearCart(env, order.gallery_id);
   const lines = parseJson(order.items, []);
   const recipient = parseJson(order.recipient, {});
 

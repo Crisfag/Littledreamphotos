@@ -16,6 +16,7 @@
 // : une galerie créée depuis le navigateur ou depuis la ligne de commande
 // produit des tuiles identiques.
 
+import zlib from "node:zlib";
 import { createServer } from "node:http";
 import { readFile, stat } from "node:fs/promises";
 import { randomBytes } from "node:crypto";
@@ -38,7 +39,30 @@ const HOST = process.env.GALERIE_ADMIN_HOST || "127.0.0.1";
 // via cette variable plutôt que de laisser le service choisir.
 const PORT = Number(process.env.GALERIE_ADMIN_PORT || process.env.PORT || 4000);
 const MAX_UPLOAD_BYTES = 60 * 1024 * 1024;
+// Photos définitives à livrer : pleine définition, donc plus lourdes.
+const MAX_DELIVERY_BYTES = 80 * 1024 * 1024;
+
+// CRC-32 d'un fichier livré, exigé par le ZIP que le Worker fabrique au fil
+// de l'eau sans relire les fichiers (voir worker/src/delivery.js).
+let crcTable = null;
+function crc32(buffer) {
+  if (typeof zlib.crc32 === "function") return zlib.crc32(buffer) >>> 0;
+  if (!crcTable) {
+    crcTable = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) {
+      let c = n;
+      for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+      crcTable[n] = c >>> 0;
+    }
+  }
+  let crc = 0xffffffff;
+  for (let i = 0; i < buffer.length; i++) crc = crcTable[(crc ^ buffer[i]) & 0xff] ^ (crc >>> 8);
+  return (crc ^ 0xffffffff) >>> 0;
+}
 const MAX_MUSIC_BYTES = 15 * 1024 * 1024;
+// Photos du portfolio : réduites ici avant l'envoi (vitrine, pas originaux).
+const MAX_PORTFOLIO_UPLOAD_BYTES = 40 * 1024 * 1024;
+const PORTFOLIO_MAX_SIDE = 2000;
 const SESSION_COOKIE = "galerie_session";
 const SESSION_MAX_AGE = 30 * 24 * 60 * 60; // aligné sur la durée du jeton côté Worker
 
@@ -145,12 +169,12 @@ function nodeRequestToWebRequest(req, body) {
   return new Request(`http://${HOST}${req.url}`, { method: req.method, headers, body });
 }
 
-async function readBody(req) {
+async function readBody(req, limit = MAX_UPLOAD_BYTES) {
   const chunks = [];
   let size = 0;
   for await (const chunk of req) {
     size += chunk.length;
-    if (size > MAX_UPLOAD_BYTES) throw Object.assign(new Error("Fichier trop volumineux"), { status: 413 });
+    if (size > limit) throw Object.assign(new Error("Fichier trop volumineux"), { status: 413 });
     chunks.push(chunk);
   }
   return Buffer.concat(chunks);
@@ -290,13 +314,16 @@ async function handleAuth(req, res, parts) {
     const firstName = String(body.firstName || "").trim();
     const lastName = String(body.lastName || "").trim();
     if (!email || !password) return json(res, 400, { error: "E-mail et mot de passe requis" });
+    // Consentement explicite aux conditions et à la politique de
+    // confidentialité, horodaté par le Worker (voir worker/src/privacy.js).
+    if (body.acceptTerms !== true) return json(res, 400, { error: "Merci d'accepter les conditions d'utilisation et la politique de confidentialité" });
 
     let signupRes;
     try {
       signupRes = await fetch(`${config.api}/api/auth/signup`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email, password, studioName, firstName, lastName }),
+        body: JSON.stringify({ email, password, studioName, firstName, lastName, acceptTerms: true }),
       });
     } catch {
       return json(res, 502, { error: "Worker injoignable" });
@@ -569,6 +596,86 @@ async function handleApi(req, res, url) {
     }
   }
 
+  // /local/portfolio… — mini-site portfolio (voir worker/src/portfolio.js).
+  if (parts[0] === "portfolio") {
+    const base = "/api/admin/portfolio";
+    try {
+      if (parts.length === 1 && req.method === "GET") return json(res, 200, await client.request("GET", base));
+      if (parts.length === 1 && req.method === "PUT") {
+        const body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
+        return json(res, 200, await client.request("PUT", base, body));
+      }
+      if (parts.length === 2 && parts[1] === "order" && req.method === "POST") {
+        const body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
+        return json(res, 200, await client.request("POST", `${base}/order`, { ids: body.ids }));
+      }
+      // POST /local/portfolio/photos (multipart, une photo par requête) :
+      // redressée selon l'EXIF, réduite à 2000 px, convertie en WebP. sharp
+      // ne recopie aucune métadonnée (EXIF, GPS, appareil) sans le lui demander.
+      if (parts.length === 2 && parts[1] === "photos" && req.method === "POST") {
+        const contentLength = Number(req.headers["content-length"] || 0);
+        if (contentLength > MAX_PORTFOLIO_UPLOAD_BYTES + 64 * 1024) return json(res, 413, { error: "Photo trop lourde (40 Mo maximum)" });
+        let form;
+        try {
+          form = await nodeRequestToWebRequest(req, await readBody(req, MAX_PORTFOLIO_UPLOAD_BYTES + 64 * 1024)).formData();
+        } catch (err) {
+          return json(res, err.status || 400, { error: err.status ? err.message : "Formulaire illisible" });
+        }
+        const file = form.get("file");
+        if (!file || typeof file.arrayBuffer !== "function") return json(res, 400, { error: "Aucun fichier reçu" });
+        let output;
+        try {
+          const input = Buffer.from(await file.arrayBuffer());
+          output = await withProcessingSlot(() => sharp(input, { failOn: "error" })
+            .rotate()
+            .resize({ width: PORTFOLIO_MAX_SIDE, height: PORTFOLIO_MAX_SIDE, fit: "inside", withoutEnlargement: true })
+            .toColourspace("srgb")
+            .webp({ quality: 84 })
+            .toBuffer({ resolveWithObject: true }));
+        } catch {
+          return json(res, 400, { error: "Image illisible (JPEG, PNG ou WebP attendu)" });
+        }
+        const query = `width=${output.info.width}&height=${output.info.height}`;
+        return json(res, 201, await client.request("PUT", `${base}/photos?${query}`, output.data, true));
+      }
+      if (parts.length === 3 && parts[1] === "photos" && req.method === "GET") {
+        const upstream = await client.getPortfolioPhotoResponse(decodeURIComponent(parts[2]));
+        if (!upstream.ok) return json(res, upstream.status, { error: "Photo introuvable" });
+        res.writeHead(200, { "content-type": "image/webp", "cache-control": "private, max-age=300" });
+        return res.end(Buffer.from(await upstream.arrayBuffer()));
+      }
+      if (parts.length === 3 && (parts[1] === "photos" || parts[1] === "messages") && req.method === "DELETE") {
+        return json(res, 200, await client.request("DELETE", `${base}/${parts[1]}/${encodeURIComponent(decodeURIComponent(parts[2]))}`));
+      }
+    } catch (err) {
+      return relayError(res, err, "Le portfolio n'a pas pu être mis à jour");
+    }
+  }
+
+  // GET /local/sales — tableau de bord des ventes (12 derniers mois).
+  if (parts[0] === "sales" && parts.length === 1 && req.method === "GET") {
+    try {
+      return json(res, 200, await client.request("GET", "/api/admin/sales"));
+    } catch (err) {
+      return relayError(res, err, "Les ventes n'ont pas pu être chargées");
+    }
+  }
+
+  // /local/subscription — abonnement Holypixx du photographe. Les adresses
+  // de retour de Stripe pointent vers ce même tableau de bord.
+  if (parts[0] === "subscription") {
+    const back = `${isSecureRequest(req) ? "https" : "http"}://${req.headers.host}/#/abonnement`;
+    try {
+      if (parts.length === 1 && req.method === "GET") return json(res, 200, await client.request("GET", "/api/admin/subscription"));
+      if (parts.length === 2 && (parts[1] === "checkout" || parts[1] === "portal") && req.method === "POST") {
+        const body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
+        return json(res, 200, await client.request("POST", `/api/admin/subscription/${parts[1]}`, { plan: body.plan, returnUrl: back }));
+      }
+    } catch (err) {
+      return relayError(res, err, "L'abonnement n'a pas pu être traité");
+    }
+  }
+
   // POST /local/stripe/refresh — relit l'état réel du compte côté Stripe
   // (utile juste après l'onboarding : le webhook peut arriver après le retour).
   if (parts.length === 2 && parts[0] === "stripe" && parts[1] === "refresh" && req.method === "POST") {
@@ -626,6 +733,35 @@ async function handleApi(req, res, url) {
   }
 
   // POST /local/account/name — prénom/nom de la personne derrière le compte.
+  // GET /local/account/export — toutes les données du compte (RGPD), en fichier.
+  if (parts.length === 2 && parts[0] === "account" && parts[1] === "export" && req.method === "GET") {
+    try {
+      const data = await client.request("GET", "/api/admin/account/export");
+      const day = new Date().toISOString().slice(0, 10);
+      res.writeHead(200, {
+        "content-type": "application/json; charset=utf-8",
+        "content-disposition": `attachment; filename="holypixx-mes-donnees-${day}.json"`,
+        "cache-control": "no-store",
+      });
+      return res.end(JSON.stringify(data, null, 2));
+    } catch (err) {
+      return relayError(res, err, "Impossible d'exporter vos données");
+    }
+  }
+
+  // POST /local/account/delete — suppression définitive du compte, puis
+  // fin de la session dans ce navigateur.
+  if (parts.length === 2 && parts[0] === "account" && parts[1] === "delete" && req.method === "POST") {
+    const body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
+    try {
+      const result = await client.request("POST", "/api/admin/account/delete", body);
+      clearSessionCookie(req, res);
+      return json(res, 200, result);
+    } catch (err) {
+      return relayError(res, err, "Impossible de supprimer le compte");
+    }
+  }
+
   if (parts.length === 2 && parts[0] === "account" && parts[1] === "name" && req.method === "POST") {
     const body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
     try {
@@ -720,6 +856,52 @@ async function handleApi(req, res, url) {
       return json(res, 200, result);
     } catch (err) {
       return relayError(res, err, "Impossible de lire les compteurs plateforme");
+    }
+  }
+
+  // GET /local/music-library — bibliothèque musicale commune.
+  if (parts.length === 1 && parts[0] === "music-library" && req.method === "GET") {
+    try {
+      return json(res, 200, await client.request("GET", "/api/admin/music-library"));
+    } catch (err) {
+      return relayError(res, err, "Impossible de lire la bibliothèque musicale");
+    }
+  }
+
+  // /local/owner/music — ajout (formulaire : fichier MP3 + titre, artiste,
+  // ambiance, crédit, durée) et retrait de morceaux, propriétaire seulement
+  // (revérifié par le Worker).
+  if (parts[0] === "owner" && parts[1] === "music") {
+    if (parts.length === 2 && req.method === "POST") {
+      const contentLength = Number(req.headers["content-length"] || 0);
+      if (contentLength > MAX_MUSIC_BYTES + 64 * 1024) return json(res, 413, { error: "Fichier trop volumineux (15 Mo maximum)" });
+      let form;
+      try {
+        form = await nodeRequestToWebRequest(req, await readBody(req)).formData();
+      } catch (err) {
+        return json(res, err.status || 400, { error: err.status ? err.message : "Formulaire illisible" });
+      }
+      const file = form.get("file");
+      if (!file || typeof file.arrayBuffer !== "function") return json(res, 400, { error: "Aucun fichier reçu" });
+      const name = String(file.name || "");
+      if (!/\.mp3$/i.test(name) && !/^audio\/(mpeg|mp3)$/i.test(file.type || "")) return json(res, 400, { error: "Seul le format MP3 est accepté" });
+      const buffer = Buffer.from(await file.arrayBuffer());
+      if (!buffer.length) return json(res, 400, { error: "Fichier vide" });
+      if (buffer.length > MAX_MUSIC_BYTES) return json(res, 413, { error: "Fichier trop volumineux (15 Mo maximum)" });
+      const query = new URLSearchParams();
+      for (const field of ["title", "artist", "mood", "credit", "duration"]) query.set(field, String(form.get(field) || ""));
+      try {
+        return json(res, 201, await client.request("PUT", `/api/owner/music?${query}`, buffer, true));
+      } catch (err) {
+        return relayError(res, err, "Impossible d'ajouter ce morceau");
+      }
+    }
+    if (parts.length === 3 && req.method === "DELETE") {
+      try {
+        return json(res, 200, await client.request("DELETE", `/api/owner/music/${encodeURIComponent(decodeURIComponent(parts[2]))}`));
+      } catch (err) {
+        return relayError(res, err, "Impossible de retirer ce morceau");
+      }
     }
   }
 
@@ -877,6 +1059,60 @@ async function handleApi(req, res, url) {
       return json(res, 200, result);
     } catch (err) {
       return relayError(res, err, "Impossible d'enregistrer la musique");
+    }
+  }
+
+  // POST /local/galleries/:slug/promo[/send] — promotion sur les tirages.
+  if (parts[2] === "promo" && req.method === "POST" && (parts.length === 3 || (parts.length === 4 && parts[3] === "send"))) {
+    const body = parts.length === 3 ? JSON.parse((await readBody(req)).toString("utf8") || "{}") : {};
+    try {
+      return json(res, 200, await client.request("POST", `/api/admin/galleries/${encodeURIComponent(slug)}/promo${parts.length === 4 ? "/send" : ""}`, body));
+    } catch (err) {
+      return relayError(res, err, "La promotion n'a pas pu être enregistrée");
+    }
+  }
+
+  // /local/galleries/:slug/delivery… — livraison des photos définitives.
+  // L'envoi d'un fichier arrive brut (corps = le fichier, ?name=…) : on en
+  // calcule le CRC-32 ici puis on le transmet au Worker.
+  if (parts[2] === "delivery") {
+    const base = `/api/admin/galleries/${encodeURIComponent(slug)}/delivery`;
+    try {
+      if (parts.length === 3 && req.method === "GET") return json(res, 200, await client.request("GET", base));
+      if (parts.length === 3 && req.method === "POST") {
+        const body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
+        return json(res, 200, await client.request("POST", base, body));
+      }
+      if (parts.length === 4 && parts[3] === "files" && req.method === "POST") {
+        const contentLength = Number(req.headers["content-length"] || 0);
+        if (contentLength > MAX_DELIVERY_BYTES) return json(res, 413, { error: "Fichier trop volumineux (80 Mo maximum)" });
+        const name = new URL(req.url, "http://x").searchParams.get("name") || "photo.jpg";
+        let buffer;
+        try {
+          buffer = await readBody(req, MAX_DELIVERY_BYTES);
+        } catch (err) {
+          return json(res, err.status || 400, { error: err.status ? "Fichier trop volumineux (80 Mo maximum)" : "Fichier illisible" });
+        }
+        if (!buffer.length) return json(res, 400, { error: "Fichier vide" });
+        const crc = crc32(buffer).toString(16).padStart(8, "0");
+        return json(res, 201, await client.request("PUT", `${base}/files?name=${encodeURIComponent(name)}&crc=${crc}`, buffer, true));
+      }
+      if (parts.length === 5 && parts[3] === "files" && req.method === "DELETE") {
+        return json(res, 200, await client.request("DELETE", `${base}/files/${encodeURIComponent(decodeURIComponent(parts[4]))}`));
+      }
+    } catch (err) {
+      return relayError(res, err, "La livraison n'a pas pu traiter la demande");
+    }
+  }
+
+  // POST /local/galleries/:slug/music-choice — bibliothèque, lien Spotify &
+  // co, ou aucune musique (le Worker valide le lien et le morceau).
+  if (parts.length === 3 && parts[2] === "music-choice" && req.method === "POST") {
+    const body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
+    try {
+      return json(res, 200, await client.request("POST", `/api/admin/galleries/${encodeURIComponent(slug)}/music-choice`, body));
+    } catch (err) {
+      return relayError(res, err, "Impossible d'enregistrer ce choix de musique");
     }
   }
 

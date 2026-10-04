@@ -15,7 +15,7 @@ import { readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createTestAccount } from "./lib/testAccount.mjs";
+import { createTestAccount, setTestPlan } from "./lib/testAccount.mjs";
 
 const BASE = process.env.ADMIN_BASE || "http://127.0.0.1:4000";
 const API = process.env.GALERIE_API || "http://127.0.0.1:8788";
@@ -78,8 +78,19 @@ await page.fill('#ad-signup-form [name="lastName"]', "Testeuse");
 await page.fill('#ad-signup-form [name="studioName"]', "Studio de test");
 await page.fill('#ad-signup-form [name="email"]', email);
 await page.fill('#ad-signup-form [name="password"]', password);
+const refusedWithoutTerms = await page.evaluate(async () => (await fetch("/local/auth/signup", {
+  method: "POST", headers: { "content-type": "application/json" },
+  body: JSON.stringify({ email: "sans-conditions@test.invalid", password: "mot-de-passe-assez-long" }),
+})).status);
+check("l'inscription exige d'accepter les conditions et la politique de confidentialité",
+      refusedWithoutTerms === 400 && await page.getAttribute('#ad-signup-form [name="acceptTerms"]', "required") !== null &&
+      (await page.textContent("#ad-signup-form")).includes("politique de confidentialité"));
+await page.check('#ad-signup-form [name="acceptTerms"]');
 await page.click("#ad-signup-submit");
 await page.waitForSelector("#ad-new-gallery", { timeout: 10000 });
+// Formule Pro (comme après un abonnement) : boutique, adresse à son nom et
+// galeries sans limite sont testées plus bas.
+await setTestPlan(API, email, "pro");
 check("créer un compte depuis le formulaire connecte automatiquement au tableau de bord",
       await page.isVisible("#ad-new-gallery"));
 check("l'onglet Admin est masqué pour un compte qui n'est pas la propriétaire",
@@ -180,7 +191,7 @@ await page.setInputFiles("#ad-music-file-input", { name: "balade.mp3", mimeType:
 await page.waitForFunction(
   () => {
     const el = document.querySelector("#ad-music-state");
-    return el && el.textContent.includes("Piste actuelle") && el.textContent.includes("balade.mp3");
+    return el && el.textContent.includes("Fichier MP3") && el.textContent.includes("balade.mp3");
   },
   { timeout: 15000 }
 );
@@ -209,6 +220,26 @@ await page.waitForFunction(
   { timeout: 15000 }
 );
 check("retirer la musique (après confirmation) ramène la fiche à « aucune musique »", true);
+
+/* ---------- Livraison des photos définitives ---------- */
+
+check("sans fichier déposé, la livraison n'est pas ouverte et rien ne peut être ouvert",
+      ((await page.textContent(".ad-delivery-status")) || "").includes("Pas encore ouverte") && (await page.locator("#ad-delivery-open").count()) === 0);
+await page.setInputFiles("#ad-delivery-input", [
+  { name: "final-01.jpg", mimeType: "image/jpeg", buffer: Buffer.alloc(200000, 1) },
+  { name: "final-02.jpg", mimeType: "image/jpeg", buffer: Buffer.alloc(50000, 2) },
+]);
+await page.waitForFunction(() => document.querySelectorAll(".ad-delivery-list li").length === 2, { timeout: 20000 });
+check("les photos définitives s'ajoutent à la livraison, avec leur poids",
+      (await page.textContent("#ad-delivery-progress")).includes("2 photos") && (await page.textContent(".ad-delivery-list")).includes("final-02.jpg"));
+await page.click("#ad-delivery-open");
+await page.waitForSelector("#ad-confirm-modal:not([hidden])");
+await page.click("#ad-confirm-ok");
+await page.waitForFunction(() => (document.querySelector(".ad-delivery-status") || {}).textContent?.includes("Livraison ouverte"), { timeout: 15000 });
+check("ouvrir la livraison (après confirmation) l'indique sur la fiche", await page.isVisible("#ad-delivery-close"));
+await page.click("#ad-delivery-close");
+await page.waitForFunction(() => (document.querySelector(".ad-delivery-status") || {}).textContent?.includes("Pas encore ouverte"), { timeout: 15000 });
+check("la livraison se referme d'un clic", await page.isVisible("#ad-delivery-open"));
 
 /* ---------- Forfait et suppléments ---------- */
 
@@ -365,12 +396,53 @@ check("le compte créé plus haut dans ce test apparaît dans la liste, avec son
 check("la section trafic & sources explique comment brancher Cloudflare Web Analytics",
       ownerPageText.indexOf("Cloudflare Web Analytics") !== -1);
 
+// Bibliothèque musicale : la propriétaire ajoute un morceau libre de droits.
+const libraryTitle = `Matin doux ${Date.now().toString(36)}`;
+await ownerPage.waitForSelector("#ad-owner-music-form");
+await ownerPage.setInputFiles('#ad-owner-music-form [name="file"]', { name: "matin.mp3", mimeType: "audio/mpeg", buffer: musicBuffer });
+await ownerPage.fill('#ad-owner-music-form [name="title"]', libraryTitle);
+await ownerPage.fill('#ad-owner-music-form [name="artist"]', "Artiste libre");
+await ownerPage.selectOption('#ad-owner-music-form [name="mood"]', "piano");
+await ownerPage.fill('#ad-owner-music-form [name="credit"]', "Artiste libre — CC BY 4.0");
+await ownerPage.click("#ad-owner-music-submit");
+await ownerPage.waitForFunction((t) => (document.getElementById("ad-owner-music-list") || {}).textContent?.includes(t), libraryTitle, { timeout: 15000 });
+check("la propriétaire ajoute un morceau à la bibliothèque musicale (titre, ambiance, crédit affichés)",
+      (await ownerPage.textContent("#ad-owner-music-list")).includes("Piano") &&
+      (await ownerPage.textContent("#ad-owner-music-list")).includes("CC BY 4.0"));
+
 // Reconnexion avec le compte normal créé au tout début de ce test : l'onglet
 // Admin ne doit jamais apparaître pour lui, même après tout ce qui précède.
 check("l'onglet Admin reste masqué pour le compte normal de ce test, même après coup",
       await page.isHidden("#ad-tab-owner"));
 
 await ownerContext.close();
+
+// Le photographe choisit ce morceau pour sa galerie, puis un lien Spotify.
+await page.reload({ waitUntil: "domcontentloaded" });
+await page.waitForFunction((t) => (document.getElementById("ad-music-library") || {}).textContent?.includes(t), libraryTitle, { timeout: 15000 });
+check("la bibliothèque est proposée dans la fiche galerie, avec écoute",
+      (await page.locator("#ad-music-library .ad-track-play").count()) >= 1);
+await page.locator("#ad-music-library .ad-track", { hasText: libraryTitle }).locator("[data-pick-track]").click();
+await page.waitForFunction((t) => (document.getElementById("ad-music-state") || {}).textContent?.includes(t), libraryTitle, { timeout: 15000 });
+// La liste de la bibliothèque se recharge juste après la fiche.
+await page.waitForSelector("#ad-music-library .ad-track-current", { timeout: 15000 });
+check("choisir un morceau de la bibliothèque en fait la musique de la galerie",
+      (await page.textContent("#ad-music-state")).includes("bibliothèque") &&
+      (await page.locator("#ad-music-library .ad-track-current", { hasText: libraryTitle }).count()) === 1);
+
+await page.click('[data-music-tab="link"]');
+await page.fill("#ad-music-link-input", "https://exemple.com/ma-musique");
+await page.click("#ad-music-link-save");
+await page.waitForFunction(() => (document.querySelector(".ad-toast-visible") || {}).textContent?.includes("Spotify"), { timeout: 10000 });
+check("un lien d'un autre site est refusé avec un message clair", true);
+await page.fill("#ad-music-link-input", "https://open.spotify.com/playlist/37i9dQZF1DX4sWSpwq3LiO?si=abc");
+await page.click("#ad-music-link-save");
+await page.waitForFunction(() => (document.getElementById("ad-music-state") || {}).textContent?.includes("Spotify"), { timeout: 15000 });
+check("un lien Spotify devient le lecteur de la galerie", (await page.textContent("#ad-music-state")).includes("Lecteur Spotify"));
+await page.click("#ad-music-remove");
+await page.waitForSelector("#ad-confirm-modal:not([hidden])");
+await page.click("#ad-confirm-ok");
+await page.waitForFunction(() => (document.getElementById("ad-music-state") || {}).textContent?.includes("Aucune musique"), { timeout: 15000 });
 
 /* ---------- Le lien créé fonctionne vraiment côté client ---------- */
 
@@ -777,6 +849,16 @@ await page.check("#ad-gallery-shop-toggle");
 await page.waitForFunction(() => (document.getElementById("ad-shop-printable") || {}).textContent?.includes("tant que la boutique est ouverte"), { timeout: 10000 });
 check("ouvrir la boutique l'enregistre et explique quelles photos sont commandables",
       await page.isChecked("#ad-gallery-shop-toggle") && (await page.textContent("#ad-shop-printable")).includes("disponible"));
+
+check("une fois la boutique ouverte, la fiche propose une promotion à durée limitée", await page.isVisible("#ad-promo-start"));
+await page.selectOption("#ad-promo-percent", "25");
+await page.click("#ad-promo-start");
+await page.waitForSelector(".ad-promo-on", { timeout: 10000 });
+check("lancer une promotion l'affiche sur la fiche (remise et date de fin)",
+      (await page.textContent(".ad-promo-on")).includes("−25 %") && await page.isVisible("#ad-promo-stop"));
+await page.click("#ad-promo-stop");
+await page.waitForSelector("#ad-promo-start", { timeout: 10000 });
+check("la promotion s'arrête d'un clic", true);
 await shopLab.close();
 
 await page.click("#ad-tab-settings");
@@ -878,6 +960,41 @@ await page.click("#ad-login-submit");
 await page.waitForSelector("#ad-new-gallery", { timeout: 10000 });
 check("le compte créé depuis le formulaire d'inscription se reconnecte ensuite normalement",
       await page.isVisible("#ad-new-gallery"));
+
+/* ---------- Abonnement ---------- */
+
+await page.click("#ad-tab-subscription");
+await page.waitForSelector(".ad-plans", { timeout: 10000 });
+check("l'onglet Abonnement présente les 3 formules, la formule actuelle et l'utilisation",
+      (await page.locator(".ad-plan").count()) === 3 && (await page.textContent(".ad-plan-name")) === "Pro" &&
+      (await page.locator(".ad-plan-current", { hasText: "Pro" }).count()) === 1 &&
+      (await page.textContent(".ad-plan-usage")).includes("galerie") &&
+      (await page.evaluate(() => location.hash)) === "#/abonnement");
+
+/* ---------- Mes données : export puis suppression du compte ---------- */
+
+await page.click("#ad-tab-settings");
+await page.waitForSelector(".ad-mydata", { timeout: 10000 });
+const [exportDownload] = await Promise.all([page.waitForEvent("download", { timeout: 15000 }), page.click('.ad-mydata a[href="/local/account/export"]')]);
+const exported = JSON.parse(readFileSync(await exportDownload.path(), "utf8"));
+check("« Exporter mes données » télécharge toutes les données du compte, sans aucun secret",
+      exported.format === "holypixx-export-1" && exported.account?.email === email && Array.isArray(exported.galleries) &&
+      typeof exported.account.terms_accepted_at === "number" &&
+      !("password_hash" in exported.account) && !JSON.stringify(exported).includes("password_salt"),
+      exportDownload.suggestedFilename());
+await page.click(".ad-danger-zone summary");
+await page.fill('#ad-delete-account-form [name="password"]', "mauvais-mot-de-passe");
+await page.fill('#ad-delete-account-form [name="confirm"]', "SUPPRIMER");
+await page.click("#ad-delete-account-submit");
+await page.waitForSelector("#ad-delete-account-error:not([hidden])", { timeout: 10000 });
+check("supprimer le compte exige le bon mot de passe", (await page.textContent("#ad-delete-account-error")).includes("incorrect"));
+await page.fill('#ad-delete-account-form [name="password"]', password);
+await page.click("#ad-delete-account-submit");
+await page.waitForSelector("#ad-login-form", { timeout: 15000 });
+const loginAfterDelete = await page.evaluate(async ({ email, password }) => (await fetch("/local/auth/login", {
+  method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, password }),
+})).status, { email, password });
+check("une fois supprimé, le compte n'existe plus (connexion refusée)", loginAfterDelete === 401, String(loginAfterDelete));
 
 check("aucune exception JavaScript", exceptions.length === 0, exceptions.join(" | "));
 
