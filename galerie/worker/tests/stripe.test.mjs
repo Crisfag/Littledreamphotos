@@ -116,7 +116,8 @@ check("un refus de Stripe montre sa raison",
       stripeFailureMessage(new Error("")) === "Stripe a refusé la demande");
 check("un Connect pas encore configuré en mode réel donne la marche à suivre",
       stripeFailureMessage(new Error("You must complete your platform profile to use Connect and create live connected accounts.")).includes("Profil de plateforme") &&
-      stripeFailureMessage(new Error("You can only create new accounts if you've signed up for Connect")).includes("Profil de plateforme"));
+      stripeFailureMessage(new Error("You can only create new accounts if you've signed up for Connect")).includes("Profil de plateforme") &&
+      stripeFailureMessage(new Error("Please review the responsibilities of managing losses for connected accounts at https://dashboard.stripe.com/settings/connect/platform-profile.")).includes("Profil de plateforme"));
 
 /* ---------- État de la configuration (onglet Admin) ---------- */
 

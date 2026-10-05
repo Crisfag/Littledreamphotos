@@ -16,7 +16,7 @@ import { sendInvoiceEmail } from "./notify.js";
 // explication est impossible à corriger.
 export function stripeFailureMessage(err) {
   const reason = String(err?.message || "").trim();
-  if (/platform profile|signed up for connect|connect.*(review|responsibilit)|loss liability/i.test(reason)) {
+  if (/platform[ -]profile|signed up for connect|managing losses|loss liability/i.test(reason)) {
     return "Stripe Connect n'est pas encore activé en mode réel sur la plateforme : terminez « Connect → Paramètres → Profil de plateforme » dans le tableau de bord Stripe, puis réessayez. " +
       `(Stripe : ${reason})`;
   }
