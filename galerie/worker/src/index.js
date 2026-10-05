@@ -19,6 +19,7 @@ import { runReminders } from "./reminders.js";
 import { purgeOldAccessLogs } from "./privacy.js";
 import { runSalesReminders } from "./campaigns.js";
 import { handlePortfolioPublic, purgeOldPortfolioMessages } from "./portfolio.js";
+import { runStoragePurge } from "./storage.js";
 import { shopState } from "./shop.js";
 import { studioSubdomainOf, handleStudioHost } from "./studio.js";
 import { handlePrintAsset, handleProdigiCallback } from "./shop.js";
@@ -130,6 +131,13 @@ export default {
     ctx.waitUntil(
       runSalesReminders(env, shopState).catch((err) => {
         console.error("Relances de vente : échec de la passe planifiée :", err && err.stack ? err.stack : err);
+      })
+    );
+    // Fichiers HD et d'impression des galeries expirées depuis 90 jours
+    // (préavis au photographe 14 jours avant, voir storage.js).
+    ctx.waitUntil(
+      runStoragePurge(env).catch((err) => {
+        console.error("Purge du stockage : échec :", err && err.stack ? err.stack : err);
       })
     );
     // Messages du formulaire de contact des portfolios : conservés un an.

@@ -18,6 +18,7 @@
 
 import { json, fail } from "./http.js";
 import { signToken, verifyToken, randomBytes, b64url } from "./auth.js";
+import { storageRefusal } from "./storage.js";
 
 export const MAX_DELIVERY_FILE_BYTES = 80 * 1024 * 1024;
 // Au-delà de 4 Go, le format ZIP classique ne suffit plus (ZIP64) : on reste
@@ -216,6 +217,9 @@ async function addFile(request, env, gallery) {
   const existing = await listFiles(env, gallery.id);
   if (existing.length >= MAX_FILES) return fail(409, `${MAX_FILES} fichiers maximum par galerie`);
   const used = existing.reduce((n, f) => n + f.size, 0);
+  const photographer = await env.DB.prepare("SELECT * FROM photographers WHERE id = ?").bind(gallery.photographer_id).first();
+  const storageFull = await storageRefusal(env, photographer, declared);
+  if (storageFull) return storageFull;
 
   const id = `dlv_${b64url(randomBytes(9))}`;
   const key = deliveryKey(gallery.id, id);

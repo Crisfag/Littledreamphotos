@@ -18,6 +18,7 @@ import { setPromo, sendPromoToClient, promoForAdmin } from "./campaigns.js";
 import { galleryUrlFor } from "./reminders.js";
 import { salesForAdmin } from "./sales.js";
 import { handlePortfolioAdmin, deletePortfolioFiles } from "./portfolio.js";
+import { storageRefusal, TILE_BYTES_PER_PHOTO } from "./storage.js";
 import { authenticatePhotographer } from "./authPhotographer.js";
 import { connectStripe, refreshStripeStatus, setBillingProfile } from "./billing.js";
 import { updateStudioName, updateName, changePassword, requestEmailChange, updateDefaults, updateReminders, updateSubdomain } from "./account.js";
@@ -214,7 +215,7 @@ async function getGallery(env, photographerId, slug) {
   const selectedCount = photos.filter((p) => p.selected).length;
 
   const { results: payments } = await env.DB.prepare(
-    `SELECT payments.id, payments.extra_count, payments.amount_cents, payments.status, payments.kind,
+    `SELECT payments.id, payments.extra_count, payments.amount_cents, payments.fee_cents, payments.status, payments.kind,
             payments.created_at, payments.paid_at,
             invoices.id AS invoice_id, invoices.number AS invoice_number, invoices.emailed_to AS invoice_emailed_to
      FROM payments LEFT JOIN invoices ON invoices.payment_id = payments.id
@@ -504,6 +505,9 @@ async function addPhoto(request, env, photographerId, slug) {
     const clash = await env.DB.prepare("SELECT id FROM photos WHERE id = ?").bind(id).first();
     if (clash) return fail(409, "Identifiant de photo déjà utilisé");
   }
+  const owner = await env.DB.prepare("SELECT * FROM photographers WHERE id = ?").bind(photographerId).first();
+  const storageFull = await storageRefusal(env, owner, TILE_BYTES_PER_PHOTO);
+  if (storageFull) return storageFull;
 
   await env.DB.prepare(
     `INSERT INTO photos

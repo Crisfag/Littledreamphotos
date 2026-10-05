@@ -8,6 +8,7 @@ import { sendCaptureAlert, sendSelectionValidated } from "./notify.js";
 import { supplementFor } from "./admin.js";
 import { shopForClient, handlePrintOrder } from "./shop.js";
 import { createCheckoutSession } from "./stripe.js";
+import { paymentFeeCents } from "./fees.js";
 import { musicForClient, audioKeyFor, serveAudio, getTrack } from "./music.js";
 import { deliveryForClient, createDownloadLink, downloadFile, downloadZip } from "./delivery.js";
 import { saveCart } from "./campaigns.js";
@@ -497,6 +498,7 @@ async function handleCheckout(request, env, slug) {
 
   const paymentId = newPaymentId();
   const amountCents = outstanding * (gallery.extra_photo_price_cents || 0);
+  const feeCents = paymentFeeCents(env, photographer, amountCents);
 
   let session;
   try {
@@ -507,6 +509,7 @@ async function handleCheckout(request, env, slug) {
       successUrl,
       cancelUrl,
       metadata: { gallery_id: gallery.id, gallery_slug: slug, payment_id: paymentId },
+      applicationFeeCents: feeCents,
     });
   } catch (err) {
     console.error("Échec de la création de la session Stripe :", err);
@@ -514,10 +517,10 @@ async function handleCheckout(request, env, slug) {
   }
 
   await env.DB.prepare(
-    `INSERT INTO payments (id, gallery_id, stripe_checkout_session_id, extra_count, amount_cents, status, created_at)
-     VALUES (?, ?, ?, ?, ?, 'pending', ?)`
+    `INSERT INTO payments (id, gallery_id, stripe_checkout_session_id, extra_count, amount_cents, fee_cents, status, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)`
   )
-    .bind(paymentId, gallery.id, session.id, outstanding, amountCents, now())
+    .bind(paymentId, gallery.id, session.id, outstanding, amountCents, feeCents, now())
     .run();
 
   return json({ url: session.url });

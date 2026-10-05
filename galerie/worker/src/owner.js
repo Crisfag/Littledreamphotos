@@ -15,6 +15,7 @@ import { runReminders } from "./reminders.js";
 import { handleOwnerMusic } from "./music.js";
 import { runSalesReminders } from "./campaigns.js";
 import { shopState } from "./shop.js";
+import { runStoragePurge } from "./storage.js";
 
 async function requireOwner(env, photographerId) {
   if (!env.OWNER_EMAIL) return null;
@@ -133,6 +134,13 @@ export async function handleOwner(request, env, path) {
     const result = await runReminders(env);
     const sales = await runSalesReminders(env, shopState);
     return json({ ...result, sent: [...result.sent, ...sales.sent] });
+  }
+  // Purge du stockage tout de suite (préavis puis effacement des fichiers HD
+  // et d'impression des galeries expirées), même passe que le déclencheur.
+  if (action === "storage" && parts[3] === "purge" && parts.length === 4 && request.method === "POST") {
+    const owner = await requireOwner(env, photographerId);
+    if (!owner) return fail(403, "Accès réservé");
+    return json(await runStoragePurge(env));
   }
   // Bibliothèque musicale commune : ajout et retrait de morceaux.
   if (action === "music") {

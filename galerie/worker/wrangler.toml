@@ -36,6 +36,13 @@ PUBLIC_SITE_ORIGIN = "https://www.holypixx.com"
 # être touché.
 STUDIO_DOMAIN = "holypixx.com"
 
+# Frais de paiement retenus sur chaque vente en ligne d'un photographe
+# (suppléments, tirages) pour couvrir les frais Stripe que paie la
+# plateforme — voir worker/src/fees.js. Pourcentage du montant + fixe en
+# centimes. Un changement ne vaut que pour les paiements suivants.
+PAYMENT_FEE_PERCENT = "2"
+PAYMENT_FEE_FIXED_CENTS = "30"
+
 # Relances automatiques (voir worker/src/reminders.js) : une passe par jour,
 # 08:00 UTC (10:00 à Paris/Bruxelles en été, 09:00 en hiver). Client prévenu
 # à J-7 puis J-2 de l'expiration de sa galerie tant qu'il n'a pas validé sa

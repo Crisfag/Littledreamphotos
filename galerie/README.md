@@ -567,6 +567,27 @@ mosaïque, visionneuse (flèches, Échap, glisser au doigt), à propos et
 prestations, contact. Le portfolio, ses photos et ses messages figurent dans
 l'export RGPD et disparaissent avec le compte.
 
+#### Espace de stockage (onglet Abonnement)
+
+Chaque formule inclut un espace : **5 Go** (Découverte), **200 Go**
+(Essentiel), **1 To** (Pro) ; la propriétaire n'a pas de limite. L'onglet
+Abonnement affiche une jauge (espace utilisé sur l'espace inclus). La mesure
+additionne ce que la base connaît déjà, sans relire R2 : fichiers livrés en
+HD et fichiers d'impression (tailles exactes), photos du portfolio, et une
+estimation de 0,6 Mo de tuiles par photo de galerie (`worker/src/storage.js`).
+
+- **Espace plein** : tout nouvel envoi (photo de galerie, fichier HD,
+  fichier d'impression, photo de portfolio) est refusé avec un message
+  clair ; rien de ce qui est déjà en ligne n'est retiré.
+- **Purge automatique** : les fichiers HD livrés et les fichiers
+  d'impression d'une galerie **expirée depuis 90 jours** sont effacés par la
+  passe quotidienne (les tuiles, légères, restent : la galerie peut être
+  prolongée). Le photographe reçoit un e-mail de rappel **14 jours avant** ;
+  prolonger la galerie repousse la purge d'autant. Les fichiers d'impression
+  d'une commande payée pas encore partie au labo ne sont jamais effacés.
+  La propriétaire peut lancer la passe à la main :
+  `POST /api/owner/storage/purge`.
+
 #### Onglet Paramètres
 
 Tout ce qui concerne le compte plutôt qu'une galerie en particulier :
@@ -737,6 +758,23 @@ l'interface d'administration, insérée en lien dans l'e-mail.
 
 ### Paiement en ligne des suppléments (Stripe Connect)
 
+**Frais de paiement.** Avec une charge de destination, c'est le compte
+Stripe de la *plateforme* qui paie les frais Stripe de chaque vente (carte,
+virement vers le photographe, forfait mensuel par compte connecté). Pour que
+chaque vente ne coûte rien à Holypixx, un montant forfaitaire est retenu sur
+le paiement (`application_fee_amount`, voir `worker/src/fees.js`) :
+**2 % + 0,30 €** par défaut, réglable sans toucher au code avec
+`PAYMENT_FEE_PERCENT` et `PAYMENT_FEE_FIXED_CENTS` dans `wrangler.toml` (le
+montant est figé à la création du paiement : un changement ne vaut que pour
+les ventes suivantes ; pensez à mettre à jour la mention de la page
+d'accueil). Ce n'est pas une commission : seulement le coût du paiement. Le
+photographe le voit avant de connecter Stripe (onglet Facturation), sur
+chaque paiement (« dont x € de frais de paiement »), dans l'onglet Ventes
+(montant reçu après frais), et ses marges de tirages sont affichées nettes
+de ces frais ; l'outil d'ajout de produit calcule le prix client pour que la
+marge saisie arrive entière. La propriétaire de la plateforme n'en paie pas.
+
+
 Chaque photographe connecte son propre compte [Stripe](https://stripe.com)
 (comptes « Express », [Stripe Connect](https://stripe.com/connect)) depuis
 l'onglet Facturation du tableau de bord, et renseigne ses coordonnées de
@@ -744,8 +782,8 @@ facturation (raison sociale, adresse, n° de TVA) depuis l'onglet Paramètres.
 Le règlement d'un
 supplément passe par une **charge de destination** (`transfer_data.destination`) :
 la session de paiement est créée sur la plateforme, qui règle les frais
-Stripe, puis le montant est automatiquement transféré au photographe —
-toujours 100 %, sans commission de plateforme. (Les charges directes,
+Stripe, puis le montant est automatiquement transféré au photographe, sans
+commission de plateforme. (Les charges directes,
 utilisées au tout début de cette fonctionnalité, ne sont plus autorisées par
 Stripe pour les nouvelles plateformes Connect — voir Dashboard Stripe →
 Santé → Indicateurs si ce message réapparaît un jour.)
@@ -1039,7 +1077,7 @@ client, jamais deux fois la même relance, pas de rattrapage d'une relance
 manquée le jour d'une autre, et lien de galerie construit (slug encodé)
 seulement si `PUBLIC_SITE_ORIGIN` est renseigné.
 
-**Signature de webhook Stripe et sessions de paiement** — 16 vérifications
+**Signature de webhook Stripe et sessions de paiement** — 18 vérifications
 sans réseau (fetch intercepté, jamais appelé pour de vrai) :
 `verifyStripeSignature` est une fonction pure — signature valide acceptée,
 mauvais secret refusé, corps modifié après signature refusé, évènement trop
@@ -1060,7 +1098,7 @@ appliqué sinon, HT + TVA se recomposant exactement au centime près en TTC
 même sur un montant qui ne se divise pas rond, et un vrai PDF valide généré
 aussi bien avec des coordonnées complètes qu'avec des champs vides.
 
-**Interface d'administration** — 132 vérifications dans un vrai navigateur,
+**Interface d'administration** — 134 vérifications dans un vrai navigateur,
 contre le vrai Worker local : demande de lien de réinitialisation de mot de
 passe (message générique affiché), création de compte et connexion depuis
 le formulaire (pas de session présupposée), barre d'onglets Galeries /
@@ -1213,12 +1251,13 @@ avec la marche à suivre ; tout autre site, identifiant invalide ou domaine
 piège refusé ; rien du lien collé recopié tel quel ; ce que reçoit la page
 client pour chaque source.
 
-**Tableau de bord des ventes (logique)** — 12 vérifications sans réseau
+**Tableau de bord des ventes (logique)** — 13 vérifications sans réseau
 ni D1 : douze mois calendaires (passage d'année, heure belge et non UTC),
 paiement rangé dans son mois et sa catégorie, paiements hors période
 ignorés, totaux et panier moyen, marge estimée limitée aux produits au coût
-connu (avec la part couverte), classements des formats et des galeries,
-conversion, et aucune division par zéro sans vente.
+connu (avec la part couverte) et nette des frais de paiement, frais
+totalisés et montant reçu après frais, classements des formats et des
+galeries, conversion, et aucune division par zéro sans vente.
 
 **Onglet Ventes** — 16 vérifications dans un vrai navigateur, contre le vrai
 Worker local : seuls les paiements réglés des douze derniers mois comptent,
@@ -1226,6 +1265,22 @@ marge, conversion, cloisonnement entre photographes, indicateurs affichés,
 douze colonnes de 24 px au plus avec légende, détail au survol, vue
 tableau, classements, lien vers la fiche d'une galerie, page tenant dans la
 largeur d'un téléphone, aucune exception.
+
+**Frais de paiement (logique)** — 9 vérifications sans réseau : règle par
+défaut (2 % + 0,30 €, qui couvre une carte européenne et le virement),
+arrondi, plafond (jamais tout le paiement), réglage par variables, valeur
+absurde ignorée, frais désactivables, propriétaire exemptée, libellé.
+
+**Stockage (logique)** — 6 vérifications sans réseau : unités affichées,
+espace par formule, quota selon la formule effective, propriétaire
+illimitée, dates de purge et de préavis, e-mail de préavis.
+
+**Stockage** — 15 vérifications contre le vrai Worker local : mesure
+(tuiles estimées, fichiers HD, fichier d'impression), espace plein (fichier
+HD et photo refusés, rien retiré), propriétaire illimitée, envois acceptés à
+nouveau après suppression, préavis à 76 jours (une seule fois), purge à 90
+jours (HD et impression effacés, livraison refermée, photos et tuiles
+conservées).
 
 **Portfolio (logique)** — 8 vérifications sans réseau ni D1 : règles de
 l'adresse, adresse proposée, prestations, Instagram, site (https ajouté,
@@ -1270,6 +1325,7 @@ node tests/music.test.mjs             # musique côté client (bibliothèque, li
 node tests/delivery.test.mjs          # livraison des photos définitives côté client, autonome
 node tests/sales.test.mjs             # onglet Ventes, autonome (admin-server.mjs lancé)
 node tests/portfolio.test.mjs         # portfolio (admin, page publique, contact, sous-domaine), autonome (admin-server.mjs lancé)
+node tests/storage.test.mjs           # espace de stockage, quota et purge, autonome
 
 cd ../worker
 node tests/notify.test.mjs            # e-mails (alerte de capture, relances…), sans réseau
@@ -1281,6 +1337,8 @@ node tests/subscription.test.mjs      # formules d'abonnement et webhook Stripe,
 node tests/campaigns.test.mjs         # promotion, panier enregistré, e-mails de relance, sans réseau
 node tests/sales.test.mjs             # tableau de bord des ventes (mois, marge, classements), sans réseau
 node tests/portfolio.test.mjs         # règles du portfolio et e-mail de contact, sans réseau
+node tests/fees.test.mjs              # frais de paiement retenus sur les ventes, sans réseau
+node tests/storage.test.mjs           # unités, espace par formule, purge, e-mail de préavis, sans réseau
 node tests/stripe.test.mjs            # signature de webhook + encodage des sessions Stripe, sans réseau
 node tests/invoices.test.mjs          # calcul de TVA + génération du PDF de facture, sans réseau
 npm run dev:local                     # dans un autre terminal (Worker local sur le port 8788)

@@ -806,3 +806,12 @@ h3 { font-size: 1.15rem; margin-bottom: .9rem; }
 .ad-pf-message-meta { font-size: .86rem; margin: .2rem 0 .5rem; color: var(--muted); }
 .ad-pf-message-body { white-space: pre-wrap; margin-bottom: .6rem; color: var(--charcoal); }
 .ad-banner a { color: inherit; font-weight: 500; }
+
+/* ---------- Jauge de stockage ---------- */
+
+.ad-storage { min-width: 220px; }
+.ad-gauge { height: 8px; border-radius: 999px; background: var(--sand); overflow: hidden; margin-top: .45rem; max-width: 260px; }
+.ad-gauge span { display: block; height: 100%; background: var(--rose-deep); border-radius: 999px; }
+.ad-gauge-warn span { background: #b7791f; }
+.ad-gauge-full span { background: var(--danger); }
+.ad-gauge-note { margin-top: .35rem; max-width: 280px; }

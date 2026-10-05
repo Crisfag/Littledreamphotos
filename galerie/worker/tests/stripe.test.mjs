@@ -82,6 +82,19 @@ check("aucun payment_method_types n'est imposé : Stripe propose ce qui est acti
       body.get("payment_method_types") === null && body.get("payment_method_types[0]") === null);
 check("les métadonnées imbriquées sont bien encodées",
       body.get("metadata[gallery_id]") === "gal_abc");
+check("sans frais de paiement, aucune retenue n'est demandée à Stripe",
+      body.get("payment_intent_data[application_fee_amount]") === null);
+
+captured = null;
+await createCheckoutSession({ STRIPE_SECRET_KEY: "sk_test_fake" }, "acct_123", {
+  label: "Tirages", unitAmountCents: 4500, quantity: 1,
+  successUrl: "https://example.com/success", cancelUrl: "https://example.com/cancel",
+  metadata: {}, applicationFeeCents: 120,
+});
+const feeBody = new URLSearchParams(captured.body);
+check("les frais de paiement sont retenus sur la vente (application_fee_amount), le reste part au photographe",
+      feeBody.get("payment_intent_data[application_fee_amount]") === "120" &&
+      feeBody.get("payment_intent_data[transfer_data][destination]") === "acct_123");
 
 captured = null;
 await createConnectAccount({ STRIPE_SECRET_KEY: "sk_test_fake" }, { email: "test@example.com" });

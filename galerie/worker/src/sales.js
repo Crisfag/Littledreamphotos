@@ -9,8 +9,8 @@
 // 31 à 23 h 30 compte bien dans le mois du 31.
 //
 // La marge des tirages est une ESTIMATION : prix payé par le client moins
-// le dernier coût Prodigi connu du produit (print_products.cost_cents), hors
-// frais de port et hors frais Stripe. Une ligne dont le produit a été
+// le dernier coût Prodigi connu du produit (print_products.cost_cents) et
+// moins les frais de paiement retenus, hors frais de port. Une ligne dont le produit a été
 // supprimé ou n'a jamais eu de devis n'entre pas dans le calcul ; la part
 // couverte est renvoyée pour que l'admin le dise.
 
@@ -63,7 +63,7 @@ export function windowStart(nowSeconds, count = SALES_MONTHS, timeZone = SALES_T
 }
 
 // Calcul pur (testé à part) à partir des lignes déjà lues en base.
-//   payments  : [{ id, gallery_id, kind, amount_cents, paid_at }]   (réglés)
+//   payments  : [{ id, gallery_id, kind, amount_cents, fee_cents, paid_at }]   (réglés)
 //   orders    : [{ payment_id, items }]                             (tirages)
 //   products  : [{ id, cost_cents }]                                (catalogue actuel)
 //   galleries : [{ id, slug, title, created_at }]
@@ -89,6 +89,9 @@ export function summarizeSales({ payments, orders, products, galleries, nowSecon
     month.orders += 1;
   }
 
+  // Frais de paiement retenus sur ces ventes (voir fees.js).
+  const feeCents = inWindow.reduce((sum, p) => sum + (p.fee_cents || 0), 0);
+  const printFeeCents = inWindow.filter((p) => p.kind === "print").reduce((sum, p) => sum + (p.fee_cents || 0), 0);
   const supplementCents = monthList.reduce((s, m) => s + m.supplementCents, 0);
   const printCents = monthList.reduce((s, m) => s + m.printCents, 0);
   const revenueCents = supplementCents + printCents;
@@ -153,9 +156,12 @@ export function summarizeSales({ payments, orders, products, galleries, nowSecon
       printCents,
       orders: orderCount,
       averageOrderCents: orderCount ? Math.round(revenueCents / orderCount) : 0,
+      feeCents,
+      netCents: revenueCents - feeCents,
     },
     printMargin: {
-      marginCents,
+      // Frais de paiement des commandes de tirages déduits de la marge.
+      marginCents: marginCents - printFeeCents,
       coveredRevenueCents,
       lineRevenueCents,
       // Part du chiffre d'affaires des tirages (hors port) dont le coût est connu.
@@ -172,7 +178,7 @@ export async function salesForAdmin(env, photographerId, nowSeconds = Math.floor
   const since = windowStart(nowSeconds);
   const [payments, orders, products, galleries] = await Promise.all([
     env.DB.prepare(
-      `SELECT p.id, p.gallery_id, p.kind, p.amount_cents, p.paid_at
+      `SELECT p.id, p.gallery_id, p.kind, p.amount_cents, p.fee_cents, p.paid_at
          FROM payments p JOIN galleries g ON g.id = p.gallery_id
         WHERE g.photographer_id = ? AND p.status = 'paid'`
     ).bind(photographerId).all(),
