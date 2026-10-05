@@ -10,12 +10,25 @@ import { createConnectAccount, createAccountLink, retrieveAccount, verifyStripeS
 import { createInvoiceForPayment } from "./invoices.js";
 import { sendInvoiceEmail } from "./notify.js";
 
+// Message montré au photographe : la raison donnée par Stripe (jamais une
+// clé, Stripe n'en renvoie pas), avec la marche à suivre pour les refus
+// liés à la configuration Connect de la plateforme — sinon un refus sans
+// explication est impossible à corriger.
+export function stripeFailureMessage(err) {
+  const reason = String(err?.message || "").trim();
+  if (/platform profile|signed up for connect|connect.*(review|responsibilit)|loss liability/i.test(reason)) {
+    return "Stripe Connect n'est pas encore activé en mode réel sur la plateforme : terminez « Connect → Paramètres → Profil de plateforme » dans le tableau de bord Stripe, puis réessayez. " +
+      `(Stripe : ${reason})`;
+  }
+  return reason ? `Stripe a refusé la demande : ${reason}` : "Stripe a refusé la demande";
+}
+
 function stripeFailure(err) {
   console.error("Échec d'un appel Stripe :", err);
   if (err.stripeNotConfigured) {
     return fail(503, "Le paiement en ligne n'est pas encore configuré sur cette plateforme");
   }
-  return fail(502, "Stripe a refusé la demande");
+  return fail(502, stripeFailureMessage(err));
 }
 
 // Crée le compte Connect au premier appel (réutilisé ensuite), puis un lien
