@@ -5,6 +5,7 @@
 import { createHmac } from "node:crypto";
 import { verifyStripeSignature, createCheckoutSession, createConnectAccount } from "../src/stripe.js";
 import { stripeConfigStatus } from "../src/owner.js";
+import { stripeFailureMessage } from "../src/billing.js";
 
 const SECRET = "whsec_test_secret";
 const PAYLOAD = JSON.stringify({ id: "evt_test", type: "account.updated", data: { object: { id: "acct_123", charges_enabled: true } } });
@@ -107,6 +108,15 @@ check("les capacités demandées sont bien encodées",
       accountBody.get("capabilities[transfers][requested]") === "true");
 
 globalThis.fetch = originalFetch;
+
+/* ---------- Refus de Stripe expliqués au photographe ---------- */
+
+check("un refus de Stripe montre sa raison",
+      stripeFailureMessage(new Error("Invalid email address")) === "Stripe a refusé la demande : Invalid email address" &&
+      stripeFailureMessage(new Error("")) === "Stripe a refusé la demande");
+check("un Connect pas encore configuré en mode réel donne la marche à suivre",
+      stripeFailureMessage(new Error("You must complete your platform profile to use Connect and create live connected accounts.")).includes("Profil de plateforme") &&
+      stripeFailureMessage(new Error("You can only create new accounts if you've signed up for Connect")).includes("Profil de plateforme"));
 
 /* ---------- État de la configuration (onglet Admin) ---------- */
 

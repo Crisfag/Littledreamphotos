@@ -1100,7 +1100,7 @@ client, jamais deux fois la même relance, pas de rattrapage d'une relance
 manquée le jour d'une autre, et lien de galerie construit (slug encodé)
 seulement si `PUBLIC_SITE_ORIGIN` est renseigné.
 
-**Signature de webhook Stripe et sessions de paiement** — 20 vérifications
+**Signature de webhook Stripe et sessions de paiement** — 22 vérifications
 sans réseau (fetch intercepté, jamais appelé pour de vrai) :
 `verifyStripeSignature` est une fonction pure — signature valide acceptée,
 mauvais secret refusé, corps modifié après signature refusé, évènement trop
