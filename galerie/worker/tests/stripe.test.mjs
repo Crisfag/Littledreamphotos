@@ -4,6 +4,7 @@
 
 import { createHmac } from "node:crypto";
 import { verifyStripeSignature, createCheckoutSession, createConnectAccount } from "../src/stripe.js";
+import { stripeConfigStatus } from "../src/owner.js";
 
 const SECRET = "whsec_test_secret";
 const PAYLOAD = JSON.stringify({ id: "evt_test", type: "account.updated", data: { object: { id: "acct_123", charges_enabled: true } } });
@@ -106,6 +107,17 @@ check("les capacités demandées sont bien encodées",
       accountBody.get("capabilities[transfers][requested]") === "true");
 
 globalThis.fetch = originalFetch;
+
+/* ---------- État de la configuration (onglet Admin) ---------- */
+
+check("le mode Stripe se déduit du préfixe de la clé (réel, test, clé restreinte)",
+      stripeConfigStatus({ STRIPE_SECRET_KEY: "sk_live_abc" }).mode === "live" &&
+      stripeConfigStatus({ STRIPE_SECRET_KEY: "rk_live_abc" }).mode === "live" &&
+      stripeConfigStatus({ STRIPE_SECRET_KEY: "sk_test_abc" }).mode === "test" &&
+      stripeConfigStatus({}).mode === "absent" && stripeConfigStatus({ STRIPE_SECRET_KEY: "pk_live_abc" }).mode === "inconnu");
+const status = stripeConfigStatus({ STRIPE_SECRET_KEY: "sk_live_secret", STRIPE_WEBHOOK_SECRET_PLATFORM: "whsec_x" });
+check("l'état indique les secrets de webhook présents, sans jamais renvoyer une clé",
+      status.webhookPlatform === true && status.webhookConnect === false && !JSON.stringify(status).includes("secret") && !JSON.stringify(status).includes("whsec"));
 
 const failed = checks.filter((c) => !c.ok);
 console.log(failed.length ? `\n${failed.length} vérification(s) en échec.` : `\n${checks.length} vérifications, toutes passent.`);

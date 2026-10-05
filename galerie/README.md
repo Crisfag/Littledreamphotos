@@ -756,6 +756,29 @@ npx wrangler secret put RESEND_FROM      # adresse d'expédition vérifiée sur 
 `ADMIN_URL` (dans `wrangler.toml`, pas un secret) est l'adresse de
 l'interface d'administration, insérée en lien dans l'e-mail.
 
+### Passer Stripe en mode réel
+
+Le Worker ne connaît que des secrets : passer du mode test au mode réel
+consiste à les remplacer, sans redéployer le code.
+
+1. Dans le Dashboard Stripe **en mode réel** : compte activé (identité,
+   IBAN), Connect activé, webhook(s) vers
+   `https://<votre-worker>.workers.dev/api/stripe/webhook` (« Votre compte » :
+   `checkout.session.completed` et `customer.subscription.*` ; « Comptes
+   connectés » : `account.updated`), portail client enregistré.
+2. Depuis `worker/` :
+   ```bash
+   npx wrangler secret put STRIPE_SECRET_KEY               # sk_live_…
+   npx wrangler secret put STRIPE_WEBHOOK_SECRET_PLATFORM  # whsec_… du webhook « Votre compte »
+   npx wrangler secret put STRIPE_WEBHOOK_SECRET           # whsec_… du webhook « Comptes connectés »
+   ```
+3. Effacer en base les identifiants Stripe de test (comptes connectés,
+   clients, abonnements) : ils n'existent pas en mode réel. Chaque
+   photographe reconnecte ensuite Stripe depuis l'onglet Facturation.
+4. Vérifier dans l'onglet **Admin → Paiements Stripe** : « Mode réel » et
+   les deux secrets de webhook cochés. Faire un vrai paiement d'un euro, puis
+   le rembourser depuis le Dashboard.
+
 ### Paiement en ligne des suppléments (Stripe Connect)
 
 **Frais de paiement.** Avec une charge de destination, c'est le compte
@@ -1077,7 +1100,7 @@ client, jamais deux fois la même relance, pas de rattrapage d'une relance
 manquée le jour d'une autre, et lien de galerie construit (slug encodé)
 seulement si `PUBLIC_SITE_ORIGIN` est renseigné.
 
-**Signature de webhook Stripe et sessions de paiement** — 18 vérifications
+**Signature de webhook Stripe et sessions de paiement** — 20 vérifications
 sans réseau (fetch intercepté, jamais appelé pour de vrai) :
 `verifyStripeSignature` est une fonction pure — signature valide acceptée,
 mauvais secret refusé, corps modifié après signature refusé, évènement trop

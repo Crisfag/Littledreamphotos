@@ -1820,6 +1820,26 @@
     );
   }
 
+  // Mode Stripe du Worker (réel / test) et secrets de webhook présents :
+  // jamais la clé elle-même, seulement son mode.
+  function stripeConfigHtml(stripe) {
+    if (!stripe) return "";
+    var modeText = {
+      live: "✓ Mode réel : les paiements sont de vrais paiements.",
+      test: "Mode test : aucun vrai paiement n'est encaissé (cartes de test Stripe uniquement).",
+      absent: "Aucune clé Stripe configurée : les paiements en ligne sont désactivés.",
+      inconnu: "Clé Stripe au format inattendu : vérifiez STRIPE_SECRET_KEY.",
+    }[stripe.mode] || "";
+    var line = function (ok, text) { return "<li>" + (ok ? "✓ " : "✗ ") + esc(text) + "</li>"; };
+    return '<section id="ad-owner-stripe"><div class="ad-section-header"><h3>Paiements Stripe</h3>' +
+      '<span class="ad-badge' + (stripe.mode === "live" ? " ad-badge-selected" : "") + '">' + (stripe.mode === "live" ? "Réel" : stripe.mode === "test" ? "Test" : "À configurer") + "</span></div>" +
+      '<p class="ad-hint">' + esc(modeText) + "</p>" +
+      '<ul class="ad-plan-features">' +
+      line(stripe.webhookPlatform, "Secret du webhook « Votre compte » (paiements, abonnements) : STRIPE_WEBHOOK_SECRET_PLATFORM") +
+      line(stripe.webhookConnect, "Secret du webhook « Comptes connectés » (état des comptes Stripe des photographes) : STRIPE_WEBHOOK_SECRET") +
+      "</ul></section>";
+  }
+
   function signupsTableHtml(signupsByMonth) {
     if (!signupsByMonth.length) return '<p class="ad-hint">Aucune inscription pour l\'instant.</p>';
     var rows = signupsByMonth.map(function (row) {
@@ -1904,6 +1924,7 @@
       "</div></header>" +
 
       ownerStatsHtml(statsData) +
+      stripeConfigHtml(statsData.stripe) +
 
       '<section><div class="ad-section-header"><h3>Inscriptions par mois</h3></div>' +
       signupsTableHtml(statsData.signupsByMonth) +

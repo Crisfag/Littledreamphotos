@@ -111,7 +111,21 @@ async function platformStats(env, photographerId) {
     extrasDueCount: dueExtraCount,
     extrasDueAmountCents: dueTotalCents,
     signupsByMonth: signupRows.map((r) => ({ month: r.month, count: r.n })),
+    stripe: stripeConfigStatus(env),
   });
+}
+
+// État de la configuration Stripe du Worker, pour vérifier d'un coup d'œil
+// le passage en mode réel : jamais la moindre partie d'une clé, seulement
+// son mode (déduit de son préfixe) et la présence des secrets de webhook.
+export function stripeConfigStatus(env) {
+  const key = String(env.STRIPE_SECRET_KEY || "");
+  const mode = !key ? "absent" : /^(sk|rk)_live_/.test(key) ? "live" : /^(sk|rk)_test_/.test(key) ? "test" : "inconnu";
+  return {
+    mode,
+    webhookPlatform: Boolean(env.STRIPE_WEBHOOK_SECRET_PLATFORM),
+    webhookConnect: Boolean(env.STRIPE_WEBHOOK_SECRET),
+  };
 }
 
 export async function handleOwner(request, env, path) {
