@@ -31,7 +31,7 @@ const galleries = [
 ];
 const payments = [
   { id: "pay1", gallery_id: "g1", kind: "supplement", amount_cents: 3000, paid_at: at("2026-06-10T10:00:00Z") },
-  { id: "pay2", gallery_id: "g1", kind: "print", amount_cents: 9890, paid_at: at("2026-07-02T10:00:00Z") },
+  { id: "pay2", gallery_id: "g1", kind: "print", amount_cents: 9890, fee_cents: 228, paid_at: at("2026-07-02T10:00:00Z") },
   { id: "pay3", gallery_id: "g2", kind: "print", amount_cents: 2400, paid_at: at("2026-08-31T22:30:00Z") },
   { id: "pay4", gallery_id: "g4", kind: "supplement", amount_cents: 5000, paid_at: at("2024-02-01T10:00:00Z") },
 ];
@@ -52,9 +52,11 @@ check("chaque paiement tombe dans son mois et sa catégorie",
 check("un paiement hors des douze mois est ignoré", s.totals.revenueCents === 15290 && s.totals.orders === 3, `${s.totals.revenueCents}`);
 check("totaux par catégorie et panier moyen arrondi",
       s.totals.supplementCents === 3000 && s.totals.printCents === 12290 && s.totals.averageOrderCents === 5097);
-check("la marge estimée ne compte que les produits au coût connu",
-      s.printMargin.marginCents === (8900 - 2300) + (1600 - 600) && s.printMargin.coveredRevenueCents === 10500 && s.printMargin.lineRevenueCents === 10900,
+check("la marge estimée ne compte que les produits au coût connu, frais de paiement déduits",
+      s.printMargin.marginCents === (8900 - 2300) + (1600 - 600) - 228 && s.printMargin.coveredRevenueCents === 10500 && s.printMargin.lineRevenueCents === 10900,
       `${s.printMargin.marginCents}`);
+check("frais de paiement totalisés, et montant reçu après frais",
+      s.totals.feeCents === 228 && s.totals.netCents === 15290 - 228);
 check("la couverture de l'estimation est donnée", Math.abs(s.printMargin.coverage - 10500 / 10900) < 1e-9);
 check("les formats sont classés par chiffre d'affaires",
       s.topProducts.map((p) => p.label).join("|") === "Toile 40 × 50 cm|Tirage 10 × 15 cm|Format retiré" && s.topProducts[1].copies === 4);

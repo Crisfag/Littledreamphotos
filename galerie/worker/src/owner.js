@@ -15,6 +15,7 @@ import { runReminders } from "./reminders.js";
 import { handleOwnerMusic } from "./music.js";
 import { runSalesReminders } from "./campaigns.js";
 import { shopState } from "./shop.js";
+import { runStoragePurge } from "./storage.js";
 
 async function requireOwner(env, photographerId) {
   if (!env.OWNER_EMAIL) return null;
@@ -110,7 +111,21 @@ async function platformStats(env, photographerId) {
     extrasDueCount: dueExtraCount,
     extrasDueAmountCents: dueTotalCents,
     signupsByMonth: signupRows.map((r) => ({ month: r.month, count: r.n })),
+    stripe: stripeConfigStatus(env),
   });
+}
+
+// État de la configuration Stripe du Worker, pour vérifier d'un coup d'œil
+// le passage en mode réel : jamais la moindre partie d'une clé, seulement
+// son mode (déduit de son préfixe) et la présence des secrets de webhook.
+export function stripeConfigStatus(env) {
+  const key = String(env.STRIPE_SECRET_KEY || "");
+  const mode = !key ? "absent" : /^(sk|rk)_live_/.test(key) ? "live" : /^(sk|rk)_test_/.test(key) ? "test" : "inconnu";
+  return {
+    mode,
+    webhookPlatform: Boolean(env.STRIPE_WEBHOOK_SECRET_PLATFORM),
+    webhookConnect: Boolean(env.STRIPE_WEBHOOK_SECRET),
+  };
 }
 
 export async function handleOwner(request, env, path) {
@@ -133,6 +148,13 @@ export async function handleOwner(request, env, path) {
     const result = await runReminders(env);
     const sales = await runSalesReminders(env, shopState);
     return json({ ...result, sent: [...result.sent, ...sales.sent] });
+  }
+  // Purge du stockage tout de suite (préavis puis effacement des fichiers HD
+  // et d'impression des galeries expirées), même passe que le déclencheur.
+  if (action === "storage" && parts[3] === "purge" && parts.length === 4 && request.method === "POST") {
+    const owner = await requireOwner(env, photographerId);
+    if (!owner) return fail(403, "Accès réservé");
+    return json(await runStoragePurge(env));
   }
   // Bibliothèque musicale commune : ajout et retrait de morceaux.
   if (action === "music") {

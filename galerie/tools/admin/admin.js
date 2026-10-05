@@ -376,11 +376,21 @@
   // (chaque photographe connecte son propre compte Stripe, l'argent lui
   // arrive directement) et coordonnées à faire figurer sur les factures.
 
+  // Frais de paiement retenus sur chaque vente : jamais une commission, le
+  // seul coût du paiement (carte, virement), annoncé avant de connecter Stripe.
+  function paymentFeeHintHtml(photographer) {
+    var fee = photographer.paymentFee;
+    if (!fee || (!fee.percent && !fee.fixedCents)) return "";
+    return '<p class="ad-hint ad-fee-hint">Frais de paiement : <strong>' + esc(fee.label) + "</strong> par vente (carte bancaire et virement vers votre compte). " +
+      "Aucune commission Holypixx sur vos ventes.</p>";
+  }
+
   function stripeStatusHtml(photographer) {
     if (photographer.stripeChargesEnabled) {
       return (
         '<p class="ad-stripe-badge ad-stripe-badge-ok">✓ Compte Stripe actif</p>' +
-        '<p class="ad-hint">Les suppléments payés par vos clients (carte, Apple Pay, PayPal) arrivent directement sur votre compte — jamais via un compte intermédiaire.</p>'
+        '<p class="ad-hint">Les suppléments et tirages payés par vos clients (carte, Apple Pay, Bancontact…) arrivent directement sur votre compte.</p>' +
+        paymentFeeHintHtml(photographer)
       );
     }
     if (photographer.stripeConnected) {
@@ -395,6 +405,7 @@
     }
     return (
       '<p class="ad-hint">Connectez un compte Stripe pour que vos clients puissent régler leurs suppléments en ligne (carte, Apple Pay, PayPal) — l\'argent arrive directement chez vous.</p>' +
+      paymentFeeHintHtml(photographer) +
       '<button type="button" class="ad-btn ad-btn-primary" id="ad-stripe-connect">Connecter Stripe</button>'
     );
   }
@@ -1208,7 +1219,7 @@
     var t = data.totals;
     var margin = data.printMargin;
     var marginNote = margin.lineRevenueCents
-      ? (margin.coverage < 0.999 ? "Sur " + percentText(margin.coverage) + " des tirages (coût connu), " : "") + "hors port et frais Stripe"
+      ? (margin.coverage < 0.999 ? "Sur " + percentText(margin.coverage) + " des tirages (coût connu), " : "") + "frais de paiement déduits, hors port"
       : "Aucun tirage vendu";
 
     el.view.innerHTML =
@@ -1217,7 +1228,8 @@
       "</div></header>" +
       '<div class="ad-stats">' +
       salesStatHtml("Chiffre d'affaires", formatEuros(t.revenueCents),
-        formatEurosShort(t.supplementCents) + " suppléments · " + formatEurosShort(t.printCents) + " tirages") +
+        formatEurosShort(t.supplementCents) + " suppléments · " + formatEurosShort(t.printCents) + " tirages" +
+        (t.feeCents ? " · " + formatEuros(t.netCents) + " reçus après frais de paiement" : "")) +
       salesStatHtml("Paiements", String(t.orders), t.orders ? "Panier moyen " + formatEuros(t.averageOrderCents) : "") +
       salesStatHtml("Marge estimée sur les tirages", margin.lineRevenueCents ? formatEuros(margin.marginCents) : "—", marginNote) +
       salesStatHtml("Galeries qui vendent", data.conversion.galleries ? percentText(data.conversion.rate) : "—",
@@ -1255,14 +1267,40 @@
     drawSalesChart();
   }
 
+  // « 5 Go », « 200 Go », « 1 To » — mêmes unités que storage.js.
+  function formatStorage(bytes) {
+    var n = Math.max(0, Number(bytes) || 0);
+    var fmt = function (v, unit) { return v.toLocaleString("fr-FR", { maximumFractionDigits: v < 10 ? 1 : 0 }) + " " + unit; };
+    if (n >= 1e12) return fmt(n / 1e12, "To");
+    if (n >= 1e9) return fmt(n / 1e9, "Go");
+    return fmt(n / 1e6, "Mo");
+  }
+
+  // Jauge d'espace utilisé : la couleur ne porte jamais seule l'information,
+  // le texte donne toujours les chiffres.
+  function storageGaugeHtml(storage) {
+    if (!storage) return "";
+    var unlimited = storage.quotaBytes === null;
+    var ratio = unlimited ? 0 : Math.min(1, storage.usedBytes / storage.quotaBytes);
+    var level = ratio >= 0.95 ? " ad-gauge-full" : ratio >= 0.8 ? " ad-gauge-warn" : "";
+    return '<div class="ad-storage"><p class="ad-hint">Stockage</p>' +
+      '<p class="ad-plan-usage" id="ad-storage-text">' + esc(storage.usedLabel) + (unlimited ? " (illimité)" : " sur " + esc(storage.quotaLabel)) + "</p>" +
+      (unlimited ? "" : '<div class="ad-gauge' + level + '" role="meter" aria-label="Espace de stockage utilisé" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' +
+        Math.round(ratio * 100) + '"><span style="width:' + (ratio * 100).toFixed(1) + '%"></span></div>') +
+      (ratio >= 0.8 && !unlimited ? '<p class="ad-hint ad-gauge-note">' + (ratio >= 1 ? "Espace plein : les nouveaux envois sont refusés." : "Bientôt plein.") +
+        " Supprimez d'anciennes galeries ou livraisons, ou passez à la formule supérieure.</p>" : "") +
+      "</div>";
+  }
+
   function planFeaturesHtml(plan) {
     var items = [
       plan.maxActiveGalleries === null ? "Galeries actives illimitées" : plan.maxActiveGalleries + " galeries actives",
+      plan.storageBytes ? formatStorage(plan.storageBytes) + " de stockage" : "",
       "Protection, sélection, musique et livraison HD",
       (plan.features.shop ? "✓ " : "— ") + "Boutique de tirages",
       (plan.features.subdomain ? "✓ " : "— ") + "Vos galeries à votre nom",
     ];
-    return '<ul class="ad-plan-features">' + items.map(function (t) { return "<li>" + esc(t) + "</li>"; }).join("") + "</ul>";
+    return '<ul class="ad-plan-features">' + items.filter(Boolean).map(function (t) { return "<li>" + esc(t) + "</li>"; }).join("") + "</ul>";
   }
 
   async function renderSubscription(skipHash) {
@@ -1321,11 +1359,14 @@
       '<section class="ad-plan-summary"><div><p class="ad-hint">Formule actuelle</p><p class="ad-plan-name">' + esc(current.label) + "</p>" +
       (status ? '<p class="ad-hint">' + esc(status) + "</p>" : "") + "</div>" +
       '<div><p class="ad-hint">Utilisation</p><p class="ad-plan-usage">' + esc(usage) + "</p></div>" +
+      storageGaugeHtml(data.usage.storage) +
       (data.canManage ? '<button type="button" class="ad-btn" data-portal>Gérer mon abonnement</button>' : "") +
       "</section>" +
       (data.stripeConfigured || data.owner ? "" : '<p class="ad-hint">Le paiement des abonnements n\'est pas encore ouvert sur la plateforme.</p>') +
       '<div class="ad-plans">' + cards + "</div>" +
-      '<p class="ad-hint">Prix TTC. Paiement sécurisé par Stripe ; factures disponibles dans « Gérer mon abonnement ». ' +
+      '<p class="ad-hint">Prix TTC. Les fichiers HD livrés et les fichiers d\'impression d\'une galerie expirée depuis ' +
+      ((data.usage.storage && data.usage.storage.purgeAfterExpiryDays) || 90) + " jours sont effacés automatiquement, avec un e-mail de rappel 14 jours avant ; les photos de la galerie restent. " +
+      'Paiement sécurisé par Stripe ; factures disponibles dans « Gérer mon abonnement ». ' +
       'Voir les <a href="https://www.holypixx.com/conditions.html" target="_blank" rel="noopener">conditions d\'utilisation</a>.</p>';
 
     el.view.querySelectorAll("[data-subscribe]").forEach(function (btn) {
@@ -1386,7 +1427,8 @@
       '<section class="ad-delivery">' +
       '<div class="ad-section-header"><h3>Livraison des photos définitives</h3></div>' +
       '<p class="ad-hint">Déposez ici les photos finales, en haute définition et sans filigrane (JPEG, PNG, TIFF… 80 Mo maximum chacune). ' +
-      "Une fois la livraison ouverte, le client les télécharge depuis sa galerie, une par une ou toutes d'un coup (ZIP).</p>" +
+      "Une fois la livraison ouverte, le client les télécharge depuis sa galerie, une par une ou toutes d'un coup (ZIP). " +
+      "Ces fichiers sont effacés 90 jours après l'expiration de la galerie (e-mail de rappel 14 jours avant) : prolongez-la pour les garder.</p>" +
       '<p class="ad-delivery-status">' + status + "</p>" +
       '<div class="ad-bg-custom"><label class="ad-btn">Ajouter des photos' +
       '<input type="file" id="ad-delivery-input" accept="image/jpeg,image/png,image/tiff,image/webp,.heic,.tif,.tiff" multiple hidden /></label>' +
@@ -1778,6 +1820,26 @@
     );
   }
 
+  // Mode Stripe du Worker (réel / test) et secrets de webhook présents :
+  // jamais la clé elle-même, seulement son mode.
+  function stripeConfigHtml(stripe) {
+    if (!stripe) return "";
+    var modeText = {
+      live: "✓ Mode réel : les paiements sont de vrais paiements.",
+      test: "Mode test : aucun vrai paiement n'est encaissé (cartes de test Stripe uniquement).",
+      absent: "Aucune clé Stripe configurée : les paiements en ligne sont désactivés.",
+      inconnu: "Clé Stripe au format inattendu : vérifiez STRIPE_SECRET_KEY.",
+    }[stripe.mode] || "";
+    var line = function (ok, text) { return "<li>" + (ok ? "✓ " : "✗ ") + esc(text) + "</li>"; };
+    return '<section id="ad-owner-stripe"><div class="ad-section-header"><h3>Paiements Stripe</h3>' +
+      '<span class="ad-badge' + (stripe.mode === "live" ? " ad-badge-selected" : "") + '">' + (stripe.mode === "live" ? "Réel" : stripe.mode === "test" ? "Test" : "À configurer") + "</span></div>" +
+      '<p class="ad-hint">' + esc(modeText) + "</p>" +
+      '<ul class="ad-plan-features">' +
+      line(stripe.webhookPlatform, "Secret du webhook « Votre compte » (paiements, abonnements) : STRIPE_WEBHOOK_SECRET_PLATFORM") +
+      line(stripe.webhookConnect, "Secret du webhook « Comptes connectés » (état des comptes Stripe des photographes) : STRIPE_WEBHOOK_SECRET") +
+      "</ul></section>";
+  }
+
   function signupsTableHtml(signupsByMonth) {
     if (!signupsByMonth.length) return '<p class="ad-hint">Aucune inscription pour l\'instant.</p>';
     var rows = signupsByMonth.map(function (row) {
@@ -1862,6 +1924,7 @@
       "</div></header>" +
 
       ownerStatsHtml(statsData) +
+      stripeConfigHtml(statsData.stripe) +
 
       '<section><div class="ad-section-header"><h3>Inscriptions par mois</h3></div>' +
       signupsTableHtml(statsData.signupsByMonth) +
@@ -2076,7 +2139,7 @@
       "</td>" +
       '<td class="ad-cost-cell" id="ad-quote-' + esc(p.id) + '">' + (cost ? formatEuros(cost) : '<span class="ad-hint">à estimer</span>') + "</td>" +
       '<td><input type="text" class="ad-input ad-input-price" data-field="price" value="' + eurosInput(p.priceCents) + '" inputmode="decimal" aria-label="Prix pour le client" /></td>' +
-      '<td class="ad-margin-cell">' + (cost ? marginHtml(p.priceCents - cost) : "—") + "</td>" +
+      '<td class="ad-margin-cell">' + (cost ? marginHtml(netMarginFor(p.priceCents, cost)) : "—") + "</td>" +
       '<td><input type="checkbox" data-field="active"' + (p.active ? " checked" : "") + ' aria-label="Proposé aux clients" /></td>' +
       '<td class="ad-row-actions"><button type="button" class="ad-btn ad-btn-small" data-save-product>Enregistrer</button>' +
       ' <button type="button" class="ad-btn ad-btn-small ad-btn-danger" data-delete-product>Supprimer</button></td>' +
@@ -2086,6 +2149,25 @@
 
   function marginHtml(cents) {
     return '<strong class="' + (cents > 0 ? "ad-margin-ok" : "ad-order-error") + '">' + formatEuros(cents) + "</strong>";
+  }
+
+  // Frais de paiement retenus sur une vente (même règle que worker/src/fees.js),
+  // pour que la marge affichée soit celle qui arrive vraiment chez le photographe.
+  var shopFeeRule = null;
+  function paymentFeeFor(cents) {
+    var rule = shopFeeRule;
+    if (!rule || cents <= 0 || (!rule.percent && !rule.fixedCents)) return 0;
+    return Math.max(0, Math.min(Math.round(cents * rule.percent / 100) + rule.fixedCents, cents - 1));
+  }
+  function netMarginFor(priceCents, costCents) {
+    return priceCents - costCents - paymentFeeFor(priceCents);
+  }
+  // Prix client qui laisse au moins `marginCents` net, frais de paiement
+  // compris, arrondi aux 10 centimes supérieurs.
+  function priceForMargin(costCents, marginCents) {
+    var price = costCents + marginCents;
+    while (netMarginFor(price, costCents) < marginCents) price += 1;
+    return Math.ceil(price / 10) * 10;
   }
 
   function productsTableHtml(products) {
@@ -2152,7 +2234,7 @@
     function refreshPrice() {
       var margin = centsFromEuros($("ad-pick-margin").value);
       var ok = pick.costCents !== null && !isNaN(margin) && margin >= 0;
-      $("ad-pick-price").textContent = ok ? formatEuros(pick.costCents + margin) : "—";
+      $("ad-pick-price").textContent = ok ? formatEuros(priceForMargin(pick.costCents, margin)) : "—";
       $("ad-pick-add").disabled = !ok;
     }
 
@@ -2282,7 +2364,7 @@
           product: product.key,
           size: $("ad-pick-size").value,
           option: product.option ? $("ad-pick-option").value : "",
-          priceCents: pick.costCents + margin,
+          priceCents: priceForMargin(pick.costCents, margin),
           costCents: pick.costCents,
           shipCostCents: pick.shipCents,
         });
@@ -2310,6 +2392,7 @@
       return renderList();
     }
     var s = data.settings;
+    shopFeeRule = s.paymentFee || null;
     var activeCount = data.products.filter(function (p) { return p.active; }).length;
     var check = function (ok, text) { return '<li class="' + (ok ? "ad-step-ok" : "ad-step-todo") + '">' + (ok ? "✓ " : "○ ") + text + "</li>"; };
     var countryOptions = Object.keys(data.countries).map(function (code) {
@@ -2363,7 +2446,9 @@
 
       '<section><div class="ad-section-header"><h3>Mes produits</h3>' +
       '<button type="button" class="ad-btn" id="ad-shop-quote"' + (s.connected && data.products.length ? "" : " disabled") + ">Mettre à jour les coûts labo</button></div>" +
-      '<p class="ad-hint">Prix TTC payé par le client. Votre marge = prix client − coût du produit chez le labo ; la livraison est couverte à part par vos frais de port (' + formatEuros(s.shippingCents) + " par commande)." +
+      '<p class="ad-hint">Prix TTC payé par le client. Votre marge = prix client − coût du produit chez le labo' +
+      (s.paymentFee && s.paymentFee.label !== "aucun" ? " − frais de paiement (" + esc(s.paymentFee.label) + ", comptés comme si le produit était commandé seul)" : "") +
+      " ; la livraison est couverte à part par vos frais de port (" + formatEuros(s.shippingCents) + " par commande)." +
       (maxShip ? " Dernier devis : le labo facture jusqu'à " + formatEuros(maxShip) + " de livraison pour un article." : "") + "</p>" +
       productsTableHtml(data.products) +
       '<details class="ad-advanced"><summary>Mode avancé : ajouter une référence Prodigi hors catalogue</summary>' +
@@ -2455,7 +2540,7 @@
         if (!row || event.target.getAttribute("data-field") !== "price") return;
         var cost = Number(row.getAttribute("data-cost")) || 0;
         var price = centsFromEuros(event.target.value);
-        if (cost && !isNaN(price)) row.querySelector(".ad-margin-cell").innerHTML = marginHtml(price - cost);
+        if (cost && !isNaN(price)) row.querySelector(".ad-margin-cell").innerHTML = marginHtml(netMarginFor(price, cost));
       });
       productsTable.addEventListener("click", async function (event) {
         var row = event.target.closest("tr[data-product-id]");
@@ -2826,7 +2911,8 @@
         "<tr>" +
         "<td>" + esc(formatDateTime(p.paid_at || p.created_at)) + "</td>" +
         "<td>" + (p.kind === "print" ? "Tirages" : p.extra_count + " photo" + (p.extra_count > 1 ? "s" : "")) + "</td>" +
-        "<td>" + formatEuros(p.amount_cents) + "</td>" +
+        "<td>" + formatEuros(p.amount_cents) +
+        (p.fee_cents ? '<br><span class="ad-hint">dont ' + formatEuros(p.fee_cents) + " de frais de paiement</span>" : "") + "</td>" +
         "<td><span class=\"ad-badge " + statusCls + "\">" + statusLabel + "</span></td>" +
         "<td>" + invoiceCell + "</td>" +
         "</tr>"

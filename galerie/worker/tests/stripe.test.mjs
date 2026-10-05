@@ -4,6 +4,7 @@
 
 import { createHmac } from "node:crypto";
 import { verifyStripeSignature, createCheckoutSession, createConnectAccount } from "../src/stripe.js";
+import { stripeConfigStatus } from "../src/owner.js";
 
 const SECRET = "whsec_test_secret";
 const PAYLOAD = JSON.stringify({ id: "evt_test", type: "account.updated", data: { object: { id: "acct_123", charges_enabled: true } } });
@@ -82,6 +83,19 @@ check("aucun payment_method_types n'est imposé : Stripe propose ce qui est acti
       body.get("payment_method_types") === null && body.get("payment_method_types[0]") === null);
 check("les métadonnées imbriquées sont bien encodées",
       body.get("metadata[gallery_id]") === "gal_abc");
+check("sans frais de paiement, aucune retenue n'est demandée à Stripe",
+      body.get("payment_intent_data[application_fee_amount]") === null);
+
+captured = null;
+await createCheckoutSession({ STRIPE_SECRET_KEY: "sk_test_fake" }, "acct_123", {
+  label: "Tirages", unitAmountCents: 4500, quantity: 1,
+  successUrl: "https://example.com/success", cancelUrl: "https://example.com/cancel",
+  metadata: {}, applicationFeeCents: 120,
+});
+const feeBody = new URLSearchParams(captured.body);
+check("les frais de paiement sont retenus sur la vente (application_fee_amount), le reste part au photographe",
+      feeBody.get("payment_intent_data[application_fee_amount]") === "120" &&
+      feeBody.get("payment_intent_data[transfer_data][destination]") === "acct_123");
 
 captured = null;
 await createConnectAccount({ STRIPE_SECRET_KEY: "sk_test_fake" }, { email: "test@example.com" });
@@ -93,6 +107,17 @@ check("les capacités demandées sont bien encodées",
       accountBody.get("capabilities[transfers][requested]") === "true");
 
 globalThis.fetch = originalFetch;
+
+/* ---------- État de la configuration (onglet Admin) ---------- */
+
+check("le mode Stripe se déduit du préfixe de la clé (réel, test, clé restreinte)",
+      stripeConfigStatus({ STRIPE_SECRET_KEY: "sk_live_abc" }).mode === "live" &&
+      stripeConfigStatus({ STRIPE_SECRET_KEY: "rk_live_abc" }).mode === "live" &&
+      stripeConfigStatus({ STRIPE_SECRET_KEY: "sk_test_abc" }).mode === "test" &&
+      stripeConfigStatus({}).mode === "absent" && stripeConfigStatus({ STRIPE_SECRET_KEY: "pk_live_abc" }).mode === "inconnu");
+const status = stripeConfigStatus({ STRIPE_SECRET_KEY: "sk_live_secret", STRIPE_WEBHOOK_SECRET_PLATFORM: "whsec_x" });
+check("l'état indique les secrets de webhook présents, sans jamais renvoyer une clé",
+      status.webhookPlatform === true && status.webhookConnect === false && !JSON.stringify(status).includes("secret") && !JSON.stringify(status).includes("whsec"));
 
 const failed = checks.filter((c) => !c.ok);
 console.log(failed.length ? `\n${failed.length} vérification(s) en échec.` : `\n${checks.length} vérifications, toutes passent.`);

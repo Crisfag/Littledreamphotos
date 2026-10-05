@@ -1710,7 +1710,7 @@ const exportData = await exportResponse.json();
 check("l'export contient le compte, ses galeries, photos et clients, et l'acceptation des conditions horodatée",
       exportResponse.ok && (exportResponse.headers.get("content-disposition") || "").includes("holypixx-mes-donnees-") &&
       exportData.account?.email === rgpdEmail && typeof exportData.account.terms_accepted_at === "number" &&
-      exportData.account.terms_version === "2026-10-03" &&
+      exportData.account.terms_version === "2026-10-05" &&
       exportData.galleries?.[0]?.client_email === "famille-rgpd@test.invalid" && exportData.galleries[0].photos?.length === 1,
       JSON.stringify({ terms: exportData.account?.terms_accepted_at, g: exportData.galleries?.length }));
 check("l'export ne contient jamais de secret (empreintes de mot de passe, clé Prodigi chiffrée)",
@@ -1911,8 +1911,9 @@ check("le photographe peut changer le prix d'un format", priceUpdate.ok &&
 const quote = await (await admin("POST", "/api/admin/shop/quote", { countryCode: "FR" })).json();
 const tirageQuote = quote.quotes?.find((q) => q.productId === tirage.id);
 const invalidQuote = quote.quotes?.find((q) => q.productId === invalidProductId);
-check("le devis Prodigi donne le coût réel (produit + port) et la marge de chaque format (prix − coût du produit)",
-      quote.countryCode === "FR" && tirageQuote?.totalCostCents === 1745 && tirageQuote?.marginCents === 450 - 1250 &&
+check("le devis Prodigi donne le coût réel (produit + port) et la marge de chaque format (prix − coût du produit − frais de paiement)",
+      quote.countryCode === "FR" && tirageQuote?.totalCostCents === 1745 && tirageQuote?.feeCents === 9 + 30 &&
+      tirageQuote?.marginCents === 450 - 1250 - (9 + 30) &&
       lab.quotes.at(-1)?.destinationCountryCode === "FR",
       JSON.stringify(tirageQuote));
 check("un format refusé par le labo est signalé avec la raison donnée par Prodigi",

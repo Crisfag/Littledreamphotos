@@ -453,6 +453,27 @@ export function buildPrintOrderShippedEmail({ studioName, galleryTitle, recipien
   return { subject, html: emailShell({ preheader: subject, bodyHtml }), text };
 }
 
+export function buildStoragePurgeNoticeEmail({ studioName, galleryTitle, deliveryCount, originalCount, sizeLabel, purgeAt, adminUrl }) {
+  const subject = `Fichiers HD de « ${galleryTitle} » effacés le ${formatDay(purgeAt)}`;
+  const what = [
+    deliveryCount ? `${deliveryCount} photo${deliveryCount > 1 ? "s" : ""} livrée${deliveryCount > 1 ? "s" : ""} en haute définition (${sizeLabel})` : "",
+    originalCount ? `${originalCount} fichier${originalCount > 1 ? "s" : ""} d'impression` : "",
+  ].filter(Boolean).join(" et ");
+  const bodyHtml =
+    eyebrow(studioName || "Votre espace de stockage") +
+    heading("Des fichiers vont être effacés") +
+    paragraph(`La galerie « <strong>${escapeHtml(galleryTitle)}</strong> » a expiré. Pour libérer votre espace de stockage, ${escapeHtml(what)} seront effacés le <strong>${escapeHtml(formatDay(purgeAt))}</strong>.`) +
+    paragraph("Les photos de la galerie elle-même restent en ligne. Pour garder ces fichiers, prolongez simplement la galerie : la date d'effacement sera repoussée d'autant.") +
+    (adminUrl ? emailButton(adminUrl, "Ouvrir la galerie") : "") +
+    paragraph("Vous avez les originaux sur votre ordinateur ? Rien à faire : ils pourront toujours être déposés à nouveau.", { small: true });
+  const text = [
+    `La galerie « ${galleryTitle} » a expiré : ${what} seront effacés le ${formatDay(purgeAt)}.`,
+    "Les photos de la galerie restent en ligne. Prolongez la galerie pour garder ces fichiers.",
+    adminUrl ? `\nOuvrir la galerie : ${adminUrl}` : "",
+  ].join("\n");
+  return { subject, html: emailShell({ preheader: subject, bodyHtml }), text };
+}
+
 export function buildPortfolioContactEmail({ studioName, name, email, phone, eventDate, message }) {
   const subject = `Nouveau message de ${name} via votre portfolio`;
   const details = [
@@ -589,4 +610,8 @@ export async function sendFavoritesPrint(env, params) {
 
 export async function sendPortfolioContact(env, params) {
   await sendEmail(env, { to: params.to, replyTo: params.replyTo, ...buildPortfolioContactEmail(params) });
+}
+
+export async function sendStoragePurgeNotice(env, params) {
+  await sendEmail(env, { to: params.to, ...buildStoragePurgeNoticeEmail(params) });
 }

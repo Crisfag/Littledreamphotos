@@ -14,6 +14,7 @@
 
 import { json, fail } from "./http.js";
 import { createSubscriptionCheckout, createBillingPortalSession } from "./stripe.js";
+import { storageForAdmin } from "./storage.js";
 
 export const PLANS = {
   free: {
@@ -21,6 +22,7 @@ export const PLANS = {
     label: "Découverte",
     priceCents: 0,
     maxActiveGalleries: 3,
+    storageBytes: 5e9,
     features: { shop: false, subdomain: false },
     pitch: "Pour essayer : 3 galeries actives, protection complète, sélection, livraison HD.",
   },
@@ -29,6 +31,7 @@ export const PLANS = {
     label: "Essentiel",
     priceCents: 1200,
     maxActiveGalleries: 25,
+    storageBytes: 200e9,
     features: { shop: true, subdomain: false },
     pitch: "25 galeries actives et la boutique de tirages.",
   },
@@ -37,6 +40,7 @@ export const PLANS = {
     label: "Pro",
     priceCents: 2400,
     maxActiveGalleries: null,
+    storageBytes: 1000e9,
     features: { shop: true, subdomain: true },
     pitch: "Galeries illimitées, boutique, et vos galeries à votre nom (votre-studio.holypixx.com).",
   },
@@ -102,6 +106,7 @@ function planOut(plan) {
     label: plan.label,
     priceCents: plan.priceCents,
     maxActiveGalleries: plan.maxActiveGalleries,
+    storageBytes: plan.storageBytes,
     features: plan.features,
     pitch: plan.pitch,
   };
@@ -118,7 +123,7 @@ export async function subscriptionForAdmin(env, photographer) {
     cancelAtPeriodEnd: Boolean(photographer.plan_cancel_at_period_end),
     canManage: Boolean(photographer.stripe_customer_id),
     stripeConfigured: Boolean(env.STRIPE_SECRET_KEY),
-    usage: { activeGalleries: await activeGalleryCount(env, photographer.id) },
+    usage: { activeGalleries: await activeGalleryCount(env, photographer.id), storage: await storageForAdmin(env, photographer) },
     plans: Object.values(PLANS).map(planOut),
   });
 }

@@ -7,6 +7,7 @@
 
 import { json, fail } from "./http.js";
 import { TERMS_VERSION } from "./privacy.js";
+import { feeRuleForAdmin } from "./fees.js";
 import {
   hashPassword,
   verifyPassword,
@@ -88,6 +89,8 @@ function profileOf(photographer, env) {
     // /api/owner/* revérifie elle-même l'e-mail côté serveur, jamais sur la
     // seule foi de ce champ renvoyé au client.
     isOwner: Boolean(env?.OWNER_EMAIL) && photographer.email === env.OWNER_EMAIL,
+    // Frais de paiement retenus sur chaque vente en ligne (voir fees.js).
+    paymentFee: env ? feeRuleForAdmin(env, photographer) : null,
   };
 }
 

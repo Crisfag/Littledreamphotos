@@ -159,8 +159,12 @@ CREATE TABLE IF NOT EXISTS photos (
   tag          TEXT NOT NULL DEFAULT '',    -- code couleur posé par le client : '' | green | yellow | red
   marks        TEXT NOT NULL DEFAULT '[]',  -- repères annotés : JSON [{x, y, note}], x/y entre 0 et 1
   has_original INTEGER NOT NULL DEFAULT 0,  -- 1 = fichier d'impression en R2 (originals/{id}.jpg)
+  original_bytes INTEGER NOT NULL DEFAULT 0, -- taille de ce fichier (espace de stockage, voir storage.js)
   created_at   INTEGER NOT NULL
 );
+
+-- Migration vers la mesure de l'espace de stockage (bases créées avant) :
+--   ALTER TABLE photos ADD COLUMN original_bytes INTEGER NOT NULL DEFAULT 0;
 
 -- Si une base existe déjà (galeries déjà envoyées) sans ces colonnes :
 --   ALTER TABLE photos ADD COLUMN selected INTEGER NOT NULL DEFAULT 0;
@@ -298,9 +302,16 @@ CREATE TABLE IF NOT EXISTS payments (
   -- tirages, détaillée dans print_orders). extra_count vaut 0 pour 'print' :
   -- une commande de tirages ne change jamais le décompte des suppléments.
   kind                        TEXT NOT NULL DEFAULT 'supplement',
+  -- Frais de paiement retenus sur la vente (application_fee_amount Stripe)
+  -- pour couvrir les frais Stripe payés par la plateforme (voir fees.js).
+  -- Le photographe reçoit amount_cents - fee_cents.
+  fee_cents                   INTEGER NOT NULL DEFAULT 0,
   created_at                  INTEGER NOT NULL,
   paid_at                     INTEGER
 );
+
+-- Migration vers les frais de paiement refacturés (bases créées avant) :
+--   ALTER TABLE payments ADD COLUMN fee_cents INTEGER NOT NULL DEFAULT 0;
 
 CREATE INDEX IF NOT EXISTS idx_payments_gallery ON payments(gallery_id, status);
 CREATE INDEX IF NOT EXISTS idx_payments_session ON payments(stripe_checkout_session_id);

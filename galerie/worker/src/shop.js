@@ -12,6 +12,8 @@ import { hasFeature, featureRefusal } from "./subscription.js";
 import { applyPromo, activePromo, savedCartFor, clearCart } from "./campaigns.js";
 import { randomBytes, b64url } from "./auth.js";
 import { createCheckoutSession } from "./stripe.js";
+import { paymentFeeCents, feeRuleForAdmin } from "./fees.js";
+import { originalKey, storageRefusal } from "./storage.js";
 import { createInvoiceForPayment, formatEuros } from "./invoices.js";
 import { sendPrintOrderConfirmation, sendPrintOrderPhotographer, sendPrintOrderShipped } from "./notify.js";
 import {
@@ -33,12 +35,8 @@ function newId(prefix) {
   return `${prefix}_${b64url(randomBytes(9))}`;
 }
 
-export function originalKey(galleryId, photoId) {
-  // Sous le préfixe de la photo : effacé avec elle (et avec la galerie) par
-  // les boucles de suppression existantes, sans rien à ajouter. Jamais
-  // atteignable par la route des tuiles, qui n'accepte que des nombres.
-  return `${galleryId}/${photoId}/original.jpg`;
-}
+// Clé R2 du fichier d'impression : définie avec la mesure du stockage.
+export { originalKey };
 
 async function credentialsFor(env, photographer) {
   return {
@@ -120,6 +118,8 @@ async function getShop(env, photographerId) {
       environment: photographer.prodigi_environment === "live" ? "live" : "sandbox",
       shippingCents: photographer.shop_shipping_cents || 0,
       stripeReady: Boolean(photographer.stripe_account_id) && Boolean(photographer.stripe_charges_enabled),
+      // Frais de paiement retenus sur chaque commande (voir fees.js).
+      paymentFee: feeRuleForAdmin(env, photographer),
     },
     products: products.map(productOut),
     suggested: SUGGESTED_PRODUCTS,
@@ -287,9 +287,11 @@ async function quoteProducts(request, env, photographerId) {
         productId: product.id,
         ...cost,
         totalCostCents: cost.itemsCents + cost.shippingCents,
-        // Marge sur le produit : prix de vente moins coût du labo. La
+        // Marge sur le produit : prix de vente moins coût du labo et frais
+        // de paiement (comptés comme si le produit était commandé seul). La
         // livraison est couverte à part par le forfait de port.
-        marginCents: product.price_cents - cost.itemsCents,
+        feeCents: paymentFeeCents(env, photographer, product.price_cents),
+        marginCents: product.price_cents - cost.itemsCents - paymentFeeCents(env, photographer, product.price_cents),
       });
     } catch (err) {
       quotes.push({ productId: product.id, error: err.message || "Devis refusé" });
@@ -389,13 +391,18 @@ async function setGalleryShop(request, env, gallery) {
 // Fichier d'impression d'une photo (pleine définition, sans filigrane) —
 // envoyé par l'outil d'import, jamais servi au client : seul le labo le
 // télécharge, par une URL signée propre à une commande payée.
-async function putOriginal(request, env, photo) {
+async function putOriginal(request, env, photo, photographerId) {
   const length = Number(request.headers.get("content-length") || 0);
   if (length > MAX_ORIGINAL_BYTES) return fail(413, "Fichier d'impression trop volumineux");
-  await env.TILES.put(originalKey(photo.gallery_id, photo.id), request.body, {
+  // Remplacer un fichier déjà envoyé ne compte que la différence.
+  const refusal = await storageRefusal(env, await photographerRow(env, photographerId), length - (photo.original_bytes || 0));
+  if (refusal) return refusal;
+  const stored = await env.TILES.put(originalKey(photo.gallery_id, photo.id), request.body, {
     httpMetadata: { contentType: "image/jpeg" },
   });
-  await env.DB.prepare("UPDATE photos SET has_original = 1 WHERE id = ?").bind(photo.id).run();
+  await env.DB.prepare("UPDATE photos SET has_original = 1, original_bytes = ? WHERE id = ?")
+    .bind(stored?.size ?? length, photo.id)
+    .run();
   return json({ ok: true });
 }
 
@@ -453,7 +460,7 @@ export async function handleShopAdmin(request, env, photographerId, parts, helpe
   if (section === "photos" && parts.length === 5 && parts[4] === "original" && method === "PUT") {
     const photo = await helpers.ownedPhoto(env, photographerId, parts[3]);
     if (!photo) return fail(404, "Photo introuvable");
-    return putOriginal(request, env, photo);
+    return putOriginal(request, env, photo, photographerId);
   }
   return null;
 }
@@ -531,6 +538,7 @@ export async function handlePrintOrder(request, env, gallery) {
 
   const shippingCents = state.photographer.shop_shipping_cents || 0;
   const totalCents = built.itemsCents + shippingCents;
+  const feeCents = paymentFeeCents(env, state.photographer, totalCents);
   const paymentId = newId("pay");
   const orderId = newId("ord");
   const count = built.lines.reduce((n, l) => n + l.copies, 0);
@@ -544,6 +552,7 @@ export async function handlePrintOrder(request, env, gallery) {
       successUrl,
       cancelUrl,
       metadata: { gallery_id: gallery.id, payment_id: paymentId, print_order_id: orderId, kind: "print" },
+      applicationFeeCents: feeCents,
     });
   } catch (err) {
     if (err.stripeNotConfigured) return fail(503, "Le paiement en ligne n'est pas encore activé");
@@ -554,9 +563,9 @@ export async function handlePrintOrder(request, env, gallery) {
   const ts = now();
   await env.DB.batch([
     env.DB.prepare(
-      `INSERT INTO payments (id, gallery_id, stripe_checkout_session_id, extra_count, amount_cents, status, kind, created_at)
-       VALUES (?, ?, ?, 0, ?, 'pending', 'print', ?)`
-    ).bind(paymentId, gallery.id, session.id, totalCents, ts),
+      `INSERT INTO payments (id, gallery_id, stripe_checkout_session_id, extra_count, amount_cents, fee_cents, status, kind, created_at)
+       VALUES (?, ?, ?, 0, ?, ?, 'pending', 'print', ?)`
+    ).bind(paymentId, gallery.id, session.id, totalCents, feeCents, ts),
     env.DB.prepare(
       `INSERT INTO print_orders (id, gallery_id, photographer_id, payment_id, status, items, recipient, client_email,
                                  items_cents, shipping_cents, total_cents, created_at, updated_at)

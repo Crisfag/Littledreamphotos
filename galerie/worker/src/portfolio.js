@@ -21,6 +21,7 @@ import { randomBytes, b64url, hashIp } from "./auth.js";
 import { normalizeSubdomain } from "./studio.js";
 import { sendPortfolioContact } from "./notify.js";
 import { hasFeature } from "./subscription.js";
+import { storageRefusal } from "./storage.js";
 
 export const MAX_PORTFOLIO_PHOTOS = 40;
 export const MAX_PORTFOLIO_PHOTO_BYTES = 4 * 1024 * 1024;
@@ -411,6 +412,8 @@ async function addPhoto(request, env, photographer, url) {
   if (!bytes.length) return fail(400, "Image vide");
   if (bytes.length > MAX_PORTFOLIO_PHOTO_BYTES) return fail(413, "Image trop lourde");
   if (!isWebp(bytes)) return fail(400, "Format d'image inattendu");
+  const storageFull = await storageRefusal(env, photographer, bytes.length);
+  if (storageFull) return storageFull;
 
   const stats = await env.DB.prepare(
     "SELECT COUNT(*) AS n, COALESCE(MAX(position), -1) AS last FROM portfolio_photos WHERE photographer_id = ?"

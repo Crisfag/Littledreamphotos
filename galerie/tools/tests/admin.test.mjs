@@ -563,8 +563,8 @@ execFileSync(
   "npx",
   [
     "wrangler", "d1", "execute", "galerie-protegee", "--local", "--command",
-    `INSERT INTO payments (id, gallery_id, stripe_checkout_session_id, extra_count, amount_cents, status, created_at, paid_at) ` +
-      `VALUES ('pay_admin_ui_test', '${galleryIdForPayments}', 'cs_admin_ui_test', 2, 2500, 'paid', ${paidAt}, ${paidAt});` +
+    `INSERT INTO payments (id, gallery_id, stripe_checkout_session_id, extra_count, amount_cents, fee_cents, status, created_at, paid_at) ` +
+      `VALUES ('pay_admin_ui_test', '${galleryIdForPayments}', 'cs_admin_ui_test', 2, 2500, 80, 'paid', ${paidAt}, ${paidAt});` +
       `INSERT INTO invoices (id, photographer_id, gallery_id, payment_id, number, issued_at, amount_cents, ` +
       `vat_rate_percent, vat_amount_cents, net_amount_cents, client_name, seller_company_name, seller_address, ` +
       `seller_vat_number, emailed_to, created_at) VALUES ('inv_admin_ui_test', ` +
@@ -586,6 +586,8 @@ check("la ligne du paiement affiche le nombre de suppléments, le montant et le 
       paymentsRowText.indexOf("25,00") !== -1 &&
       paymentsRowText.indexOf("Réglé") !== -1,
       paymentsRowText);
+check("la ligne indique les frais de paiement retenus sur ce règlement",
+      paymentsRowText.indexOf("dont 0,80") !== -1 && paymentsRowText.indexOf("frais de paiement") !== -1, paymentsRowText);
 check("la ligne affiche aussi le numéro de la facture émise et son adresse d'envoi",
       paymentsRowText.indexOf("2026-0001") !== -1 &&
       paymentsRowText.indexOf("client@test.invalid") !== -1,
@@ -661,6 +663,9 @@ check("l'onglet Facturation est marqué actif dans la barre",
       await page.locator("#ad-tab-billing.ad-tab-active").count() === 1);
 check("sans compte Stripe connecté, le bouton de connexion est proposé",
       await page.isVisible("#ad-stripe-connect"));
+check("les frais de paiement sont annoncés avant de connecter Stripe, sans commission",
+      (await page.textContent(".ad-stripe")).includes("Frais de paiement : 2 % + 0,30 €") &&
+      (await page.textContent(".ad-stripe")).includes("Aucune commission"));
 
 const billingViewText = await page.textContent("#ad-view");
 check("le supplément dû n'apparaît plus une fois le forfait relevé au-dessus de la sélection du client",
@@ -781,16 +786,19 @@ check("une toile roulée n'a pas d'option : le menu d'option disparaît", await 
 await page.selectOption("#ad-pick-size", "16x20");
 await page.waitForFunction(() => (document.getElementById("ad-pick-cost") || {}).textContent?.includes("12,50"), { timeout: 10000 });
 check("le coût réel chez le labo s'affiche aussitôt le format choisi", (await page.textContent("#ad-pick-cost")).includes("le produit"));
-check("une marge est proposée et le prix client se calcule tout seul",
-      (await page.inputValue("#ad-pick-margin")) === "13.00" && (await page.textContent("#ad-pick-price")).includes("25,50"),
+// Prix client = coût + marge + frais de paiement (2 % + 0,30 €), arrondi
+// aux 10 centimes supérieurs : la marge saisie arrive entière.
+check("une marge est proposée et le prix client se calcule tout seul, frais de paiement compris",
+      (await page.inputValue("#ad-pick-margin")) === "13.00" && (await page.textContent("#ad-pick-price")).includes("26,40"),
       await page.textContent("#ad-pick-price"));
 await page.fill("#ad-pick-margin", "20");
-check("changer la marge recalcule le prix client", (await page.textContent("#ad-pick-price")).includes("32,50"));
+check("changer la marge recalcule le prix client", (await page.textContent("#ad-pick-price")).includes("33,50"));
 await page.click("#ad-pick-add");
 await page.waitForFunction(() => Array.from(document.querySelectorAll("#ad-shop-products tr[data-product-id]")).some((r) => r.textContent.includes("Toile roulée (sans châssis) 40 × 50 cm")), { timeout: 10000 });
 const pickedRow = page.locator("#ad-shop-products tr[data-product-id]", { hasText: "Toile roulée" });
-check("le produit ajouté apparaît dans « Mes produits », avec son coût et sa marge",
-      (await pickedRow.locator('[data-field="price"]').inputValue()) === "32.50" && (await pickedRow.locator(".ad-margin-cell").textContent()).includes("20,00"));
+check("le produit ajouté apparaît dans « Mes produits », avec son coût et sa marge nette de frais",
+      (await pickedRow.locator('[data-field="price"]').inputValue()) === "33.50" && (await pickedRow.locator(".ad-margin-cell").textContent()).includes("20,03"),
+      await pickedRow.locator(".ad-margin-cell").textContent());
 
 await page.selectOption("#ad-pick-category", "frames");
 await page.waitForFunction(() => (document.getElementById("ad-pick-cost") || {}).textContent?.includes("12,50"), { timeout: 10000 });
@@ -833,7 +841,7 @@ check("un produit refusé par le labo affiche la raison donnée par Prodigi", in
 
 const firstRow = page.locator("#ad-shop-products tr[data-product-id]").first();
 await firstRow.locator('[data-field="price"]').fill("16.50");
-check("modifier un prix recalcule la marge immédiatement", (await firstRow.locator(".ad-margin-cell").textContent()).includes("4,00"),
+check("modifier un prix recalcule la marge (nette des frais de paiement) immédiatement", (await firstRow.locator(".ad-margin-cell").textContent()).includes("3,37"),
       await firstRow.locator(".ad-margin-cell").textContent());
 await firstRow.locator("[data-save-product]").click();
 await page.waitForFunction(() => document.querySelector('#ad-shop-products tr[data-product-id] [data-field="price"]')?.value === "16.50", { timeout: 10000 });

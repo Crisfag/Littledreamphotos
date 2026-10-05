@@ -109,7 +109,11 @@ export function retrieveAccount(env, accountId) {
 // `payment_method_types` : une session Checkout propose déjà, sans qu'on ait
 // à le demander, tout ce qui est activé sur le compte plateforme pour cette
 // devise (carte, portefeuilles comme Apple Pay, etc.).
-export function createCheckoutSession(env, connectedAccountId, { label, unitAmountCents, quantity, successUrl, cancelUrl, metadata }) {
+//
+// `applicationFeeCents` : frais de paiement retenus sur la vente pour couvrir
+// les frais Stripe que paie la plateforme (voir fees.js). Le reste du
+// montant part au photographe.
+export function createCheckoutSession(env, connectedAccountId, { label, unitAmountCents, quantity, successUrl, cancelUrl, metadata, applicationFeeCents = 0 }) {
   return stripeRequest(env, "POST", "/checkout/sessions", {
     mode: "payment",
     line_items: [{
@@ -122,6 +126,7 @@ export function createCheckoutSession(env, connectedAccountId, { label, unitAmou
     }],
     payment_intent_data: {
       transfer_data: { destination: connectedAccountId },
+      ...(applicationFeeCents > 0 ? { application_fee_amount: applicationFeeCents } : {}),
     },
     // "Managed Payments" (activé par défaut sur les comptes Stripe récents)
     // est incompatible avec transfer_data ci-dessus — Stripe refuse la
