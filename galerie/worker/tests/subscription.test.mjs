@@ -4,7 +4,7 @@
 //
 //   node tests/subscription.test.mjs
 
-import { PLANS, planFor, hasFeature, planKeyFromSubscription, handleSubscriptionEvent } from "../src/subscription.js";
+import { PLANS, planFor, hasFeature, planKeyFromSubscription, handleSubscriptionEvent, TRIAL_DAYS, FOUNDERS_LIMIT, founderCoupon, trialAvailable, founderEligible, publicPlans } from "../src/subscription.js";
 
 const checks = [];
 function check(label, ok, detail) {
@@ -28,6 +28,25 @@ check("la formule d'un abonnement se lit dans ses métadonnées, sinon d'après 
       planKeyFromSubscription({ metadata: { plan: "essentiel" } }) === "essentiel" &&
       planKeyFromSubscription({ metadata: {}, items: { data: [{ price: { unit_amount: PLANS.pro.priceCents } }] } }) === "pro" &&
       planKeyFromSubscription({ items: { data: [{ price: { unit_amount: 999 } }] } }) === "");
+
+check("grille : Essentiel 15 €/mois ou 150 €/an, Pro 29 €/mois ou 290 €/an (2 mois offerts)",
+      PLANS.essentiel.priceCents === 1500 && PLANS.essentiel.yearlyCents === 15000 &&
+      PLANS.pro.priceCents === 2900 && PLANS.pro.yearlyCents === 29000);
+check("une formule annuelle se reconnaît aussi à son prix", planKeyFromSubscription({ items: { data: [{ price: { unit_amount: 29000 } }] } }) === "pro");
+check("essai gratuit de 10 jours, offre Fondateurs limitée à 50 places", TRIAL_DAYS === 10 && FOUNDERS_LIMIT === 50);
+const couponMonth = founderCoupon(PLANS.pro, "month");
+const couponYear = founderCoupon(PLANS.essentiel, "year");
+check("Fondateurs en mensuel : 5 € de moins pendant 12 mois (24 € au lieu de 29 €), puis prix normal",
+      couponMonth.amount_off === 500 && couponMonth.duration === "repeating" && couponMonth.duration_in_months === 12 && couponMonth.currency === "eur",
+      JSON.stringify(couponMonth));
+check("Fondateurs en annuel : 30 € de moins sur la 1re année seulement (120 € au lieu de 150 €)",
+      couponYear.amount_off === 3000 && couponYear.duration === "once" && couponYear.duration_in_months === undefined && couponYear.id === "fondateurs-essentiel-annuel");
+check("essai et prix Fondateurs réservés à un premier abonnement",
+      trialAvailable({}) && !trialAvailable({ trial_used_at: 1 }) && !trialAvailable({ stripe_customer_id: "cus_1" }) &&
+      founderEligible({}, 49) && !founderEligible({}, 50) && !founderEligible({ stripe_customer_id: "cus_1" }, 0) && !founderEligible({ founder_at: 1 }, 0));
+const pub = publicPlans(47);
+check("ce qui est publié : formules, durée d'essai, places restantes", pub.trialDays === 10 && pub.founders.remaining === 3 && pub.plans.length === 3 &&
+      publicPlans(80).founders.remaining === 0);
 
 // Base factice : garde la dernière requête préparée et ses valeurs.
 function fakeDb(row) {
@@ -53,7 +72,16 @@ const handledCheckout = await handleSubscriptionEvent({ DB: db1 }, {
   data: { object: { mode: "subscription", client_reference_id: "pho_1", customer: "cus_1", subscription: "sub_1", metadata: { plan: "pro" } } },
 });
 check("paiement de l'abonnement confirmé : formule, client et abonnement Stripe enregistrés",
-      handledCheckout === true && /UPDATE photographers SET plan = \?/.test(db1.calls[0].sql) && db1.calls[0].binds.join(",") === "pro,cus_1,sub_1,pho_1");
+      handledCheckout === true && /UPDATE photographers SET plan = \?/.test(db1.calls[0].sql) &&
+      db1.calls[0].binds.slice(0, 4).join(",") === "pro,active,cus_1,sub_1" && db1.calls[0].binds[4] === 0 && db1.calls[0].binds[6] === 0 &&
+      db1.calls[0].binds.at(-1) === "pho_1", db1.calls[0].binds.join(","));
+const dbTrial = fakeDb(null);
+await handleSubscriptionEvent({ DB: dbTrial }, {
+  type: "checkout.session.completed",
+  data: { object: { mode: "subscription", client_reference_id: "pho_1", customer: "cus_1", subscription: "sub_1", metadata: { plan: "pro", trial: "1", founder: "1" } } },
+});
+check("abonnement avec essai et prix Fondateurs : statut « essai », essai consommé et place Fondateurs prise",
+      dbTrial.calls[0].binds[1] === "trialing" && dbTrial.calls[0].binds[4] === 1 && dbTrial.calls[0].binds[6] === 1, dbTrial.calls[0].binds.join(","));
 const db2 = fakeDb(null);
 const ignored = await handleSubscriptionEvent({ DB: db2 }, { type: "checkout.session.completed", data: { object: { mode: "payment", id: "cs_1" } } });
 check("un paiement de supplément ou de tirages n'est pas pris pour un abonnement", ignored === false && db2.calls.length === 0);
@@ -66,6 +94,15 @@ await handleSubscriptionEvent({ DB: db3 }, {
 const update = db3.calls[1];
 check("mise à jour de l'abonnement : formule, statut, échéance et résiliation programmée recopiés",
       update.binds.slice(0, 5).join(",") === "essentiel,active,1800000000,1,sub_1" && update.binds.at(-1) === "pho_1", update.binds.join(","));
+
+const db3b = fakeDb({ id: "pho_1", stripe_subscription_id: "sub_1" });
+await handleSubscriptionEvent({ DB: db3b }, {
+  type: "customer.subscription.updated",
+  data: { object: { id: "sub_1", customer: "cus_1", status: "trialing", trial_end: 1790000000, metadata: { plan: "pro" },
+    items: { data: [{ current_period_end: 1790000000, price: { unit_amount: 29000, recurring: { interval: "year" } } }] } } },
+});
+check("versions d'API récentes : échéance lue sur la ligne d'abonnement, facturation annuelle enregistrée",
+      db3b.calls[1].binds[2] === 1790000000 && db3b.calls[1].binds[7] === "year" && db3b.calls[1].binds[1] === "trialing", db3b.calls[1].binds.join(","));
 
 const db4 = fakeDb({ id: "pho_1", stripe_subscription_id: "sub_1" });
 await handleSubscriptionEvent({ DB: db4 }, { type: "customer.subscription.deleted", data: { object: { id: "sub_1", customer: "cus_1", status: "canceled" } } });

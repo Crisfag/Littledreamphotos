@@ -20,6 +20,7 @@ import { purgeOldAccessLogs } from "./privacy.js";
 import { runSalesReminders } from "./campaigns.js";
 import { handlePortfolioPublic, purgeOldPortfolioMessages } from "./portfolio.js";
 import { runStoragePurge } from "./storage.js";
+import { plansForPublic } from "./subscription.js";
 import { shopState } from "./shop.js";
 import { studioSubdomainOf, handleStudioHost } from "./studio.js";
 import { handlePrintAsset, handleProdigiCallback } from "./shop.js";
@@ -85,6 +86,9 @@ export default {
         response = await handleOwner(request, env, path);
       } else if (path.startsWith("/api/gallery/")) {
         response = await handleViewer(request, env, ctx, path);
+      } else if (path === "/api/public/plans" && request.method === "GET") {
+        // Formules, essai et places Fondateurs restantes (page d'accueil).
+        response = await plansForPublic(env);
       } else if (path.startsWith("/api/portfolio/")) {
         // Mini-site public du photographe (lecture, photos, formulaire de contact).
         response = await handlePortfolioPublic(request, env, path);

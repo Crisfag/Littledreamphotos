@@ -406,11 +406,22 @@ Le tableau de bord s'organise en trois onglets, chacun avec son propre lien
 - **Abonnements Holypixx** : trois formules (`worker/src/subscription.js`,
   prix à ajuster au même endroit et dans la section Tarifs de
   `web/index.html`). *Découverte* (gratuite) : 3 galeries actives ;
-  *Essentiel* (12 €/mois) : 25 galeries actives et la boutique de tirages ;
-  *Pro* (24 €/mois) : galeries illimitées, boutique et adresse à son nom.
+  *Essentiel* (15 €/mois ou 150 €/an) : 25 galeries actives et la boutique
+  de tirages ; *Pro* (29 €/mois ou 290 €/an) : galeries illimitées, boutique
+  et adresse à son nom. La formule annuelle offre 2 mois.
+  **Essai gratuit de 10 jours** au premier abonnement (`TRIAL_DAYS`) : carte
+  enregistrée par Stripe, rien n'est prélevé avant la fin de l'essai.
+  **Offre Fondateurs** (`FOUNDERS_LIMIT`, 50 places) : les premiers abonnés
+  paient 12 € (Essentiel) ou 24 € (Pro) par mois pendant leur première année
+  (120 € / 240 € la première année en annuel), puis le prix normal — un
+  coupon Stripe créé au premier usage (`fondateurs-<formule>-<période>`). Essai
+  et prix Fondateurs ne valent que pour un premier abonnement (résilier puis
+  se réabonner ne les relance pas). Les places restantes sont publiques
+  (`GET /api/public/plans`) et affichées sur la page d'accueil.
   Une galerie expirée ne compte plus. Onglet *Abonnement* de l'admin :
-  formule actuelle, utilisation, souscription par une page de paiement
-  Stripe (abonnement mensuel sur le compte plateforme, prix créé à la volée),
+  formule actuelle, utilisation, bascule mensuel / annuel, souscription par
+  une page de paiement Stripe (abonnement sur le compte plateforme, prix
+  créé à la volée),
   puis « Gérer mon abonnement » ouvre le portail client Stripe (carte,
   changement de formule, factures, résiliation). La formule n'est accordée
   que tant que Stripe dit l'abonnement actif (ou en période de grâce après
@@ -906,7 +917,7 @@ des tuiles, refus du mauvais mot de passe, absence de toute balise `<img>`,
 neutralisation du menu contextuel et de la copie, voile sur « Impr. écran » et
 sur perte de focus, consignation au journal.
 
-**API du Worker** — 365 vérifications contre le vrai moteur Cloudflare (D1 et R2
+**API du Worker** — 368 vérifications contre le vrai moteur Cloudflare (D1 et R2
 émulés localement par `wrangler dev`) : comptes photographes (inscription,
 connexion, session, mot de passe oublié — même réponse générique qu'un
 compte existe ou non), cloisonnement strict entre comptes (un photographe ne
@@ -1100,7 +1111,7 @@ client, jamais deux fois la même relance, pas de rattrapage d'une relance
 manquée le jour d'une autre, et lien de galerie construit (slug encodé)
 seulement si `PUBLIC_SITE_ORIGIN` est renseigné.
 
-**Signature de webhook Stripe et sessions de paiement** — 22 vérifications
+**Signature de webhook Stripe et sessions de paiement** — 24 vérifications
 sans réseau (fetch intercepté, jamais appelé pour de vrai) :
 `verifyStripeSignature` est une fonction pure — signature valide acceptée,
 mauvais secret refusé, corps modifié après signature refusé, évènement trop
@@ -1247,7 +1258,10 @@ période de promotion, remises proposées, arrondi, plancher au coût du labo,
 prix barré conservé, prix remisé encaissé à la commande, panier nettoyé,
 contenu des e-mails (promotion, panier, coups de cœur).
 
-**Abonnements (logique)** — 12 vérifications sans réseau ni D1 : formule
+**Abonnements (logique)** — 21 vérifications sans réseau ni D1 : grille
+(mensuel, annuel), essai de 10 jours, coupons Fondateurs (12 mois en
+mensuel, 1re échéance en annuel), essai et prix Fondateurs réservés au
+premier abonnement, données publiques ; formule
 effective selon le statut Stripe (active, essai, période de grâce ; tout le
 reste retombe en gratuit), formule inconnue ignorée, propriétaire illimitée,
 fonctionnalités par formule, formule retrouvée par métadonnées ou par prix,
@@ -1310,6 +1324,13 @@ l'adresse, adresse proposée, prestations, Instagram, site (https ajouté,
 schémas dangereux refusés), téléphone, adresse du studio réservée à la
 formule Pro, e-mail de contact échappé.
 
+**Grille tarifaire** — 11 vérifications dans un vrai navigateur, contre le
+vrai Worker local : onglet Abonnement d'un compte gratuit (offre Fondateurs
+et places restantes, prix barrés, essai de 10 jours, bascule annuelle,
+période transmise à la demande de paiement, boutons désactivés sans Stripe)
+et section Tarifs de la page d'accueil (prix, essai, places Fondateurs lues
+sur l'API publique).
+
 **Portfolio** — 33 vérifications dans un vrai navigateur, contre le vrai
 Worker local : adresse proposée, publication refusée sans photo, envoi de
 trois photos (réduites à 2000 px, WebP sans bloc EXIF), ordre, champs
@@ -1349,6 +1370,7 @@ node tests/delivery.test.mjs          # livraison des photos définitives côté
 node tests/sales.test.mjs             # onglet Ventes, autonome (admin-server.mjs lancé)
 node tests/portfolio.test.mjs         # portfolio (admin, page publique, contact, sous-domaine), autonome (admin-server.mjs lancé)
 node tests/storage.test.mjs           # espace de stockage, quota et purge, autonome
+node tests/pricing.test.mjs           # grille tarifaire (admin et page d'accueil), autonome (admin-server.mjs lancé)
 
 cd ../worker
 node tests/notify.test.mjs            # e-mails (alerte de capture, relances…), sans réseau

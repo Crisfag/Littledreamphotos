@@ -729,3 +729,13 @@ h3 { font-size: 1.05rem; letter-spacing: -.01em; line-height: 1.3; }
   .toast-1 { display: none; }
   .rv { opacity: 1; transform: none; }
 }
+
+/* Tarifs : prix annuel et offre Fondateurs. */
+.plan-alt { margin-top: 4px; font-size: .9rem; color: var(--muted); }
+.plan-featured .plan-alt { color: var(--cream-dim); }
+.founders {
+  margin: 0 auto 22px; max-width: 760px; padding: 14px 20px; border-radius: 14px; text-align: center;
+  background: #fdf3e6; color: #7a4a12; border: 1px solid #f1d9b5; font-size: .98rem;
+}
+.founders[hidden] { display: none; }
+.founders strong { color: #5e360a; }

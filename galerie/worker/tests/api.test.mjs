@@ -1647,6 +1647,17 @@ check("un nouveau compte démarre en formule Découverte (gratuite), avec les 3 
       freeSub.plan?.key === "free" && freeSub.plan.maxActiveGalleries === 3 && freeSub.usage?.activeGalleries === 0 &&
       freeSub.plans?.map((p) => p.key).join(",") === "free,essentiel,pro" && freeSub.canManage === false,
       JSON.stringify(freeSub.plan));
+check("nouvelle grille : 15 € / 29 € par mois, 150 € / 290 € par an, prix Fondateurs 12 € / 24 €",
+      freeSub.plans?.[1]?.priceCents === 1500 && freeSub.plans?.[1]?.yearlyCents === 15000 && freeSub.plans?.[1]?.founderCents === 1200 &&
+      freeSub.plans?.[2]?.priceCents === 2900 && freeSub.plans?.[2]?.yearlyCents === 29000 && freeSub.plans?.[2]?.founderCents === 2400);
+check("un compte jamais abonné a droit à l'essai de 10 jours et, s'il reste des places, au prix Fondateurs",
+      freeSub.trialAvailable === true && freeSub.trialDays === 10 && freeSub.founders?.limit === 50 &&
+      freeSub.founderEligible === (freeSub.founders.remaining > 0) && freeSub.isFounder === false);
+const publicPlansRes = await fetch(`${BASE}/api/public/plans`);
+const publicPlansBody = await publicPlansRes.json();
+check("les formules et les places Fondateurs restantes sont publiques (page d'accueil), sans aucune donnée de compte",
+      publicPlansRes.ok && publicPlansBody.founders?.remaining <= 50 && publicPlansBody.plans?.length === 3 && publicPlansBody.trialDays === 10 &&
+      !JSON.stringify(publicPlansBody).includes("@"));
 for (let i = 1; i <= 3; i++) {
   await free("POST", "/api/admin/galleries", { slug: `${SLUG}-gratuit-${i}`, password: "mot-de-passe-solide", title: `Gratuite ${i}` });
 }
@@ -1710,7 +1721,7 @@ const exportData = await exportResponse.json();
 check("l'export contient le compte, ses galeries, photos et clients, et l'acceptation des conditions horodatée",
       exportResponse.ok && (exportResponse.headers.get("content-disposition") || "").includes("holypixx-mes-donnees-") &&
       exportData.account?.email === rgpdEmail && typeof exportData.account.terms_accepted_at === "number" &&
-      exportData.account.terms_version === "2026-10-05" &&
+      exportData.account.terms_version === "2026-10-06" &&
       exportData.galleries?.[0]?.client_email === "famille-rgpd@test.invalid" && exportData.galleries[0].photos?.length === 1,
       JSON.stringify({ terms: exportData.account?.terms_accepted_at, g: exportData.galleries?.length }));
 check("l'export ne contient jamais de secret (empreintes de mot de passe, clé Prodigi chiffrée)",

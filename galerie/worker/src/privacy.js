@@ -13,7 +13,7 @@ import { verifyPassword } from "./auth.js";
 
 // Version des conditions acceptées à l'inscription (date de publication des
 // pages legales du site, voir web/conditions.html).
-export const TERMS_VERSION = "2026-10-05";
+export const TERMS_VERSION = "2026-10-06";
 
 // Journaux d'accès aux galeries conservés 13 mois, puis effacés.
 export const ACCESS_LOG_RETENTION_SECONDS = 395 * 24 * 60 * 60;

@@ -3,7 +3,7 @@
 //   node tests/stripe.test.mjs
 
 import { createHmac } from "node:crypto";
-import { verifyStripeSignature, createCheckoutSession, createConnectAccount } from "../src/stripe.js";
+import { verifyStripeSignature, createCheckoutSession, createConnectAccount, createSubscriptionCheckout } from "../src/stripe.js";
 import { stripeConfigStatus } from "../src/owner.js";
 import { stripeFailureMessage } from "../src/billing.js";
 
@@ -106,6 +106,28 @@ check("le compte Connect est créé sans en-tête Stripe-Account (c'est la plate
 check("les capacités demandées sont bien encodées",
       accountBody.get("capabilities[card_payments][requested]") === "true" &&
       accountBody.get("capabilities[transfers][requested]") === "true");
+
+captured = null;
+await createSubscriptionCheckout({ STRIPE_SECRET_KEY: "sk_test_fake" }, {
+  photographerId: "pho_1", email: "a@test.invalid", customerId: "", planKey: "pro", label: "Holypixx Pro (annuel)",
+  unitAmountCents: 29000, interval: "year", trialDays: 10, couponId: "fondateurs-pro-annuel",
+  successUrl: "https://example.com/ok", cancelUrl: "https://example.com/ko",
+});
+const subBody = new URLSearchParams(captured.body);
+check("abonnement annuel avec essai de 10 jours et coupon Fondateurs, sans saisie de code promo (incompatible)",
+      subBody.get("line_items[0][price_data][recurring][interval]") === "year" && subBody.get("line_items[0][price_data][unit_amount]") === "29000" &&
+      subBody.get("subscription_data[trial_period_days]") === "10" && subBody.get("discounts[0][coupon]") === "fondateurs-pro-annuel" &&
+      subBody.get("allow_promotion_codes") === null && subBody.get("metadata[trial]") === "1" && subBody.get("metadata[founder]") === "1",
+      captured.body);
+captured = null;
+await createSubscriptionCheckout({ STRIPE_SECRET_KEY: "sk_test_fake" }, {
+  photographerId: "pho_1", email: "a@test.invalid", customerId: "cus_1", planKey: "essentiel", label: "Holypixx Essentiel",
+  unitAmountCents: 1500, successUrl: "https://example.com/ok", cancelUrl: "https://example.com/ko",
+});
+const plainBody = new URLSearchParams(captured.body);
+check("sans essai ni coupon : mensuel, codes promo acceptés, aucun essai demandé",
+      plainBody.get("line_items[0][price_data][recurring][interval]") === "month" && plainBody.get("allow_promotion_codes") === "true" &&
+      plainBody.get("subscription_data[trial_period_days]") === null && plainBody.get("discounts[0][coupon]") === null && plainBody.get("metadata[trial]") === "0");
 
 globalThis.fetch = originalFetch;
 

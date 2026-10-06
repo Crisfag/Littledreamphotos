@@ -143,26 +143,44 @@ export function createCheckoutSession(env, connectedAccountId, { label, unitAmou
 // PLATEFORME : pas de transfert, pas de compte connecté. Le prix est créé à
 // la volée (price_data + recurring). La formule voyage dans les métadonnées
 // de la session et de l'abonnement, relues par le webhook.
-export function createSubscriptionCheckout(env, { photographerId, email, customerId, planKey, label, unitAmountCents, successUrl, cancelUrl }) {
+export function createSubscriptionCheckout(env, { photographerId, email, customerId, planKey, label, unitAmountCents, interval = "month", trialDays = 0, couponId = "", successUrl, cancelUrl }) {
+  // Essai et coupon voyagent dans les métadonnées de la session : le
+  // webhook s'en sert pour marquer l'essai consommé et la place Fondateurs.
+  const flags = { trial: trialDays > 0 ? "1" : "0", founder: couponId ? "1" : "0" };
   return stripeRequest(env, "POST", "/checkout/sessions", {
     mode: "subscription",
     line_items: [{
       price_data: {
         currency: "eur",
         unit_amount: unitAmountCents,
-        recurring: { interval: "month" },
+        recurring: { interval: interval === "year" ? "year" : "month" },
         product_data: { name: label },
       },
       quantity: 1,
     }],
     client_reference_id: photographerId,
     ...(customerId ? { customer: customerId } : { customer_email: email }),
-    metadata: { photographer_id: photographerId, plan: planKey },
-    subscription_data: { metadata: { photographer_id: photographerId, plan: planKey } },
-    allow_promotion_codes: true,
+    metadata: { photographer_id: photographerId, plan: planKey, ...flags },
+    subscription_data: {
+      metadata: { photographer_id: photographerId, plan: planKey },
+      ...(trialDays > 0 ? { trial_period_days: trialDays } : {}),
+    },
+    // Stripe refuse de combiner un coupon imposé et la saisie d'un code promo.
+    ...(couponId ? { discounts: [{ coupon: couponId }] } : { allow_promotion_codes: true }),
     success_url: successUrl,
     cancel_url: cancelUrl,
   });
+}
+
+// Coupon à identifiant fixe (offre Fondateurs), créé au premier usage. Un
+// coupon déjà existant n'est pas une erreur ; ses conditions ne changent
+// plus une fois créé (Stripe ne permet de modifier que son nom).
+export async function ensureCoupon(env, coupon) {
+  try {
+    await stripeRequest(env, "POST", "/coupons", coupon);
+  } catch (err) {
+    if (err.stripeCode !== "resource_already_exists") throw err;
+  }
 }
 
 // Portail client Stripe : changer de carte, de formule, télécharger ses
