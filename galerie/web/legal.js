@@ -4,18 +4,18 @@
 // « à compléter » sur les pages.
 window.LEGAL = {
   // Nom de l'entreprise ou nom et prénom (entreprise individuelle).
-  company: "",
+  company: "Little Dream Photography",
   // Forme juridique (ex. « personne physique — entreprise individuelle », « SRL »).
-  legalForm: "",
+  legalForm: "Entreprise individuelle (personne physique) — Christine Fagnant",
   // Adresse du siège ou de l'établissement.
-  address: "",
+  address: "Rue de la Gotte 12, 4120 Rotheux (Neupré), Belgique",
   // Numéro d'entreprise (BCE) et numéro de TVA.
-  companyNumber: "",
-  vatNumber: "",
+  companyNumber: "0636.825.982",
+  vatNumber: "BE 0636.825.982",
   // Adresse e-mail de contact (aussi pour les demandes RGPD).
-  email: "",
+  email: "littledreamphotos@hotmail.com",
   // Arrondissement judiciaire compétent (ex. « Liège », « Bruxelles »).
-  court: "",
+  court: "Liège",
 };
 
 (function () {
