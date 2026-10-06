@@ -33,6 +33,14 @@ check("une signature calculée avec le mauvais secret est refusée",
 check("un corps modifié après signature est refusé",
       !(await verifyStripeSignature(PAYLOAD + " ", header(now, SECRET, PAYLOAD), SECRET)));
 
+{
+  // Secret renouvelé : Stripe signe avec l'ancien et le nouveau, l'ancien en premier.
+  const both = `t=${now},v1=${header(now, "whsec_ancien", PAYLOAD).split("v1=")[1]},v1=${header(now, SECRET, PAYLOAD).split("v1=")[1]},v0=abc`;
+  check("plusieurs signatures v1 (secret renouvelé) : une seule valide suffit, quelle que soit sa place",
+        await verifyStripeSignature(PAYLOAD, both, SECRET) && await verifyStripeSignature(PAYLOAD, both, "whsec_ancien") &&
+        !(await verifyStripeSignature(PAYLOAD, both, "whsec_autre_secret")));
+}
+
 check("un évènement trop ancien (rejeu) est refusé",
       !(await verifyStripeSignature(PAYLOAD, header(now - 3600, SECRET, PAYLOAD), SECRET)));
 

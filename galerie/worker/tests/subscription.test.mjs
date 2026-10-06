@@ -4,7 +4,7 @@
 //
 //   node tests/subscription.test.mjs
 
-import { PLANS, planFor, hasFeature, planKeyFromSubscription, handleSubscriptionEvent, TRIAL_DAYS, FOUNDERS_LIMIT, founderCoupon, trialAvailable, founderEligible, publicPlans } from "../src/subscription.js";
+import { PLANS, planFor, hasFeature, planKeyFromSubscription, handleSubscriptionEvent, TRIAL_DAYS, FOUNDERS_LIMIT, founderCoupon, trialAvailable, founderEligible, publicPlans, syncSubscription } from "../src/subscription.js";
 
 const checks = [];
 function check(label, ok, detail) {
@@ -56,10 +56,13 @@ function fakeDb(row) {
     prepare(sql) {
       const call = { sql, binds: [] };
       calls.push(call);
+      const run = async () => ({ meta: { changes: 1 } });
+      const first = async () => row;
       return {
+        run, first, all: async () => ({ results: [] }),
         bind(...binds) {
           call.binds = binds;
-          return { run: async () => ({ meta: { changes: 1 } }), first: async () => row };
+          return { run, first, all: async () => ({ results: [] }) };
         },
       };
     },
@@ -110,6 +113,55 @@ check("abonnement résilié : retour au gratuit", db4.calls[1].binds.slice(0, 2)
 const db5 = fakeDb({ id: "pho_1", stripe_subscription_id: "sub_2" });
 await handleSubscriptionEvent({ DB: db5 }, { type: "customer.subscription.deleted", data: { object: { id: "sub_1", customer: "cus_1" } } });
 check("la fin d'un ancien abonnement n'écrase pas un abonnement plus récent", db5.calls.length === 1);
+
+/* ---------- Rattrapage au retour de Stripe (webhook manqué) ---------- */
+// fetch intercepté : on répond comme Stripe et on note ce qui a été demandé.
+const stripeCalls = [];
+function fakeStripe(routes) {
+  globalThis.fetch = async (url) => {
+    const path = String(url).replace("https://api.stripe.com/v1", "");
+    stripeCalls.push(path);
+    const hit = Object.keys(routes).find((prefix) => path.startsWith(prefix));
+    return new Response(JSON.stringify(hit ? routes[hit] : { error: { message: "inconnu" } }), { status: hit ? 200 : 404 });
+  };
+}
+const stripeSub = {
+  id: "sub_9", customer: "cus_9", status: "trialing", created: 1791300848, trial_start: 1791300848, trial_end: 1792164845,
+  metadata: { photographer_id: "pho_1", plan: "essentiel" },
+  discount: { coupon: { id: "fondateurs-essentiel-annuel" } },
+  items: { data: [{ current_period_end: 1792164845, price: { unit_amount: 15000, recurring: { interval: "year" } } }] },
+};
+const syncEnv = (db) => ({ DB: db, STRIPE_SECRET_KEY: "sk_test_x", OWNER_EMAIL: "proprietaire@exemple.be" });
+const syncRequest = (body) => new Request("https://w/api/admin/subscription/sync", { method: "POST", body: JSON.stringify(body) });
+
+fakeStripe({ "/checkout/sessions/cs_live_abc": {
+  id: "cs_live_abc", mode: "subscription", status: "complete", client_reference_id: "pho_1",
+  metadata: { plan: "essentiel", trial: "1", founder: "1" }, subscription: stripeSub,
+} });
+const dbSync = fakeDb({ id: "pho_1", email: "a@b.c", plan: "free", plan_status: "", stripe_subscription_id: "" });
+const synced = await syncSubscription(syncRequest({ sessionId: "cs_live_abc" }), syncEnv(dbSync), { id: "pho_1", email: "a@b.c", plan: "free" });
+const syncWrites = dbSync.calls.filter((c) => /^\s*UPDATE photographers/.test(c.sql));
+check("retour de Stripe : la session relue enregistre formule, essai, place Fondateurs, échéance et rythme annuel",
+      synced.status === 200 && stripeCalls[0].includes("expand%5B%5D=subscription") && syncWrites.length === 2 &&
+      syncWrites[0].binds.slice(0, 4).join(",") === "essentiel,trialing,cus_9,sub_9" && syncWrites[0].binds[4] === 1 && syncWrites[0].binds[6] === 1 &&
+      syncWrites[1].binds[2] === 1792164845 && syncWrites[1].binds[7] === "year",
+      syncWrites.map((c) => c.binds.join(",")).join(" | "));
+
+fakeStripe({ "/checkout/sessions/cs_live_autre": { id: "cs_live_autre", mode: "subscription", status: "complete", client_reference_id: "pho_2", subscription: stripeSub } });
+const dbOther = fakeDb({ id: "pho_1" });
+const stolen = await syncSubscription(syncRequest({ sessionId: "cs_live_autre" }), syncEnv(dbOther), { id: "pho_1", email: "a@b.c", plan: "free" });
+check("la session de paiement d'un autre photographe est refusée et ne touche à rien",
+      stolen.status === 403 && !dbOther.calls.some((c) => /UPDATE/.test(c.sql)));
+
+stripeCalls.length = 0;
+fakeStripe({ "/subscriptions/search": { data: [{ ...stripeSub, id: "sub_old", status: "canceled", created: 1 }, stripeSub] } });
+const dbSearch = fakeDb({ id: "pho_1", plan: "free" });
+await syncSubscription(syncRequest({}), syncEnv(dbSearch), { id: "pho_1", email: "a@b.c", plan: "free" });
+const searchWrites = dbSearch.calls.filter((c) => /^\s*UPDATE photographers/.test(c.sql));
+check("sans session : l'abonnement en cours est retrouvé par sa métadonnée (les résiliés sont ignorés), essai et Fondateurs déduits",
+      decodeURIComponent(stripeCalls[0]).includes("metadata['photographer_id']:'pho_1'") && searchWrites.length === 2 &&
+      searchWrites[0].binds.slice(0, 4).join(",") === "essentiel,trialing,cus_9,sub_9" && searchWrites[0].binds[4] === 1 && searchWrites[0].binds[6] === 1,
+      searchWrites.map((c) => c.binds.join(",")).join(" | "));
 
 const failed = checks.filter((c) => !c.ok);
 console.log(failed.length ? `\n${failed.length} vérification(s) en échec.` : `\n${checks.length} vérifications, toutes passent.`);

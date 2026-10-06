@@ -435,6 +435,15 @@ Le tableau de bord s'organise en trois onglets, chacun avec son propre lien
   `customer.subscription.deleted` (en plus de `checkout.session.completed`) ;
   enregistrer une configuration du *portail client* (Paramètres → Billing →
   Portail client), en y autorisant le changement de formule si souhaité.
+  Au retour du paiement, le tableau de bord n'attend pas le webhook : il
+  fait relire la session Checkout par le Worker (`POST
+  /api/admin/subscription/sync`, adresse de retour portant
+  `session_id={CHECKOUT_SESSION_ID}`), qui enregistre la formule, l'essai et
+  la place Fondateurs. Avant d'ouvrir un nouveau paiement, le Worker cherche
+  aussi chez Stripe un abonnement déjà en cours pour ce photographe (webhook
+  manqué) et l'enregistre au lieu d'en créer un second. Les renouvellements
+  et résiliations, eux, n'arrivent que par le webhook : un refus de
+  signature est journalisé (`npx wrangler tail`, « signature invalide »).
 - **Campagnes de vente des tirages** (`worker/src/campaigns.js`) :
   - *Promotion à durée limitée* sur une galerie (−10 à −50 % jusqu'à une
     date, depuis la section boutique de la fiche) : bandeau et prix barrés

@@ -126,7 +126,12 @@ export async function handleStripeWebhook(request, env) {
       break;
     }
   }
-  if (!valid) return fail(400, "Signature invalide");
+  if (!valid) {
+    // Visible avec `wrangler tail` : presque toujours un secret de webhook
+    // (whsec_…) qui ne correspond pas à la destination Stripe qui envoie.
+    console.warn("Webhook Stripe refusé : signature invalide (vérifier STRIPE_WEBHOOK_SECRET / STRIPE_WEBHOOK_SECRET_PLATFORM)");
+    return fail(400, "Signature invalide");
+  }
 
   let event;
   try {
