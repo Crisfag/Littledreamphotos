@@ -31,7 +31,11 @@
 
   <script>
     // Adresse de l'interface d'administration (connexion / création de compte).
-    window.HOME_CONFIG = { adminUrl: "https://holypixx-admin.onrender.com/" };
+    window.HOME_CONFIG = {
+      adminUrl: "https://holypixx-admin.onrender.com/",
+      // Places restantes de l'offre Fondateurs (GET /api/public/plans).
+      api: "https://galerie-protegee.littledreamphotos-be.workers.dev",
+    };
   </script>
 
   <script type="application/ld+json">
@@ -353,6 +357,9 @@
           <p class="kicker">Tarifs</p>
           <h2>Commencez gratuitement.<br />Passez à la vitesse supérieure quand vous voulez.</h2>
         </div>
+        <p class="founders rv" id="founders" hidden>
+          <strong>Offre Fondateurs</strong> : <span id="founders-left">50 places</span>. Essentiel à 12 € et Pro à 24 € par mois pendant toute la première année, puis le prix normal.
+        </p>
         <div class="plans">
           <article class="plan rv">
             <h3>Découverte</h3>
@@ -367,28 +374,30 @@
           </article>
           <article class="plan rv">
             <h3>Essentiel</h3>
-            <p class="plan-price">12 € <span>/ mois</span></p>
+            <p class="plan-price">15 € <span>/ mois</span></p>
+            <p class="plan-alt">ou 150 € / an, 2 mois offerts</p>
             <ul class="checks">
               <li>25 galeries actives, 200 Go de stockage</li>
               <li>Tout Découverte</li>
               <li>Boutique de tirages intégrée</li>
               <li>Suppléments payés en ligne</li>
             </ul>
-            <a class="btn btn-ghost-dark" data-signup href="#">Commencer</a>
+            <a class="btn btn-ghost-dark" data-signup href="#">Essayer 10 jours gratuitement</a>
           </article>
           <article class="plan plan-featured rv">
             <h3>Pro</h3>
-            <p class="plan-price">24 € <span>/ mois</span></p>
+            <p class="plan-price">29 € <span>/ mois</span></p>
+            <p class="plan-alt">ou 290 € / an, 2 mois offerts</p>
             <ul class="checks">
               <li>Galeries illimitées, 1 To de stockage</li>
               <li>Tout Essentiel</li>
               <li>Vos galeries à votre nom : votre-studio.holypixx.com</li>
               <li>Toutes les fonctionnalités</li>
             </ul>
-            <a class="btn btn-rose" data-signup href="#">Commencer</a>
+            <a class="btn btn-rose" data-signup href="#">Essayer 10 jours gratuitement</a>
           </article>
         </div>
-        <p class="plans-note rv">Prix TTC, sans engagement : résiliable à tout moment depuis votre compte. Aucune commission sur vos ventes : seuls les frais de paiement (2 % + 0,30 € par vente) sont retenus.</p>
+        <p class="plans-note rv">Prix TTC, sans engagement : 10 jours d'essai gratuit sur les formules payantes, résiliable à tout moment depuis votre compte. Aucune commission sur vos ventes : seuls les frais de paiement (2 % + 0,30 € par vente) sont retenus.</p>
       </div>
     </section>
 
@@ -449,6 +458,20 @@
       document.querySelectorAll("[data-signup]").forEach(function (a) { a.href = admin + "#/inscription"; });
       var year = document.getElementById("year");
       if (year) year.textContent = new Date().getFullYear();
+
+      // Offre Fondateurs : affichée seulement tant qu'il reste des places.
+      var api = (window.HOME_CONFIG || {}).api;
+      if (api && window.fetch) {
+        fetch(api.replace(/\/+$/, "") + "/api/public/plans")
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (data) {
+            var left = data && data.founders ? data.founders.remaining : 0;
+            if (!left) return;
+            document.getElementById("founders-left").textContent = "plus que " + left + " place" + (left > 1 ? "s" : "");
+            document.getElementById("founders").hidden = false;
+          })
+          .catch(function () { /* sans réponse, l'offre n'est simplement pas affichée */ });
+      }
 
       // Barre de navigation : fond plein dès qu'on quitte le haut de page.
       var nav = document.getElementById("nav");

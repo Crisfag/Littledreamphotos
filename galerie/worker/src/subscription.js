@@ -13,7 +13,7 @@
 // abonnement.
 
 import { json, fail } from "./http.js";
-import { createSubscriptionCheckout, createBillingPortalSession } from "./stripe.js";
+import { createSubscriptionCheckout, createBillingPortalSession, ensureCoupon } from "./stripe.js";
 import { storageForAdmin } from "./storage.js";
 
 export const PLANS = {
@@ -29,7 +29,10 @@ export const PLANS = {
   essentiel: {
     key: "essentiel",
     label: "Essentiel",
-    priceCents: 1200,
+    priceCents: 1500,
+    yearlyCents: 15000,
+    founderCents: 1200,
+    founderYearlyCents: 12000,
     maxActiveGalleries: 25,
     storageBytes: 200e9,
     features: { shop: true, subdomain: false },
@@ -38,13 +41,29 @@ export const PLANS = {
   pro: {
     key: "pro",
     label: "Pro",
-    priceCents: 2400,
+    priceCents: 2900,
+    yearlyCents: 29000,
+    founderCents: 2400,
+    founderYearlyCents: 24000,
     maxActiveGalleries: null,
     storageBytes: 1000e9,
     features: { shop: true, subdomain: true },
     pitch: "Galeries illimitées, boutique, et vos galeries à votre nom (votre-studio.holypixx.com).",
   },
 };
+
+// Essai gratuit des formules payantes : une seule fois par compte. La carte
+// est demandée par Stripe dès l'inscription, rien n'est prélevé si
+// l'abonnement est résilié avant la fin de l'essai.
+export const TRIAL_DAYS = 10;
+
+// Offre Fondateurs : les FOUNDERS_LIMIT premiers abonnés paient le prix
+// réduit (founderCents / founderYearlyCents) pendant la première année,
+// puis le prix normal. La réduction est un coupon Stripe appliqué à
+// l'abonnement (12 mois en mensuel, la 1re échéance en annuel).
+export const FOUNDERS_LIMIT = 50;
+
+export const INTERVALS = ["month", "year"];
 
 export const FEATURE_LABELS = {
   shop: "La boutique de tirages",
@@ -105,6 +124,9 @@ function planOut(plan) {
     key: plan.key,
     label: plan.label,
     priceCents: plan.priceCents,
+    yearlyCents: plan.yearlyCents ?? 0,
+    founderCents: plan.founderCents ?? 0,
+    founderYearlyCents: plan.founderYearlyCents ?? 0,
     maxActiveGalleries: plan.maxActiveGalleries,
     storageBytes: plan.storageBytes,
     features: plan.features,
@@ -112,19 +134,57 @@ function planOut(plan) {
   };
 }
 
+// Places de l'offre Fondateurs déjà prises (comptes passés par un
+// abonnement au prix Fondateurs).
+export async function foundersTaken(env) {
+  const row = await env.DB.prepare("SELECT COUNT(*) AS n FROM photographers WHERE founder_at IS NOT NULL").first();
+  return row?.n || 0;
+}
+
+// Essai et prix Fondateurs ne valent que pour un premier abonnement : le
+// client Stripe n'est créé qu'au premier abonnement payé et n'est jamais
+// effacé, il sert donc de témoin (résilier puis se réabonner ne relance ni
+// un essai ni une année à prix réduit).
+export function trialAvailable(photographer) {
+  return !photographer?.trial_used_at && !photographer?.stripe_customer_id;
+}
+
+export function founderEligible(photographer, taken) {
+  return !photographer?.founder_at && !photographer?.stripe_customer_id && taken < FOUNDERS_LIMIT;
+}
+
+export function publicPlans(taken) {
+  return {
+    plans: Object.values(PLANS).map(planOut),
+    trialDays: TRIAL_DAYS,
+    founders: { limit: FOUNDERS_LIMIT, remaining: Math.max(0, FOUNDERS_LIMIT - taken) },
+  };
+}
+
+// GET /api/public/plans — formules, essai et places Fondateurs restantes
+// (page d'accueil). Aucune donnée de compte.
+export async function plansForPublic(env) {
+  return json(publicPlans(await foundersTaken(env)), { headers: { "cache-control": "public, max-age=300" } });
+}
+
 export async function subscriptionForAdmin(env, photographer) {
   const plan = planFor(env, photographer);
+  const taken = await foundersTaken(env);
   return json({
+    ...publicPlans(taken),
     plan: planOut(plan),
     owner: isOwner(env, photographer),
     status: photographer.plan_status || "",
+    interval: photographer.plan_interval || "month",
     subscribedPlan: photographer.plan || "free",
     renewsAt: photographer.plan_renews_at || null,
+    trialAvailable: trialAvailable(photographer),
+    founderEligible: founderEligible(photographer, taken),
+    isFounder: Boolean(photographer.founder_at),
     cancelAtPeriodEnd: Boolean(photographer.plan_cancel_at_period_end),
     canManage: Boolean(photographer.stripe_customer_id),
     stripeConfigured: Boolean(env.STRIPE_SECRET_KEY),
     usage: { activeGalleries: await activeGalleryCount(env, photographer.id), storage: await storageForAdmin(env, photographer) },
-    plans: Object.values(PLANS).map(planOut),
   });
 }
 
@@ -133,11 +193,28 @@ function stripeFailure(err) {
   return fail(502, err.message || "Stripe a refusé la demande");
 }
 
-// POST /api/admin/subscription/checkout { plan, returnUrl }
+// Coupon Stripe de l'offre Fondateurs pour une formule et une période :
+// la différence avec le prix normal, pendant 12 mois (mensuel) ou sur la
+// première échéance (annuel).
+export function founderCoupon(plan, interval) {
+  const yearly = interval === "year";
+  const amountOff = yearly ? plan.yearlyCents - plan.founderYearlyCents : plan.priceCents - plan.founderCents;
+  return {
+    id: `fondateurs-${plan.key}-${yearly ? "annuel" : "mensuel"}`,
+    name: "Offre Fondateurs (1re année)",
+    currency: "eur",
+    amount_off: amountOff,
+    duration: yearly ? "once" : "repeating",
+    ...(yearly ? {} : { duration_in_months: 12 }),
+  };
+}
+
+// POST /api/admin/subscription/checkout { plan, interval, returnUrl }
 export async function startSubscriptionCheckout(request, env, photographer) {
   const body = await request.json().catch(() => null);
   const plan = PLANS[body?.plan];
   if (!plan || plan.key === "free") return fail(400, "Formule inconnue");
+  const interval = INTERVALS.includes(body?.interval) ? body.interval : "month";
   if (isOwner(env, photographer)) return fail(409, "Le compte propriétaire a déjà toutes les fonctionnalités.");
   if (planFor(env, photographer).key !== "free" && photographer.stripe_customer_id) {
     return fail(409, "Vous avez déjà un abonnement : changez de formule depuis « Gérer mon abonnement ».");
@@ -145,13 +222,23 @@ export async function startSubscriptionCheckout(request, env, photographer) {
   const returnUrl = String(body?.returnUrl || "");
   if (!/^https?:\/\//.test(returnUrl)) return fail(400, "Adresse de retour invalide");
   try {
+    const founder = founderEligible(photographer, await foundersTaken(env));
+    let couponId = "";
+    if (founder) {
+      const coupon = founderCoupon(plan, interval);
+      await ensureCoupon(env, coupon);
+      couponId = coupon.id;
+    }
     const session = await createSubscriptionCheckout(env, {
       photographerId: photographer.id,
       email: photographer.email,
       customerId: photographer.stripe_customer_id || "",
       planKey: plan.key,
-      label: `Holypixx ${plan.label}`,
-      unitAmountCents: plan.priceCents,
+      label: `Holypixx ${plan.label}${interval === "year" ? " (annuel)" : ""}`,
+      unitAmountCents: interval === "year" ? plan.yearlyCents : plan.priceCents,
+      interval,
+      trialDays: trialAvailable(photographer) ? TRIAL_DAYS : 0,
+      couponId,
       successUrl: `${returnUrl}${returnUrl.includes("?") ? "&" : "?"}abonnement=merci`,
       cancelUrl: `${returnUrl}${returnUrl.includes("?") ? "&" : "?"}abonnement=annule`,
     });
@@ -184,7 +271,7 @@ export function planKeyFromSubscription(subscription) {
   // Changement de formule depuis le portail : on retrouve la formule au
   // montant mensuel du prix.
   const amount = subscription?.items?.data?.[0]?.price?.unit_amount;
-  const match = Object.values(PLANS).find((p) => p.priceCents && p.priceCents === amount);
+  const match = Object.values(PLANS).find((p) => p.priceCents && [p.priceCents, p.yearlyCents].includes(amount));
   return match ? match.key : "";
 }
 
@@ -198,11 +285,16 @@ export async function handleSubscriptionEvent(env, event) {
     const photographerId = object.client_reference_id || object.metadata?.photographer_id;
     const planKey = PLANS[object.metadata?.plan] ? object.metadata.plan : "";
     if (photographerId && planKey) {
+      const trial = object.metadata?.trial === "1";
+      const founder = object.metadata?.founder === "1";
       await env.DB.prepare(
-        `UPDATE photographers SET plan = ?, plan_status = 'active', stripe_customer_id = ?, stripe_subscription_id = ?
+        `UPDATE photographers SET plan = ?, plan_status = ?, stripe_customer_id = ?, stripe_subscription_id = ?,
+           trial_used_at = CASE WHEN ? THEN COALESCE(trial_used_at, ?) ELSE trial_used_at END,
+           founder_at = CASE WHEN ? THEN COALESCE(founder_at, ?) ELSE founder_at END
          WHERE id = ?`
       )
-        .bind(planKey, object.customer || "", object.subscription || "", photographerId)
+        .bind(planKey, trial ? "trialing" : "active", object.customer || "", object.subscription || "",
+              trial ? 1 : 0, now(), founder ? 1 : 0, now(), photographerId)
         .run();
     }
     return true;
@@ -220,14 +312,21 @@ export async function handleSubscriptionEvent(env, event) {
     if (!photographer) return true;
     // Un vieil abonnement résilié ne doit pas écraser un abonnement plus récent.
     if (deleted && photographer.stripe_subscription_id && photographer.stripe_subscription_id !== object.id) return true;
+    // Selon la version d'API du webhook, l'échéance est sur l'abonnement
+    // ou sur sa ligne (versions récentes) ; pendant un essai, c'est sa fin.
+    const item = object.items?.data?.[0];
+    const periodEnd = object.current_period_end || item?.current_period_end || object.trial_end || null;
+    const interval = item?.price?.recurring?.interval || item?.plan?.interval || "";
     await env.DB.prepare(
       `UPDATE photographers SET plan = ?, plan_status = ?, plan_renews_at = ?, plan_cancel_at_period_end = ?,
-         stripe_subscription_id = ?, stripe_customer_id = CASE WHEN ? != '' THEN ? ELSE stripe_customer_id END
+         stripe_subscription_id = ?, stripe_customer_id = CASE WHEN ? != '' THEN ? ELSE stripe_customer_id END,
+         plan_interval = CASE WHEN ? != '' THEN ? ELSE plan_interval END
        WHERE id = ?`
     )
       .bind(
-        planKey, status, object.current_period_end || null, object.cancel_at_period_end ? 1 : 0,
-        deleted ? "" : object.id || "", object.customer || "", object.customer || "", photographer.id
+        planKey, status, periodEnd, object.cancel_at_period_end ? 1 : 0,
+        deleted ? "" : object.id || "", object.customer || "", object.customer || "",
+        interval, interval, photographer.id
       )
       .run();
     return true;

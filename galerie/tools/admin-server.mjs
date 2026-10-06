@@ -669,7 +669,7 @@ async function handleApi(req, res, url) {
       if (parts.length === 1 && req.method === "GET") return json(res, 200, await client.request("GET", "/api/admin/subscription"));
       if (parts.length === 2 && (parts[1] === "checkout" || parts[1] === "portal") && req.method === "POST") {
         const body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
-        return json(res, 200, await client.request("POST", `/api/admin/subscription/${parts[1]}`, { plan: body.plan, returnUrl: back }));
+        return json(res, 200, await client.request("POST", `/api/admin/subscription/${parts[1]}`, { plan: body.plan, interval: body.interval, returnUrl: back }));
       }
     } catch (err) {
       return relayError(res, err, "L'abonnement n'a pas pu être traité");

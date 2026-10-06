@@ -818,3 +818,11 @@ h3 { font-size: 1.15rem; margin-bottom: .9rem; }
 .ad-gauge-warn span { background: #b7791f; }
 .ad-gauge-full span { background: var(--danger); }
 .ad-gauge-note { margin-top: .35rem; max-width: 280px; }
+
+/* ---------- Abonnement : période, essai, Fondateurs ---------- */
+
+.ad-interval { margin: 0 0 1rem; }
+.ad-plan-price s { color: var(--muted); font-weight: 400; margin-right: .2rem; }
+.ad-plan-price-note { display: block; font-family: var(--sans); font-size: .78rem; font-weight: 400; color: var(--muted); margin-top: .15rem; }
+.ad-plan-trial { margin-top: .4rem; }
+.ad-founders { background: #fdf3e6; color: #7a4a12; }

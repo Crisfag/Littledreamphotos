@@ -823,8 +823,29 @@
   // chaque mois par Stripe Billing. Souscrire passe par une page de paiement
   // Stripe ; changer de formule, de carte ou résilier, par le portail Stripe.
 
+  function euros(cents) {
+    return formatEuros(cents).replace(",00", "");
+  }
+
+  // Prix affiché d'une formule (HTML) : mensuel ou annuel, et prix
+  // Fondateurs barrant le prix normal quand l'offre s'applique.
+  function planPriceHtml(plan, interval, founder) {
+    if (!plan.priceCents) return "Gratuit";
+    var yearly = interval === "year";
+    var normal = yearly ? plan.yearlyCents : plan.priceCents;
+    var unit = yearly ? " / an" : " / mois";
+    if (founder && plan.founderCents) {
+      var reduced = yearly ? plan.founderYearlyCents : plan.founderCents;
+      return "<s>" + esc(euros(normal)) + "</s> " + esc(euros(reduced)) + esc(unit) +
+        '<span class="ad-plan-price-note">la 1re année, puis ' + esc(euros(normal)) + esc(unit) + "</span>";
+    }
+    return esc(euros(normal)) + esc(unit) +
+      (yearly ? '<span class="ad-plan-price-note">soit ' + esc(euros(Math.round(normal / 12))) + " / mois, 2 mois offerts</span>" : "");
+  }
+
+  // Compatibilité : prix mensuel en texte (ailleurs dans l'admin).
   function planPrice(plan) {
-    return plan.priceCents ? formatEuros(plan.priceCents).replace(",00", "") + " / mois" : "Gratuit";
+    return plan.priceCents ? euros(plan.priceCents) + " / mois" : "Gratuit";
   }
 
   /* ---------- Portfolio : mini-site public du photographe ---------- */
@@ -1303,6 +1324,8 @@
     return '<ul class="ad-plan-features">' + items.filter(Boolean).map(function (t) { return "<li>" + esc(t) + "</li>"; }).join("") + "</ul>";
   }
 
+  var subscriptionInterval = "month";
+
   async function renderSubscription(skipHash) {
     var returned = /abonnement=(merci|annule)/.exec(location.hash);
     if (!skipHash && location.hash.indexOf("#/abonnement") !== 0) history.pushState(null, "", "#/abonnement");
@@ -1325,34 +1348,54 @@
 
     var current = data.plan;
     var status = "";
+    var billing = data.interval === "year" ? "Facturation annuelle. " : "";
     if (data.owner) status = "Compte propriétaire : toutes les fonctionnalités sont incluses.";
     else if (current.key !== "free" && data.cancelAtPeriodEnd && data.renewsAt) status = "Résiliation programmée : votre formule reste active jusqu'au " + formatDate(data.renewsAt) + ".";
     else if (current.key !== "free" && data.status === "past_due") status = "Le dernier prélèvement a échoué : mettez à jour votre carte depuis « Gérer mon abonnement ».";
-    else if (current.key !== "free" && data.renewsAt) status = "Prochain renouvellement le " + formatDate(data.renewsAt) + ".";
+    else if (current.key !== "free" && data.status === "trialing" && data.renewsAt) status = "Essai gratuit jusqu'au " + formatDate(data.renewsAt) + ", puis premier prélèvement automatique (résiliable avant, sans frais).";
+    else if (current.key !== "free" && data.renewsAt) status = billing + "Prochain renouvellement le " + formatDate(data.renewsAt) + ".";
+    if (data.isFounder && current.key !== "free" && !data.owner) status += " Tarif Fondateurs la première année.";
     var usage = current.maxActiveGalleries === null
       ? data.usage.activeGalleries + " galerie" + (data.usage.activeGalleries > 1 ? "s" : "") + " active" + (data.usage.activeGalleries > 1 ? "s" : "")
       : data.usage.activeGalleries + " / " + current.maxActiveGalleries + " galeries actives";
 
-    var cards = data.plans.map(function (plan) {
-      var isCurrent = plan.key === current.key;
-      var action;
-      if (isCurrent) action = '<span class="ad-badge ad-badge-selected">✓ Votre formule</span>';
-      else if (data.owner) action = "";
-      else if (data.canManage) action = '<button type="button" class="ad-btn" data-portal>Changer de formule</button>';
-      else if (plan.key === "free") action = "";
-      else action = '<button type="button" class="ad-btn ad-btn-primary" data-subscribe="' + esc(plan.key) + '"' + (data.stripeConfigured ? "" : " disabled") + ">Choisir " + esc(plan.label) + "</button>";
-      return (
-        '<article class="ad-plan' + (isCurrent ? " ad-plan-current" : "") + (plan.key === "pro" ? " ad-plan-featured" : "") + '">' +
-        "<h3>" + esc(plan.label) + "</h3>" +
-        '<p class="ad-plan-price">' + esc(planPrice(plan)) + "</p>" +
-        '<p class="ad-hint">' + esc(plan.pitch) + "</p>" +
-        planFeaturesHtml(plan) + action + "</article>"
-      );
-    }).join("");
+    var interval = data.interval === "year" && current.key !== "free" ? "year" : subscriptionInterval;
+    if (!data.plans.some(function (p) { return p.yearlyCents; })) interval = "month";
+    var founder = data.founderEligible && !data.owner;
+    function cardsHtml() {
+      return data.plans.map(function (plan) {
+        var isCurrent = plan.key === current.key;
+        var action;
+        if (isCurrent) action = '<span class="ad-badge ad-badge-selected">✓ Votre formule</span>';
+        else if (data.owner) action = "";
+        else if (data.canManage) action = '<button type="button" class="ad-btn" data-portal>Changer de formule</button>';
+        else if (plan.key === "free") action = "";
+        else action = '<button type="button" class="ad-btn ad-btn-primary" data-subscribe="' + esc(plan.key) + '"' + (data.stripeConfigured ? "" : " disabled") + ">" +
+          (data.trialAvailable ? "Essayer " + data.trialDays + " jours gratuitement" : "Choisir " + esc(plan.label)) + "</button>" +
+          (data.trialAvailable ? '<p class="ad-hint ad-plan-trial">Aucun prélèvement pendant l\'essai ; résiliable avant la fin, sans frais.</p>' : "");
+        return (
+          '<article class="ad-plan' + (isCurrent ? " ad-plan-current" : "") + (plan.key === "pro" ? " ad-plan-featured" : "") + '">' +
+          "<h3>" + esc(plan.label) + "</h3>" +
+          '<p class="ad-plan-price">' + planPriceHtml(plan, interval, founder) + "</p>" +
+          '<p class="ad-hint">' + esc(plan.pitch) + "</p>" +
+          planFeaturesHtml(plan) + action + "</article>"
+        );
+      }).join("");
+    }
+    // Bascule annuelle seulement si le Worker connaît les prix annuels.
+    var intervalSwitch = current.key === "free" && !data.owner && data.plans.some(function (p) { return p.yearlyCents; })
+      ? '<div class="ad-seg ad-interval" role="group" aria-label="Période de facturation">' +
+        '<button type="button" class="ad-seg-btn" data-interval="month" aria-pressed="' + (interval === "month") + '">Mensuel</button>' +
+        '<button type="button" class="ad-seg-btn" data-interval="year" aria-pressed="' + (interval === "year") + '">Annuel · 2 mois offerts</button></div>'
+      : "";
+    var founderBanner = founder && data.founders.remaining > 0
+      ? '<p class="ad-banner ad-founders">🎉 <strong>Offre Fondateurs</strong> : plus que ' + data.founders.remaining + " place" + (data.founders.remaining > 1 ? "s" : "") +
+        ". Essentiel à " + esc(euros(data.plans[1].founderCents)) + " et Pro à " + esc(euros(data.plans[2].founderCents)) + " par mois pendant toute la première année, puis le prix normal.</p>"
+      : "";
 
     el.view.innerHTML =
       '<header class="ad-detail-header"><div><h2>Abonnement</h2>' +
-      '<p class="ad-hint">Votre formule Holypixx. Sans engagement : résiliable à tout moment, effet à la fin du mois payé.</p>' +
+      '<p class="ad-hint">Votre formule Holypixx. Sans engagement : résiliable à tout moment, effet à la fin de la période payée.</p>' +
       "</div></header>" +
       (returned ? '<p class="ad-banner' + (returned[1] === "merci" ? "" : " ad-banner-muted") + '">' +
         (returned[1] === "merci" ? "Merci ! Votre abonnement est enregistré." : "Paiement annulé : votre formule n'a pas changé.") + "</p>" : "") +
@@ -1363,22 +1406,34 @@
       (data.canManage ? '<button type="button" class="ad-btn" data-portal>Gérer mon abonnement</button>' : "") +
       "</section>" +
       (data.stripeConfigured || data.owner ? "" : '<p class="ad-hint">Le paiement des abonnements n\'est pas encore ouvert sur la plateforme.</p>') +
-      '<div class="ad-plans">' + cards + "</div>" +
+      founderBanner + intervalSwitch +
+      '<div class="ad-plans" id="ad-plans">' + cardsHtml() + "</div>" +
       '<p class="ad-hint">Prix TTC. Les fichiers HD livrés et les fichiers d\'impression d\'une galerie expirée depuis ' +
       ((data.usage.storage && data.usage.storage.purgeAfterExpiryDays) || 90) + " jours sont effacés automatiquement, avec un e-mail de rappel 14 jours avant ; les photos de la galerie restent. " +
       'Paiement sécurisé par Stripe ; factures disponibles dans « Gérer mon abonnement ». ' +
       'Voir les <a href="https://www.holypixx.com/conditions.html" target="_blank" rel="noopener">conditions d\'utilisation</a>.</p>';
 
-    el.view.querySelectorAll("[data-subscribe]").forEach(function (btn) {
-      btn.addEventListener("click", async function () {
-        btn.disabled = true;
-        try {
-          var result = await api("POST", "/subscription/checkout", { plan: btn.getAttribute("data-subscribe") });
-          window.location.href = result.url;
-        } catch (err) {
-          toast(err.message, true);
-          btn.disabled = false;
-        }
+    function wireSubscribe() {
+      el.view.querySelectorAll("[data-subscribe]").forEach(function (btn) {
+        btn.addEventListener("click", async function () {
+          btn.disabled = true;
+          try {
+            var result = await api("POST", "/subscription/checkout", { plan: btn.getAttribute("data-subscribe"), interval: interval });
+            window.location.href = result.url;
+          } catch (err) {
+            toast(err.message, true);
+            btn.disabled = false;
+          }
+        });
+      });
+    }
+    wireSubscribe();
+    el.view.querySelectorAll("[data-interval]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        interval = subscriptionInterval = btn.getAttribute("data-interval");
+        el.view.querySelectorAll("[data-interval]").forEach(function (b) { b.setAttribute("aria-pressed", String(b === btn)); });
+        document.getElementById("ad-plans").innerHTML = cardsHtml();
+        wireSubscribe();
       });
     });
     el.view.querySelectorAll("[data-portal]").forEach(function (btn) {
