@@ -13,7 +13,7 @@
 // abonnement.
 
 import { json, fail } from "./http.js";
-import { createSubscriptionCheckout, createBillingPortalSession, ensureCoupon } from "./stripe.js";
+import { createSubscriptionCheckout, createBillingPortalSession, ensureCoupon, retrieveCheckoutSession, searchPhotographerSubscriptions } from "./stripe.js";
 import { storageForAdmin } from "./storage.js";
 
 export const PLANS = {
@@ -221,6 +221,15 @@ export async function startSubscriptionCheckout(request, env, photographer) {
   }
   const returnUrl = String(body?.returnUrl || "");
   if (!/^https?:\/\//.test(returnUrl)) return fail(400, "Adresse de retour invalide");
+  // Un abonnement déjà payé mais pas encore enregistré ici (webhook manqué ou
+  // en retard) : on le rattrape plutôt que d'en ouvrir un second.
+  if (!photographer.stripe_subscription_id) {
+    const existing = await findLiveSubscription(env, photographer).catch(() => null);
+    if (existing) {
+      await applySubscription(env, existing);
+      return fail(409, "Vous avez déjà un abonnement en cours : il vient d'être enregistré, rechargez la page.");
+    }
+  }
   try {
     const founder = founderEligible(photographer, await foundersTaken(env));
     let couponId = "";
@@ -239,13 +248,72 @@ export async function startSubscriptionCheckout(request, env, photographer) {
       interval,
       trialDays: trialAvailable(photographer) ? TRIAL_DAYS : 0,
       couponId,
-      successUrl: `${returnUrl}${returnUrl.includes("?") ? "&" : "?"}abonnement=merci`,
+      // {CHECKOUT_SESSION_ID} est remplacé par Stripe : au retour, le tableau
+      // de bord relit cette session (voir syncSubscription).
+      successUrl: `${returnUrl}${returnUrl.includes("?") ? "&" : "?"}abonnement=merci&session_id={CHECKOUT_SESSION_ID}`,
       cancelUrl: `${returnUrl}${returnUrl.includes("?") ? "&" : "?"}abonnement=annule`,
     });
     return json({ url: session.url });
   } catch (err) {
     return stripeFailure(err);
   }
+}
+
+// Abonnements qui comptent encore (pas résiliés, pas abandonnés au paiement).
+const LIVE_STATUSES = ["trialing", "active", "past_due", "unpaid"];
+
+async function findLiveSubscription(env, photographer) {
+  const subs = await searchPhotographerSubscriptions(env, photographer.id);
+  return subs
+    .filter((sub) => LIVE_STATUSES.includes(sub.status))
+    .sort((a, b) => (b.created || 0) - (a.created || 0))[0] || null;
+}
+
+// Enregistre un abonnement relu chez Stripe, exactement comme le ferait le
+// webhook : essai et place Fondateurs d'abord (comme checkout.session.completed),
+// puis formule, statut et échéance (comme customer.subscription.updated).
+async function applySubscription(env, sub, session = null) {
+  const photographerId = session?.client_reference_id || sub.metadata?.photographer_id;
+  const planKey = planKeyFromSubscription(sub) || sub.metadata?.plan || "";
+  if (!photographerId || !PLANS[planKey]) return;
+  const coupons = [sub.discount?.coupon?.id, ...(sub.discounts || []).map((d) => d?.coupon?.id || d?.coupon)];
+  const founder = session ? session.metadata?.founder === "1" : coupons.some((id) => String(id || "").startsWith("fondateurs-"));
+  const trial = session ? session.metadata?.trial === "1" : Boolean(sub.trial_start);
+  const customer = typeof sub.customer === "string" ? sub.customer : sub.customer?.id || "";
+  await handleSubscriptionEvent(env, {
+    type: "checkout.session.completed",
+    data: { object: {
+      mode: "subscription", client_reference_id: photographerId, customer, subscription: sub.id,
+      metadata: { plan: planKey, trial: trial ? "1" : "0", founder: founder ? "1" : "0" },
+    } },
+  });
+  await handleSubscriptionEvent(env, { type: "customer.subscription.updated", data: { object: { ...sub, customer } } });
+}
+
+// POST /api/admin/subscription/sync { sessionId? } — au retour de Stripe, relit
+// la session de paiement (ou, à défaut, les abonnements du photographe) et
+// met la base à jour sans attendre le webhook.
+export async function syncSubscription(request, env, photographer) {
+  const body = await request.json().catch(() => null);
+  const sessionId = String(body?.sessionId || "");
+  if (!isOwner(env, photographer)) {
+    try {
+      if (/^cs_(test|live)_[A-Za-z0-9]+$/.test(sessionId)) {
+        const session = await retrieveCheckoutSession(env, sessionId, { expandSubscription: true });
+        if (session.client_reference_id !== photographer.id) return fail(403, "Cette session de paiement ne vous appartient pas");
+        if (session.mode === "subscription" && session.status === "complete" && session.subscription && typeof session.subscription === "object") {
+          await applySubscription(env, session.subscription, session);
+        }
+      } else if (!photographer.stripe_subscription_id) {
+        const sub = await findLiveSubscription(env, photographer);
+        if (sub) await applySubscription(env, sub);
+      }
+    } catch (err) {
+      return stripeFailure(err);
+    }
+  }
+  const fresh = await env.DB.prepare("SELECT * FROM photographers WHERE id = ?").bind(photographer.id).first();
+  return subscriptionForAdmin(env, fresh || photographer);
 }
 
 // POST /api/admin/subscription/portal { returnUrl } — portail client Stripe

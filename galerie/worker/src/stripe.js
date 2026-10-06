@@ -193,8 +193,18 @@ export function createBillingPortalSession(env, { customerId, returnUrl }) {
 // Relit une session — utilisée pour vérifier son statut si jamais le webhook
 // tardait, jamais comme seule source de vérité (voir schema.sql). Vit sur la
 // plateforme (charge de destination, voir plus haut), donc sans Stripe-Account.
-export function retrieveCheckoutSession(env, sessionId) {
-  return stripeRequest(env, "GET", `/checkout/sessions/${encodeURIComponent(sessionId)}`);
+export function retrieveCheckoutSession(env, sessionId, { expandSubscription = false } = {}) {
+  const expand = expandSubscription ? "?expand%5B%5D=subscription" : "";
+  return stripeRequest(env, "GET", `/checkout/sessions/${encodeURIComponent(sessionId)}${expand}`);
+}
+
+// Abonnements Holypixx d'un photographe, retrouvés par la métadonnée posée à
+// la création (voir createSubscriptionCheckout) : sert à rattraper un webhook
+// manqué. L'index de recherche de Stripe peut avoir une minute de retard.
+export async function searchPhotographerSubscriptions(env, photographerId) {
+  const query = encodeURIComponent(`metadata['photographer_id']:'${String(photographerId).replace(/'/g, "")}'`);
+  const result = await stripeRequest(env, "GET", `/subscriptions/search?query=${query}&limit=10`);
+  return result?.data || [];
 }
 
 function toHex(buffer) {
@@ -209,15 +219,16 @@ function toHex(buffer) {
 // compare à temps constant, et rejette un évènement trop ancien (rejeu).
 export async function verifyStripeSignature(payload, header, secret, toleranceSeconds = 300) {
   if (!header || !secret) return false;
-  const parts = Object.fromEntries(
-    header.split(",").map((p) => {
-      const [k, v] = p.split("=");
-      return [k, v];
-    })
-  );
-  const timestamp = Number(parts.t);
-  const signature = parts.v1;
-  if (!Number.isFinite(timestamp) || !signature) return false;
+  // Stripe peut envoyer plusieurs signatures v1 (secret renouvelé, ancien
+  // encore valide quelques heures) : une seule qui correspond suffit.
+  let timestamp = NaN;
+  const signatures = [];
+  for (const part of header.split(",")) {
+    const [k, v] = part.trim().split("=");
+    if (k === "t") timestamp = Number(v);
+    else if (k === "v1" && v) signatures.push(v);
+  }
+  if (!Number.isFinite(timestamp) || !signatures.length) return false;
   if (Math.abs(Date.now() / 1000 - timestamp) > toleranceSeconds) return false;
 
   const key = await crypto.subtle.importKey(
@@ -231,8 +242,10 @@ export async function verifyStripeSignature(payload, header, secret, toleranceSe
     await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(`${timestamp}.${payload}`))
   );
 
-  if (expected.length !== signature.length) return false;
-  let diff = 0;
-  for (let i = 0; i < expected.length; i++) diff |= expected.charCodeAt(i) ^ signature.charCodeAt(i);
-  return diff === 0;
+  return signatures.some((signature) => {
+    if (expected.length !== signature.length) return false;
+    let diff = 0;
+    for (let i = 0; i < expected.length; i++) diff |= expected.charCodeAt(i) ^ signature.charCodeAt(i);
+    return diff === 0;
+  });
 }

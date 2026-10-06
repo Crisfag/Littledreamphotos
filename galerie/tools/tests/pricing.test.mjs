@@ -88,6 +88,16 @@ check("le refus du serveur est expliqué", (await page.textContent("body")).incl
 await page.click('[data-interval="month"]');
 check("retour au mensuel", (await essentiel.locator(".ad-plan-price").textContent()).includes("/ mois"));
 
+// Retour de Stripe après paiement : le tableau de bord fait relire la session
+// au serveur (sans attendre le webhook), puis nettoie l'adresse.
+const syncRequest = page.waitForRequest((r) => r.url().endsWith("/local/subscription/sync"), { timeout: 10000 });
+await page.goto(`${BASE}/#/abonnement?abonnement=merci&session_id=cs_test_a1B2c3`, { waitUntil: "domcontentloaded" });
+const syncSent = JSON.parse((await syncRequest).postData() || "{}");
+await page.waitForSelector("#ad-plans", { timeout: 10000 });
+check("retour de Stripe : la session de paiement est relue, merci affiché, adresse nettoyée",
+      syncSent.sessionId === "cs_test_a1B2c3" && (await page.textContent("body")).includes("Votre abonnement est enregistré") &&
+      (await page.evaluate(() => location.hash)) === "#/abonnement", JSON.stringify(syncSent));
+
 /* ---------- Page d'accueil ---------- */
 
 const site = createServer(async (req, res) => {

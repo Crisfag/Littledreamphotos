@@ -1328,6 +1328,7 @@
 
   async function renderSubscription(skipHash) {
     var returned = /abonnement=(merci|annule)/.exec(location.hash);
+    var returnedSession = /[?&]session_id=(cs_[A-Za-z0-9_]+)/.exec(location.hash);
     if (!skipHash && location.hash.indexOf("#/abonnement") !== 0) history.pushState(null, "", "#/abonnement");
     if (returned) history.replaceState(null, "", "#/abonnement");
     setActiveTab("subscription");
@@ -1336,10 +1337,15 @@
     var data;
     try {
       data = await api("GET", "/subscription");
-      // Retour de Stripe : le webhook peut arriver quelques secondes après.
+      // Retour de Stripe : sans attendre le webhook, on fait relire la
+      // session de paiement par le serveur (qui met la formule à jour).
       if (returned && returned[1] === "merci" && data.plan.key === "free") {
-        await new Promise(function (r) { setTimeout(r, 2500); });
-        data = await api("GET", "/subscription");
+        try {
+          data = await api("POST", "/subscription/sync", { sessionId: returnedSession ? returnedSession[1] : "" });
+        } catch (syncErr) {
+          await new Promise(function (r) { setTimeout(r, 2500); });
+          data = await api("GET", "/subscription");
+        }
       }
     } catch (err) {
       toast(err.message, true);

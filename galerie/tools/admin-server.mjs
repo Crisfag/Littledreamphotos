@@ -671,6 +671,11 @@ async function handleApi(req, res, url) {
         const body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
         return json(res, 200, await client.request("POST", `/api/admin/subscription/${parts[1]}`, { plan: body.plan, interval: body.interval, returnUrl: back }));
       }
+      // Retour de Stripe : relit la session de paiement sans attendre le webhook.
+      if (parts.length === 2 && parts[1] === "sync" && req.method === "POST") {
+        const body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
+        return json(res, 200, await client.request("POST", "/api/admin/subscription/sync", { sessionId: String(body.sessionId || "") }));
+      }
     } catch (err) {
       return relayError(res, err, "L'abonnement n'a pas pu être traité");
     }
