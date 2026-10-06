@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Holypixx — Galeries clients protégées pour photographes</title>
-  <meta name="description" content="Galeries clients protégées pour photographes : filigrane invisible traçable, alerte de capture d'écran, sélection et annotations du client, relances automatiques, boutique de tirages intégrée et adresse à votre nom." />
+  <meta name="description" content="Galeries clients protégées pour photographes : filigrane invisible traçable, alerte de capture d'écran, sélection et annotations du client, livraison HD, boutique de tirages intégrée, portfolio et adresse à votre nom." />
   <link rel="canonical" href="https://www.holypixx.com/" />
   <meta name="theme-color" content="#14100d" />
   <meta name="color-scheme" content="light" />
@@ -53,7 +53,7 @@
     "@type": "FAQPage",
     "mainEntity": [
       { "@type": "Question", "name": "Un client peut-il télécharger les photos ?",
-        "acceptedAnswer": { "@type": "Answer", "text": "Non. Les photos sont découpées en tuiles et recomposées à l'écran : aucun fichier n'est jamais téléchargeable. Les fichiers définitifs se livrent en dehors de la galerie, ou sous forme de tirages commandés depuis la galerie." } },
+        "acceptedAnswer": { "@type": "Answer", "text": "Pas pendant la sélection : les photos sont découpées en tuiles et recomposées à l'écran, aucun fichier n'est téléchargeable. Quand la séance est terminée, vous ouvrez la livraison : il télécharge alors les fichiers définitifs en haute définition que vous avez déposés, en ZIP ou une par une." } },
       { "@type": "Question", "name": "Peut-on empêcher une capture d'écran ?",
         "acceptedAnswer": { "@type": "Answer", "text": "Aucun site au monde ne le peut. Holypixx rend une capture inutile (basse définition, filigrane dense), vous prévient par e-mail quand une capture est tentée, et retrouve la galerie d'origine d'une image grâce à son empreinte invisible." } },
       { "@type": "Question", "name": "Mon client doit-il créer un compte ?",
@@ -62,6 +62,10 @@
         "acceptedAnswer": { "@type": "Answer", "text": "Vous choisissez vos formats en menus déroulants et fixez votre marge. Le client commande depuis sa galerie et paie en ligne sur votre compte Stripe ; le laboratoire Prodigi imprime et livre directement chez lui, avec suivi." } },
       { "@type": "Question", "name": "Puis-je avoir une adresse à mon nom ?",
         "acceptedAnswer": { "@type": "Answer", "text": "Oui : choisissez un sous-domaine dans vos paramètres, et vos galeries s'ouvrent sur votre-studio.holypixx.com avec le nom de votre studio." } },
+      { "@type": "Question", "name": "Prenez-vous une commission sur mes ventes ?",
+        "acceptedAnswer": { "@type": "Answer", "text": "Non. Sur chaque paiement en ligne (suppléments, tirages), seuls les frais de paiement sont retenus : 2 % + 0,30 €, ce que coûtent la carte bancaire et le virement vers votre compte." } },
+      { "@type": "Question", "name": "Puis-je présenter mon travail à de futurs clients ?",
+        "acceptedAnswer": { "@type": "Answer", "text": "Oui, avec le portfolio inclus dans toutes les formules : une page vitrine avec vos photos, votre présentation et un formulaire de contact dont les messages arrivent dans votre boîte e-mail." } },
       { "@type": "Question", "name": "Où sont hébergées les photos ?",
         "acceptedAnswer": { "@type": "Answer", "text": "Sur l'infrastructure Cloudflare (stockage R2 et base D1). Les mots de passe ne sont jamais stockés en clair et chaque compte est strictement cloisonné." } }
     ]
@@ -148,8 +152,8 @@
 
       <div class="ticker" aria-hidden="true">
         <div class="ticker-track">
-          <span>Empreinte invisible</span><span>Alerte de capture</span><span>Zéro téléchargement</span><span>Coups de cœur</span><span>Repères annotés</span><span>Relances automatiques</span><span>Paiement en ligne</span><span>Factures automatiques</span><span>Tirages & toiles</span><span>votre-studio.holypixx.com</span><span>Musique d'ambiance</span>
-          <span>Empreinte invisible</span><span>Alerte de capture</span><span>Zéro téléchargement</span><span>Coups de cœur</span><span>Repères annotés</span><span>Relances automatiques</span><span>Paiement en ligne</span><span>Factures automatiques</span><span>Tirages & toiles</span><span>votre-studio.holypixx.com</span><span>Musique d'ambiance</span>
+          <span>Empreinte invisible</span><span>Alerte de capture</span><span>Zéro téléchargement</span><span>Coups de cœur</span><span>Repères annotés</span><span>Relances automatiques</span><span>Paiement en ligne</span><span>Factures automatiques</span><span>Tirages & toiles</span><span>Livraison HD</span><span>Portfolio</span><span>votre-studio.holypixx.com</span><span>Musique d'ambiance</span>
+          <span>Empreinte invisible</span><span>Alerte de capture</span><span>Zéro téléchargement</span><span>Coups de cœur</span><span>Repères annotés</span><span>Relances automatiques</span><span>Paiement en ligne</span><span>Factures automatiques</span><span>Tirages & toiles</span><span>Livraison HD</span><span>Portfolio</span><span>votre-studio.holypixx.com</span><span>Musique d'ambiance</span>
         </div>
       </div>
     </section>
@@ -236,7 +240,7 @@
             <div class="tile-overlay">
               <span class="eq" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
               <h3>Musique d'ambiance</h3>
-              <p>Un MP3 par galerie, joué en mode défilement.</p>
+              <p>Bibliothèque libre de droits, ou votre playlist Spotify, Deezer, SoundCloud ou YouTube.</p>
             </div>
           </article>
 
@@ -248,14 +252,34 @@
 
           <article class="tile rv">
             <span class="tile-ico">📊</span>
-            <h3>Tableau de bord clair</h3>
-            <p>Galeries, ventes, suppléments en ordre ou en attente, journal d'accès complet.</p>
+            <h3>Tableau de bord des ventes</h3>
+            <p>Chiffre d'affaires des 12 derniers mois, marge sur les tirages, formats qui se vendent, suppléments en attente.</p>
           </article>
 
           <article class="tile rv">
             <span class="tile-ico">🔑</span>
             <h3>Accès sous contrôle</h3>
             <p>Mot de passe régénérable d'un clic, expiration automatique, écran d'accueil à vos couleurs.</p>
+          </article>
+
+          <article class="tile rv">
+            <span class="tile-ico">📦</span>
+            <h3>Livraison des photos HD</h3>
+            <p>Déposez les fichiers définitifs : votre client est prévenu par e-mail et les télécharge depuis sa galerie, en ZIP ou une par une.</p>
+          </article>
+
+          <article class="tile tile-wide rv">
+            <span class="tile-ico">✨</span>
+            <div>
+              <h3>Votre portfolio en ligne</h3>
+              <p>Une page vitrine avec vos plus belles photos, votre présentation, vos prestations et un formulaire de contact. En formule Pro, elle s'ouvre sur votre-studio.holypixx.com.</p>
+            </div>
+          </article>
+
+          <article class="tile rv">
+            <span class="tile-ico">🏷</span>
+            <h3>Campagnes de vente</h3>
+            <p>Promotion à durée limitée sur les tirages, panier retrouvé sur tous les appareils, relance des paniers oubliés et des coups de cœur.</p>
           </article>
         </div>
       </div>
@@ -376,11 +400,13 @@
           <h2>Les bonnes questions,<br />des réponses franches.</h2>
         </div>
         <div class="faq rv">
-          <details open><summary>Un client peut-il télécharger les photos ?</summary><p>Non. Les photos sont découpées en tuiles et recomposées à l'écran : aucun fichier n'est jamais téléchargeable. Les fichiers définitifs se livrent en dehors de la galerie, ou sous forme de tirages commandés depuis la galerie.</p></details>
+          <details open><summary>Un client peut-il télécharger les photos ?</summary><p>Pas pendant la sélection : les photos sont découpées en tuiles et recomposées à l'écran, aucun fichier n'est téléchargeable. Quand la séance est terminée, vous ouvrez la livraison : il télécharge alors les fichiers définitifs en haute définition que vous avez déposés, en ZIP ou une par une.</p></details>
           <details><summary>Peut-on empêcher une capture d'écran ?</summary><p>Aucun site au monde ne le peut. Holypixx rend une capture inutile (basse définition, filigrane dense), vous prévient par e-mail quand une capture est tentée, et retrouve la galerie d'origine d'une image grâce à son empreinte invisible.</p></details>
           <details><summary>Mon client doit-il créer un compte ?</summary><p>Non. Il reçoit un lien et un mot de passe, rien d'autre.</p></details>
           <details><summary>Comment fonctionne la boutique de tirages ?</summary><p>Vous choisissez vos formats en menus déroulants et fixez votre marge. Le client commande depuis sa galerie et paie en ligne sur votre compte Stripe ; le laboratoire Prodigi imprime et livre directement chez lui, avec suivi.</p></details>
           <details><summary>Puis-je avoir une adresse à mon nom ?</summary><p>Oui : choisissez un sous-domaine dans vos paramètres, et vos galeries s'ouvrent sur votre-studio.holypixx.com avec le nom de votre studio.</p></details>
+          <details><summary>Prenez-vous une commission sur mes ventes ?</summary><p>Non. Sur chaque paiement en ligne (suppléments, tirages), seuls les frais de paiement sont retenus : 2 % + 0,30 €, ce que coûtent la carte bancaire et le virement vers votre compte.</p></details>
+          <details><summary>Puis-je présenter mon travail à de futurs clients ?</summary><p>Oui, avec le portfolio inclus dans toutes les formules : une page vitrine avec vos photos, votre présentation et un formulaire de contact dont les messages arrivent dans votre boîte e-mail.</p></details>
           <details><summary>Où sont hébergées les photos ?</summary><p>Sur l'infrastructure Cloudflare (stockage R2 et base D1). Les mots de passe ne sont jamais stockés en clair et chaque compte est strictement cloisonné.</p></details>
         </div>
       </div>
