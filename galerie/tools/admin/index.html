@@ -127,7 +127,7 @@
   </main>
 
   <div class="ad-shell" id="ad-app" hidden>
-    <header class="ad-topbar">
+    <aside class="ad-sidebar">
       <div class="ad-brand">
         <span class="ad-brand-mark">H</span>
         <div>
@@ -136,20 +136,51 @@
         </div>
       </div>
       <nav class="ad-tabs" id="ad-tabs" aria-label="Sections du tableau de bord">
-        <button type="button" class="ad-tab" id="ad-tab-galleries" data-tab="galleries">Galeries</button>
-        <button type="button" class="ad-tab" id="ad-tab-sales" data-tab="sales">Ventes</button>
-        <button type="button" class="ad-tab" id="ad-tab-billing" data-tab="billing">Facturation</button>
-        <button type="button" class="ad-tab" id="ad-tab-shop" data-tab="shop">Boutique</button>
-        <button type="button" class="ad-tab" id="ad-tab-portfolio" data-tab="portfolio">Portfolio</button>
-        <button type="button" class="ad-tab" id="ad-tab-subscription" data-tab="subscription">Abonnement</button>
-        <button type="button" class="ad-tab" id="ad-tab-settings" data-tab="settings">Paramètres</button>
-        <button type="button" class="ad-tab" id="ad-tab-owner" data-tab="owner" hidden>Admin</button>
+        <p class="ad-nav-group">Activité</p>
+          <button type="button" class="ad-tab" id="ad-tab-galleries" data-tab="galleries">
+            <span class="ad-tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/></svg></span>
+            <span class="ad-tab-text"><span class="ad-tab-label">Galeries</span><span class="ad-tab-hint">Séances et clients</span></span>
+          </button>
+          <button type="button" class="ad-tab" id="ad-tab-sales" data-tab="sales">
+            <span class="ad-tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 6-6"/><path d="M16 8h4v4"/></svg></span>
+            <span class="ad-tab-text"><span class="ad-tab-label">Ventes</span><span class="ad-tab-hint">Chiffres et marges</span></span>
+          </button>
+          <button type="button" class="ad-tab" id="ad-tab-billing" data-tab="billing">
+            <span class="ad-tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h14v18l-3-2-2 2-2-2-2 2-2-2-3 2z"/><path d="M9 8h6M9 12h6M9 16h3"/></svg></span>
+            <span class="ad-tab-text"><span class="ad-tab-label">Facturation</span><span class="ad-tab-hint">Paiements et factures</span></span>
+          </button>
+        <p class="ad-nav-group">Vitrine</p>
+          <button type="button" class="ad-tab" id="ad-tab-shop" data-tab="shop">
+            <span class="ad-tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg></span>
+            <span class="ad-tab-text"><span class="ad-tab-label">Boutique</span><span class="ad-tab-hint">Tirages et prix</span></span>
+          </button>
+          <button type="button" class="ad-tab" id="ad-tab-portfolio" data-tab="portfolio">
+            <span class="ad-tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18a14 14 0 0 1 0-18z"/></svg></span>
+            <span class="ad-tab-text"><span class="ad-tab-label">Portfolio</span><span class="ad-tab-hint">Votre mini-site</span></span>
+          </button>
+        <p class="ad-nav-group">Compte</p>
+          <button type="button" class="ad-tab" id="ad-tab-subscription" data-tab="subscription">
+            <span class="ad-tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/><path d="M6 15h4"/></svg></span>
+            <span class="ad-tab-text"><span class="ad-tab-label">Abonnement</span><span class="ad-tab-hint">Votre formule</span></span>
+          </button>
+          <button type="button" class="ad-tab" id="ad-tab-settings" data-tab="settings">
+            <span class="ad-tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg></span>
+            <span class="ad-tab-text"><span class="ad-tab-label">Paramètres</span><span class="ad-tab-hint">Studio et sécurité</span></span>
+          </button>
+          <button type="button" class="ad-tab" id="ad-tab-owner" data-tab="owner" hidden>
+            <span class="ad-tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/><path d="m9 12 2 2 4-4"/></svg></span>
+            <span class="ad-tab-text"><span class="ad-tab-label">Admin</span><span class="ad-tab-hint">Toute la plateforme</span></span>
+          </button>
       </nav>
-      <div class="ad-topbar-actions">
-        <button type="button" class="ad-btn ad-btn-icon" id="ad-check-photo" title="Vérifier une photo">🔍</button>
-        <button type="button" class="ad-btn" id="ad-logout">Se déconnecter</button>
+      <div class="ad-sidebar-actions">
+        <button type="button" class="ad-side-action" id="ad-check-photo" title="Retrouver à qui une photo a été remise">
+          <span class="ad-side-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></span><span>Vérifier une photo</span>
+        </button>
+        <button type="button" class="ad-side-action" id="ad-logout">
+          <span class="ad-side-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg></span><span>Se déconnecter</span>
+        </button>
       </div>
-    </header>
+    </aside>
 
     <main id="ad-view">
       <!-- Rempli par admin.js : liste des galeries, détail d'une galerie, facturation ou paramètres -->

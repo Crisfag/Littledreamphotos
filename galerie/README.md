@@ -1144,7 +1144,7 @@ aussi bien avec des coordonnées complètes qu'avec des champs vides.
 **Interface d'administration** — 134 vérifications dans un vrai navigateur,
 contre le vrai Worker local : demande de lien de réinitialisation de mot de
 passe (message générique affiché), création de compte et connexion depuis
-le formulaire (pas de session présupposée), barre d'onglets Galeries /
+le formulaire (pas de session présupposée), menu latéral Galeries /
 Facturation / Paramètres visible avec l'onglet Galeries actif par défaut,
 bandeau de compteurs affiché dès l'arrivée et tout à zéro pour un compte
 tout neuf (aucune tuile en alerte ni en succès), création d'une galerie,
@@ -1164,7 +1164,7 @@ liste. Onglet Facturation : bouton de connexion
 Stripe proposé, résumé des suppléments dus, la facture émise plus haut bien
 présente dans l'historique agrégé, et un clic sur sa ligne ramène à la bonne
 galerie. Onglet Paramètres : nom du studio modifié aussitôt reflété dans la
-barre supérieure, présentation par défaut choisie et relue après
+tête du menu, présentation par défaut choisie et relue après
 rechargement, coordonnées fiscales enregistrées et relues après
 rechargement, mauvais mot de passe actuel rejeté **sans déconnecter la
 session en cours** (le bug corrigé pendant ce développement — voir
