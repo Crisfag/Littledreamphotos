@@ -38,7 +38,18 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 600; color: var(--ink); }
 h2 { font-size: 1.6rem; }
 h3 { font-size: 1.15rem; margin-bottom: .9rem; }
 
-.ad-shell { max-width: 1080px; margin: 0 auto; padding: 0 1.25rem 5rem; }
+/* Tableau de bord : menu vertical à gauche, contenu à droite. */
+.ad-shell {
+  display: grid;
+  grid-template-columns: 264px minmax(0, 1fr);
+  min-height: 100vh;
+}
+#ad-view {
+  width: 100%;
+  max-width: 1120px;
+  padding: 2.2rem 2.5rem 5rem;
+  min-width: 0;
+}
 
 /* ---------- Connexion ---------- */
 
@@ -61,46 +72,132 @@ h3 { font-size: 1.15rem; margin-bottom: .9rem; }
 .ad-login-card .ad-hint { margin-top: 1.1rem; text-align: center; }
 .ad-login-card .ad-hint code { font-family: ui-monospace, "SF Mono", Consolas, monospace; }
 
-/* ---------- Barre supérieure ---------- */
+/* ---------- Menu latéral ---------- */
 
-.ad-topbar {
+.ad-sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1.4rem;
+  padding: 1.5rem 1rem 1.25rem;
+  background: var(--ivory);
+  border-right: 1px solid var(--line);
+}
+.ad-sidebar .ad-brand { padding: 0 .35rem; }
+.ad-sidebar .ad-brand-sub {
+  max-width: 172px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ad-tabs { display: flex; flex-direction: column; gap: .35rem; }
+.ad-nav-group {
+  margin: .8rem .5rem .15rem;
+  font-size: .68rem;
+  font-weight: 500;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.ad-nav-group:first-child { margin-top: 0; }
+
+/* Chaque entrée est une case : pastille d'icône, nom, et ce qu'on y trouve. */
+.ad-tab {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 1.5rem 0;
-  flex-wrap: wrap;
+  gap: .75rem;
+  width: 100%;
+  text-align: left;
+  font-family: var(--sans);
+  color: var(--charcoal);
+  background: rgba(255, 255, 255, .8);
+  border: 1px solid rgba(229, 219, 208, .65);
+  border-radius: 10px;
+  padding: .55rem .65rem;
+  cursor: pointer;
+  transition: background .15s var(--ease), border-color .15s var(--ease), box-shadow .15s var(--ease);
 }
-.ad-topbar-actions { display: flex; align-items: center; gap: .6rem; }
-
-.ad-tabs {
-  display: flex;
-  gap: .2rem;
-  background: var(--sand);
-  border-radius: 999px;
-  padding: .3rem;
-  max-width: 100%;
-  /* Trop d'onglets pour un téléphone : la barre défile au doigt. */
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-.ad-tabs::-webkit-scrollbar { display: none; }
-.ad-tab {
+.ad-tab:hover { background: #fff; border-color: var(--line); }
+.ad-tab:focus-visible { outline: 2px solid var(--rose); outline-offset: 2px; }
+.ad-tab-icon {
   flex: none;
-  white-space: nowrap;
+  display: grid;
+  place-items: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 8px;
+  background: var(--sand);
+  color: var(--rose-deep);
+  transition: background .15s var(--ease), color .15s var(--ease);
+}
+.ad-tab-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
+.ad-tab-label { font-size: .9rem; font-weight: 500; color: var(--ink); }
+.ad-tab-hint { font-size: .74rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ad-tab-active {
+  background: #fff;
+  border-color: #dcc3b8;
+  box-shadow: 0 6px 18px -12px rgba(58, 51, 46, .55);
+}
+.ad-tab-active .ad-tab-icon { background: var(--rose); color: #fff; }
+
+.ad-sidebar-actions {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: .2rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+}
+.ad-side-action {
+  display: flex;
+  align-items: center;
+  gap: .65rem;
+  width: 100%;
   font-family: var(--sans);
   font-size: .85rem;
-  font-weight: 500;
   color: var(--muted);
   background: transparent;
   border: 0;
-  border-radius: 999px;
-  padding: .5rem 1.15rem;
+  border-radius: 8px;
+  padding: .5rem .65rem;
   cursor: pointer;
-  transition: background .15s var(--ease), color .15s var(--ease);
+  text-align: left;
 }
-.ad-tab:hover { color: var(--charcoal); }
-.ad-tab-active { background: #fff; color: var(--ink); box-shadow: 0 2px 10px -5px rgba(58, 51, 46, .4); }
+.ad-side-action:hover { background: var(--sand); color: var(--ink); }
+.ad-side-action-icon { display: grid; place-items: center; width: 1.4rem; }
+
+/* Tablette et téléphone : le menu passe en haut, en grille de cases. */
+@media (max-width: 860px) {
+  .ad-shell { display: block; }
+  .ad-sidebar {
+    position: static;
+    height: auto;
+    gap: 1rem;
+    padding: 1rem 1rem 1.1rem;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .ad-sidebar .ad-brand-sub { max-width: none; }
+  .ad-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .4rem; }
+  .ad-nav-group { display: none; }
+  .ad-tab { flex-direction: column; gap: .35rem; padding: .6rem .3rem; text-align: center; background: #fff; border-color: var(--line); }
+  .ad-tab-text { align-items: center; }
+  .ad-tab-label { font-size: .78rem; }
+  .ad-tab-hint { display: none; }
+  .ad-sidebar-actions { flex-direction: row; justify-content: space-between; margin-top: 0; padding-top: .6rem; }
+  .ad-side-action { width: auto; }
+  #ad-view { padding: 1.5rem 1.25rem 5rem; }
+}
+@media (max-width: 420px) {
+  .ad-tabs { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .3rem; }
+  .ad-tab-icon { width: 1.9rem; height: 1.9rem; }
+  .ad-tab-label { font-size: .7rem; }
+}
+
 .ad-btn-icon { padding: .55rem .75rem; font-size: 1rem; line-height: 1; }
 .ad-brand { display: flex; align-items: center; gap: .75rem; }
 .ad-brand-mark {
@@ -637,11 +734,6 @@ h3 { font-size: 1.15rem; margin-bottom: .9rem; }
   .ad-field-row { grid-template-columns: 1fr; }
   .ad-upload-item { grid-template-columns: minmax(0, 1fr) 70px; }
   .ad-upload-bar { grid-column: span 2; }
-  .ad-tabs { width: 100%; order: 3; }
-  /* Sur téléphone, tous les onglets restent visibles, sur plusieurs lignes
-     (une barre qui défile cachait les derniers, dont « Admin »). */
-  .ad-tabs { flex-wrap: wrap; overflow: visible; border-radius: 18px; justify-content: center; }
-  .ad-tab { padding: .45rem .7rem; }
 }
 
 /* ---------- Relances et sélection validée ---------- */

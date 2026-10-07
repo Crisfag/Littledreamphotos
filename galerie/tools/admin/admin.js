@@ -63,11 +63,8 @@
     el.tabs.querySelectorAll(".ad-tab").forEach(function (btn) {
       var active = btn.getAttribute("data-tab") === name;
       btn.classList.toggle("ad-tab-active", active);
-      // Sur téléphone, la barre défile : l'onglet ouvert reste visible.
-      if (active && el.tabs.scrollWidth > el.tabs.clientWidth) {
-        var offset = btn.getBoundingClientRect().left - el.tabs.getBoundingClientRect().left;
-        el.tabs.scrollLeft += offset - (el.tabs.clientWidth - btn.offsetWidth) / 2;
-      }
+      if (active) btn.setAttribute("aria-current", "page");
+      else btn.removeAttribute("aria-current");
     });
   }
 
@@ -109,6 +106,7 @@
     el.app.hidden = false;
     if (el.account) {
       el.account.textContent = (photographer.studioName || photographer.email) + " · Galeries protégées";
+      el.account.title = el.account.textContent;
     }
     state.isOwner = Boolean(photographer.isOwner);
     if (el.tabOwner) el.tabOwner.hidden = !state.isOwner;
@@ -679,7 +677,7 @@
         var studioName = form.studioName.value.trim();
         await api("POST", "/account", { studioName: studioName });
         toast("Nom du studio enregistré.");
-        if (el.account) el.account.textContent = (studioName || photographer.email) + " · Galeries protégées";
+        if (el.account) el.account.textContent = el.account.title = (studioName || photographer.email) + " · Galeries protégées";
       } catch (err) {
         toast(err.message, true);
       } finally {

@@ -95,12 +95,24 @@ check("créer un compte depuis le formulaire connecte automatiquement au tableau
       await page.isVisible("#ad-new-gallery"));
 check("l'onglet Admin est masqué pour un compte qui n'est pas la propriétaire",
       await page.isHidden("#ad-tab-owner"));
-check("le nom du studio renseigné à l'inscription apparaît dans la barre supérieure",
+check("le nom du studio renseigné à l'inscription apparaît en tête du menu",
       (await page.textContent("#ad-current-account")).indexOf("Studio de test") === 0);
-check("la barre d'onglets Galeries / Facturation / Paramètres est visible",
+check("le menu Galeries / Facturation / Paramètres est visible",
       await page.isVisible("#ad-tabs"));
 check("l'onglet Galeries est actif par défaut, à l'arrivée sur le tableau de bord",
-      await page.locator("#ad-tab-galleries.ad-tab-active").count() === 1);
+      await page.locator("#ad-tab-galleries.ad-tab-active").count() === 1 &&
+      await page.getAttribute("#ad-tab-galleries", "aria-current") === "page");
+{
+  // Sur ordinateur : menu vertical à gauche du contenu, chaque entrée avec son icône.
+  const nav = await page.locator(".ad-sidebar").boundingBox();
+  const view = await page.locator("#ad-view").boundingBox();
+  const first = await page.locator("#ad-tab-galleries").boundingBox();
+  const last = await page.locator("#ad-tab-settings").boundingBox();
+  check("menu vertical à gauche, une case avec icône par section",
+        nav.x === 0 && view.x >= nav.x + nav.width && last.y > first.y && Math.abs(last.x - first.x) < 1 &&
+        await page.locator("#ad-tabs .ad-tab:not([hidden]) .ad-tab-icon svg").count() === 7,
+        `menu ${nav.width}px, contenu à ${view.x}px`);
+}
 
 /* ---------- Bandeau de compteurs (avant toute galerie) ---------- */
 
