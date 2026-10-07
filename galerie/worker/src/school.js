@@ -18,6 +18,7 @@
 import { json, fail } from "./http.js";
 import { randomBytes, b64url, hashPassword } from "./auth.js";
 import { hasFeature, isOwner, featureRefusal, schoolLaunched } from "./subscription.js";
+import { handleSchoolShopAdmin, copyProducts, eraseShopStatements } from "./schoolshop.js";
 
 // Vocabulaire selon le type d'établissement (affiché tel quel par le
 // tableau de bord).
@@ -211,6 +212,7 @@ async function deleteSchool(env, photographer, schoolId, helpers) {
   // Années et groupes partent avec (ON DELETE CASCADE) ; on les efface
   // explicitement aussi, D1 n'appliquant les clés étrangères que si activées.
   await env.DB.batch([
+    ...eraseShopStatements(env, "school_id = ?", schoolId),
     env.DB.prepare("DELETE FROM school_groups WHERE year_id IN (SELECT id FROM school_years WHERE school_id = ?)").bind(schoolId),
     env.DB.prepare("DELETE FROM school_years WHERE school_id = ?").bind(schoolId),
     env.DB.prepare("DELETE FROM schools WHERE id = ? AND photographer_id = ?").bind(schoolId, photographer.id),
@@ -246,6 +248,9 @@ async function createYear(request, env, photographer, schoolId) {
       statements.push(env.DB.prepare("INSERT INTO school_groups (id, year_id, name, leader, sort, created_at) VALUES (?, ?, ?, ?, ?, ?)")
         .bind(newId("scg"), id, g.name, g.leader, g.sort, now()));
     }
+    // La gamme et les frais de port suivent aussi : mêmes produits, mêmes prix.
+    statements.push(...(await copyProducts(env, source.id, id)));
+    statements.push(env.DB.prepare("UPDATE school_years SET home_shipping_cents = (SELECT home_shipping_cents FROM school_years WHERE id = ?) WHERE id = ?").bind(source.id, id));
   }
   await env.DB.batch(statements);
   return json({ id, label }, { status: 201 });
@@ -274,6 +279,7 @@ async function deleteYear(env, photographer, yearId, helpers) {
   const { results: groups } = await env.DB.prepare("SELECT id, gallery_id FROM school_groups WHERE year_id = ?").bind(yearId).all();
   await eraseGroups(env, groups, helpers);
   await env.DB.batch([
+    ...eraseShopStatements(env, "id = ?", yearId),
     env.DB.prepare("DELETE FROM school_groups WHERE year_id = ?").bind(yearId),
     env.DB.prepare("DELETE FROM school_years WHERE id = ?").bind(yearId),
   ]);
@@ -540,6 +546,8 @@ async function mergeChild(request, env, photographer, childId) {
   if (!into || into.id === child.id) return fail(400, "Enfant de destination invalide");
   await env.DB.batch([
     env.DB.prepare("UPDATE photos SET child_id = ? WHERE child_id = ? AND gallery_id = ?").bind(into.id, child.id, child.gallery_id),
+    env.DB.prepare("UPDATE school_order_lines SET child_id = ? WHERE child_id = ?").bind(into.id, child.id),
+    env.DB.prepare("INSERT OR IGNORE INTO family_children (family_id, child_id, added_at) SELECT family_id, ?, added_at FROM family_children WHERE child_id = ?").bind(into.id, child.id),
     ...(child.first_name && !into.first_name ? [env.DB.prepare("UPDATE school_children SET first_name = ? WHERE id = ?").bind(child.first_name, into.id)] : []),
     env.DB.prepare("DELETE FROM school_children WHERE id = ?").bind(child.id),
   ]);
@@ -643,6 +651,8 @@ export async function handleSchoolAdmin(request, env, photographer, rest, helper
   if (rest.length === 0 && method === "GET") return overview(env, photographer);
   if (!access.allowed) return featureRefusal("school");
 
+  const shop = await handleSchoolShopAdmin(request, env, photographer, rest);
+  if (shop) return shop;
   const [kind, id, sub] = rest;
   if (kind === "schools" && rest.length === 1 && method === "POST") return createSchool(request, env, photographer);
   if (kind === "schools" && rest.length === 2 && method === "POST") return updateSchool(request, env, photographer, id);

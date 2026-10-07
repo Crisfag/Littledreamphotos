@@ -8,6 +8,7 @@ import { json, fail } from "./http.js";
 import { handlePrintPaymentConfirmed } from "./shop.js";
 import { createConnectAccount, createAccountLink, retrieveAccount, verifyStripeSignature } from "./stripe.js";
 import { createInvoiceForPayment } from "./invoices.js";
+import { markSchoolOrderPaid } from "./schoolshop.js";
 import { sendInvoiceEmail } from "./notify.js";
 
 // Message montré au photographe : la raison donnée par Stripe (jamais une
@@ -154,6 +155,11 @@ export async function handleStripeWebhook(request, env) {
 
   if (event.type === "checkout.session.completed") {
     const session = event.data && event.data.object;
+    // Commande d'une famille (module scolaire, schoolshop.js).
+    if (session?.metadata?.kind === "school") {
+      await markSchoolOrderPaid(env, session);
+      return json({ received: true });
+    }
     // "paid" est le seul statut qui compte comme réglé : certains moyens de
     // paiement restent "unpaid" un instant après ce même évènement (virement
     // notamment) — mieux vaut attendre leur propre confirmation que de

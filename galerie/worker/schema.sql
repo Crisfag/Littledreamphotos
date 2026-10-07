@@ -670,6 +670,9 @@ CREATE TABLE IF NOT EXISTS school_years (
   order_deadline INTEGER,
   late_deadline  INTEGER,
   status         TEXT NOT NULL DEFAULT 'draft',    -- draft, open, closed, archived
+  -- Frais de port d'une commande livrée à domicile (après la commande
+  -- groupée), en centimes.
+  home_shipping_cents INTEGER NOT NULL DEFAULT 0,
   created_at     INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_school_years_school ON school_years(school_id, created_at);
@@ -714,6 +717,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_school_children_code ON school_children(ac
 --   ALTER TABLE photos ADD COLUMN child_id TEXT NOT NULL DEFAULT '';
 --   ALTER TABLE photos ADD COLUMN school_role TEXT NOT NULL DEFAULT '';
 --   ALTER TABLE school_children ADD COLUMN access_code TEXT NOT NULL DEFAULT '';
+--   ALTER TABLE school_years ADD COLUMN home_shipping_cents INTEGER NOT NULL DEFAULT 0;
 
 -- Espace famille (family.js, page ecole.html) : une famille = une adresse
 -- e-mail ; ses enfants y sont rattachés par le code de leur fiche. Pas de
@@ -743,3 +747,57 @@ CREATE TABLE IF NOT EXISTS family_links (
   created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_family_links_family ON family_links(family_id, created_at);
+
+-- Commande des familles (schoolshop.js) : la gamme et les prix d'une année
+-- (pochettes, tirages, fichiers numériques ; sur un portrait ou sur la
+-- photo de groupe), puis les commandes payées par Stripe (charge de
+-- destination vers le photographe), une ligne par article.
+CREATE TABLE IF NOT EXISTS school_products (
+  id          TEXT PRIMARY KEY,
+  year_id     TEXT NOT NULL REFERENCES school_years(id) ON DELETE CASCADE,
+  kind        TEXT NOT NULL DEFAULT 'pochette',   -- pochette, tirage, numerique
+  scope       TEXT NOT NULL DEFAULT 'portrait',   -- portrait, group
+  name        TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',           -- contenu d'une pochette, format…
+  price_cents INTEGER NOT NULL,
+  sort        INTEGER NOT NULL DEFAULT 0,
+  active      INTEGER NOT NULL DEFAULT 1,
+  created_at  INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_school_products_year ON school_products(year_id, sort);
+
+CREATE TABLE IF NOT EXISTS school_orders (
+  id                TEXT PRIMARY KEY,
+  year_id           TEXT NOT NULL REFERENCES school_years(id) ON DELETE CASCADE,
+  family_id         TEXT NOT NULL,
+  email             TEXT NOT NULL,
+  delivery          TEXT NOT NULL DEFAULT 'school',  -- school, home
+  shipping_cents    INTEGER NOT NULL DEFAULT 0,
+  amount_cents      INTEGER NOT NULL,
+  fee_cents         INTEGER NOT NULL DEFAULT 0,
+  status            TEXT NOT NULL DEFAULT 'pending', -- pending, paid
+  shipping_name     TEXT NOT NULL DEFAULT '',
+  shipping_address  TEXT NOT NULL DEFAULT '',        -- JSON (adresse Stripe), commande à domicile
+  stripe_session_id TEXT NOT NULL DEFAULT '',
+  created_at        INTEGER NOT NULL,
+  paid_at           INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_school_orders_year ON school_orders(year_id, status);
+CREATE INDEX IF NOT EXISTS idx_school_orders_family ON school_orders(family_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_school_orders_session ON school_orders(stripe_session_id);
+
+CREATE TABLE IF NOT EXISTS school_order_lines (
+  id          TEXT PRIMARY KEY,
+  order_id    TEXT NOT NULL REFERENCES school_orders(id) ON DELETE CASCADE,
+  child_id    TEXT NOT NULL,
+  group_id    TEXT NOT NULL,
+  product_id  TEXT NOT NULL,
+  photo_id    TEXT NOT NULL,
+  kind        TEXT NOT NULL,
+  name        TEXT NOT NULL,           -- nom du produit au moment de la commande
+  description TEXT NOT NULL DEFAULT '',
+  price_cents INTEGER NOT NULL,
+  quantity    INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_school_order_lines_order ON school_order_lines(order_id);
+CREATE INDEX IF NOT EXISTS idx_school_order_lines_group ON school_order_lines(group_id);

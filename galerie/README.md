@@ -495,8 +495,32 @@ Le tableau de bord s'organise en trois onglets, chacun avec son propre lien
     dessinées en canvas, sans cache. Codes erronés limités (12 par quart
     d'heure et par IP). Espaces vides sans connexion depuis un an et liens
     périmés effacés chaque jour.
-  - *À venir* : commande (pochettes, tirages), commande groupée et labo
-    intégré (BePhoto à l'étude).
+  - *Commande* (`worker/src/schoolshop.js`) : le photographe compose la
+    gamme de chaque année (pochettes, tirages, fichiers numériques ; sur un
+    portrait ou sur la photo de groupe), ses prix TTC et les frais de port à
+    domicile ; une gamme type est proposée, et gamme et frais suivent dans
+    l'année suivante. La famille remplit un seul panier pour tous ses
+    enfants (navigateur), choisit la photo de chaque article, et paie par
+    Stripe : charge de destination vers le photographe, une commande par
+    établissement et par année, retenue `schoolFeeRule` (fees.js : 4,5 %
+    pour la formule Scolaire, frais de paiement ordinaires sinon). Livraison
+    groupée à l'établissement, gratuite, jusqu'à la date de commande
+    groupée ; ensuite, à domicile (adresse demandée par Stripe) jusqu'à la
+    date de commande à domicile. Le serveur revérifie chaque article
+    (enfant de la famille, produit en vente, photo de cet enfant ou photo
+    de groupe). Commande payée par le webhook `checkout.session.completed`
+    (`metadata.kind = "school"`) ou au retour de Stripe
+    (`/api/family/checkout/sync`), une seule fois ; e-mail de confirmation
+    à la famille ; fichiers numériques téléchargeables depuis l'espace
+    famille (fichier d'impression, sans filigrane). Côté photographe : suivi
+    par classe (enfants ayant commandé, montants) et *fichier de
+    production* (admin-server, ZIP au fil de l'eau) : fichiers d'impression
+    rangés par classe puis par enfant (`01_P2/007_Lea/2x_Pochette….jpg`),
+    commandes à domicile à part avec leur adresse, `recapitulatif.csv` (une
+    ligne par article) et `distribution.csv` (à cocher à la remise).
+    Paniers jamais payés effacés après deux jours.
+  - *À venir* : labo intégré (BePhoto à l'étude), relances des familles,
+    part de l'établissement, ventes scolaires dans le tableau des ventes.
 - **Campagnes de vente des tirages** (`worker/src/campaigns.js`) :
   - *Promotion à durée limitée* sur une galerie (−10 à −50 % jusqu'à une
     date, depuis la section boutique de la fiche) : bandeau et prix barrés

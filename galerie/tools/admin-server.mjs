@@ -703,6 +703,86 @@ async function handleApi(req, res, url) {
     }
   }
 
+  // GET /local/school/years/:id/production[?group=…] — fichier de
+  // production des commandes payées : un ZIP rangé comme on distribue.
+  //   01_P2/007_Lea/2x_Pochette_Classique_ab12cd.jpg  (livraison à l'école)
+  //   A_domicile/Dupont_Marie_sco123/1x_Tirage_20x30_ab12cd.jpg + adresse.txt
+  //   recapitulatif.csv  (une ligne par article, pour le labo ou la compta)
+  //   distribution.csv   (par groupe et par enfant, à cocher à la remise)
+  // Le fichier d'impression de chaque photo n'est téléchargé qu'une fois.
+  if (parts[0] === "school" && parts[1] === "years" && parts[3] === "production" && parts.length === 4 && req.method === "GET") {
+    const url = new URL(req.url, "http://localhost");
+    const groupId = url.searchParams.get("group") || "";
+    let data;
+    try {
+      data = await client.request("POST", `/api/admin/school/years/${encodeURIComponent(decodeURIComponent(parts[2]))}/production`, groupId ? { groupId } : {});
+    } catch (err) {
+      return relayError(res, err, "Le fichier de production n'a pas pu être préparé");
+    }
+    if (!data.lines.length) return json(res, 400, { error: "Aucune commande payée pour l'instant." });
+    const safe = (s) => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Za-z0-9-]+/g, "_").replace(/^_+|_+$/g, "");
+    const csvCell = (v) => {
+      // Une cellule saisie par une famille ne doit jamais devenir une formule.
+      const t = String(v ?? "").replace(/^([=+\-@\t\r])/, "'$1");
+      return /[";\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
+    };
+    const csv = (rows) => Buffer.from("\ufeff" + rows.map((r) => r.map(csvCell).join(";")).join("\r\n") + "\r\n", "utf8");
+    const euros = (cents) => (cents / 100).toFixed(2).replace(".", ",");
+    const addressText = (a) => (a ? [a.line1, a.line2, `${a.postal_code || ""} ${a.city || ""}`.trim(), a.country].filter(Boolean).join(", ") : "");
+    const groupIndex = new Map();
+    for (const l of data.lines) if (!groupIndex.has(l.groupId)) groupIndex.set(l.groupId, groupIndex.size + 1);
+    const childDir = (l) => `${String(l.childNumber).padStart(3, "0")}${l.childFirstName ? "_" + safe(l.childFirstName) : ""}`;
+    const dirOf = (l) => l.delivery === "home"
+      ? `A_domicile/${safe(l.shippingName) || "commande"}_${l.orderId.slice(-6)}`
+      : `${String(groupIndex.get(l.groupId)).padStart(2, "0")}_${safe(l.groupName)}/${childDir(l)}`;
+    const stem = `production-${safe(data.school.name)}-${data.year.label}${groupId ? "-" + safe(data.lines[0].groupName) : ""}`;
+    try {
+      res.writeHead(200, { "content-type": "application/zip", "content-disposition": `attachment; filename="${stem}.zip"`, "cache-control": "no-store" });
+      const zip = new ZipWriter((chunk) => res.write(chunk));
+      const cache = new Map();
+      const used = new Set();
+      const homeOrders = new Map();
+      for (const l of data.lines) {
+        const dir = dirOf(l);
+        let name = `${dir}/${l.quantity}x_${safe(l.name)}_${l.photoId.slice(-6)}.jpg`;
+        for (let n = 2; used.has(name); n++) name = `${dir}/${l.quantity}x_${safe(l.name)}_${l.photoId.slice(-6)}_${n}.jpg`;
+        used.add(name);
+        if (!cache.has(l.photoId)) cache.set(l.photoId, await client.getOriginal(l.photoId).catch(() => null));
+        const original = cache.get(l.photoId);
+        if (original) zip.addFile(name, original);
+        if (l.delivery === "home" && !homeOrders.has(dir)) homeOrders.set(dir, l);
+      }
+      for (const [dir, l] of homeOrders) {
+        const a = l.shippingAddress || {};
+        const lines = [l.shippingName, a.line1, a.line2, `${a.postal_code || ""} ${a.city || ""}`.trim(), a.country, "", `Enfant : ${l.childFirstName || "n° " + l.childNumber} (${l.groupName})`, `Commande ${l.orderId}`];
+        zip.addFile(`${dir}/adresse.txt`, Buffer.from(lines.filter((x) => x !== undefined && x !== null).join("\r\n") + "\r\n", "utf8"));
+      }
+      zip.addFile("recapitulatif.csv", csv([
+        ["Groupe", "N°", "Prénom", "Article", "Contenu", "Quantité", "Prix unitaire (€)", "Livraison", "Nom (domicile)", "Adresse (domicile)", "Commande", "E-mail", "Photo", "Dossier"],
+        ...data.lines.map((l) => [
+          l.groupName, l.childNumber, l.childFirstName, l.name, l.description, l.quantity, euros(l.priceCents),
+          l.delivery === "home" ? "À domicile" : "École", l.shippingName, addressText(l.shippingAddress), l.orderId, l.email, l.photoId, dirOf(l),
+        ]),
+      ]));
+      const perChild = new Map();
+      for (const l of data.lines) {
+        const key = `${l.groupId}|${l.childId}`;
+        if (!perChild.has(key)) perChild.set(key, { l, items: [] });
+        perChild.get(key).items.push(`${l.quantity}× ${l.name}${l.delivery === "home" ? " (à domicile)" : ""}`);
+      }
+      zip.addFile("distribution.csv", csv([
+        ["Groupe", "N°", "Prénom", "Articles", "Remis"],
+        ...[...perChild.values()].map(({ l, items }) => [l.groupName, l.childNumber, l.childFirstName, items.join(" + "), ""]),
+      ]));
+      zip.end();
+      return res.end();
+    } catch (err) {
+      console.error("Échec du fichier de production :", err);
+      if (!res.headersSent) return relayError(res, err, "Le fichier de production n'a pas pu être généré");
+      return res.destroy(err);
+    }
+  }
+
   // /local/school/… — module photo de groupe (établissements, années,
   // groupes) : simple relais JSON vers /api/admin/school/….
   if (parts[0] === "school" && ["GET", "POST", "DELETE"].includes(req.method)) {

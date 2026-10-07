@@ -20,7 +20,7 @@
 // La propriétaire de la plateforme n'en paie pas : ses ventes sont déjà
 // celles de la plateforme.
 
-import { isOwner } from "./subscription.js";
+import { isOwner, PLANS } from "./subscription.js";
 
 export const DEFAULT_FEE_PERCENT = 2;
 export const DEFAULT_FEE_FIXED_CENTS = 30;
@@ -38,6 +38,18 @@ export function paymentFeeRule(env, photographer) {
     percent: parseNumber(env.PAYMENT_FEE_PERCENT, DEFAULT_FEE_PERCENT, { min: 0, max: 20 }),
     fixedCents: Math.round(parseNumber(env.PAYMENT_FEE_FIXED_CENTS, DEFAULT_FEE_FIXED_CENTS, { min: 0, max: 500 })),
   };
+}
+
+// Ventes du module scolaire : la formule Scolaire paie sa commission
+// (frais bancaires compris) à la place des frais de paiement habituels ;
+// Studio et les autres formules gardent la règle ordinaire.
+export function schoolFeeRule(env, photographer) {
+  if (photographer && isOwner(env, photographer)) return { percent: 0, fixedCents: 0 };
+  const plan = PLANS[photographer?.plan];
+  if (plan?.schoolFeePercent && ["active", "trialing", "past_due"].includes(photographer.plan_status)) {
+    return { percent: plan.schoolFeePercent, fixedCents: 0 };
+  }
+  return paymentFeeRule(env, photographer);
 }
 
 // Montant retenu (centimes) sur un paiement de `amountCents`. Jamais plus

@@ -67,6 +67,20 @@
     </header>
 
     <main class="ec-main" id="ec-view"></main>
+
+    <!-- Panier : barre fixe en bas, détail dans un panneau -->
+    <div class="ec-cartbar" id="ec-cartbar" hidden>
+      <span id="ec-cartbar-text"></span>
+      <button type="button" class="ec-btn ec-btn-small" id="ec-cartbar-open">Voir le panier</button>
+    </div>
+  </div>
+
+  <!-- ============ Choix d'un article / panier ============ -->
+  <div class="ec-sheet" id="ec-sheet" hidden role="dialog" aria-modal="true" aria-labelledby="ec-sheet-title">
+    <div class="ec-sheet-card">
+      <button type="button" class="ec-sheet-close" id="ec-sheet-close" aria-label="Fermer">&times;</button>
+      <div id="ec-sheet-body"></div>
+    </div>
   </div>
 
   <!-- ============ Photo en grand ============ -->
@@ -75,6 +89,7 @@
     <button type="button" class="ec-lightbox-nav ec-prev" id="ec-prev" aria-label="Photo précédente">&#8249;</button>
     <canvas id="ec-lightbox-canvas"></canvas>
     <button type="button" class="ec-lightbox-nav ec-next" id="ec-next" aria-label="Photo suivante">&#8250;</button>
+    <button type="button" class="ec-btn ec-btn-small ec-lightbox-order" id="ec-lightbox-order" hidden>Commander cette photo</button>
   </div>
 
   <script src="ecole.js"></script>

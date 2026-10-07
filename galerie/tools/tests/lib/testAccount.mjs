@@ -30,8 +30,13 @@ export async function createTestAccount(api, label, { plan = "pro" } = {}) {
 // ferait le webhook Stripe) : par défaut Pro, pour que les tests ne butent
 // pas sur les limites de la formule gratuite (testées dans api.test.mjs).
 export async function setTestPlan(api, email, plan, status = "active") {
-  execFileSync("npx", ["wrangler", "d1", "execute", "galerie-protegee", "--local", "--command",
-    `UPDATE photographers SET plan = '${plan}', plan_status = '${status}' WHERE email = '${email}'`], { cwd: WORKER_DIR, stdio: "pipe" });
+  await localSql(api, `UPDATE photographers SET plan = '${plan}', plan_status = '${status}' WHERE email = '${email}'`);
+}
+
+// Requête SQL directe sur la base locale (états qu'aucune route ne permet de
+// poser : paiement confirmé par Stripe, compte Stripe activé…).
+export async function localSql(api, sql) {
+  execFileSync("npx", ["wrangler", "d1", "execute", "galerie-protegee", "--local", "--command", sql], { cwd: WORKER_DIR, stdio: "pipe" });
   // Juste après une écriture directe, le Worker local coupe parfois ses
   // connexions : on attend qu'il réponde à nouveau.
   for (let i = 0; i < 20; i++) {

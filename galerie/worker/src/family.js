@@ -20,6 +20,7 @@ import { json, fail } from "./http.js";
 import { signToken, verifyToken, hashValue, hashToken, randomBytes, b64url } from "./auth.js";
 import { normalizeAccessCode, SCHOOL_KINDS } from "./school.js";
 import { sendFamilyLoginLink } from "./notify.js";
+import { shopForFamily, familyCheckout, familyCheckoutSync, familyDownload, purgePendingOrdersStatements } from "./schoolshop.js";
 
 const SESSION_TTL_SECONDS = 30 * 24 * 60 * 60;
 const LINK_TTL_SECONDS = 30 * 60;
@@ -154,6 +155,8 @@ async function familyView(env, family) {
     const kind = SCHOOL_KINDS[r.school_kind] || SCHOOL_KINDS.ecole;
     children.push({
       id: r.id,
+      yearId: r.year_id,
+      groupId: r.group_id,
       firstName: r.first_name,
       number: r.number,
       school: { name: r.school_name, kind: r.school_kind },
@@ -166,7 +169,7 @@ async function familyView(env, family) {
       groupPhotos,
     });
   }
-  return { email: family.email, children };
+  return { email: family.email, children, ...(await shopForFamily(env, family, children)) };
 }
 
 /* ---------- Routes ---------- */
@@ -286,6 +289,9 @@ export async function handleFamily(request, env, path) {
   if (parts[0] === "me" && parts.length === 1 && method === "GET") return json(await familyView(env, family));
   if (parts[0] === "children" && parts.length === 1 && method === "POST") return addChild(request, env, family);
   if (parts[0] === "children" && parts.length === 2 && method === "DELETE") return removeChild(env, family, decodeURIComponent(parts[1]));
+  if (parts[0] === "checkout" && parts.length === 1 && method === "POST") return familyCheckout(request, env, family);
+  if (parts[0] === "checkout" && parts[1] === "sync" && parts.length === 2 && method === "POST") return familyCheckoutSync(request, env, family);
+  if (parts[0] === "download" && parts.length === 2 && method === "GET") return familyDownload(env, family, decodeURIComponent(parts[1]));
   if (parts[0] === "tile" && parts.length === 5 && method === "GET") {
     return tile(env, family, decodeURIComponent(parts[1]), Number(parts[2]), Number(parts[3]), Number(parts[4]));
   }
@@ -295,7 +301,7 @@ export async function handleFamily(request, env, path) {
 // Passe quotidienne : un espace famille sans enfant (tous retirés, ou
 // établissements supprimés) et sans connexion depuis un an est effacé ; les
 // liens de connexion, valables une demi-heure, ne sont pas gardés au-delà de
-// deux jours.
+// deux jours, ni les paniers partis vers Stripe sans être payés.
 export async function purgeFamilies(env, at = now()) {
   await env.DB.batch([
     env.DB.prepare(
@@ -303,5 +309,6 @@ export async function purgeFamilies(env, at = now()) {
          AND NOT EXISTS (SELECT 1 FROM family_children fc WHERE fc.family_id = families.id)`
     ).bind(at - 365 * 24 * 60 * 60),
     env.DB.prepare("DELETE FROM family_links WHERE created_at < ?").bind(at - 2 * 24 * 60 * 60),
+    ...purgePendingOrdersStatements(env, at),
   ]);
 }
