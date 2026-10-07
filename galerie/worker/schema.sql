@@ -142,6 +142,10 @@ CREATE TABLE IF NOT EXISTS galleries (
   -- photos importées tant qu'elle est ouverte gardent un fichier
   -- d'impression (R2, originals/{photoId}.jpg), jamais servi au client.
   shop_enabled           INTEGER NOT NULL DEFAULT 0,
+  -- 'client' (galerie classique) ou 'school' : galerie protégée qui porte
+  -- les photos d'un groupe scolaire (school_groups.gallery_id), jamais
+  -- listée avec les galeries classiques ni comptée dans leur quota.
+  kind                   TEXT NOT NULL DEFAULT 'client',
   created_at             INTEGER NOT NULL
 );
 
@@ -166,6 +170,14 @@ CREATE TABLE IF NOT EXISTS photos (
   marks        TEXT NOT NULL DEFAULT '[]',  -- repères annotés : JSON [{x, y, note}], x/y entre 0 et 1
   has_original INTEGER NOT NULL DEFAULT 0,  -- 1 = fichier d'impression en R2 (originals/{id}.jpg)
   original_bytes INTEGER NOT NULL DEFAULT 0, -- taille de ce fichier (espace de stockage, voir storage.js)
+  -- Photo de groupe scolaire (voir school.js) : heure de prise de vue (ms,
+  -- EXIF, à l'heure de l'appareil), nom du fichier d'origine, enfant auquel
+  -- elle appartient (school_children.id, '' = à trier) et rôle ('' ou
+  -- 'group' pour la photo de classe, vue par toutes les familles du groupe).
+  taken_at     INTEGER,
+  source_name  TEXT NOT NULL DEFAULT '',
+  child_id     TEXT NOT NULL DEFAULT '',
+  school_role  TEXT NOT NULL DEFAULT '',
   created_at   INTEGER NOT NULL
 );
 
@@ -668,9 +680,31 @@ CREATE TABLE IF NOT EXISTS school_groups (
   name       TEXT NOT NULL,                        -- « P3 », « Section des grands », « U9 »
   leader     TEXT NOT NULL DEFAULT '',             -- enseignant, puéricultrice, entraîneur
   sort       INTEGER NOT NULL DEFAULT 0,
+  -- Galerie protégée (kind = 'school') qui porte les photos du groupe,
+  -- créée au premier import ; '' tant qu'aucune photo n'a été envoyée.
+  gallery_id TEXT NOT NULL DEFAULT '',
   created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_school_groups_year ON school_groups(year_id, sort);
 
--- Migration (bases créées avant le module) : les trois CREATE TABLE
--- ci-dessus, plus la colonne photographers.founder_plan (voir plus haut).
+-- Enfants d'un groupe, nés du regroupement des photos par rafale : un
+-- numéro d'ordre (« Enfant 7 ») et un prénom facultatif — la fiche parent
+-- porte le portrait, le nom n'est jamais exigé.
+CREATE TABLE IF NOT EXISTS school_children (
+  id         TEXT PRIMARY KEY,
+  group_id   TEXT NOT NULL REFERENCES school_groups(id) ON DELETE CASCADE,
+  number     INTEGER NOT NULL,
+  first_name TEXT NOT NULL DEFAULT '',
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_school_children_group ON school_children(group_id, number);
+
+-- Migration (bases créées avant le module) : les CREATE TABLE ci-dessus,
+-- plus :
+--   ALTER TABLE photographers ADD COLUMN founder_plan TEXT NOT NULL DEFAULT '';
+--   ALTER TABLE galleries ADD COLUMN kind TEXT NOT NULL DEFAULT 'client';
+--   ALTER TABLE school_groups ADD COLUMN gallery_id TEXT NOT NULL DEFAULT '';
+--   ALTER TABLE photos ADD COLUMN taken_at INTEGER;
+--   ALTER TABLE photos ADD COLUMN source_name TEXT NOT NULL DEFAULT '';
+--   ALTER TABLE photos ADD COLUMN child_id TEXT NOT NULL DEFAULT '';
+--   ALTER TABLE photos ADD COLUMN school_role TEXT NOT NULL DEFAULT '';

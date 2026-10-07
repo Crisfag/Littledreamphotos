@@ -165,7 +165,7 @@ export function featureRefusal(feature) {
 
 export async function activeGalleryCount(env, photographerId) {
   const row = await env.DB.prepare(
-    "SELECT COUNT(*) AS n FROM galleries WHERE photographer_id = ? AND (expires_at IS NULL OR expires_at > ?)"
+    "SELECT COUNT(*) AS n FROM galleries WHERE photographer_id = ? AND kind != 'school' AND (expires_at IS NULL OR expires_at > ?)"
   )
     .bind(photographerId, now())
     .first();

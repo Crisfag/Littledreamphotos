@@ -459,8 +459,21 @@ Le tableau de bord s'organise en trois onglets, chacun avec son propre lien
     1re année ou 45 €/mois pendant 12 mois). Elles ne sont proposées qu'avec
     `SCHOOL_LAUNCHED = "1"` (wrangler.toml) ; d'ici là seule la propriétaire
     voit le module, pour le préparer.
-  - *À venir* : import des photos par groupe et regroupement par enfant,
-    fiches parents QR, espace famille, commande groupée et labo intégré.
+  - *Photos d'un groupe* : on glisse les photos (ou le dossier) d'une
+    classe ; chaque groupe a sa galerie protégée (`galleries.kind =
+    'school'`, jamais listée avec les galeries classiques ni comptée dans
+    leur quota), avec les mêmes tuiles, filigrane, empreinte et fichier
+    d'impression. L'heure de prise de vue (EXIF, au centième) est lue à
+    l'import (`tools/lib/exif.mjs`) ; les photos se regroupent ensuite par
+    enfant en rafales (`splitIntoBursts`, school.js : première cassure nette
+    entre « poses d'un même enfant » et « enfant suivant », jamais sous
+    5 s). Grille de vérification : déplacer des photos vers un enfant, un
+    nouvel enfant, la photo de groupe ou « à trier » ; fusionner deux
+    cartes ; prénom facultatif. Les enfants sont numérotés dans l'ordre de
+    la séance. Pas de reconnaissance faciale (données biométriques
+    d'enfants).
+  - *À venir* : fiches parents QR, espace famille, commande groupée et labo
+    intégré (BePhoto à l'étude).
 - **Campagnes de vente des tirages** (`worker/src/campaigns.js`) :
   - *Promotion à durée limitée* sur une galerie (−10 à −50 % jusqu'à une
     date, depuis la section boutique de la fiche) : bandeau et prix barrés

@@ -3851,6 +3851,8 @@
   }
 
   async function renderSchool(skipHash) {
+    var groupMatch = /^#\/scolaire\/groupe\/([^/]+)$/.exec(location.hash);
+    if (groupMatch) return renderSchoolGroup(decodeURIComponent(groupMatch[1]));
     var match = /^#\/scolaire\/([^/]+)(?:\/([^/]+))?$/.exec(location.hash);
     var schoolId = match ? decodeURIComponent(match[1]) : "";
     var yearId = match && match[2] ? decodeURIComponent(match[2]) : "";
@@ -3995,7 +3997,9 @@
               '<li data-group="' + esc(g.id) + '">' +
               '<input type="text" class="ad-sc-in" data-field="name" maxlength="60" value="' + esc(g.name) + '" aria-label="Nom" />' +
               '<input type="text" class="ad-sc-in ad-sc-in-muted" data-field="leader" maxlength="80" value="' + esc(g.leader) + '" placeholder="' + esc(kind.leader) + '" aria-label="' + esc(kind.leader) + '" />' +
-              '<span class="ad-hint ad-sc-count">0 enfant</span>' +
+              '<button type="button" class="ad-btn ad-sc-open" data-open-group>' +
+              (g.photoCount ? g.childrenCount + " enfant" + (g.childrenCount > 1 ? "s" : "") + " · " + g.photoCount + " photo" + (g.photoCount > 1 ? "s" : "") : "Importer les photos") +
+              "</button>" +
               '<button type="button" class="ad-link-btn ad-sc-del" data-del-group aria-label="Supprimer ' + esc(g.name) + '">Supprimer</button>' +
               "</li>"
             );
@@ -4031,7 +4035,7 @@
           '<label class="ad-field"><span>Ajouter des ' + esc(kind.groups.toLowerCase()) + ' <em>(une par ligne)</em></span>' +
           '<textarea name="names" rows="3" placeholder="' + esc(school.kind === "club" ? "U7\nU9\nU11" : school.kind === "creche" ? "Bébés\nMoyens\nGrands" : "M1\nM2\nP1") + '"></textarea></label>' +
           '<button type="submit" class="ad-btn ad-btn-primary">Ajouter</button></form>' +
-          '<p class="ad-hint ad-sc-next">Prochaine étape : importer les photos de chaque ' + esc(kind.group.toLowerCase()) + " et les regrouper par enfant.</p>" +
+          '<p class="ad-hint ad-sc-next">Ouvrez chaque ' + esc(kind.group.toLowerCase()) + " pour importer ses photos : Holypixx les regroupe par enfant d'après l'heure de prise de vue.</p>" +
           "</section>"
         : "") +
 
@@ -4105,6 +4109,10 @@
             }
           });
         });
+        li.querySelector("[data-open-group]").addEventListener("click", function () {
+          history.pushState(null, "", "#/scolaire/groupe/" + encodeURIComponent(id));
+          renderSchool(true);
+        });
         li.querySelector("[data-del-group]").addEventListener("click", async function () {
           try {
             await api("DELETE", "/school/groups/" + encodeURIComponent(id));
@@ -4145,6 +4153,261 @@
       } catch (err) {
         toast(err.message, true);
       }
+    });
+  }
+
+  /* ---------- Groupe scolaire : import et regroupement par enfant ---------- */
+
+  function schoolThumb(photo, selected) {
+    var cols = state.config.previewCols || 2;
+    var rows = state.config.previewRows || 2;
+    var cells = "";
+    for (var row = 0; row < rows; row++) {
+      for (var col = 0; col < cols; col++) {
+        cells += '<img loading="lazy" src="/local/tiles/' + esc(photo.id) + "/0/" + col + "/" + row + '" alt="" />';
+      }
+    }
+    var time = photo.takenAt ? new Date(photo.takenAt).toISOString().slice(11, 19) : "";
+    return (
+      '<button type="button" class="ad-sc-thumb' + (selected ? " ad-sc-thumb-on" : "") + '" data-photo="' + esc(photo.id) + '" aria-pressed="' + Boolean(selected) + '"' +
+      ' title="' + esc((photo.sourceName || "") + (time ? " · " + time : "")) + '">' +
+      '<span class="ad-sc-thumb-img" style="aspect-ratio:' + photo.width + "/" + photo.height + ";grid-template-columns:repeat(" + cols + ",1fr);grid-template-rows:repeat(" + rows + ',1fr)">' + cells + "</span>" +
+      (time ? '<span class="ad-sc-thumb-time">' + time + "</span>" : "") +
+      "</button>"
+    );
+  }
+
+  var schoolSelection = { groupId: "", ids: [] };
+
+  async function renderSchoolGroup(groupId) {
+    setActiveTab("school");
+    if (schoolSelection.groupId !== groupId) schoolSelection = { groupId: groupId, ids: [] };
+    var data;
+    try {
+      data = await api("GET", "/school/groups/" + encodeURIComponent(groupId));
+    } catch (err) {
+      toast(err.message, true);
+      history.replaceState(null, "", "#/scolaire");
+      return renderSchool(true);
+    }
+    var kind = data.kinds[data.school.kind] || data.kinds.ecole;
+    var selected = {};
+    schoolSelection.ids = schoolSelection.ids.filter(function (id) { return data.photos.some(function (p) { return p.id === id; }); });
+    schoolSelection.ids.forEach(function (id) { selected[id] = true; });
+    var groupPhotos = data.photos.filter(function (p) { return p.role === "group"; });
+    var unsorted = data.photos.filter(function (p) { return p.role !== "group" && !p.childId; });
+    var byChild = {};
+    data.photos.forEach(function (p) {
+      if (p.childId && p.role !== "group") (byChild[p.childId] = byChild[p.childId] || []).push(p);
+    });
+    var undatedCount = unsorted.filter(function (p) { return !p.takenAt; }).length;
+
+    function thumbs(list) {
+      return '<div class="ad-sc-thumbs">' + list.map(function (p) { return schoolThumb(p, selected[p.id]); }).join("") + "</div>";
+    }
+    function childLabel(c) {
+      return "Enfant " + c.number + (c.firstName ? " · " + c.firstName : "");
+    }
+
+    var childrenHtml = data.children.map(function (c, i) {
+      var prev = data.children[i - 1];
+      return (
+        '<article class="ad-sc-child" data-child="' + esc(c.id) + '">' +
+        '<header><span class="ad-sc-child-num">' + c.number + "</span>" +
+        '<input type="text" class="ad-sc-in" data-child-name maxlength="60" value="' + esc(c.firstName) + '" placeholder="Prénom (facultatif)" aria-label="Prénom de l\'enfant ' + c.number + '" />' +
+        '<span class="ad-hint">' + (byChild[c.id] || []).length + " photo" + ((byChild[c.id] || []).length > 1 ? "s" : "") + "</span>" +
+        (prev ? '<button type="button" class="ad-link-btn" data-merge="' + esc(prev.id) + '" title="Même enfant : réunir avec ' + esc(childLabel(prev)) + '">Fusionner avec le n° ' + prev.number + "</button>" : "") +
+        "</header>" + thumbs(byChild[c.id] || []) + "</article>"
+      );
+    }).join("");
+
+    var moveOptions = '<option value="">Déplacer vers…</option>' +
+      '<option value="new">Un nouvel enfant</option>' +
+      '<option value="group">' + esc(kind.groupPhoto) + "</option>" +
+      '<option value="unsorted">À trier</option>' +
+      data.children.map(function (c) { return '<option value="' + esc(c.id) + '">' + esc(childLabel(c)) + "</option>"; }).join("");
+
+    el.view.innerHTML =
+      '<p class="ad-sc-back"><button type="button" class="ad-link-btn" id="ad-sc-back-school">← ' + esc(data.school.name) + " · " + esc(data.year.label) + "</button></p>" +
+      '<header class="ad-detail-header"><div><p class="ad-sc-kind">' + esc(kind.group) + "</p><h2>" + esc(data.group.name) + "</h2>" +
+      '<p class="ad-hint">' + esc([data.group.leader, data.photos.length + " photo" + (data.photos.length > 1 ? "s" : ""),
+        data.children.length + " enfant" + (data.children.length > 1 ? "s" : "")].filter(Boolean).join(" · ")) + "</p></div></header>" +
+
+      '<section class="ad-dropzone" id="ad-sc-drop">' +
+      "<p><strong>Glissez les photos de " + esc(kind.group.toLowerCase()) + " " + esc(data.group.name) + "</strong> (portraits et " + esc(kind.groupPhoto.toLowerCase()) + "), ou</p>" +
+      '<div class="ad-sc-actions" style="justify-content:center">' +
+      '<label class="ad-btn ad-btn-primary">Choisir des photos<input type="file" id="ad-sc-files" accept="image/jpeg,image/*" multiple hidden /></label>' +
+      '<label class="ad-btn">Choisir un dossier<input type="file" id="ad-sc-folder" webkitdirectory multiple hidden /></label></div>' +
+      '<p class="ad-hint ad-sc-drop-hint">Gardez les fichiers d\'origine de l\'appareil : leur heure de prise de vue sert à reconnaître chaque enfant.</p>' +
+      '<div class="ad-sc-progress" id="ad-sc-progress" hidden><div class="ad-sc-progress-bar"><span id="ad-sc-progress-fill"></span></div><p class="ad-hint" id="ad-sc-progress-text"></p></div>' +
+      "</section>" +
+
+      '<div class="ad-sc-toolbar" id="ad-sc-toolbar"' + (schoolSelection.ids.length ? "" : " hidden") + '>' +
+      '<span id="ad-sc-sel-count"></span>' +
+      '<select id="ad-sc-move" aria-label="Déplacer les photos choisies">' + moveOptions + "</select>" +
+      '<button type="button" class="ad-btn ad-btn-danger" id="ad-sc-sel-delete">Supprimer</button>' +
+      '<button type="button" class="ad-link-btn" id="ad-sc-sel-clear">Annuler</button></div>' +
+
+      (unsorted.length
+        ? '<section class="ad-sc-unsorted"><div class="ad-section-header"><h3>À trier (' + unsorted.length + ")</h3>" +
+          (unsorted.length > undatedCount ? '<button type="button" class="ad-btn ad-btn-primary" id="ad-sc-arrange">Regrouper par enfant</button>' : "") + "</div>" +
+          (undatedCount ? '<p class="ad-hint">' + undatedCount + " photo" + (undatedCount > 1 ? "s n'ont" : " n'a") + " pas d'heure de prise de vue : choisissez-les puis « Déplacer vers… ».</p>" : "") +
+          thumbs(unsorted) + "</section>"
+        : "") +
+
+      '<section><div class="ad-section-header"><h3>' + esc(kind.groupPhoto) + " (" + groupPhotos.length + ")</h3></div>" +
+      (groupPhotos.length ? thumbs(groupPhotos)
+        : '<p class="ad-hint">Choisissez la ou les photos de groupe dans la grille, puis « Déplacer vers… » ' + esc(kind.groupPhoto.toLowerCase()) + ". Toutes les familles du groupe la verront.</p>") +
+      "</section>" +
+
+      '<section><div class="ad-section-header"><h3>Enfants (' + data.children.length + ")</h3></div>" +
+      (data.children.length
+        ? '<p class="ad-hint">Vérifiez d\'un coup d\'œil : chaque carte doit montrer un seul enfant. Cliquez sur des photos pour les choisir et les déplacer ; deux cartes du même enfant se fusionnent.</p>' +
+          '<div class="ad-sc-children">' + childrenHtml + "</div>"
+        : '<p class="ad-hint">Les enfants apparaîtront ici une fois les photos importées et regroupées.</p>') +
+      "</section>";
+
+    function updateToolbar() {
+      var n = schoolSelection.ids.length;
+      document.getElementById("ad-sc-toolbar").hidden = n === 0;
+      document.getElementById("ad-sc-sel-count").textContent = n + " photo" + (n > 1 ? "s choisies" : " choisie");
+    }
+    updateToolbar();
+
+    function reload() { renderSchoolGroup(groupId); }
+
+    document.getElementById("ad-sc-back-school").addEventListener("click", function () {
+      history.pushState(null, "", "#/scolaire/" + encodeURIComponent(data.school.id) + "/" + encodeURIComponent(data.year.id));
+      renderSchool(true);
+    });
+
+    el.view.querySelectorAll("[data-photo]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var id = btn.getAttribute("data-photo");
+        var at = schoolSelection.ids.indexOf(id);
+        if (at === -1) schoolSelection.ids.push(id);
+        else schoolSelection.ids.splice(at, 1);
+        btn.classList.toggle("ad-sc-thumb-on", at === -1);
+        btn.setAttribute("aria-pressed", String(at === -1));
+        updateToolbar();
+      });
+    });
+    document.getElementById("ad-sc-sel-clear").addEventListener("click", function () {
+      schoolSelection.ids = [];
+      reload();
+    });
+    document.getElementById("ad-sc-move").addEventListener("change", async function () {
+      var to = this.value;
+      if (!to) return;
+      try {
+        await api("POST", "/school/groups/" + encodeURIComponent(groupId) + "/assign", { photoIds: schoolSelection.ids, to: to });
+        schoolSelection.ids = [];
+        reload();
+      } catch (err) {
+        toast(err.message, true);
+        this.value = "";
+      }
+    });
+    document.getElementById("ad-sc-sel-delete").addEventListener("click", async function () {
+      var ids = schoolSelection.ids.slice();
+      this.disabled = true;
+      try {
+        for (var i = 0; i < ids.length; i++) {
+          await api("DELETE", "/galleries/" + encodeURIComponent(data.group.gallerySlug) + "/photos/" + encodeURIComponent(ids[i]));
+        }
+        toast(ids.length + " photo" + (ids.length > 1 ? "s supprimées." : " supprimée."));
+        schoolSelection.ids = [];
+        reload();
+      } catch (err) {
+        toast(err.message, true);
+        this.disabled = false;
+      }
+    });
+    var arrange = document.getElementById("ad-sc-arrange");
+    if (arrange) arrange.addEventListener("click", async function () {
+      this.disabled = true;
+      try {
+        var result = await api("POST", "/school/groups/" + encodeURIComponent(groupId) + "/arrange", {});
+        toast(result.created + " enfant" + (result.created > 1 ? "s trouvés." : " trouvé."));
+        reload();
+      } catch (err) {
+        toast(err.message, true);
+        this.disabled = false;
+      }
+    });
+    el.view.querySelectorAll("[data-child]").forEach(function (card) {
+      var childId = card.getAttribute("data-child");
+      card.querySelector("[data-child-name]").addEventListener("change", async function () {
+        try {
+          await api("POST", "/school/children/" + encodeURIComponent(childId), { firstName: this.value });
+          toast("Prénom enregistré.");
+        } catch (err) {
+          toast(err.message, true);
+        }
+      });
+      var merge = card.querySelector("[data-merge]");
+      if (merge) merge.addEventListener("click", async function () {
+        try {
+          await api("POST", "/school/children/" + encodeURIComponent(childId) + "/merge", { into: merge.getAttribute("data-merge") });
+          reload();
+        } catch (err) {
+          toast(err.message, true);
+        }
+      });
+    });
+
+    // Envoi : trois photos à la fois, puis regroupement automatique.
+    async function uploadAll(files) {
+      files = Array.prototype.filter.call(files, function (f) { return /^image\//.test(f.type) || /\.(jpe?g|png|webp|heic)$/i.test(f.name); });
+      if (!files.length) return;
+      var box = document.getElementById("ad-sc-progress");
+      var fill = document.getElementById("ad-sc-progress-fill");
+      var label = document.getElementById("ad-sc-progress-text");
+      box.hidden = false;
+      var done = 0, failed = 0, next = 0, base = data.photos.length;
+      function show() {
+        fill.style.width = Math.round(((done + failed) / files.length) * 100) + "%";
+        label.textContent = (done + failed) + " / " + files.length + " photos traitées" + (failed ? " · " + failed + " en échec" : "");
+      }
+      show();
+      async function worker() {
+        while (next < files.length) {
+          var file = files[next];
+          var position = base + next;
+          next += 1;
+          var form = new FormData();
+          form.append("file", file, file.name);
+          form.append("position", String(position));
+          try {
+            var response = await fetch("/local/school/groups/" + encodeURIComponent(groupId) + "/photos", { method: "POST", body: form });
+            if (!response.ok) throw new Error(((await response.json().catch(function () { return {}; })).error) || "HTTP " + response.status);
+            done += 1;
+          } catch (err) {
+            failed += 1;
+            console.error(file.name, err);
+          }
+          show();
+        }
+      }
+      await Promise.all([worker(), worker(), worker()]);
+      try {
+        var result = await api("POST", "/school/groups/" + encodeURIComponent(groupId) + "/arrange", {});
+        toast(done + " photo" + (done > 1 ? "s importées" : " importée") + ", " + result.created + " enfant" + (result.created > 1 ? "s trouvés." : " trouvé.") +
+          (failed ? " " + failed + " en échec : réessayez-les." : ""), Boolean(failed));
+      } catch (err) {
+        toast(err.message, true);
+      }
+      reload();
+    }
+    document.getElementById("ad-sc-files").addEventListener("change", function () { uploadAll(this.files); });
+    document.getElementById("ad-sc-folder").addEventListener("change", function () { uploadAll(this.files); });
+    var drop = document.getElementById("ad-sc-drop");
+    drop.addEventListener("dragover", function (e) { e.preventDefault(); drop.classList.add("ad-dropzone-active"); });
+    drop.addEventListener("dragleave", function () { drop.classList.remove("ad-dropzone-active"); });
+    drop.addEventListener("drop", function (e) {
+      e.preventDefault();
+      drop.classList.remove("ad-dropzone-active");
+      uploadAll(e.dataTransfer.files);
     });
   }
 
