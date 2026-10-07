@@ -483,8 +483,20 @@ Le tableau de bord s'organise en trois onglets, chacun avec son propre lien
     ou ZIP d'images 10×15 à 300 dpi, rangées par groupe, à tirer au labo.
     PDF et ZIP sont écrits au fil de l'eau (`lib/pdf.mjs`, `lib/zip.mjs`).
     Polices : DejaVu, installée dans l'image Docker.
-  - *À venir* : espace famille, commande groupée et labo intégré (BePhoto à
-    l'étude).
+  - *Espace famille* (`web/ecole.html`, `worker/src/family.js`) : le parent
+    entre son e-mail et le code de la fiche (ou scanne le QR, qui remplit le
+    code) ; il retrouve tous ses enfants au même endroit — frères et sœurs,
+    autres écoles, années suivantes — et en ajoute avec leur code. Pas de
+    mot de passe : pour revenir sans fiche, un lien de connexion par e-mail
+    (une demi-heure, usage unique, réponse neutre si l'adresse est
+    inconnue). Une famille ne voit que les photos de ses enfants et la photo
+    de groupe de leurs groupes, tant que l'année est « en vente » ou
+    « ventes closes » ; tuiles servies une à une avec le jeton famille et
+    dessinées en canvas, sans cache. Codes erronés limités (12 par quart
+    d'heure et par IP). Espaces vides sans connexion depuis un an et liens
+    périmés effacés chaque jour.
+  - *À venir* : commande (pochettes, tirages), commande groupée et labo
+    intégré (BePhoto à l'étude).
 - **Campagnes de vente des tirages** (`worker/src/campaigns.js`) :
   - *Promotion à durée limitée* sur une galerie (−10 à −50 % jusqu'à une
     date, depuis la section boutique de la fiche) : bandeau et prix barrés

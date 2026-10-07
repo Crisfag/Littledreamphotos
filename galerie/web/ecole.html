@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Espace famille — photos scolaires</title>
+  <meta name="robots" content="noindex, nofollow, noarchive, noimageindex" />
+  <meta name="referrer" content="no-referrer" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Jost:wght@300;400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="ecole.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%23b98a7a'/><text y='72' x='50' text-anchor='middle' font-size='60' font-family='Georgia'>H</text></svg>" />
+  <script>
+    window.ECOLE_CONFIG = {
+      api: "https://galerie-protegee.littledreamphotos-be.workers.dev",
+    };
+  </script>
+</head>
+<body>
+
+  <!-- ============ Connexion : e-mail + code de la fiche ============ -->
+  <main class="ec-shell" id="ec-login">
+    <section class="ec-card">
+      <p class="ec-eyebrow">Espace famille</p>
+      <h1>Les photos de vos enfants</h1>
+      <p class="ec-lede" id="ec-login-lede">Entrez votre adresse e-mail et le code d'accès imprimé sur la fiche remise par l'établissement.</p>
+
+      <form id="ec-access-form" autocomplete="on" novalidate>
+        <label class="ec-field">
+          <span>Adresse e-mail</span>
+          <input type="email" id="ec-email" name="email" autocomplete="email" inputmode="email" required />
+        </label>
+        <label class="ec-field">
+          <span>Code d'accès <em>(sur la fiche)</em></span>
+          <input type="text" id="ec-code" name="code" autocomplete="off" autocapitalize="characters" spellcheck="false"
+                 class="ec-code-input" maxlength="12" placeholder="K7P4 29QX" required />
+        </label>
+        <p class="ec-error" id="ec-access-error" role="alert" hidden></p>
+        <button type="submit" class="ec-btn" id="ec-access-submit">Voir les photos</button>
+      </form>
+
+      <form id="ec-link-form" novalidate hidden>
+        <label class="ec-field">
+          <span>Adresse e-mail de votre espace</span>
+          <input type="email" id="ec-link-email" name="email" autocomplete="email" inputmode="email" required />
+        </label>
+        <p class="ec-error" id="ec-link-error" role="alert" hidden></p>
+        <p class="ec-ok" id="ec-link-ok" role="status" hidden></p>
+        <button type="submit" class="ec-btn" id="ec-link-submit">Recevoir un lien de connexion</button>
+      </form>
+
+      <p class="ec-switch">
+        <button type="button" class="ec-link-btn" id="ec-switch">Déjà venu sans votre fiche ? Recevoir un lien par e-mail</button>
+      </p>
+    </section>
+  </main>
+
+  <!-- ============ Espace famille ============ -->
+  <div class="ec-app" id="ec-app" hidden>
+    <header class="ec-top">
+      <div>
+        <p class="ec-eyebrow" id="ec-studio">Espace famille</p>
+        <p class="ec-account" id="ec-account"></p>
+      </div>
+      <button type="button" class="ec-link-btn" id="ec-logout">Se déconnecter</button>
+    </header>
+
+    <main class="ec-main" id="ec-view"></main>
+  </div>
+
+  <!-- ============ Photo en grand ============ -->
+  <div class="ec-lightbox" id="ec-lightbox" hidden role="dialog" aria-modal="true" aria-label="Photo en grand">
+    <button type="button" class="ec-lightbox-close" id="ec-lightbox-close" aria-label="Fermer">&times;</button>
+    <button type="button" class="ec-lightbox-nav ec-prev" id="ec-prev" aria-label="Photo précédente">&#8249;</button>
+    <canvas id="ec-lightbox-canvas"></canvas>
+    <button type="button" class="ec-lightbox-nav ec-next" id="ec-next" aria-label="Photo suivante">&#8250;</button>
+  </div>
+
+  <script src="ecole.js"></script>
+</body>
+</html>

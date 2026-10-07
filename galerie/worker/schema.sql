@@ -714,3 +714,32 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_school_children_code ON school_children(ac
 --   ALTER TABLE photos ADD COLUMN child_id TEXT NOT NULL DEFAULT '';
 --   ALTER TABLE photos ADD COLUMN school_role TEXT NOT NULL DEFAULT '';
 --   ALTER TABLE school_children ADD COLUMN access_code TEXT NOT NULL DEFAULT '';
+
+-- Espace famille (family.js, page ecole.html) : une famille = une adresse
+-- e-mail ; ses enfants y sont rattachés par le code de leur fiche. Pas de
+-- mot de passe : le code ouvre l'accès, un lien de connexion envoyé par
+-- e-mail permet de revenir (family_links : empreinte du jeton, une demi-
+-- heure, usage unique).
+CREATE TABLE IF NOT EXISTS families (
+  id            TEXT PRIMARY KEY,
+  email         TEXT NOT NULL UNIQUE,
+  created_at    INTEGER NOT NULL,
+  last_login_at INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS family_children (
+  family_id TEXT NOT NULL REFERENCES families(id) ON DELETE CASCADE,
+  child_id  TEXT NOT NULL REFERENCES school_children(id) ON DELETE CASCADE,
+  added_at  INTEGER NOT NULL,
+  PRIMARY KEY (family_id, child_id)
+);
+CREATE INDEX IF NOT EXISTS idx_family_children_child ON family_children(child_id);
+
+CREATE TABLE IF NOT EXISTS family_links (
+  token_hash TEXT PRIMARY KEY,
+  family_id  TEXT NOT NULL REFERENCES families(id) ON DELETE CASCADE,
+  expires_at INTEGER NOT NULL,
+  used_at    INTEGER,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_family_links_family ON family_links(family_id, created_at);
