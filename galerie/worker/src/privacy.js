@@ -105,6 +105,13 @@ export async function deleteAccount(request, env, photographerId, deleteGalleryF
   await env.DB.batch([
     ...galleries.map((g) => env.DB.prepare("DELETE FROM access_log WHERE gallery_id = ?").bind(g.id)),
     env.DB.prepare("DELETE FROM galleries WHERE photographer_id = ?").bind(photographerId),
+    // Écoles, crèches et clubs : enfants, groupes, années, établissements.
+    env.DB.prepare(`DELETE FROM school_children WHERE group_id IN (SELECT g.id FROM school_groups g
+      JOIN school_years y ON y.id = g.year_id JOIN schools s ON s.id = y.school_id WHERE s.photographer_id = ?)`).bind(photographerId),
+    env.DB.prepare(`DELETE FROM school_groups WHERE year_id IN (SELECT y.id FROM school_years y
+      JOIN schools s ON s.id = y.school_id WHERE s.photographer_id = ?)`).bind(photographerId),
+    env.DB.prepare("DELETE FROM school_years WHERE school_id IN (SELECT id FROM schools WHERE photographer_id = ?)").bind(photographerId),
+    env.DB.prepare("DELETE FROM schools WHERE photographer_id = ?").bind(photographerId),
     env.DB.prepare("DELETE FROM photographers WHERE id = ?").bind(photographerId),
   ]);
   return json({ ok: true, deletedGalleries: galleries.length });

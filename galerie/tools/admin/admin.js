@@ -50,6 +50,7 @@
     account: document.getElementById("ad-current-account"),
     tabs: document.getElementById("ad-tabs"),
     tabOwner: document.getElementById("ad-tab-owner"),
+    tabSchool: document.getElementById("ad-tab-school"),
   };
 
   /* ---------- Onglets (Galeries / Facturation / Paramètres) ---------- */
@@ -81,6 +82,7 @@
       else if (tab === "subscription") renderSubscription();
       else if (tab === "settings") renderSettings();
       else if (tab === "owner") renderOwner();
+      else if (tab === "school") renderSchool();
     });
   }
 
@@ -110,6 +112,7 @@
     }
     state.isOwner = Boolean(photographer.isOwner);
     if (el.tabOwner) el.tabOwner.hidden = !state.isOwner;
+    if (el.tabSchool) el.tabSchool.hidden = !photographer.schoolTab;
   }
 
   /* ---------- Requêtes ---------- */
@@ -828,6 +831,9 @@
   // Prix affiché d'une formule (HTML) : mensuel ou annuel, et prix
   // Fondateurs barrant le prix normal quand l'offre s'applique.
   function planPriceHtml(plan, interval, founder) {
+    if (plan.noSubscription) {
+      return "Sans abonnement" + '<span class="ad-plan-price-note">' + esc(String(plan.schoolFeePercent).replace(".", ",")) + " % sur les ventes scolaires, frais bancaires compris</span>";
+    }
     if (!plan.priceCents) return "Gratuit";
     var yearly = interval === "year";
     var normal = yearly ? plan.yearlyCents : plan.priceCents;
@@ -1318,6 +1324,7 @@
       "Protection, sélection, musique et livraison HD",
       (plan.features.shop ? "✓ " : "— ") + "Boutique de tirages",
       (plan.features.subdomain ? "✓ " : "— ") + "Vos galeries à votre nom",
+      plan.features.school ? "✓ Écoles, crèches et clubs" + (plan.schoolFeePercent ? " (" + String(plan.schoolFeePercent).replace(".", ",") + " % des ventes)" : ", sans commission") : "",
     ];
     return '<ul class="ad-plan-features">' + items.filter(Boolean).map(function (t) { return "<li>" + esc(t) + "</li>"; }).join("") + "</ul>";
   }
@@ -1366,28 +1373,44 @@
     var interval = data.interval === "year" && current.key !== "free" ? "year" : subscriptionInterval;
     if (!data.plans.some(function (p) { return p.yearlyCents; })) interval = "month";
     var founder = data.founderEligible && !data.owner;
-    function cardsHtml() {
-      return data.plans.map(function (plan) {
+    var studioFounder = data.studioFounderEligible && !data.owner;
+    function planCardHtml(plan) {
         var isCurrent = plan.key === current.key;
         var action;
-        if (isCurrent) action = '<span class="ad-badge ad-badge-selected">✓ Votre formule</span>';
-        else if (data.owner) action = "";
+        if (isCurrent) {
+          action = '<span class="ad-badge ad-badge-selected">✓ Votre formule</span>' +
+            (plan.noSubscription && !data.owner ? ' <button type="button" class="ad-link-btn" data-scolaire="off">Revenir à Découverte</button>' : "");
+        } else if (data.owner) action = "";
+        else if (plan.noSubscription) {
+          action = current.key === "free"
+            ? '<button type="button" class="ad-btn ad-btn-primary" data-scolaire="on">Activer, sans abonnement</button>'
+            : '<p class="ad-hint">Disponible une fois votre abonnement actuel résilié.</p>';
+        }
+        else if (data.canManage && current.key !== "scolaire") action = '<button type="button" class="ad-btn" data-portal>Changer de formule</button>';
         else if (data.canManage) action = '<button type="button" class="ad-btn" data-portal>Changer de formule</button>';
         else if (plan.key === "free") action = "";
         else action = '<button type="button" class="ad-btn ad-btn-primary" data-subscribe="' + esc(plan.key) + '"' + (data.stripeConfigured ? "" : " disabled") + ">" +
           (data.trialAvailable ? "Essayer " + data.trialDays + " jours gratuitement" : "Choisir " + esc(plan.label)) + "</button>" +
           (data.trialAvailable ? '<p class="ad-hint ad-plan-trial">Aucun prélèvement pendant l\'essai ; résiliable avant la fin, sans frais.</p>' : "");
+        var planFounder = plan.key === "studio" ? studioFounder && data.studioFounders && data.studioFounders.remaining > 0 : founder;
         return (
-          '<article class="ad-plan' + (isCurrent ? " ad-plan-current" : "") + (plan.key === "pro" ? " ad-plan-featured" : "") + '">' +
+          '<article class="ad-plan' + (isCurrent ? " ad-plan-current" : "") + (plan.key === "pro" || plan.key === "studio" ? " ad-plan-featured" : "") + '">' +
           "<h3>" + esc(plan.label) + "</h3>" +
-          '<p class="ad-plan-price">' + planPriceHtml(plan, interval, founder) + "</p>" +
+          '<p class="ad-plan-price">' + planPriceHtml(plan, interval, planFounder) + "</p>" +
           '<p class="ad-hint">' + esc(plan.pitch) + "</p>" +
           planFeaturesHtml(plan) + action + "</article>"
         );
-      }).join("");
+    }
+    // Formules galeries, puis (si proposées) celles qui incluent les écoles,
+    // crèches et clubs.
+    function cardsHtml() {
+      var galleries = data.plans.filter(function (p) { return !p.features.school; });
+      var school = data.plans.filter(function (p) { return p.features.school; });
+      return galleries.map(planCardHtml).join("") +
+        (school.length ? '<h3 class="ad-plans-group">Avec les écoles, crèches et clubs</h3>' + school.map(planCardHtml).join("") : "");
     }
     // Bascule annuelle seulement si le Worker connaît les prix annuels.
-    var intervalSwitch = current.key === "free" && !data.owner && data.plans.some(function (p) { return p.yearlyCents; })
+    var intervalSwitch = (current.key === "free" || current.key === "scolaire") && !data.owner && data.plans.some(function (p) { return p.yearlyCents; })
       ? '<div class="ad-seg ad-interval" role="group" aria-label="Période de facturation">' +
         '<button type="button" class="ad-seg-btn" data-interval="month" aria-pressed="' + (interval === "month") + '">Mensuel</button>' +
         '<button type="button" class="ad-seg-btn" data-interval="year" aria-pressed="' + (interval === "year") + '">Annuel · 2 mois offerts</button></div>'
@@ -1396,6 +1419,12 @@
       ? '<p class="ad-banner ad-founders">🎉 <strong>Offre Fondateurs</strong> : plus que ' + data.founders.remaining + " place" + (data.founders.remaining > 1 ? "s" : "") +
         ". Essentiel à " + esc(euros(data.plans[1].founderCents)) + " et Pro à " + esc(euros(data.plans[2].founderCents)) + " par mois pendant toute la première année, puis le prix normal.</p>"
       : "";
+    var studioPlan = data.plans.find(function (p) { return p.key === "studio"; });
+    if (studioPlan && studioFounder && data.studioFounders && data.studioFounders.remaining > 0) {
+      founderBanner += '<p class="ad-banner ad-founders">🎓 <strong>Fondateurs Studio</strong> : plus que ' + data.studioFounders.remaining + " place" +
+        (data.studioFounders.remaining > 1 ? "s" : "") + ". " + esc(euros(studioPlan.founderYearlyCents)) + " la première année au lieu de " +
+        esc(euros(studioPlan.yearlyCents)) + " (ou " + esc(euros(studioPlan.founderCents)) + " par mois pendant 12 mois).</p>";
+    }
 
     el.view.innerHTML =
       '<header class="ad-detail-header"><div><h2>Abonnement</h2>' +
@@ -1431,13 +1460,30 @@
         });
       });
     }
+    function wireScolaire() {
+      el.view.querySelectorAll("[data-scolaire]").forEach(function (btn) {
+        btn.addEventListener("click", async function () {
+          btn.disabled = true;
+          try {
+            await api("POST", "/subscription/scolaire", { on: btn.getAttribute("data-scolaire") === "on" });
+            toast(btn.getAttribute("data-scolaire") === "on" ? "Formule Scolaire activée." : "Retour à la formule Découverte.");
+            renderSubscription(true);
+          } catch (err) {
+            toast(err.message, true);
+            btn.disabled = false;
+          }
+        });
+      });
+    }
     wireSubscribe();
+    wireScolaire();
     el.view.querySelectorAll("[data-interval]").forEach(function (btn) {
       btn.addEventListener("click", function () {
         interval = subscriptionInterval = btn.getAttribute("data-interval");
         el.view.querySelectorAll("[data-interval]").forEach(function (b) { b.setAttribute("aria-pressed", String(b === btn)); });
         document.getElementById("ad-plans").innerHTML = cardsHtml();
         wireSubscribe();
+        wireScolaire();
       });
     });
     el.view.querySelectorAll("[data-portal]").forEach(function (btn) {
@@ -1910,29 +1956,188 @@
     );
   }
 
+  /* ---------- Admin : comptes photographes ---------- */
+
+  function shortDate(ts) {
+    if (!ts) return "";
+    return new Date(ts * 1000).toLocaleDateString("fr-BE", { day: "numeric", month: "short", year: "numeric" });
+  }
+
+  // « aujourd'hui », « il y a 3 j », « il y a 2 mois ».
+  function sinceText(ts) {
+    if (!ts) return "jamais";
+    var days = Math.floor((Date.now() / 1000 - ts) / 86400);
+    if (days < 1) return "aujourd'hui";
+    if (days < 60) return "il y a " + days + " j";
+    return "il y a " + Math.floor(days / 30) + " mois";
+  }
+
+  var ACCOUNT_STATUS = {
+    trialing: { text: "Essai", cls: "ad-acc-status-trial" },
+    active: { text: "Actif", cls: "ad-acc-status-ok" },
+    past_due: { text: "Paiement en retard", cls: "ad-acc-status-warn" },
+    unpaid: { text: "Impayé", cls: "ad-acc-status-bad" },
+    canceled: { text: "Résilié", cls: "ad-acc-status-muted" },
+    incomplete: { text: "Paiement inachevé", cls: "ad-acc-status-warn" },
+    incomplete_expired: { text: "Paiement abandonné", cls: "ad-acc-status-muted" },
+  };
+
+  // Catégorie d'un compte pour les filtres.
+  function accountGroup(p) {
+    var sub = p.subscription;
+    if (p.isOwner) return "owner";
+    if (sub.plan !== "free" && sub.status === "trialing") return "trial";
+    if (sub.plan !== "free" && (sub.status === "active" || sub.status === "past_due")) return "paying";
+    return "free";
+  }
+
+  // À surveiller : paiement en retard, résiliation programmée, ou plus
+  // connecté depuis 30 jours.
+  function accountNeedsAttention(p) {
+    if (p.isOwner) return false;
+    var sub = p.subscription;
+    var idle = !p.lastLoginAt || Date.now() / 1000 - p.lastLoginAt > 30 * 86400;
+    return sub.status === "past_due" || sub.status === "unpaid" || (sub.cancelAtPeriodEnd && sub.effectivePlan !== "free") || idle;
+  }
+
+  function accountRowHtml(p) {
+    var sub = p.subscription;
+    var name = [p.firstName, p.lastName].filter(Boolean).join(" ");
+    var title = p.studioName || name || p.email;
+    var who = [p.studioName && name ? name : "", p.email].filter(Boolean).join(" · ");
+
+    var planCell;
+    if (p.isOwner) {
+      planCell = '<span class="ad-acc-plan ad-acc-plan-pro">Propriétaire</span>';
+    } else {
+      var status = ACCOUNT_STATUS[sub.status];
+      var details = [];
+      if (sub.plan !== "free" && sub.interval) details.push(sub.interval === "year" ? "Annuel" : "Mensuel");
+      if (sub.founder) details.push("Fondateur");
+      planCell =
+        '<span class="ad-acc-plan ad-acc-plan-' + esc(sub.plan) + '">' + esc(sub.planLabel) + "</span>" +
+        (sub.plan !== "free" && status ? ' <span class="ad-acc-status ' + status.cls + '">' + status.text + "</span>" : "") +
+        (details.length ? '<span class="ad-acc-sub">' + esc(details.join(" · ")) + "</span>" : "");
+    }
+
+    var dates = [];
+    if (!p.isOwner && sub.plan !== "free") {
+      if (sub.startedAt) dates.push("Depuis le " + shortDate(sub.startedAt));
+      if (sub.renewsAt && sub.effectivePlan !== "free") {
+        if (sub.status === "trialing") dates.push("Essai jusqu'au " + shortDate(sub.renewsAt));
+        else if (sub.cancelAtPeriodEnd) dates.push('<span class="ad-acc-warn">Se termine le ' + shortDate(sub.renewsAt) + "</span>");
+        else dates.push((sub.interval === "year" ? "Renouvelé le " : "Prochain prélèvement le ") + shortDate(sub.renewsAt));
+      }
+    }
+
+    var storage = p.storage || {};
+    var pct = storage.quotaBytes ? Math.min(100, Math.round((storage.usedBytes / storage.quotaBytes) * 100)) : 0;
+    var idle = !p.lastLoginAt || Date.now() / 1000 - p.lastLoginAt > 30 * 86400;
+
+    return (
+      '<tr data-group="' + accountGroup(p) + '" data-attention="' + (accountNeedsAttention(p) ? "1" : "0") + '" ' +
+        'data-search="' + esc((title + " " + who).toLowerCase()) + '">' +
+      '<td><span class="ad-acc-name">' + esc(title) + "</span>" +
+        (who ? '<span class="ad-acc-sub">' + esc(who) + "</span>" : "") +
+        '<span class="ad-acc-sub">Inscrit le ' + esc(shortDate(p.createdAt)) + "</span></td>" +
+      "<td>" + planCell + "</td>" +
+      "<td>" + (dates.length ? dates.map(function (d) { return '<span class="ad-acc-line">' + d + "</span>"; }).join("") : '<span class="ad-hint">—</span>') + "</td>" +
+      '<td class="ad-acc-num">' + (sub.monthlyRevenueCents ? euros(sub.monthlyRevenueCents) + '<span class="ad-acc-sub">/ mois</span>' : '<span class="ad-hint">—</span>') + "</td>" +
+      "<td>" + '<span class="ad-acc-line">' + p.galleriesCount + " galerie" + (p.galleriesCount > 1 ? "s" : "") + " · " + p.photosCount + " photo" + (p.photosCount > 1 ? "s" : "") + "</span>" +
+        '<span class="ad-acc-sub' + (idle && !p.isOwner ? " ad-acc-warn" : "") + '">Connexion : ' + esc(sinceText(p.lastLoginAt)) + "</span></td>" +
+      "<td>" + '<span class="ad-acc-line">' + esc(formatBytes(storage.usedBytes || 0)) + (storage.quotaBytes ? " / " + esc(formatBytes(storage.quotaBytes)) : "") + "</span>" +
+        (storage.quotaBytes ? '<span class="ad-acc-meter"><span style="width:' + pct + '%"' + (pct >= 90 ? ' class="ad-acc-meter-full"' : "") + "></span></span>" : "") + "</td>" +
+      '<td class="ad-acc-num">' + (p.salesCents ? euros(p.salesCents) : '<span class="ad-hint">—</span>') + "</td>" +
+      "<td>" + (p.stripeChargesEnabled
+          ? '<span class="ad-acc-status ad-acc-status-ok">Encaisse</span>'
+          : p.stripeConnected ? '<span class="ad-acc-status ad-acc-status-warn">À finaliser</span>' : '<span class="ad-hint">—</span>') +
+        (sub.stripeCustomerId
+          ? '<a class="ad-acc-link" href="https://dashboard.stripe.com/customers/' + encodeURIComponent(sub.stripeCustomerId) + '" target="_blank" rel="noopener">Client Stripe ↗</a>'
+          : "") + "</td>" +
+      "</tr>"
+    );
+  }
+
+  function accountsSummaryHtml(sum, photographers) {
+    if (!sum) return "";
+    // Même définition que le filtre « À surveiller » : retard de paiement,
+    // résiliation programmée, ou plus de connexion depuis 30 jours.
+    var watched = photographers.filter(accountNeedsAttention);
+    var idle = watched.filter(function (p) { return !p.lastLoginAt || Date.now() / 1000 - p.lastLoginAt > 30 * 86400; }).length;
+    var watchedParts = [
+      sum.pastDue ? sum.pastDue + " en retard de paiement" : "",
+      sum.cancelling ? sum.cancelling + " résiliation" + (sum.cancelling > 1 ? "s" : "") + " programmée" + (sum.cancelling > 1 ? "s" : "") : "",
+      idle ? idle + " inactif" + (idle > 1 ? "s" : "") + " depuis 30 j" : "",
+    ].filter(Boolean).join(" · ");
+    return (
+      '<div class="ad-stats">' +
+      statTile("Abonnés payants", sum.paying, sum.accounts + " compte" + (sum.accounts > 1 ? "s" : "") + " au total", sum.paying ? "ad-stat-success" : "") +
+      statTile("En essai gratuit", sum.trialing) +
+      statTile("Revenu mensuel récurrent", euros(sum.monthlyRevenueCents), "annuels ramenés au mois") +
+      statTile("Places Fondateurs", sum.founders + " / " + sum.foundersLimit) +
+      statTile("À surveiller", watched.length, watchedParts, watched.length ? "ad-stat-warn" : "") +
+      "</div>"
+    );
+  }
+
   function photographersTableHtml(photographers) {
     if (!photographers.length) return '<p class="ad-hint">Aucun compte pour l\'instant.</p>';
-    var rows = photographers.map(function (p) {
-      var name = [p.firstName, p.lastName].filter(Boolean).join(" ");
-      return (
-        "<tr>" +
-        "<td>" + (name ? esc(name) : '<span class="ad-hint">—</span>') + "</td>" +
-        "<td>" + (p.studioName ? esc(p.studioName) : '<span class="ad-hint">—</span>') + "</td>" +
-        "<td>" + esc(p.email) + "</td>" +
-        "<td>" + esc(formatDate(p.createdAt)) + "</td>" +
-        "<td>" + p.galleriesCount + "</td>" +
-        "<td>" + p.photosCount + "</td>" +
-        "<td>" + (p.stripeChargesEnabled
-          ? '<span class="ad-stripe-badge ad-stripe-badge-ok">✓ Actif</span>'
-          : '<span class="ad-hint">—</span>') + "</td>" +
-        "</tr>"
-      );
+    // Worker pas encore redéployé : l'ancien format n'a pas ces champs.
+    photographers.forEach(function (p) {
+      if (!p.subscription) p.subscription = { plan: "free", planLabel: "—", effectivePlan: "free", status: "", monthlyRevenueCents: 0 };
+      if (!p.storage) p.storage = { usedBytes: 0, quotaBytes: null };
     });
+    var counts = { all: 0, paying: 0, trial: 0, free: 0, attention: 0 };
+    photographers.forEach(function (p) {
+      var g = accountGroup(p);
+      counts.all += 1;
+      if (counts[g] !== undefined) counts[g] += 1;
+      if (accountNeedsAttention(p)) counts.attention += 1;
+    });
+    var filters = [["all", "Tous"], ["paying", "Payants"], ["trial", "En essai"], ["free", "Gratuits"], ["attention", "À surveiller"]];
     return (
-      '<div class="ad-table-wrap"><table class="ad-table"><thead><tr>' +
-      "<th>Nom</th><th>Studio</th><th>E-mail</th><th>Inscrit le</th><th>Galeries</th><th>Photos</th><th>Stripe</th>" +
-      "</tr></thead><tbody>" + rows.join("") + "</tbody></table></div>"
+      '<div class="ad-acc-toolbar">' +
+        '<div class="ad-seg" id="ad-acc-filters" role="group" aria-label="Filtrer les comptes">' +
+        filters.map(function (f, i) {
+          return '<button type="button" class="ad-seg-btn" data-filter="' + f[0] + '" aria-pressed="' + (i === 0) + '">' +
+            f[1] + ' <span class="ad-acc-count">' + counts[f[0]] + "</span></button>";
+        }).join("") +
+        "</div>" +
+        '<input type="search" class="ad-acc-search" id="ad-acc-search" placeholder="Rechercher un studio, un e-mail…" aria-label="Rechercher un compte" />' +
+      "</div>" +
+      '<div class="ad-table-wrap"><table class="ad-table ad-acc-table" id="ad-acc-table"><thead><tr>' +
+      "<th>Compte</th><th>Formule</th><th>Abonnement</th><th>Revenu</th><th>Activité</th><th>Stockage</th><th>Ventes</th><th>Stripe</th>" +
+      "</tr></thead><tbody>" + photographers.map(accountRowHtml).join("") + "</tbody></table></div>" +
+      '<p class="ad-hint" id="ad-acc-empty" hidden>Aucun compte ne correspond.</p>'
     );
+  }
+
+  function wireAccountsTable() {
+    var table = document.getElementById("ad-acc-table");
+    if (!table) return;
+    var filter = "all";
+    var search = document.getElementById("ad-acc-search");
+    function apply() {
+      var q = search.value.trim().toLowerCase();
+      var shown = 0;
+      table.querySelectorAll("tbody tr").forEach(function (tr) {
+        var okFilter = filter === "all" || (filter === "attention" ? tr.getAttribute("data-attention") === "1" : tr.getAttribute("data-group") === filter);
+        var ok = okFilter && (!q || tr.getAttribute("data-search").indexOf(q) !== -1);
+        tr.hidden = !ok;
+        if (ok) shown += 1;
+      });
+      document.getElementById("ad-acc-empty").hidden = shown > 0;
+    }
+    document.getElementById("ad-acc-filters").addEventListener("click", function (event) {
+      var btn = event.target.closest("[data-filter]");
+      if (!btn) return;
+      filter = btn.getAttribute("data-filter");
+      this.querySelectorAll("[data-filter]").forEach(function (b) {
+        b.setAttribute("aria-pressed", String(b === btn));
+      });
+      apply();
+    });
+    search.addEventListener("input", apply);
   }
 
   // Le trafic du site (visites, pages vues) et les sources de visiteurs
@@ -1991,6 +2196,7 @@
 
       '<section><div class="ad-section-header"><h3>Comptes photographes (' +
       photographersData.photographers.length + ")</h3></div>" +
+      accountsSummaryHtml(photographersData.summary, photographersData.photographers) +
       photographersTableHtml(photographersData.photographers) +
       "</section>" +
 
@@ -2008,6 +2214,7 @@
       "</section>";
 
     wireOwnerMusic();
+    wireAccountsTable();
     document.getElementById("ad-run-reminders").addEventListener("click", async function () {
       var btn = this;
       var out = document.getElementById("ad-run-reminders-result");
@@ -3619,6 +3826,591 @@
     showLogin();
   });
 
+  /* ---------- Écoles, crèches et clubs (module photo de groupe) ---------- */
+
+  var YEAR_STATUS = {
+    draft: { text: "En préparation", cls: "ad-acc-status-muted" },
+    open: { text: "En vente", cls: "ad-acc-status-ok" },
+    closed: { text: "Ventes closes", cls: "ad-acc-status-warn" },
+    archived: { text: "Archivée", cls: "ad-acc-status-muted" },
+  };
+
+  function schoolKindOf(data, kind) {
+    return data.kinds[kind] || data.kinds.ecole;
+  }
+
+  // Date (epoch) → valeur d'un champ <input type="date"> (heure belge ≈ UTC).
+  function dateInputValue(ts) {
+    if (!ts) return "";
+    return new Date(ts * 1000).toISOString().slice(0, 10);
+  }
+
+  // Année affichée par défaut : la plus récente.
+  function currentYearOf(school) {
+    return school.years[0] || null;
+  }
+
+  async function renderSchool(skipHash) {
+    var groupMatch = /^#\/scolaire\/groupe\/([^/]+)$/.exec(location.hash);
+    if (groupMatch) return renderSchoolGroup(decodeURIComponent(groupMatch[1]));
+    var match = /^#\/scolaire\/([^/]+)(?:\/([^/]+))?$/.exec(location.hash);
+    var schoolId = match ? decodeURIComponent(match[1]) : "";
+    var yearId = match && match[2] ? decodeURIComponent(match[2]) : "";
+    if (!skipHash && location.hash.indexOf("#/scolaire") !== 0) history.pushState(null, "", "#/scolaire");
+    setActiveTab("school");
+    el.view.innerHTML = '<p class="ad-loading">Chargement…</p>';
+    var data;
+    try {
+      data = await api("GET", "/school");
+    } catch (err) {
+      toast(err.message, true);
+      return renderList();
+    }
+    if (!data.access.allowed) return renderSchoolTeaser(data);
+    var school = schoolId && data.schools.find(function (s) { return s.id === schoolId; });
+    if (school) return renderSchoolDetail(data, school, yearId);
+    renderSchoolList(data);
+  }
+
+  function renderSchoolTeaser(data) {
+    el.view.innerHTML =
+      '<header class="ad-detail-header"><div><h2>Écoles, crèches et clubs</h2>' +
+      '<p class="ad-hint">Vendez vos photos de groupe : établissements, classes ou équipes, fiches parents avec QR, espace famille et commande groupée.</p></div></header>' +
+      '<section class="ad-sc-teaser">' +
+      "<p>Le module est inclus dans deux formules :</p>" +
+      "<ul><li><strong>Scolaire</strong> : sans abonnement, 4,5 % sur les ventes scolaires, frais bancaires compris.</li>" +
+      "<li><strong>Studio</strong> : 49 € par mois, tout Pro plus le scolaire, sans commission.</li></ul>" +
+      (data.access.launched
+        ? '<button type="button" class="ad-btn ad-btn-primary" id="ad-sc-to-plans">Voir les formules</button>'
+        : '<p class="ad-hint">Bientôt disponible.</p>') +
+      "</section>";
+    var btn = document.getElementById("ad-sc-to-plans");
+    if (btn) btn.addEventListener("click", function () { renderSubscription(); });
+  }
+
+  function schoolFormHtml(data, school) {
+    var s = school || { kind: "ecole", name: "", address: "", contactName: "", contactEmail: "", contactPhone: "" };
+    return (
+      '<form class="ad-sc-form" id="ad-sc-form">' +
+      '<div class="ad-seg" role="radiogroup" aria-label="Type d\'établissement">' +
+      Object.keys(data.kinds).map(function (k) {
+        return '<button type="button" class="ad-seg-btn" data-kind="' + k + '" aria-pressed="' + (s.kind === k) + '">' + esc(data.kinds[k].label) + "</button>";
+      }).join("") +
+      "</div>" +
+      '<input type="hidden" name="kind" value="' + esc(s.kind) + '" />' +
+      '<label class="ad-field"><span>Nom</span><input type="text" name="name" required maxlength="120" value="' + esc(s.name) + '" placeholder="École communale de Rotheux" /></label>' +
+      '<label class="ad-field"><span>Adresse <em>(livraison des commandes groupées)</em></span><input type="text" name="address" maxlength="240" value="' + esc(s.address) + '" /></label>' +
+      '<div class="ad-field-row">' +
+      '<label class="ad-field"><span>Contact <em>(direction, responsable)</em></span><input type="text" name="contactName" maxlength="120" value="' + esc(s.contactName) + '" /></label>' +
+      '<label class="ad-field"><span>Téléphone</span><input type="tel" name="contactPhone" maxlength="40" value="' + esc(s.contactPhone) + '" /></label>' +
+      "</div>" +
+      '<label class="ad-field"><span>E-mail du contact</span><input type="email" name="contactEmail" maxlength="200" value="' + esc(s.contactEmail) + '" /></label>' +
+      '<div class="ad-sc-actions"><button type="submit" class="ad-btn ad-btn-primary">' + (school ? "Enregistrer" : "Ajouter l'établissement") + "</button>" +
+      (school ? "" : '<button type="button" class="ad-btn" id="ad-sc-cancel">Annuler</button>') + "</div>" +
+      "</form>"
+    );
+  }
+
+  function wireSchoolForm(onSubmit) {
+    var form = document.getElementById("ad-sc-form");
+    form.querySelector(".ad-seg").addEventListener("click", function (event) {
+      var btn = event.target.closest("[data-kind]");
+      if (!btn) return;
+      form.kind.value = btn.getAttribute("data-kind");
+      this.querySelectorAll("[data-kind]").forEach(function (b) { b.setAttribute("aria-pressed", String(b === btn)); });
+    });
+    form.addEventListener("submit", async function (event) {
+      event.preventDefault();
+      var submit = form.querySelector('[type="submit"]');
+      submit.disabled = true;
+      try {
+        await onSubmit({
+          kind: form.kind.value, name: form.name.value, address: form.address.value,
+          contactName: form.contactName.value, contactEmail: form.contactEmail.value, contactPhone: form.contactPhone.value,
+        });
+      } catch (err) {
+        toast(err.message, true);
+        submit.disabled = false;
+      }
+    });
+  }
+
+  function renderSchoolList(data) {
+    var cards = data.schools.map(function (s) {
+      var kind = schoolKindOf(data, s.kind);
+      var year = currentYearOf(s);
+      var status = year && YEAR_STATUS[year.status];
+      return (
+        '<div class="ad-card" tabindex="0" role="link" data-school="' + esc(s.id) + '">' +
+        '<p class="ad-sc-kind">' + esc(kind.label) + "</p>" +
+        "<h3>" + esc(s.name) + "</h3>" +
+        '<p class="ad-card-sub">' + (s.address ? esc(s.address) : "&nbsp;") + "</p>" +
+        '<div class="ad-card-meta"><span>' + (year ? esc(year.label) + " · " + year.groups.length + " " + esc(year.groups.length > 1 ? kind.groups.toLowerCase() : kind.group.toLowerCase()) : "Aucune année") + "</span>" +
+        (status ? '<span class="ad-acc-status ' + status.cls + '">' + status.text + "</span>" : "") + "</div>" +
+        "</div>"
+      );
+    });
+    el.view.innerHTML =
+      '<div class="ad-section-header"><h2>Écoles, crèches et clubs</h2>' +
+      '<button type="button" class="ad-btn ad-btn-primary" id="ad-sc-new">+ Nouvel établissement</button></div>' +
+      '<div id="ad-sc-new-panel" hidden></div>' +
+      (data.schools.length
+        ? '<div class="ad-grid">' + cards.join("") + "</div>"
+        : '<div class="ad-empty"><h2>Aucun établissement pour le moment</h2>' +
+          "<p>Ajoutez une école, une crèche ou un club : vous y créerez ensuite ses classes, sections ou équipes pour l'année.</p></div>");
+
+    el.view.querySelectorAll("[data-school]").forEach(function (card) {
+      function open() {
+        history.pushState(null, "", "#/scolaire/" + encodeURIComponent(card.getAttribute("data-school")));
+        renderSchool(true);
+      }
+      card.addEventListener("click", open);
+      card.addEventListener("keydown", function (e) { if (e.key === "Enter") open(); });
+    });
+    document.getElementById("ad-sc-new").addEventListener("click", function () {
+      var panel = document.getElementById("ad-sc-new-panel");
+      panel.hidden = false;
+      panel.innerHTML = '<section><h3>Nouvel établissement</h3>' + schoolFormHtml(data, null) + "</section>";
+      panel.querySelector('[name="name"]').focus();
+      document.getElementById("ad-sc-cancel").addEventListener("click", function () { panel.hidden = true; panel.innerHTML = ""; });
+      wireSchoolForm(async function (fields) {
+        var created = await api("POST", "/school/schools", fields);
+        toast("Établissement ajouté.");
+        history.pushState(null, "", "#/scolaire/" + encodeURIComponent(created.id));
+        renderSchool(true);
+      });
+    });
+  }
+
+  function renderSchoolDetail(data, school, yearId) {
+    var kind = schoolKindOf(data, school.kind);
+    var year = school.years.find(function (y) { return y.id === yearId; }) || currentYearOf(school);
+    var yearsNav = school.years.map(function (y) {
+      return '<button type="button" class="ad-seg-btn" data-year="' + esc(y.id) + '" aria-pressed="' + (year && y.id === year.id) + '">' + esc(y.label) + "</button>";
+    }).join("");
+
+    var groupsHtml = "";
+    if (year) {
+      groupsHtml = year.groups.length
+        ? '<ul class="ad-sc-groups">' + year.groups.map(function (g) {
+            return (
+              '<li data-group="' + esc(g.id) + '">' +
+              '<input type="text" class="ad-sc-in" data-field="name" maxlength="60" value="' + esc(g.name) + '" aria-label="Nom" />' +
+              '<input type="text" class="ad-sc-in ad-sc-in-muted" data-field="leader" maxlength="80" value="' + esc(g.leader) + '" placeholder="' + esc(kind.leader) + '" aria-label="' + esc(kind.leader) + '" />' +
+              '<button type="button" class="ad-btn ad-sc-open" data-open-group>' +
+              (g.photoCount ? g.childrenCount + " enfant" + (g.childrenCount > 1 ? "s" : "") + " · " + g.photoCount + " photo" + (g.photoCount > 1 ? "s" : "") : "Importer les photos") +
+              "</button>" +
+              '<button type="button" class="ad-link-btn ad-sc-del" data-del-group aria-label="Supprimer ' + esc(g.name) + '">Supprimer</button>' +
+              "</li>"
+            );
+          }).join("") + "</ul>"
+        : '<p class="ad-hint">Aucun groupe pour cette année. Ajoutez-les ci-dessous, un par ligne.</p>';
+    }
+
+    el.view.innerHTML =
+      '<p class="ad-sc-back"><button type="button" class="ad-link-btn" id="ad-sc-back">← Tous les établissements</button></p>' +
+      '<header class="ad-detail-header"><div><p class="ad-sc-kind">' + esc(kind.label) + "</p><h2>" + esc(school.name) + "</h2>" +
+      '<p class="ad-hint">' + esc([school.address, school.contactName, school.contactEmail, school.contactPhone].filter(Boolean).join(" · ") || "Coordonnées à compléter") + "</p></div>" +
+      '<button type="button" class="ad-btn" id="ad-sc-edit">Modifier</button></header>' +
+      '<div id="ad-sc-edit-panel" hidden></div>' +
+
+      '<section><div class="ad-section-header"><h3>' + esc(kind.period) + "</h3>" +
+      '<div class="ad-sc-years"><div class="ad-seg" id="ad-sc-years" role="group" aria-label="' + esc(kind.period) + '">' + yearsNav + "</div>" +
+      '<button type="button" class="ad-btn" id="ad-sc-new-year">+ ' + (school.years.length ? "Année suivante" : "Nouvelle année") + "</button></div></div>" +
+      (year
+        ? '<div class="ad-field-row ad-sc-year-fields">' +
+          '<label class="ad-field"><span>Statut</span><select id="ad-sc-status">' +
+          Object.keys(YEAR_STATUS).map(function (k) { return '<option value="' + k + '"' + (year.status === k ? " selected" : "") + ">" + YEAR_STATUS[k].text + "</option>"; }).join("") +
+          "</select></label>" +
+          '<label class="ad-field"><span>Commande groupée jusqu\'au <em>(livrée à l\'établissement)</em></span><input type="date" id="ad-sc-deadline" value="' + dateInputValue(year.orderDeadline) + '" /></label>' +
+          '<label class="ad-field"><span>Commande à domicile jusqu\'au <em>(facultatif)</em></span><input type="date" id="ad-sc-late" value="' + dateInputValue(year.lateDeadline) + '" /></label>' +
+          "</div>"
+        : '<p class="ad-hint">Créez l\'année en cours pour y ajouter les ' + esc(kind.groups.toLowerCase()) + ".</p>") +
+      "</section>" +
+
+      (year
+        ? '<section><div class="ad-section-header"><h3>' + esc(kind.groups) + " · " + esc(year.label) + " (" + year.groups.length + ")</h3></div>" +
+          groupsHtml +
+          '<form id="ad-sc-add-groups" class="ad-sc-add">' +
+          '<label class="ad-field"><span>Ajouter des ' + esc(kind.groups.toLowerCase()) + ' <em>(une par ligne)</em></span>' +
+          '<textarea name="names" rows="3" placeholder="' + esc(school.kind === "club" ? "U7\nU9\nU11" : school.kind === "creche" ? "Bébés\nMoyens\nGrands" : "M1\nM2\nP1") + '"></textarea></label>' +
+          '<button type="submit" class="ad-btn ad-btn-primary">Ajouter</button></form>' +
+          '<p class="ad-hint ad-sc-next">Ouvrez chaque ' + esc(kind.group.toLowerCase()) + " pour importer ses photos : Holypixx les regroupe par enfant d'après l'heure de prise de vue.</p>" +
+          "</section>"
+        : "") +
+
+      '<section class="ad-sc-danger"><div class="ad-section-header"><h3>Supprimer</h3></div>' +
+      '<p class="ad-hint">Supprime l\'établissement avec toutes ses années et ses ' + esc(kind.groups.toLowerCase()) + ".</p>" +
+      '<div class="ad-sc-actions"><button type="button" class="ad-btn ad-btn-danger" id="ad-sc-delete">Supprimer l\'établissement</button>' +
+      '<span id="ad-sc-delete-confirm" hidden><button type="button" class="ad-btn ad-btn-danger" id="ad-sc-delete-yes">Oui, supprimer définitivement</button> ' +
+      '<button type="button" class="ad-btn" id="ad-sc-delete-no">Annuler</button></span></div></section>';
+
+    function reload(newYearId) {
+      history.replaceState(null, "", "#/scolaire/" + encodeURIComponent(school.id) + (newYearId ? "/" + encodeURIComponent(newYearId) : ""));
+      renderSchool(true);
+    }
+
+    document.getElementById("ad-sc-back").addEventListener("click", function () {
+      history.pushState(null, "", "#/scolaire");
+      renderSchool(true);
+    });
+    document.getElementById("ad-sc-edit").addEventListener("click", function () {
+      var panel = document.getElementById("ad-sc-edit-panel");
+      panel.hidden = !panel.hidden;
+      if (panel.hidden) return;
+      panel.innerHTML = "<section>" + schoolFormHtml(data, school) + "</section>";
+      wireSchoolForm(async function (fields) {
+        await api("POST", "/school/schools/" + encodeURIComponent(school.id), fields);
+        toast("Établissement enregistré.");
+        reload(year && year.id);
+      });
+    });
+    var yearsSeg = document.getElementById("ad-sc-years");
+    yearsSeg.addEventListener("click", function (event) {
+      var btn = event.target.closest("[data-year]");
+      if (btn) reload(btn.getAttribute("data-year"));
+    });
+    document.getElementById("ad-sc-new-year").addEventListener("click", async function () {
+      this.disabled = true;
+      try {
+        var created = await api("POST", "/school/schools/" + encodeURIComponent(school.id) + "/years", {});
+        toast("Année " + created.label + " créée" + (school.years.length ? ", avec les " + kind.groups.toLowerCase() + " de l'an dernier." : "."));
+        reload(created.id);
+      } catch (err) {
+        toast(err.message, true);
+        this.disabled = false;
+      }
+    });
+
+    if (year) {
+      async function saveYear(patch) {
+        try {
+          await api("POST", "/school/years/" + encodeURIComponent(year.id), patch);
+          toast("Enregistré.");
+        } catch (err) {
+          toast(err.message, true);
+        }
+      }
+      document.getElementById("ad-sc-status").addEventListener("change", function () { saveYear({ status: this.value }); });
+      document.getElementById("ad-sc-deadline").addEventListener("change", function () { saveYear({ orderDeadline: this.value }); });
+      document.getElementById("ad-sc-late").addEventListener("change", function () { saveYear({ lateDeadline: this.value }); });
+
+      el.view.querySelectorAll("[data-group]").forEach(function (li) {
+        var id = li.getAttribute("data-group");
+        li.querySelectorAll(".ad-sc-in").forEach(function (input) {
+          input.addEventListener("change", async function () {
+            var patch = {};
+            patch[input.getAttribute("data-field")] = input.value;
+            try {
+              await api("POST", "/school/groups/" + encodeURIComponent(id), patch);
+              toast("Enregistré.");
+            } catch (err) {
+              toast(err.message, true);
+            }
+          });
+        });
+        li.querySelector("[data-open-group]").addEventListener("click", function () {
+          history.pushState(null, "", "#/scolaire/groupe/" + encodeURIComponent(id));
+          renderSchool(true);
+        });
+        li.querySelector("[data-del-group]").addEventListener("click", async function () {
+          try {
+            await api("DELETE", "/school/groups/" + encodeURIComponent(id));
+            reload(year.id);
+          } catch (err) {
+            toast(err.message, true);
+          }
+        });
+      });
+      document.getElementById("ad-sc-add-groups").addEventListener("submit", async function (event) {
+        event.preventDefault();
+        var names = this.names.value.split(/\n/).map(function (n) { return n.trim(); }).filter(Boolean);
+        if (!names.length) return;
+        try {
+          await api("POST", "/school/years/" + encodeURIComponent(year.id) + "/groups", { names: names });
+          toast(names.length + " " + (names.length > 1 ? kind.groups.toLowerCase() + " ajoutées" : kind.group.toLowerCase() + " ajoutée") + ".");
+          reload(year.id);
+        } catch (err) {
+          toast(err.message, true);
+        }
+      });
+    }
+
+    document.getElementById("ad-sc-delete").addEventListener("click", function () {
+      document.getElementById("ad-sc-delete-confirm").hidden = false;
+      this.hidden = true;
+    });
+    document.getElementById("ad-sc-delete-no").addEventListener("click", function () {
+      document.getElementById("ad-sc-delete-confirm").hidden = true;
+      document.getElementById("ad-sc-delete").hidden = false;
+    });
+    document.getElementById("ad-sc-delete-yes").addEventListener("click", async function () {
+      try {
+        await api("DELETE", "/school/schools/" + encodeURIComponent(school.id));
+        toast("Établissement supprimé.");
+        history.pushState(null, "", "#/scolaire");
+        renderSchool(true);
+      } catch (err) {
+        toast(err.message, true);
+      }
+    });
+  }
+
+  /* ---------- Groupe scolaire : import et regroupement par enfant ---------- */
+
+  function schoolThumb(photo, selected) {
+    var cols = state.config.previewCols || 2;
+    var rows = state.config.previewRows || 2;
+    var cells = "";
+    for (var row = 0; row < rows; row++) {
+      for (var col = 0; col < cols; col++) {
+        cells += '<img loading="lazy" src="/local/tiles/' + esc(photo.id) + "/0/" + col + "/" + row + '" alt="" />';
+      }
+    }
+    var time = photo.takenAt ? new Date(photo.takenAt).toISOString().slice(11, 19) : "";
+    return (
+      '<button type="button" class="ad-sc-thumb' + (selected ? " ad-sc-thumb-on" : "") + '" data-photo="' + esc(photo.id) + '" aria-pressed="' + Boolean(selected) + '"' +
+      ' title="' + esc((photo.sourceName || "") + (time ? " · " + time : "")) + '">' +
+      '<span class="ad-sc-thumb-img" style="aspect-ratio:' + photo.width + "/" + photo.height + ";grid-template-columns:repeat(" + cols + ",1fr);grid-template-rows:repeat(" + rows + ',1fr)">' + cells + "</span>" +
+      (time ? '<span class="ad-sc-thumb-time">' + time + "</span>" : "") +
+      "</button>"
+    );
+  }
+
+  var schoolSelection = { groupId: "", ids: [] };
+
+  async function renderSchoolGroup(groupId) {
+    setActiveTab("school");
+    if (schoolSelection.groupId !== groupId) schoolSelection = { groupId: groupId, ids: [] };
+    var data;
+    try {
+      data = await api("GET", "/school/groups/" + encodeURIComponent(groupId));
+    } catch (err) {
+      toast(err.message, true);
+      history.replaceState(null, "", "#/scolaire");
+      return renderSchool(true);
+    }
+    var kind = data.kinds[data.school.kind] || data.kinds.ecole;
+    var selected = {};
+    schoolSelection.ids = schoolSelection.ids.filter(function (id) { return data.photos.some(function (p) { return p.id === id; }); });
+    schoolSelection.ids.forEach(function (id) { selected[id] = true; });
+    var groupPhotos = data.photos.filter(function (p) { return p.role === "group"; });
+    var unsorted = data.photos.filter(function (p) { return p.role !== "group" && !p.childId; });
+    var byChild = {};
+    data.photos.forEach(function (p) {
+      if (p.childId && p.role !== "group") (byChild[p.childId] = byChild[p.childId] || []).push(p);
+    });
+    var undatedCount = unsorted.filter(function (p) { return !p.takenAt; }).length;
+
+    function thumbs(list) {
+      return '<div class="ad-sc-thumbs">' + list.map(function (p) { return schoolThumb(p, selected[p.id]); }).join("") + "</div>";
+    }
+    function childLabel(c) {
+      return "Enfant " + c.number + (c.firstName ? " · " + c.firstName : "");
+    }
+
+    var childrenHtml = data.children.map(function (c, i) {
+      var prev = data.children[i - 1];
+      return (
+        '<article class="ad-sc-child" data-child="' + esc(c.id) + '">' +
+        '<header><span class="ad-sc-child-num">' + c.number + "</span>" +
+        '<input type="text" class="ad-sc-in" data-child-name maxlength="60" value="' + esc(c.firstName) + '" placeholder="Prénom (facultatif)" aria-label="Prénom de l\'enfant ' + c.number + '" />' +
+        '<span class="ad-hint">' + (byChild[c.id] || []).length + " photo" + ((byChild[c.id] || []).length > 1 ? "s" : "") + "</span>" +
+        (prev ? '<button type="button" class="ad-link-btn" data-merge="' + esc(prev.id) + '" title="Même enfant : réunir avec ' + esc(childLabel(prev)) + '">Fusionner avec le n° ' + prev.number + "</button>" : "") +
+        "</header>" + thumbs(byChild[c.id] || []) + "</article>"
+      );
+    }).join("");
+
+    var moveOptions = '<option value="">Déplacer vers…</option>' +
+      '<option value="new">Un nouvel enfant</option>' +
+      '<option value="group">' + esc(kind.groupPhoto) + "</option>" +
+      '<option value="unsorted">À trier</option>' +
+      data.children.map(function (c) { return '<option value="' + esc(c.id) + '">' + esc(childLabel(c)) + "</option>"; }).join("");
+
+    el.view.innerHTML =
+      '<p class="ad-sc-back"><button type="button" class="ad-link-btn" id="ad-sc-back-school">← ' + esc(data.school.name) + " · " + esc(data.year.label) + "</button></p>" +
+      '<header class="ad-detail-header"><div><p class="ad-sc-kind">' + esc(kind.group) + "</p><h2>" + esc(data.group.name) + "</h2>" +
+      '<p class="ad-hint">' + esc([data.group.leader, data.photos.length + " photo" + (data.photos.length > 1 ? "s" : ""),
+        data.children.length + " enfant" + (data.children.length > 1 ? "s" : "")].filter(Boolean).join(" · ")) + "</p></div></header>" +
+
+      '<section class="ad-dropzone" id="ad-sc-drop">' +
+      "<p><strong>Glissez les photos de " + esc(kind.group.toLowerCase()) + " " + esc(data.group.name) + "</strong> (portraits et " + esc(kind.groupPhoto.toLowerCase()) + "), ou</p>" +
+      '<div class="ad-sc-actions" style="justify-content:center">' +
+      '<label class="ad-btn ad-btn-primary">Choisir des photos<input type="file" id="ad-sc-files" accept="image/jpeg,image/*" multiple hidden /></label>' +
+      '<label class="ad-btn">Choisir un dossier<input type="file" id="ad-sc-folder" webkitdirectory multiple hidden /></label></div>' +
+      '<p class="ad-hint ad-sc-drop-hint">Gardez les fichiers d\'origine de l\'appareil : leur heure de prise de vue sert à reconnaître chaque enfant.</p>' +
+      '<div class="ad-sc-progress" id="ad-sc-progress" hidden><div class="ad-sc-progress-bar"><span id="ad-sc-progress-fill"></span></div><p class="ad-hint" id="ad-sc-progress-text"></p></div>' +
+      "</section>" +
+
+      '<div class="ad-sc-toolbar" id="ad-sc-toolbar"' + (schoolSelection.ids.length ? "" : " hidden") + '>' +
+      '<span id="ad-sc-sel-count"></span>' +
+      '<select id="ad-sc-move" aria-label="Déplacer les photos choisies">' + moveOptions + "</select>" +
+      '<button type="button" class="ad-btn ad-btn-danger" id="ad-sc-sel-delete">Supprimer</button>' +
+      '<button type="button" class="ad-link-btn" id="ad-sc-sel-clear">Annuler</button></div>' +
+
+      (unsorted.length
+        ? '<section class="ad-sc-unsorted"><div class="ad-section-header"><h3>À trier (' + unsorted.length + ")</h3>" +
+          (unsorted.length > undatedCount ? '<button type="button" class="ad-btn ad-btn-primary" id="ad-sc-arrange">Regrouper par enfant</button>' : "") + "</div>" +
+          (undatedCount ? '<p class="ad-hint">' + undatedCount + " photo" + (undatedCount > 1 ? "s n'ont" : " n'a") + " pas d'heure de prise de vue : choisissez-les puis « Déplacer vers… ».</p>" : "") +
+          thumbs(unsorted) + "</section>"
+        : "") +
+
+      '<section><div class="ad-section-header"><h3>' + esc(kind.groupPhoto) + " (" + groupPhotos.length + ")</h3></div>" +
+      (groupPhotos.length ? thumbs(groupPhotos)
+        : '<p class="ad-hint">Choisissez la ou les photos de groupe dans la grille, puis « Déplacer vers… » ' + esc(kind.groupPhoto.toLowerCase()) + ". Toutes les familles du groupe la verront.</p>") +
+      "</section>" +
+
+      '<section><div class="ad-section-header"><h3>Enfants (' + data.children.length + ")</h3></div>" +
+      (data.children.length
+        ? '<p class="ad-hint">Vérifiez d\'un coup d\'œil : chaque carte doit montrer un seul enfant. Cliquez sur des photos pour les choisir et les déplacer ; deux cartes du même enfant se fusionnent.</p>' +
+          '<div class="ad-sc-children">' + childrenHtml + "</div>"
+        : '<p class="ad-hint">Les enfants apparaîtront ici une fois les photos importées et regroupées.</p>') +
+      "</section>";
+
+    function updateToolbar() {
+      var n = schoolSelection.ids.length;
+      document.getElementById("ad-sc-toolbar").hidden = n === 0;
+      document.getElementById("ad-sc-sel-count").textContent = n + " photo" + (n > 1 ? "s choisies" : " choisie");
+    }
+    updateToolbar();
+
+    function reload() { renderSchoolGroup(groupId); }
+
+    document.getElementById("ad-sc-back-school").addEventListener("click", function () {
+      history.pushState(null, "", "#/scolaire/" + encodeURIComponent(data.school.id) + "/" + encodeURIComponent(data.year.id));
+      renderSchool(true);
+    });
+
+    el.view.querySelectorAll("[data-photo]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var id = btn.getAttribute("data-photo");
+        var at = schoolSelection.ids.indexOf(id);
+        if (at === -1) schoolSelection.ids.push(id);
+        else schoolSelection.ids.splice(at, 1);
+        btn.classList.toggle("ad-sc-thumb-on", at === -1);
+        btn.setAttribute("aria-pressed", String(at === -1));
+        updateToolbar();
+      });
+    });
+    document.getElementById("ad-sc-sel-clear").addEventListener("click", function () {
+      schoolSelection.ids = [];
+      reload();
+    });
+    document.getElementById("ad-sc-move").addEventListener("change", async function () {
+      var to = this.value;
+      if (!to) return;
+      try {
+        await api("POST", "/school/groups/" + encodeURIComponent(groupId) + "/assign", { photoIds: schoolSelection.ids, to: to });
+        schoolSelection.ids = [];
+        reload();
+      } catch (err) {
+        toast(err.message, true);
+        this.value = "";
+      }
+    });
+    document.getElementById("ad-sc-sel-delete").addEventListener("click", async function () {
+      var ids = schoolSelection.ids.slice();
+      this.disabled = true;
+      try {
+        for (var i = 0; i < ids.length; i++) {
+          await api("DELETE", "/galleries/" + encodeURIComponent(data.group.gallerySlug) + "/photos/" + encodeURIComponent(ids[i]));
+        }
+        toast(ids.length + " photo" + (ids.length > 1 ? "s supprimées." : " supprimée."));
+        schoolSelection.ids = [];
+        reload();
+      } catch (err) {
+        toast(err.message, true);
+        this.disabled = false;
+      }
+    });
+    var arrange = document.getElementById("ad-sc-arrange");
+    if (arrange) arrange.addEventListener("click", async function () {
+      this.disabled = true;
+      try {
+        var result = await api("POST", "/school/groups/" + encodeURIComponent(groupId) + "/arrange", {});
+        toast(result.created + " enfant" + (result.created > 1 ? "s trouvés." : " trouvé."));
+        reload();
+      } catch (err) {
+        toast(err.message, true);
+        this.disabled = false;
+      }
+    });
+    el.view.querySelectorAll("[data-child]").forEach(function (card) {
+      var childId = card.getAttribute("data-child");
+      card.querySelector("[data-child-name]").addEventListener("change", async function () {
+        try {
+          await api("POST", "/school/children/" + encodeURIComponent(childId), { firstName: this.value });
+          toast("Prénom enregistré.");
+        } catch (err) {
+          toast(err.message, true);
+        }
+      });
+      var merge = card.querySelector("[data-merge]");
+      if (merge) merge.addEventListener("click", async function () {
+        try {
+          await api("POST", "/school/children/" + encodeURIComponent(childId) + "/merge", { into: merge.getAttribute("data-merge") });
+          reload();
+        } catch (err) {
+          toast(err.message, true);
+        }
+      });
+    });
+
+    // Envoi : trois photos à la fois, puis regroupement automatique.
+    async function uploadAll(files) {
+      files = Array.prototype.filter.call(files, function (f) { return /^image\//.test(f.type) || /\.(jpe?g|png|webp|heic)$/i.test(f.name); });
+      if (!files.length) return;
+      var box = document.getElementById("ad-sc-progress");
+      var fill = document.getElementById("ad-sc-progress-fill");
+      var label = document.getElementById("ad-sc-progress-text");
+      box.hidden = false;
+      var done = 0, failed = 0, next = 0, base = data.photos.length;
+      function show() {
+        fill.style.width = Math.round(((done + failed) / files.length) * 100) + "%";
+        label.textContent = (done + failed) + " / " + files.length + " photos traitées" + (failed ? " · " + failed + " en échec" : "");
+      }
+      show();
+      async function worker() {
+        while (next < files.length) {
+          var file = files[next];
+          var position = base + next;
+          next += 1;
+          var form = new FormData();
+          form.append("file", file, file.name);
+          form.append("position", String(position));
+          try {
+            var response = await fetch("/local/school/groups/" + encodeURIComponent(groupId) + "/photos", { method: "POST", body: form });
+            if (!response.ok) throw new Error(((await response.json().catch(function () { return {}; })).error) || "HTTP " + response.status);
+            done += 1;
+          } catch (err) {
+            failed += 1;
+            console.error(file.name, err);
+          }
+          show();
+        }
+      }
+      await Promise.all([worker(), worker(), worker()]);
+      try {
+        var result = await api("POST", "/school/groups/" + encodeURIComponent(groupId) + "/arrange", {});
+        toast(done + " photo" + (done > 1 ? "s importées" : " importée") + ", " + result.created + " enfant" + (result.created > 1 ? "s trouvés." : " trouvé.") +
+          (failed ? " " + failed + " en échec : réessayez-les." : ""), Boolean(failed));
+      } catch (err) {
+        toast(err.message, true);
+      }
+      reload();
+    }
+    document.getElementById("ad-sc-files").addEventListener("change", function () { uploadAll(this.files); });
+    document.getElementById("ad-sc-folder").addEventListener("change", function () { uploadAll(this.files); });
+    var drop = document.getElementById("ad-sc-drop");
+    drop.addEventListener("dragover", function (e) { e.preventDefault(); drop.classList.add("ad-dropzone-active"); });
+    drop.addEventListener("dragleave", function () { drop.classList.remove("ad-dropzone-active"); });
+    drop.addEventListener("drop", function (e) {
+      e.preventDefault();
+      drop.classList.remove("ad-dropzone-active");
+      uploadAll(e.dataTransfer.files);
+    });
+  }
+
   /* ---------- Démarrage et navigation ---------- */
 
   function routeFromHash() {
@@ -3632,6 +4424,7 @@
     else if (location.hash === "#/parametres") renderSettings(true);
     else if (location.hash === "#/boutique") renderShop(true);
     else if (location.hash === "#/proprietaire") renderOwner(true);
+    else if (location.hash.indexOf("#/scolaire") === 0) renderSchool(true);
     else renderList(true);
   }
 

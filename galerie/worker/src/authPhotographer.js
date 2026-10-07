@@ -8,6 +8,7 @@
 import { json, fail } from "./http.js";
 import { TERMS_VERSION } from "./privacy.js";
 import { feeRuleForAdmin } from "./fees.js";
+import { hasFeature, schoolLaunched } from "./subscription.js";
 import {
   hashPassword,
   verifyPassword,
@@ -60,7 +61,10 @@ async function tooManyFailures(env, emailHash) {
   return (row?.n || 0) >= MAX_FAILED_LOGINS;
 }
 
-function issueSession(env, photographer) {
+// Toute ouverture de session (inscription, connexion, nouveau mot de passe)
+// est notée : la propriétaire repère ainsi les comptes inactifs.
+async function issueSession(env, photographer) {
+  await env.DB.prepare("UPDATE photographers SET last_login_at = ? WHERE id = ?").bind(now(), photographer.id).run();
   return signToken(env.AUTH_SECRET, {
     typ: "photographer",
     sub: photographer.id,
@@ -91,6 +95,11 @@ function profileOf(photographer, env) {
     isOwner: Boolean(env?.OWNER_EMAIL) && photographer.email === env.OWNER_EMAIL,
     // Frais de paiement retenus sur chaque vente en ligne (voir fees.js).
     paymentFee: env ? feeRuleForAdmin(env, photographer) : null,
+    // Onglet « Écoles & clubs » : formule qui l'inclut, module ouvert à tous
+    // (présentation des formules), ou propriétaire (pour le préparer).
+    schoolTab: Boolean(env) && (
+      (Boolean(env.OWNER_EMAIL) && photographer.email === env.OWNER_EMAIL) ||
+      hasFeature(env, photographer, "school") || schoolLaunched(env)),
   };
 }
 

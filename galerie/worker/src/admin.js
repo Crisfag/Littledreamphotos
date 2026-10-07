@@ -13,7 +13,8 @@ import { listLibrary, setMusicChoice, musicForAdmin } from "./music.js";
 import { handleDeliveryAdmin, deliveryForAdmin } from "./delivery.js";
 import { sendDeliveryReady } from "./notify.js";
 import { exportAccount, deleteAccount } from "./privacy.js";
-import { galleryQuotaRefusal, subscriptionForAdmin, startSubscriptionCheckout, openBillingPortal, syncSubscription } from "./subscription.js";
+import { galleryQuotaRefusal, subscriptionForAdmin, startSubscriptionCheckout, openBillingPortal, syncSubscription, setScolairePlan } from "./subscription.js";
+import { handleSchoolAdmin } from "./school.js";
 import { setPromo, sendPromoToClient, promoForAdmin } from "./campaigns.js";
 import { galleryUrlFor } from "./reminders.js";
 import { salesForAdmin } from "./sales.js";
@@ -178,7 +179,7 @@ async function listGalleries(env, photographerId) {
             (SELECT COUNT(*) FROM photos p WHERE p.gallery_id = g.id AND p.selected = 1) AS selected_count,
             (SELECT COUNT(*) FROM photos p WHERE p.gallery_id = g.id AND p.comment != '') AS comment_count,
             (SELECT COALESCE(SUM(extra_count), 0) FROM payments WHERE payments.gallery_id = g.id AND payments.status = 'paid') AS paid_extra_count
-     FROM galleries g WHERE g.photographer_id = ? ORDER BY g.created_at DESC`
+     FROM galleries g WHERE g.photographer_id = ? AND g.kind != 'school' ORDER BY g.created_at DESC`
   )
     .bind(photographerId)
     .all();
@@ -509,11 +510,16 @@ async function addPhoto(request, env, photographerId, slug) {
   const storageFull = await storageRefusal(env, owner, TILE_BYTES_PER_PHOTO);
   if (storageFull) return storageFull;
 
+  // Heure de prise de vue (ms) et nom du fichier : servent au regroupement
+  // des photos scolaires par enfant (school.js) ; facultatifs ailleurs.
+  const takenAt = Number.isSafeInteger(body.takenAt) && body.takenAt > 0 ? body.takenAt : null;
+  const sourceName = String(body.sourceName || "").slice(0, 200);
+
   await env.DB.prepare(
     `INSERT INTO photos
        (id, gallery_id, position, width, height, cols, rows,
-        preview_width, preview_height, forensic_id, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        preview_width, preview_height, forensic_id, taken_at, source_name, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   )
     .bind(
       id,
@@ -526,6 +532,8 @@ async function addPhoto(request, env, photographerId, slug) {
       Number(body.previewWidth) || 0,
       Number(body.previewHeight) || 0,
       String(body.forensicId || "").slice(0, 64),
+      takenAt,
+      sourceName,
       now()
     )
     .run();
@@ -616,7 +624,7 @@ async function listInvoices(env, photographerId) {
 // l'onglet Facturation.
 async function getStats(env, photographerId) {
   const galleriesRow = await env.DB.prepare(
-    "SELECT COUNT(*) AS n FROM galleries WHERE photographer_id = ?"
+    "SELECT COUNT(*) AS n FROM galleries WHERE photographer_id = ? AND kind != 'school'"
   )
     .bind(photographerId)
     .first();
@@ -841,6 +849,12 @@ export async function handleAdmin(request, env, ctx, path) {
   if (section === "account" && parts.length === 3 && request.method === "POST") {
     return updateStudioName(request, env, photographerId);
   }
+  // Module photo de groupe : établissements, années, groupes (school.js).
+  if (section === "school") {
+    const photographer = await env.DB.prepare("SELECT * FROM photographers WHERE id = ?").bind(photographerId).first();
+    if (!photographer) return fail(401, "Session invalide");
+    return handleSchoolAdmin(request, env, photographer, parts.slice(3), { eraseGallery });
+  }
   // Abonnement Holypixx du photographe (formules, paiement mensuel Stripe).
   if (section === "subscription") {
     const photographer = await env.DB.prepare("SELECT * FROM photographers WHERE id = ?").bind(photographerId).first();
@@ -849,6 +863,7 @@ export async function handleAdmin(request, env, ctx, path) {
     if (parts.length === 4 && parts[3] === "checkout" && request.method === "POST") return startSubscriptionCheckout(request, env, photographer);
     if (parts.length === 4 && parts[3] === "portal" && request.method === "POST") return openBillingPortal(request, env, photographer);
     if (parts.length === 4 && parts[3] === "sync" && request.method === "POST") return syncSubscription(request, env, photographer);
+    if (parts.length === 4 && parts[3] === "scolaire" && request.method === "POST") return setScolairePlan(request, env, photographer);
   }
   // Droits RGPD : export de toutes les données du compte, suppression définitive.
   if (section === "account" && parts[3] === "export" && parts.length === 4 && request.method === "GET") {

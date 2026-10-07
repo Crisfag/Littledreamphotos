@@ -444,6 +444,36 @@ Le tableau de bord s'organise en trois onglets, chacun avec son propre lien
   manqué) et l'enregistre au lieu d'en créer un second. Les renouvellements
   et résiliations, eux, n'arrivent que par le webhook : un refus de
   signature est journalisé (`npx wrangler tail`, « signature invalide »).
+- **Écoles, crèches et clubs** (`worker/src/school.js`, onglet « Écoles &
+  clubs ») : module photo de groupe, en cours de construction.
+  - *Organisation* : un établissement (école, crèche ou club sportif, le
+    vocabulaire suit : classe, section, équipe ; année scolaire ou saison)
+    se crée une fois ; chaque année reprend en un clic les groupes et leurs
+    responsables de l'année précédente. Statut de l'année (en préparation,
+    en vente, ventes closes, archivée), date de la commande groupée (livrée
+    à l'établissement) et de la commande à domicile.
+  - *Formules* : **Scolaire** (sans abonnement, 4,5 % des ventes scolaires,
+    frais bancaires compris, galeries classiques comme Découverte ; activée
+    d'un clic) et **Studio** (49 €/mois ou 490 €/an : tout Pro plus le
+    scolaire sans commission ; offre Fondateurs à part, 30 places : 440 € la
+    1re année ou 45 €/mois pendant 12 mois). Elles ne sont proposées qu'avec
+    `SCHOOL_LAUNCHED = "1"` (wrangler.toml) ; d'ici là seule la propriétaire
+    voit le module, pour le préparer.
+  - *Photos d'un groupe* : on glisse les photos (ou le dossier) d'une
+    classe ; chaque groupe a sa galerie protégée (`galleries.kind =
+    'school'`, jamais listée avec les galeries classiques ni comptée dans
+    leur quota), avec les mêmes tuiles, filigrane, empreinte et fichier
+    d'impression. L'heure de prise de vue (EXIF, au centième) est lue à
+    l'import (`tools/lib/exif.mjs`) ; les photos se regroupent ensuite par
+    enfant en rafales (`splitIntoBursts`, school.js : première cassure nette
+    entre « poses d'un même enfant » et « enfant suivant », jamais sous
+    5 s). Grille de vérification : déplacer des photos vers un enfant, un
+    nouvel enfant, la photo de groupe ou « à trier » ; fusionner deux
+    cartes ; prénom facultatif. Les enfants sont numérotés dans l'ordre de
+    la séance. Pas de reconnaissance faciale (données biométriques
+    d'enfants).
+  - *À venir* : fiches parents QR, espace famille, commande groupée et labo
+    intégré (BePhoto à l'étude).
 - **Campagnes de vente des tirages** (`worker/src/campaigns.js`) :
   - *Promotion à durée limitée* sur une galerie (−10 à −50 % jusqu'à une
     date, depuis la section boutique de la fiche) : bandeau et prix barrés
@@ -661,8 +691,16 @@ restent propres à chaque photographe :
   compte, simplement sans filtrer par photographe.
 - **Inscriptions par mois** : un simple décompte des nouveaux comptes,
   douze derniers mois, pour voir la croissance d'un coup d'œil.
-- **Comptes photographes** : la liste complète — prénom, nom, studio,
-  e-mail, date d'inscription, nombre de galeries et de photos, statut
+- **Comptes photographes** : en tête, abonnés payants, essais en cours,
+  revenu mensuel récurrent (annuels ramenés au mois, prix Fondateurs la
+  1re année), places Fondateurs prises et comptes à surveiller (paiement en
+  retard, résiliation programmée, pas de connexion depuis 30 jours). Puis
+  la liste complète, filtrable (payants, essai, gratuits, à surveiller) et
+  cherchable : studio, nom, e-mail, date d'inscription ; formule, statut,
+  mensuel ou annuel, Fondateur ; début de l'abonnement et prochaine
+  échéance (fin d'essai, renouvellement ou fin programmée) ; revenu ;
+  galeries, photos et dernière connexion ; stockage utilisé sur le quota ;
+  ventes encaissées ; statut Stripe Connect et lien vers la fiche client
   Stripe. Jamais les mots de passe, bien sûr, ni rien que vous n'ayez pas
   déjà le droit de voir sur votre propre compte.
 - **Trafic du site et sources de visiteurs** : ce Worker ne suit pas le

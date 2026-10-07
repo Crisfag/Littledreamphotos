@@ -24,6 +24,7 @@ import { dirname, join, normalize, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import sharp from "sharp";
 import { processPhoto, DEFAULTS } from "./lib/pipeline.mjs";
+import { takenAtFromExif } from "./lib/exif.mjs";
 import { PREVIEW_COLS, PREVIEW_ROWS } from "./lib/tiles.mjs";
 import { WorkerClient } from "./lib/client.mjs";
 import { identify, isMatch, MATCH_MIN_SNR, MATCH_MIN_BITS } from "./lib/forensic.mjs";
@@ -597,6 +598,59 @@ async function handleApi(req, res, url) {
   }
 
   // /local/portfolio… — mini-site portfolio (voir worker/src/portfolio.js).
+  // POST /local/school/groups/:id/photos (multipart, une photo par requête)
+  // — photo d'un groupe scolaire : même traitement qu'une galerie (tuiles,
+  // filigrane, empreinte) dans la galerie protégée du groupe, plus l'heure de
+  // prise de vue (EXIF) qui sert à regrouper les photos par enfant. Le
+  // fichier d'impression est toujours gardé (commandes des familles).
+  if (parts[0] === "school" && parts[1] === "groups" && parts[3] === "photos" && parts.length === 4 && req.method === "POST") {
+    const groupId = decodeURIComponent(parts[2]);
+    const contentLength = Number(req.headers["content-length"] || 0);
+    if (contentLength > MAX_UPLOAD_BYTES) return json(res, 413, { error: "Fichier trop volumineux" });
+    let form;
+    try {
+      form = await nodeRequestToWebRequest(req, await readBody(req)).formData();
+    } catch (err) {
+      return json(res, err.status || 400, { error: err.status ? err.message : "Fichier illisible" });
+    }
+    const file = form.get("file");
+    if (!file || typeof file.arrayBuffer !== "function") return json(res, 400, { error: "Aucun fichier reçu" });
+    try {
+      const { slug } = await client.request("POST", `/api/admin/school/groups/${encodeURIComponent(groupId)}/gallery`, {});
+      const galleryInfo = await client.getGallery(slug);
+      const input = Buffer.from(await file.arrayBuffer());
+      const meta = await sharp(input).metadata();
+      const takenAt = takenAtFromExif(meta.exif);
+      const watermarkText = galleryInfo.gallery.watermark_text || (await brandFor(client));
+      const position = Number(form.get("position")) || galleryInfo.photos.length;
+      const { photo } = await withProcessingSlot(async () => {
+        const result = await processPhoto(input, { galleryId: galleryInfo.gallery.id, forensicKey: config.forensicKey, watermarkText, position });
+        await client.addPhoto(slug, { ...result.photo, takenAt, sourceName: String(file.name || "").slice(0, 200) });
+        for (const tile of result.tiles) await client.putTile(result.photo.id, tile.level, tile.col, tile.row, tile.buffer);
+        return result;
+      });
+      const printMaster = await withProcessingSlot(() => makePrintMaster(input));
+      await client.putOriginal(photo.id, printMaster);
+      return json(res, 201, { photo: { ...photo, takenAt }, name: file.name || "" });
+    } catch (err) {
+      console.error(`Échec du traitement de ${file.name || "?"} (groupe scolaire) :`, err);
+      return relayError(res, err, `Échec du traitement de ${file.name || "cette photo"}`);
+    }
+  }
+
+  // /local/school/… — module photo de groupe (établissements, années,
+  // groupes) : simple relais JSON vers /api/admin/school/….
+  if (parts[0] === "school" && ["GET", "POST", "DELETE"].includes(req.method)) {
+    const path = "/api/admin/school" + (parts.length > 1 ? "/" + parts.slice(1).map(encodeURIComponent).join("/") : "");
+    try {
+      const body = req.method === "POST" ? JSON.parse((await readBody(req)).toString("utf8") || "{}") : undefined;
+      const status = req.method === "POST" && /\/(schools|years|groups)$/.test(path) ? 201 : 200;
+      return json(res, status, await client.request(req.method, path, body));
+    } catch (err) {
+      return relayError(res, err, "Le module scolaire n'a pas pu répondre");
+    }
+  }
+
   if (parts[0] === "portfolio") {
     const base = "/api/admin/portfolio";
     try {
@@ -670,6 +724,11 @@ async function handleApi(req, res, url) {
       if (parts.length === 2 && (parts[1] === "checkout" || parts[1] === "portal") && req.method === "POST") {
         const body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
         return json(res, 200, await client.request("POST", `/api/admin/subscription/${parts[1]}`, { plan: body.plan, interval: body.interval, returnUrl: back }));
+      }
+      // Formule Scolaire : sans abonnement, activée ou désactivée d'un clic.
+      if (parts.length === 2 && parts[1] === "scolaire" && req.method === "POST") {
+        const body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
+        return json(res, 200, await client.request("POST", "/api/admin/subscription/scolaire", { on: body.on === true }));
       }
       // Retour de Stripe : relit la session de paiement sans attendre le webhook.
       if (parts.length === 2 && parts[1] === "sync" && req.method === "POST") {

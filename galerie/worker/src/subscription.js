@@ -23,7 +23,7 @@ export const PLANS = {
     priceCents: 0,
     maxActiveGalleries: 3,
     storageBytes: 5e9,
-    features: { shop: false, subdomain: false },
+    features: { shop: false, subdomain: false, school: false },
     pitch: "Pour essayer : 3 galeries actives, protection complète, sélection, livraison HD.",
   },
   essentiel: {
@@ -35,7 +35,7 @@ export const PLANS = {
     founderYearlyCents: 12000,
     maxActiveGalleries: 25,
     storageBytes: 200e9,
-    features: { shop: true, subdomain: false },
+    features: { shop: true, subdomain: false, school: false },
     pitch: "25 galeries actives et la boutique de tirages.",
   },
   pro: {
@@ -47,10 +47,47 @@ export const PLANS = {
     founderYearlyCents: 24000,
     maxActiveGalleries: null,
     storageBytes: 1000e9,
-    features: { shop: true, subdomain: true },
+    features: { shop: true, subdomain: true, school: false },
     pitch: "Galeries illimitées, boutique, et vos galeries à votre nom (votre-studio.holypixx.com).",
   },
+  // Photo de groupe (écoles, crèches, clubs) : voir school.js. Ces deux
+  // formules ne sont proposées qu'une fois le module ouvert (SCHOOL_LAUNCHED).
+  //
+  // Scolaire : sans abonnement, une commission sur les ventes scolaires
+  // (frais bancaires compris), et les galeries classiques de Découverte.
+  scolaire: {
+    key: "scolaire",
+    label: "Scolaire",
+    priceCents: 0,
+    noSubscription: true,
+    schoolFeePercent: 4.5,
+    maxActiveGalleries: 3,
+    storageBytes: 500e9,
+    features: { shop: false, subdomain: false, school: true },
+    pitch: "Pour les photographes qui ne font que du scolaire : on ne paie que sur ce qu'on vend.",
+  },
+  // Studio : tout Pro, plus le scolaire sans commission (seulement les frais
+  // de paiement habituels, voir fees.js). Offre Fondateurs à part : 30 places.
+  studio: {
+    key: "studio",
+    label: "Studio",
+    priceCents: 4900,
+    yearlyCents: 49000,
+    founderCents: 4500,
+    founderYearlyCents: 44000,
+    foundersGroup: "studio",
+    maxActiveGalleries: null,
+    storageBytes: 2000e9,
+    features: { shop: true, subdomain: true, school: true },
+    pitch: "Tout Pro, plus les écoles, crèches et clubs, sans commission.",
+  },
 };
+
+// Le module photo de groupe (et ses formules) n'est proposé qu'une fois
+// ouvert ; la propriétaire le voit toujours, pour le préparer.
+export function schoolLaunched(env) {
+  return env?.SCHOOL_LAUNCHED === "1";
+}
 
 // Essai gratuit des formules payantes : une seule fois par compte. La carte
 // est demandée par Stripe dès l'inscription, rien n'est prélevé si
@@ -62,12 +99,26 @@ export const TRIAL_DAYS = 10;
 // puis le prix normal. La réduction est un coupon Stripe appliqué à
 // l'abonnement (12 mois en mensuel, la 1re échéance en annuel).
 export const FOUNDERS_LIMIT = 50;
+// Offre Fondateurs de Studio, comptée à part.
+export const STUDIO_FOUNDERS_LIMIT = 30;
+
+function foundersGroupOf(plan) {
+  return plan?.foundersGroup || "galeries";
+}
+function foundersLimitOf(group) {
+  return group === "studio" ? STUDIO_FOUNDERS_LIMIT : FOUNDERS_LIMIT;
+}
 
 export const INTERVALS = ["month", "year"];
 
 export const FEATURE_LABELS = {
   shop: "La boutique de tirages",
   subdomain: "L'adresse à votre nom",
+  school: "Le module écoles, crèches et clubs",
+};
+// Accord du participe : « La boutique… est incluse », « Le module… est inclus ».
+const FEATURE_MASCULINE = {
+  school: true,
 };
 
 // Statuts Stripe qui ouvrent droit à la formule payée (past_due : période de
@@ -90,6 +141,17 @@ export function planFor(env, photographer) {
   return PLANS.free;
 }
 
+// Ce que l'abonnement rapporte par mois, ramené au mois pour l'annuel. Un
+// essai ne rapporte encore rien ; le prix Fondateurs vaut pour la 1re année.
+const YEAR_SECONDS = 365 * 24 * 60 * 60;
+export function monthlyRevenueCents(photographer, at = now()) {
+  const plan = PLANS[photographer?.plan];
+  if (!plan || plan.key === "free" || !["active", "past_due"].includes(photographer.plan_status)) return 0;
+  const founder = photographer.founder_at && at < photographer.founder_at + YEAR_SECONDS;
+  if (photographer.plan_interval === "year") return Math.round((founder ? plan.founderYearlyCents : plan.yearlyCents) / 12);
+  return founder ? plan.founderCents : plan.priceCents;
+}
+
 export function hasFeature(env, photographer, feature) {
   return Boolean(planFor(env, photographer).features[feature]);
 }
@@ -97,12 +159,13 @@ export function hasFeature(env, photographer, feature) {
 // Réponse 402 expliquant quelle formule débloque une fonctionnalité.
 export function featureRefusal(feature) {
   const needed = Object.values(PLANS).find((p) => p.features[feature]);
-  return fail(402, `${FEATURE_LABELS[feature] || "Cette fonctionnalité"} est incluse à partir de la formule ${needed?.label || "payante"} (onglet Abonnement).`);
+  const included = FEATURE_MASCULINE[feature] ? "inclus" : "incluse";
+  return fail(402, `${FEATURE_LABELS[feature] || "Cette fonctionnalité"} est ${included} à partir de la formule ${needed?.label || "payante"} (onglet Abonnement).`);
 }
 
 export async function activeGalleryCount(env, photographerId) {
   const row = await env.DB.prepare(
-    "SELECT COUNT(*) AS n FROM galleries WHERE photographer_id = ? AND (expires_at IS NULL OR expires_at > ?)"
+    "SELECT COUNT(*) AS n FROM galleries WHERE photographer_id = ? AND kind != 'school' AND (expires_at IS NULL OR expires_at > ?)"
   )
     .bind(photographerId, now())
     .first();
@@ -127,6 +190,8 @@ function planOut(plan) {
     yearlyCents: plan.yearlyCents ?? 0,
     founderCents: plan.founderCents ?? 0,
     founderYearlyCents: plan.founderYearlyCents ?? 0,
+    noSubscription: Boolean(plan.noSubscription),
+    schoolFeePercent: plan.schoolFeePercent ?? null,
     maxActiveGalleries: plan.maxActiveGalleries,
     storageBytes: plan.storageBytes,
     features: plan.features,
@@ -135,9 +200,17 @@ function planOut(plan) {
 }
 
 // Places de l'offre Fondateurs déjà prises (comptes passés par un
-// abonnement au prix Fondateurs).
-export async function foundersTaken(env) {
-  const row = await env.DB.prepare("SELECT COUNT(*) AS n FROM photographers WHERE founder_at IS NOT NULL").first();
+// abonnement au prix Fondateurs), par offre : « galeries » (Essentiel et
+// Pro, 50 places) ou « studio » (30 places). founder_plan garde la formule
+// souscrite au prix Fondateurs, même si le compte en change ensuite.
+export async function foundersTaken(env, group = "galeries") {
+  const keys = Object.values(PLANS).filter((p) => p.founderCents && foundersGroupOf(p) === group).map((p) => p.key);
+  const row = await env.DB.prepare(
+    `SELECT COUNT(*) AS n FROM photographers
+     WHERE founder_at IS NOT NULL AND COALESCE(NULLIF(founder_plan, ''), plan) IN (${keys.map(() => "?").join(",")})`
+  )
+    .bind(...keys)
+    .first();
   return row?.n || 0;
 }
 
@@ -149,29 +222,40 @@ export function trialAvailable(photographer) {
   return !photographer?.trial_used_at && !photographer?.stripe_customer_id;
 }
 
-export function founderEligible(photographer, taken) {
-  return !photographer?.founder_at && !photographer?.stripe_customer_id && taken < FOUNDERS_LIMIT;
+export function founderEligible(photographer, taken, limit = FOUNDERS_LIMIT) {
+  return !photographer?.founder_at && !photographer?.stripe_customer_id && taken < limit;
 }
 
-export function publicPlans(taken) {
+// `studioTaken` : places Fondateurs Studio prises ; `withSchool` : inclure
+// les formules du module photo de groupe (une fois ouvert).
+export function publicPlans(taken, { studioTaken = 0, withSchool = false } = {}) {
   return {
-    plans: Object.values(PLANS).map(planOut),
+    plans: Object.values(PLANS).filter((p) => withSchool || !p.features.school).map(planOut),
     trialDays: TRIAL_DAYS,
     founders: { limit: FOUNDERS_LIMIT, remaining: Math.max(0, FOUNDERS_LIMIT - taken) },
+    ...(withSchool ? { studioFounders: { limit: STUDIO_FOUNDERS_LIMIT, remaining: Math.max(0, STUDIO_FOUNDERS_LIMIT - studioTaken) } } : {}),
   };
 }
 
 // GET /api/public/plans — formules, essai et places Fondateurs restantes
 // (page d'accueil). Aucune donnée de compte.
 export async function plansForPublic(env) {
-  return json(publicPlans(await foundersTaken(env)), { headers: { "cache-control": "public, max-age=300" } });
+  const withSchool = schoolLaunched(env);
+  const body = publicPlans(await foundersTaken(env), {
+    withSchool,
+    studioTaken: withSchool ? await foundersTaken(env, "studio") : 0,
+  });
+  return json(body, { headers: { "cache-control": "public, max-age=300" } });
 }
 
 export async function subscriptionForAdmin(env, photographer) {
   const plan = planFor(env, photographer);
   const taken = await foundersTaken(env);
+  const withSchool = schoolLaunched(env) || isOwner(env, photographer) || Boolean(PLANS[photographer.plan]?.features.school);
+  const studioTaken = withSchool ? await foundersTaken(env, "studio") : 0;
   return json({
-    ...publicPlans(taken),
+    ...publicPlans(taken, { withSchool, studioTaken }),
+    studioFounderEligible: withSchool && founderEligible(photographer, studioTaken, STUDIO_FOUNDERS_LIMIT),
     plan: planOut(plan),
     owner: isOwner(env, photographer),
     status: photographer.plan_status || "",
@@ -214,6 +298,8 @@ export async function startSubscriptionCheckout(request, env, photographer) {
   const body = await request.json().catch(() => null);
   const plan = PLANS[body?.plan];
   if (!plan || plan.key === "free") return fail(400, "Formule inconnue");
+  if (plan.noSubscription) return fail(400, "Cette formule s'active sans paiement, depuis l'onglet Abonnement.");
+  if (plan.features.school && !schoolLaunched(env)) return fail(409, "Cette formule n'est pas encore ouverte.");
   const interval = INTERVALS.includes(body?.interval) ? body.interval : "month";
   if (isOwner(env, photographer)) return fail(409, "Le compte propriétaire a déjà toutes les fonctionnalités.");
   if (planFor(env, photographer).key !== "free" && photographer.stripe_customer_id) {
@@ -231,7 +317,8 @@ export async function startSubscriptionCheckout(request, env, photographer) {
     }
   }
   try {
-    const founder = founderEligible(photographer, await foundersTaken(env));
+    const group = foundersGroupOf(plan);
+    const founder = founderEligible(photographer, await foundersTaken(env, group), foundersLimitOf(group));
     let couponId = "";
     if (founder) {
       const coupon = founderCoupon(plan, interval);
@@ -316,6 +403,31 @@ export async function syncSubscription(request, env, photographer) {
   return subscriptionForAdmin(env, fresh || photographer);
 }
 
+// POST /api/admin/subscription/scolaire { on } — la formule Scolaire n'a pas
+// d'abonnement Stripe (commission sur les ventes scolaires) : elle s'active
+// et se désactive d'un clic, à condition de ne pas avoir d'abonnement payant
+// en cours.
+export async function setScolairePlan(request, env, photographer) {
+  const body = await request.json().catch(() => null);
+  const on = body?.on === true;
+  if (isOwner(env, photographer)) return fail(409, "Le compte propriétaire a déjà toutes les fonctionnalités.");
+  if (on) {
+    if (!schoolLaunched(env)) return fail(409, "Cette formule n'est pas encore ouverte.");
+    const current = planFor(env, photographer);
+    if (current.key === "scolaire") return subscriptionForAdmin(env, photographer);
+    if (current.key !== "free") {
+      return fail(409, "Vous avez un abonnement en cours : résiliez-le d'abord depuis « Gérer mon abonnement », ou passez à Studio qui comprend déjà le scolaire.");
+    }
+    await env.DB.prepare(
+      "UPDATE photographers SET plan = 'scolaire', plan_status = 'active', plan_interval = '', plan_renews_at = NULL, plan_cancel_at_period_end = 0, plan_started_at = ? WHERE id = ?"
+    ).bind(now(), photographer.id).run();
+  } else if (photographer.plan === "scolaire") {
+    await env.DB.prepare("UPDATE photographers SET plan = 'free', plan_status = '' WHERE id = ?").bind(photographer.id).run();
+  }
+  const fresh = await env.DB.prepare("SELECT * FROM photographers WHERE id = ?").bind(photographer.id).first();
+  return subscriptionForAdmin(env, fresh);
+}
+
 // POST /api/admin/subscription/portal { returnUrl } — portail client Stripe
 // (changer de formule, carte, factures, résiliation).
 export async function openBillingPortal(request, env, photographer) {
@@ -358,11 +470,13 @@ export async function handleSubscriptionEvent(env, event) {
       await env.DB.prepare(
         `UPDATE photographers SET plan = ?, plan_status = ?, stripe_customer_id = ?, stripe_subscription_id = ?,
            trial_used_at = CASE WHEN ? THEN COALESCE(trial_used_at, ?) ELSE trial_used_at END,
-           founder_at = CASE WHEN ? THEN COALESCE(founder_at, ?) ELSE founder_at END
+           founder_at = CASE WHEN ? THEN COALESCE(founder_at, ?) ELSE founder_at END,
+           plan_started_at = ?,
+           founder_plan = CASE WHEN ? AND founder_plan = '' THEN ? ELSE founder_plan END
          WHERE id = ?`
       )
         .bind(planKey, trial ? "trialing" : "active", object.customer || "", object.subscription || "",
-              trial ? 1 : 0, now(), founder ? 1 : 0, now(), photographerId)
+              trial ? 1 : 0, now(), founder ? 1 : 0, now(), now(), founder ? 1 : 0, planKey, photographerId)
         .run();
     }
     return true;
@@ -388,13 +502,14 @@ export async function handleSubscriptionEvent(env, event) {
     await env.DB.prepare(
       `UPDATE photographers SET plan = ?, plan_status = ?, plan_renews_at = ?, plan_cancel_at_period_end = ?,
          stripe_subscription_id = ?, stripe_customer_id = CASE WHEN ? != '' THEN ? ELSE stripe_customer_id END,
-         plan_interval = CASE WHEN ? != '' THEN ? ELSE plan_interval END
+         plan_interval = CASE WHEN ? != '' THEN ? ELSE plan_interval END,
+         plan_started_at = CASE WHEN ? THEN ? ELSE plan_started_at END
        WHERE id = ?`
     )
       .bind(
         planKey, status, periodEnd, object.cancel_at_period_end ? 1 : 0,
         deleted ? "" : object.id || "", object.customer || "", object.customer || "",
-        interval, interval, photographer.id
+        interval, interval, !deleted && object.start_date ? 1 : 0, object.start_date || null, photographer.id
       )
       .run();
     return true;
