@@ -112,6 +112,24 @@ const badStatus = await studio.call("POST", `/api/admin/school/years/${yearId}`,
 check("dates de commande et ouverture des ventes ; incohérences refusées",
       dates.status === 200 && badDates.status === 400 && badStatus.status === 400, badDates.body.error);
 
+/* ---------- Gamme et prix ---------- */
+
+const starter = await studio.call("POST", `/api/admin/school/years/${yearId}/starter-products`, {});
+const starterAgain = await studio.call("POST", `/api/admin/school/years/${yearId}/starter-products`, {});
+check("la gamme de départ se crée une fois (pochettes, tirages, numérique, photo de groupe)",
+      starter.status === 200 && starter.body.products.length === 6 && starter.body.products.some((p) => p.scope === "group") && starterAgain.status === 409);
+const duo = await studio.call("POST", `/api/admin/school/years/${yearId}/products`, { kind: "pochette", scope: "portrait", name: "Pochette Duo", price: "18,50" });
+const badKindProduct = await studio.call("POST", `/api/admin/school/years/${yearId}/products`, { kind: "mug", name: "Mug", price: 12 });
+const tooCheap = await studio.call("POST", `/api/admin/school/years/${yearId}/products`, { kind: "tirage", name: "Gratuit", price: 0 });
+const ship = await studio.call("POST", `/api/admin/school/years/${yearId}/shipping`, { price: "6,90" });
+const hidden = await studio.call("POST", `/api/admin/school/products/${starter.body.products[3].id}`, { active: false, price: "16" });
+let shopAdmin = (await studio.call("GET", `/api/admin/school/years/${yearId}/shop`)).body;
+check("produit ajouté (prix à la virgule), type ou prix invalides refusés, frais de port et retrait de la vente enregistrés",
+      duo.status === 201 && badKindProduct.status === 400 && tooCheap.status === 400 && ship.status === 200 && hidden.status === 200 &&
+      shopAdmin.products.length === 7 && shopAdmin.products.find((p) => p.name === "Pochette Duo").priceCents === 1850 &&
+      shopAdmin.homeShippingCents === 690 && shopAdmin.products[3].active === false && shopAdmin.products[3].priceCents === 1600 &&
+      shopAdmin.totals.orders === 0 && shopAdmin.groups.length === 2);
+
 /* ---------- Année suivante : reprise des groupes ---------- */
 
 const next = await studio.call("POST", `/api/admin/school/schools/${schoolId}/years`, {});
@@ -124,6 +142,10 @@ check("l'année suivante reprend les classes et leurs enseignants, en préparati
       next.status === 201 && nextYear && nextYear.status === "draft" &&
       nextYear.groups.map((g) => g.name).join(",") === "M1,P3 A" && nextYear.groups[1].leader === "M. Dethier",
       nextYear && nextYear.groups.map((g) => g.name).join(","));
+const nextShop = (await studio.call("GET", `/api/admin/school/years/${next.body.id}/shop`)).body;
+check("l'année suivante reprend aussi la gamme, ses prix et les frais de port",
+      nextShop.products.length === 7 && nextShop.products.find((p) => p.name === "Pochette Duo").priceCents === 1850 &&
+      nextShop.products[3].active === false && nextShop.homeShippingCents === 690);
 check("l'année d'origine garde ses dates et ses classes ; la même année ne se crée pas deux fois",
       firstYear.status === "open" && firstYear.orderDeadline > 0 && firstYear.groups.length === 2 && again.status === 409);
 
@@ -145,14 +167,21 @@ const otherEdit = await free.call("POST", `/api/admin/school/schools/${schoolId}
 const otherGroup = await free.call("DELETE", `/api/admin/school/groups/${groups.body.ids[0]}`);
 const otherYear = await free.call("POST", `/api/admin/school/years/${yearId}/groups`, { names: ["Intrus"] });
 const otherCoupons = await free.call("POST", `/api/admin/school/years/${yearId}/coupons`, {});
-check("un autre photographe ne voit ni ne modifie rien de cet établissement",
-      otherSees === 0 && otherEdit.status === 404 && otherGroup.status === 404 && otherYear.status === 404 && otherCoupons.status === 404);
+const otherShop = await free.call("GET", `/api/admin/school/years/${yearId}/shop`);
+const otherProduct = await free.call("POST", `/api/admin/school/products/${starter.body.products[0].id}`, { price: 1 });
+const otherProduction = await free.call("POST", `/api/admin/school/years/${yearId}/production`, {});
+check("un autre photographe ne voit ni ne modifie rien de cet établissement (gamme et commandes comprises)",
+      otherSees === 0 && otherEdit.status === 404 && otherGroup.status === 404 && otherYear.status === 404 && otherCoupons.status === 404 &&
+      otherShop.status === 404 && otherProduct.status === 404 && otherProduction.status === 404);
 
 /* ---------- Suppression ---------- */
 
 const del = await studio.call("DELETE", `/api/admin/school/schools/${schoolId}`);
 overview = (await studio.call("GET", "/api/admin/school")).body;
-check("supprimer l'établissement emporte ses années et ses classes", del.status === 200 && overview.schools.length === 0);
+const leftovers = execFileSync("npx", ["wrangler", "d1", "execute", "galerie-protegee", "--local", "--json", "--command",
+  `SELECT COUNT(*) AS n FROM school_products WHERE year_id IN ('${yearId}', '${next.body.id}')`], { cwd: WORKER_ROOT, stdio: "pipe" }).toString();
+check("supprimer l'établissement emporte ses années, ses classes et sa gamme",
+      del.status === 200 && overview.schools.length === 0 && JSON.parse(leftovers.slice(leftovers.indexOf("[")))[0].results[0].n === 0);
 
 execFileSync("npx", ["wrangler", "d1", "execute", "galerie-protegee", "--local", "--command",
   `DELETE FROM photographers WHERE email IN ('${studio.email}', '${free.email}')`], { cwd: WORKER_ROOT, stdio: "pipe" });

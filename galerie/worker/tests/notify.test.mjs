@@ -6,6 +6,7 @@
 import {
   buildCaptureAlertEmail, buildPasswordResetEmail, buildEmailChangeConfirmationEmail,
   buildClientReminderEmail, buildPhotographerReminderEmail, buildSelectionValidatedEmail,
+  buildSchoolOrderConfirmationEmail,
 } from "../src/notify.js";
 
 const checks = [];
@@ -148,6 +149,18 @@ const validatedNoDue = buildSelectionValidatedEmail({
 });
 check("sans supplément, l'e-mail le dit explicitement et s'adresse à « votre client »",
       validatedNoDue.html.includes("Aucun supplément") && validatedNoDue.html.includes("Votre client"));
+
+const schoolLines = [
+  { name: "Pochette Classique", quantity: 2, priceCents: 2450, childName: "Léa" },
+  { name: "Fichier numérique HD", quantity: 1, priceCents: 1000, childName: "Tom <b>" },
+];
+const atSchool = buildSchoolOrderConfirmationEmail({ studioName: "Studio Test", schoolName: "École du Centre", delivery: "school", lines: schoolLines, shippingCents: 0, totalCents: 5900, familyUrl: "https://www.holypixx.com/ecole", hasDigital: true });
+const atHome = buildSchoolOrderConfirmationEmail({ studioName: "", schoolName: "École du Centre", delivery: "home", lines: schoolLines.slice(0, 1), shippingCents: 690, totalCents: 5590, familyUrl: "https://www.holypixx.com/ecole", hasDigital: false });
+check("commande scolaire : détail par enfant, total, livraison à l'école et lien vers les fichiers numériques",
+      atSchool.subject.includes("École du Centre") && atSchool.text.includes("2 × Pochette Classique — Léa") && atSchool.text.includes("59,00") &&
+      atSchool.html.includes("remises à vos enfants") && atSchool.html.includes("https://www.holypixx.com/ecole") && !atSchool.html.includes("Tom <b>"));
+check("commande scolaire à domicile : frais de port, pas de lien de téléchargement",
+      atHome.text.includes("Livraison à domicile : 6,90") && atHome.html.includes("adresse indiquée") && !atHome.html.includes("/ecole"));
 
 const failed = checks.filter((c) => !c.ok);
 console.log(failed.length ? `\n${failed.length} vérification(s) en échec.` : `\n${checks.length} vérifications, toutes passent.`);

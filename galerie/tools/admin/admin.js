@@ -4056,7 +4056,8 @@
           '<button type="submit" class="ad-btn ad-btn-primary">Ajouter</button></form>' +
           '<p class="ad-hint ad-sc-next">Ouvrez chaque ' + esc(kind.group.toLowerCase()) + " pour importer ses photos : Holypixx les regroupe par enfant d'après l'heure de prise de vue.</p>" +
           "</section>" +
-          couponsSectionHtml(year, null, kind)
+          couponsSectionHtml(year, null, kind) +
+          '<div id="ad-sc-shop"><p class="ad-loading">Chargement de la boutique…</p></div>'
         : "") +
 
       '<section class="ad-sc-danger"><div class="ad-section-header"><h3>Supprimer</h3></div>' +
@@ -4142,6 +4143,7 @@
           }
         });
       });
+      loadSchoolShop(year, kind);
       document.getElementById("ad-sc-add-groups").addEventListener("submit", async function (event) {
         event.preventDefault();
         var names = this.names.value.split(/\n/).map(function (n) { return n.trim(); }).filter(Boolean);
@@ -4170,6 +4172,169 @@
         toast("Établissement supprimé.");
         history.pushState(null, "", "#/scolaire");
         renderSchool(true);
+      } catch (err) {
+        toast(err.message, true);
+      }
+    });
+  }
+
+  /* ---------- Boutique d'une année : gamme, prix, commandes ---------- */
+
+  var SCHOOL_SCOPES = { portrait: "Portrait de l'enfant", group: "Photo de groupe" };
+
+  async function loadSchoolShop(year, kind) {
+    var host = document.getElementById("ad-sc-shop");
+    if (!host) return;
+    var shop;
+    try {
+      shop = await api("GET", "/school/years/" + encodeURIComponent(year.id) + "/shop");
+    } catch (err) {
+      host.innerHTML = '<p class="ad-hint ad-acc-warn">' + esc(err.message) + "</p>";
+      return;
+    }
+    renderSchoolShop(host, year, kind, shop);
+  }
+
+  function schoolProductRowHtml(p, shop) {
+    return (
+      '<li data-product="' + esc(p.id) + '"' + (p.active ? "" : ' class="ad-sc-off"') + ">" +
+      '<div class="ad-sc-prod-main">' +
+      '<input type="text" class="ad-sc-in" data-pfield="name" maxlength="80" value="' + esc(p.name) + '" aria-label="Nom du produit" />' +
+      '<input type="text" class="ad-sc-in ad-sc-in-muted" data-pfield="description" maxlength="240" value="' + esc(p.description) + '" placeholder="Contenu, format…" aria-label="Description" />' +
+      "</div>" +
+      '<span class="ad-sc-tag">' + esc(shop.kinds[p.kind] || p.kind) + " · " + esc(p.scope === "group" ? "groupe" : "portrait") + "</span>" +
+      '<label class="ad-sc-price"><input type="text" inputmode="decimal" class="ad-sc-in" data-pfield="price" value="' + eurosInput(p.priceCents).replace(".", ",") + '" aria-label="Prix en euros" /> €</label>' +
+      '<label class="ad-sc-toggle"><input type="checkbox" data-pfield="active"' + (p.active ? " checked" : "") + " /> En vente</label>" +
+      '<button type="button" class="ad-link-btn ad-sc-del" data-del-product aria-label="Supprimer ' + esc(p.name) + '">Supprimer</button>' +
+      "</li>"
+    );
+  }
+
+  function renderSchoolShop(host, year, kind, shop) {
+    var t = shop.totals;
+    var groupWord = kind.group.toLowerCase();
+    var productsHtml = shop.products.length
+      ? '<ul class="ad-sc-products">' + shop.products.map(function (p) { return schoolProductRowHtml(p, shop); }).join("") + "</ul>"
+      : '<div class="ad-sc-empty-shop"><p>Aucun produit pour cette année. Partez d\'une gamme type (pochettes, tirages, fichier numérique, photo de groupe) et ajustez les prix, ou créez vos produits un à un.</p>' +
+        '<button type="button" class="ad-btn ad-btn-primary" id="ad-sc-starter">Créer la gamme de départ</button></div>';
+
+    var groupRows = shop.groups.map(function (g) {
+      var pct = g.children ? Math.round((g.childrenOrdered / g.children) * 100) : 0;
+      return (
+        "<tr><td>" + esc(g.name) + "</td>" +
+        '<td><span class="ad-sc-meter" aria-hidden="true"><span style="width:' + pct + '%"></span></span> ' + g.childrenOrdered + " / " + g.children + "</td>" +
+        '<td class="ad-num">' + g.orders + "</td>" +
+        '<td class="ad-num">' + formatEuros(g.amountCents) + "</td>" +
+        '<td class="ad-num">' + (g.orders ? '<a class="ad-link-btn" href="/local/school/years/' + encodeURIComponent(year.id) + "/production?group=" + encodeURIComponent(g.id) + '" download>Fichier</a>' : "") + "</td></tr>"
+      );
+    }).join("");
+
+    var orderRows = shop.orders.map(function (o) {
+      return (
+        "<tr><td>" + esc(new Date(o.paidAt * 1000).toLocaleDateString("fr-BE")) + "</td>" +
+        "<td>" + esc(o.email) + "</td>" +
+        "<td>" + (o.delivery === "home" ? "À domicile" + (o.shippingName ? " · " + esc(o.shippingName) : "") : "École") + "</td>" +
+        '<td class="ad-num">' + o.lines + "</td>" +
+        '<td class="ad-num">' + formatEuros(o.amountCents) + "</td></tr>"
+      );
+    }).join("");
+
+    host.innerHTML =
+      '<section class="ad-sc-shop" id="ad-sc-range"><div class="ad-section-header"><h3>Gamme et prix · ' + esc(year.label) + "</h3></div>" +
+      '<p class="ad-hint">Ce que les familles peuvent commander, sur un portrait de leur enfant ou sur la photo de ' + esc(groupWord) + '. Prix TTC, payés en ligne ; les montants arrivent sur votre compte Stripe.</p>' +
+      productsHtml +
+      '<form id="ad-sc-add-product" class="ad-sc-prod-form">' +
+      '<label class="ad-field"><span>Type</span><select name="kind">' +
+      Object.keys(shop.kinds).map(function (k) { return '<option value="' + k + '">' + esc(shop.kinds[k]) + "</option>"; }).join("") + "</select></label>" +
+      '<label class="ad-field"><span>Sur</span><select name="scope">' +
+      Object.keys(SCHOOL_SCOPES).map(function (k) { return '<option value="' + k + '">' + esc(k === "group" ? "Photo de " + groupWord : SCHOOL_SCOPES[k]) + "</option>"; }).join("") + "</select></label>" +
+      '<label class="ad-field"><span>Nom</span><input type="text" name="name" required maxlength="80" placeholder="Pochette Duo" /></label>' +
+      '<label class="ad-field"><span>Contenu <em>(facultatif)</em></span><input type="text" name="description" maxlength="240" placeholder="2 tirages 13×18" /></label>' +
+      '<label class="ad-field"><span>Prix (€)</span><input type="text" name="price" required inputmode="decimal" placeholder="18,00" /></label>' +
+      '<button type="submit" class="ad-btn">+ Ajouter</button></form>' +
+      '<div class="ad-sc-shipping"><label class="ad-field"><span>Frais de port, commande à domicile <em>(après la commande groupée)</em></span>' +
+      '<span class="ad-sc-price"><input type="text" inputmode="decimal" id="ad-sc-shipping" value="' + eurosInput(shop.homeShippingCents).replace(".", ",") + '" /> €</span></label>' +
+      '<p class="ad-hint">Jusqu\'à la date de commande groupée, tout est livré à l\'établissement, sans frais. Ensuite, et jusqu\'à la date de commande à domicile, les familles paient ces frais et donnent leur adresse.</p></div>' +
+      "</section>" +
+
+      '<section class="ad-sc-shop" id="ad-sc-orders"><div class="ad-section-header"><h3>Commandes · ' + esc(year.label) + "</h3>" +
+      (t.orders ? '<a class="ad-btn ad-btn-primary" href="/local/school/years/' + encodeURIComponent(year.id) + '/production" download>Fichier de production (ZIP)</a>' : "") + "</div>" +
+      '<div class="ad-sc-kpis">' +
+      '<div><strong>' + t.orders + "</strong><span>commande" + (t.orders > 1 ? "s" : "") + "</span></div>" +
+      '<div><strong>' + t.families + "</strong><span>famille" + (t.families > 1 ? "s" : "") + "</span></div>" +
+      '<div><strong>' + formatEuros(t.amountCents) + "</strong><span>encaissé</span></div>" +
+      '<div><strong>' + formatEuros(t.amountCents - t.feeCents) + "</strong><span>pour vous, après frais</span></div>" +
+      "</div>" +
+      (shop.groups.length
+        ? '<div class="ad-table-wrap"><table class="ad-table ad-sc-group-table"><thead><tr><th>' + esc(kind.group) + "</th><th>Enfants ayant commandé</th>" +
+          '<th class="ad-num">Commandes</th><th class="ad-num">Montant</th><th class="ad-num"><span class="ad-visually-hidden">Production</span></th></tr></thead><tbody>' + groupRows + "</tbody></table></div>"
+        : "") +
+      (shop.orders.length
+        ? '<h4 class="ad-sc-subhead">Dernières commandes</h4><div class="ad-table-wrap"><table class="ad-table"><thead><tr><th>Date</th><th>E-mail</th><th>Livraison</th>' +
+          '<th class="ad-num">Articles</th><th class="ad-num">Montant</th></tr></thead><tbody>' + orderRows + "</tbody></table></div>"
+        : '<p class="ad-hint">Aucune commande pour l\'instant. Elles apparaîtront ici dès que les familles auront payé.</p>') +
+      '<p class="ad-hint">Le fichier de production range les fichiers d\'impression par ' + esc(groupWord) + " puis par enfant, avec un récapitulatif (CSV) et la liste de distribution.</p>" +
+      "</section>";
+
+    function refresh() { loadSchoolShop(year, kind); }
+
+    var starter = document.getElementById("ad-sc-starter");
+    if (starter) starter.addEventListener("click", async function () {
+      this.disabled = true;
+      try {
+        await api("POST", "/school/years/" + encodeURIComponent(year.id) + "/starter-products", {});
+        toast("Gamme de départ créée : ajustez les prix à votre convenance.");
+        refresh();
+      } catch (err) {
+        toast(err.message, true);
+        this.disabled = false;
+      }
+    });
+
+    host.querySelectorAll("[data-product]").forEach(function (li) {
+      var id = li.getAttribute("data-product");
+      li.querySelectorAll("[data-pfield]").forEach(function (input) {
+        input.addEventListener("change", async function () {
+          var field = input.getAttribute("data-pfield");
+          var patch = {};
+          patch[field] = field === "active" ? input.checked : input.value;
+          try {
+            await api("POST", "/school/products/" + encodeURIComponent(id), patch);
+            if (field === "active") li.classList.toggle("ad-sc-off", !input.checked);
+            toast("Enregistré.");
+          } catch (err) {
+            toast(err.message, true);
+          }
+        });
+      });
+      li.querySelector("[data-del-product]").addEventListener("click", async function () {
+        try {
+          await api("DELETE", "/school/products/" + encodeURIComponent(id));
+          refresh();
+        } catch (err) {
+          toast(err.message, true);
+        }
+      });
+    });
+
+    document.getElementById("ad-sc-add-product").addEventListener("submit", async function (event) {
+      event.preventDefault();
+      var form = this;
+      try {
+        await api("POST", "/school/years/" + encodeURIComponent(year.id) + "/products", {
+          kind: form.kind.value, scope: form.scope.value, name: form.name.value, description: form.description.value, price: form.price.value,
+        });
+        toast("Produit ajouté.");
+        refresh();
+      } catch (err) {
+        toast(err.message, true);
+      }
+    });
+
+    document.getElementById("ad-sc-shipping").addEventListener("change", async function () {
+      try {
+        await api("POST", "/school/years/" + encodeURIComponent(year.id) + "/shipping", { price: this.value });
+        toast("Frais de port enregistrés.");
       } catch (err) {
         toast(err.message, true);
       }

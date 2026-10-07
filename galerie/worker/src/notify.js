@@ -360,6 +360,37 @@ export function buildPrintOrderConfirmationEmail({ studioName, galleryTitle, rec
   return { subject, html: emailShell({ preheader: subject, bodyHtml }), text };
 }
 
+// Aux parents : commande de photos scolaires payée. Livraison groupée à
+// l'établissement (distribuée aux enfants) ou à domicile.
+export function buildSchoolOrderConfirmationEmail({ studioName, schoolName, delivery, lines, shippingCents, totalCents, familyUrl, hasDigital }) {
+  const subject = `Votre commande de photos est confirmée — ${schoolName}`;
+  const rows = lines.map((l) => ({ copies: l.quantity, label: `${l.name} — ${l.childName}`, lineCents: l.priceCents * l.quantity }));
+  const tableHtml = `<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;margin:6px 0 16px;font-family:${SANS};font-size:14px;color:${CHARCOAL};">` +
+    rows.map((r) => `<tr><td style="padding:4px 0;">${r.copies} × ${escapeHtml(r.label)}</td><td style="padding:4px 0;text-align:right;white-space:nowrap;">${formatEuros(r.lineCents)}</td></tr>`).join("") +
+    `</table>`;
+  const where = delivery === "home"
+    ? "Vos photos sont imprimées puis envoyées à l'adresse indiquée lors du paiement."
+    : `Vos photos sont imprimées avec celles de toute l'école puis remises à vos enfants par « ${escapeHtml(schoolName)} ».`;
+  const bodyHtml =
+    eyebrow(studioName || "Photos scolaires") +
+    heading("Merci pour votre commande !") +
+    paragraph(`Votre paiement est bien reçu. ${where}`) +
+    tableHtml +
+    paragraph(`${shippingCents ? `Livraison à domicile : ${formatEuros(shippingCents)}<br />` : ""}<strong>Total réglé : ${formatEuros(totalCents)}</strong>`) +
+    (hasDigital ? paragraph("Vos fichiers numériques sont déjà à télécharger dans votre espace famille.") + emailButton(familyUrl, "Ouvrir mon espace famille") : "");
+  const text = [
+    `Votre commande de photos (${schoolName}) est confirmée.`,
+    "",
+    ...rows.map((r) => `- ${r.copies} × ${r.label} : ${formatEuros(r.lineCents)}`),
+    ...(shippingCents ? [`Livraison à domicile : ${formatEuros(shippingCents)}`] : []),
+    `Total réglé : ${formatEuros(totalCents)}`,
+    "",
+    delivery === "home" ? "Vos photos seront envoyées à l'adresse indiquée lors du paiement." : "Vos photos seront remises à vos enfants par l'établissement.",
+    ...(hasDigital ? [`Vos fichiers numériques : ${familyUrl}`] : []),
+  ].join("\n");
+  return { subject, html: emailShell({ preheader: subject, bodyHtml }), text };
+}
+
 // Au photographe : nouvelle commande payée, et ce qu'il en est côté labo.
 export function buildPrintOrderPhotographerEmail({ galleryTitle, recipientName, lines, totalCents, labStatus, labError, adminUrl }) {
   const failed = labStatus === "failed";
@@ -609,6 +640,10 @@ export async function sendPrintOrderConfirmation(env, params) {
     ...buildPrintOrderConfirmationEmail(params),
     ...(params.pdfBytes ? { attachments: [{ filename: `facture-${params.invoiceNumber}.pdf`, content: bytesToBase64(params.pdfBytes) }] } : {}),
   });
+}
+
+export async function sendSchoolOrderConfirmation(env, params) {
+  await sendEmail(env, { to: params.to, ...buildSchoolOrderConfirmationEmail(params) });
 }
 
 export async function sendPrintOrderPhotographer(env, params) {

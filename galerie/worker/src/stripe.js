@@ -139,6 +139,30 @@ export function createCheckoutSession(env, connectedAccountId, { label, unitAmou
   });
 }
 
+// Commande d'une famille (module scolaire) : plusieurs articles, charge de
+// destination vers le photographe comme pour les tirages, adresse de
+// livraison demandée par Stripe seulement pour un envoi à domicile.
+export function createSchoolCheckout(env, connectedAccountId, { lineItems, email, collectShipping, successUrl, cancelUrl, metadata, applicationFeeCents = 0 }) {
+  return stripeRequest(env, "POST", "/checkout/sessions", {
+    mode: "payment",
+    line_items: lineItems.map((item) => ({
+      price_data: { currency: "eur", unit_amount: item.unitAmountCents, product_data: { name: item.name } },
+      quantity: item.quantity,
+    })),
+    ...(email ? { customer_email: email } : {}),
+    ...(collectShipping ? { shipping_address_collection: { allowed_countries: ["BE", "FR", "LU", "NL", "DE"] } } : {}),
+    payment_intent_data: {
+      transfer_data: { destination: connectedAccountId },
+      ...(applicationFeeCents > 0 ? { application_fee_amount: applicationFeeCents } : {}),
+      metadata,
+    },
+    managed_payments: { enabled: false },
+    success_url: successUrl,
+    cancel_url: cancelUrl,
+    metadata,
+  });
+}
+
 // Abonnement Holypixx du photographe (formule mensuelle), payé à la
 // PLATEFORME : pas de transfert, pas de compte connecté. Le prix est créé à
 // la volée (price_data + recurring). La formule voyage dans les métadonnées

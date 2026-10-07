@@ -1036,3 +1036,44 @@ h3 { font-size: 1.15rem; margin-bottom: .9rem; }
 .ad-sc-child [data-child-name] { border-bottom: 1px dashed var(--line); border-radius: 6px 6px 0 0; }
 .ad-sc-code { font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: .74rem; letter-spacing: .06em; padding: .1rem .45rem; border-radius: 6px; background: var(--sand); color: var(--ink); }
 .ad-sc-coupons .ad-sc-actions { margin: .8rem 0; }
+
+/* Boutique d'une année scolaire : gamme, prix, commandes. */
+.ad-sc-products { list-style: none; margin: .4rem 0 1.2rem; padding: 0; display: grid; gap: .45rem; }
+.ad-sc-products li {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto auto; gap: .7rem; align-items: center;
+  padding: .5rem .7rem; border: 1px solid var(--line); border-radius: 10px; background: #fff;
+}
+.ad-sc-products li.ad-sc-off { background: var(--ivory); }
+.ad-sc-products li.ad-sc-off .ad-sc-prod-main { opacity: .55; }
+.ad-sc-prod-main { display: grid; gap: .1rem; min-width: 0; }
+.ad-sc-prod-main .ad-sc-in:first-child { font-weight: 500; }
+.ad-sc-tag { font-size: .72rem; letter-spacing: .03em; color: var(--muted); background: var(--sand); border-radius: 999px; padding: .15rem .6rem; white-space: nowrap; }
+.ad-sc-price { display: inline-flex; align-items: center; gap: .3rem; white-space: nowrap; color: var(--muted); }
+.ad-sc-price input { width: 5.2rem; text-align: right; font-variant-numeric: tabular-nums; color: var(--ink); border: 1px solid var(--line); background: var(--ivory); }
+.ad-sc-toggle { display: inline-flex; align-items: center; gap: .35rem; font-size: .82rem; color: var(--muted); white-space: nowrap; cursor: pointer; }
+.ad-sc-toggle input { accent-color: var(--rose); }
+.ad-sc-empty-shop { display: grid; gap: .8rem; justify-items: start; padding: 1rem 1.1rem; margin: .4rem 0 1.2rem; border: 1px dashed var(--line); border-radius: 12px; background: var(--ivory); }
+.ad-sc-prod-form { display: grid; grid-template-columns: auto auto minmax(0, 1fr) minmax(0, 1.2fr) 6.5rem auto; gap: .6rem; align-items: end; }
+.ad-sc-prod-form .ad-field { margin-bottom: 0; }
+.ad-sc-prod-form select, .ad-sc-prod-form input { width: 100%; font-family: var(--sans); font-size: .92rem; padding: .55rem .65rem; border: 1px solid var(--line); border-radius: 8px; background: var(--ivory); color: var(--ink); }
+.ad-sc-shipping { margin-top: 1.3rem; padding-top: 1rem; border-top: 1px solid var(--line); display: grid; gap: .3rem; }
+.ad-sc-shipping .ad-field { margin-bottom: 0; }
+.ad-sc-shipping .ad-sc-price input { padding: .5rem .6rem; border-radius: 8px; font: inherit; }
+.ad-sc-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .6rem; margin: .4rem 0 1.1rem; }
+.ad-sc-kpis div { border: 1px solid var(--line); border-radius: 12px; padding: .7rem .9rem; background: #fff; display: grid; gap: .1rem; }
+.ad-sc-kpis strong { font-family: var(--serif); font-size: 1.5rem; font-weight: 500; color: var(--ink); font-variant-numeric: tabular-nums; line-height: 1.2; }
+.ad-sc-kpis span { font-size: .78rem; color: var(--muted); }
+.ad-table .ad-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ad-sc-meter { display: inline-block; vertical-align: middle; width: 70px; height: 6px; border-radius: 6px; background: var(--sand); overflow: hidden; margin-right: .4rem; }
+.ad-sc-meter span { display: block; height: 100%; background: var(--rose); border-radius: 6px; }
+.ad-sc-subhead { margin: 1.3rem 0 .4rem; font-size: .95rem; font-weight: 500; color: var(--ink); }
+.ad-visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+@media (max-width: 900px) {
+  .ad-sc-prod-form { grid-template-columns: 1fr 1fr; }
+  .ad-sc-prod-form .ad-field:nth-child(3), .ad-sc-prod-form .ad-field:nth-child(4) { grid-column: 1 / -1; }
+}
+@media (max-width: 720px) {
+  .ad-sc-products li { grid-template-columns: minmax(0, 1fr) auto; }
+  .ad-sc-products li .ad-sc-prod-main { grid-column: 1 / -1; }
+  .ad-sc-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

@@ -4,7 +4,7 @@
 //
 //   node tests/fees.test.mjs
 
-import { paymentFeeRule, feeCentsFor, paymentFeeCents, feeRuleLabel, DEFAULT_FEE_PERCENT, DEFAULT_FEE_FIXED_CENTS } from "../src/fees.js";
+import { paymentFeeRule, schoolFeeRule, feeCentsFor, paymentFeeCents, feeRuleLabel, DEFAULT_FEE_PERCENT, DEFAULT_FEE_FIXED_CENTS } from "../src/fees.js";
 
 const checks = [];
 function check(label, ok, detail) {
@@ -34,6 +34,16 @@ check("la propriétaire de la plateforme ne paie aucun frais",
 check("libellé affiché au photographe",
       feeRuleLabel(rule) === "2 % + 0,30 €" && feeRuleLabel(tuned) === "1,5 % + 0,25 €" &&
       feeRuleLabel({ percent: 0, fixedCents: 0 }) === "aucun" && feeRuleLabel({ percent: 0, fixedCents: 50 }) === "0,50 €");
+
+// Ventes scolaires : la formule Scolaire paie 4,5 % (frais bancaires compris),
+// Studio garde la règle ordinaire, la propriétaire ne paie rien.
+const scolaire = schoolFeeRule(env, { email: "a@test.invalid", plan: "scolaire", plan_status: "active" });
+const scolaireOff = schoolFeeRule(env, { email: "a@test.invalid", plan: "scolaire", plan_status: "canceled" });
+const studioRule = schoolFeeRule(env, { email: "b@test.invalid", plan: "studio", plan_status: "active" });
+check("ventes scolaires : 4,5 % pour Scolaire, règle ordinaire pour Studio, rien pour la propriétaire",
+      scolaire.percent === 4.5 && scolaire.fixedCents === 0 && feeCentsFor(scolaire, 7100) === 320 &&
+      studioRule.percent === 2 && studioRule.fixedCents === 30 && scolaireOff.percent === 2 &&
+      schoolFeeRule(env, { email: "proprietaire@test.invalid", plan: "scolaire", plan_status: "active" }).percent === 0);
 
 const failed = checks.filter((c) => !c.ok);
 console.log(failed.length ? `\n${failed.length} vérification(s) en échec.` : `\n${checks.length} vérifications, toutes passent.`);
