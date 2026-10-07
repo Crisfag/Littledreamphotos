@@ -13,7 +13,8 @@ import { listLibrary, setMusicChoice, musicForAdmin } from "./music.js";
 import { handleDeliveryAdmin, deliveryForAdmin } from "./delivery.js";
 import { sendDeliveryReady } from "./notify.js";
 import { exportAccount, deleteAccount } from "./privacy.js";
-import { galleryQuotaRefusal, subscriptionForAdmin, startSubscriptionCheckout, openBillingPortal, syncSubscription } from "./subscription.js";
+import { galleryQuotaRefusal, subscriptionForAdmin, startSubscriptionCheckout, openBillingPortal, syncSubscription, setScolairePlan } from "./subscription.js";
+import { handleSchoolAdmin } from "./school.js";
 import { setPromo, sendPromoToClient, promoForAdmin } from "./campaigns.js";
 import { galleryUrlFor } from "./reminders.js";
 import { salesForAdmin } from "./sales.js";
@@ -841,6 +842,12 @@ export async function handleAdmin(request, env, ctx, path) {
   if (section === "account" && parts.length === 3 && request.method === "POST") {
     return updateStudioName(request, env, photographerId);
   }
+  // Module photo de groupe : établissements, années, groupes (school.js).
+  if (section === "school") {
+    const photographer = await env.DB.prepare("SELECT * FROM photographers WHERE id = ?").bind(photographerId).first();
+    if (!photographer) return fail(401, "Session invalide");
+    return handleSchoolAdmin(request, env, photographer, parts.slice(3));
+  }
   // Abonnement Holypixx du photographe (formules, paiement mensuel Stripe).
   if (section === "subscription") {
     const photographer = await env.DB.prepare("SELECT * FROM photographers WHERE id = ?").bind(photographerId).first();
@@ -849,6 +856,7 @@ export async function handleAdmin(request, env, ctx, path) {
     if (parts.length === 4 && parts[3] === "checkout" && request.method === "POST") return startSubscriptionCheckout(request, env, photographer);
     if (parts.length === 4 && parts[3] === "portal" && request.method === "POST") return openBillingPortal(request, env, photographer);
     if (parts.length === 4 && parts[3] === "sync" && request.method === "POST") return syncSubscription(request, env, photographer);
+    if (parts.length === 4 && parts[3] === "scolaire" && request.method === "POST") return setScolairePlan(request, env, photographer);
   }
   // Droits RGPD : export de toutes les données du compte, suppression définitive.
   if (section === "account" && parts[3] === "export" && parts.length === 4 && request.method === "GET") {

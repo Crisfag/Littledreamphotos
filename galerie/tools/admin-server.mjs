@@ -597,6 +597,19 @@ async function handleApi(req, res, url) {
   }
 
   // /local/portfolio… — mini-site portfolio (voir worker/src/portfolio.js).
+  // /local/school/… — module photo de groupe (établissements, années,
+  // groupes) : simple relais JSON vers /api/admin/school/….
+  if (parts[0] === "school" && ["GET", "POST", "DELETE"].includes(req.method)) {
+    const path = "/api/admin/school" + (parts.length > 1 ? "/" + parts.slice(1).map(encodeURIComponent).join("/") : "");
+    try {
+      const body = req.method === "POST" ? JSON.parse((await readBody(req)).toString("utf8") || "{}") : undefined;
+      const status = req.method === "POST" && /\/(schools|years|groups)$/.test(path) ? 201 : 200;
+      return json(res, status, await client.request(req.method, path, body));
+    } catch (err) {
+      return relayError(res, err, "Le module scolaire n'a pas pu répondre");
+    }
+  }
+
   if (parts[0] === "portfolio") {
     const base = "/api/admin/portfolio";
     try {
@@ -670,6 +683,11 @@ async function handleApi(req, res, url) {
       if (parts.length === 2 && (parts[1] === "checkout" || parts[1] === "portal") && req.method === "POST") {
         const body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
         return json(res, 200, await client.request("POST", `/api/admin/subscription/${parts[1]}`, { plan: body.plan, interval: body.interval, returnUrl: back }));
+      }
+      // Formule Scolaire : sans abonnement, activée ou désactivée d'un clic.
+      if (parts.length === 2 && parts[1] === "scolaire" && req.method === "POST") {
+        const body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
+        return json(res, 200, await client.request("POST", "/api/admin/subscription/scolaire", { on: body.on === true }));
       }
       // Retour de Stripe : relit la session de paiement sans attendre le webhook.
       if (parts.length === 2 && parts[1] === "sync" && req.method === "POST") {

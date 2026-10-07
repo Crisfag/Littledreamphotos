@@ -967,3 +967,39 @@ h3 { font-size: 1.15rem; margin-bottom: .9rem; }
   .ad-acc-toolbar .ad-seg { border-radius: 14px; }
   .ad-acc-search { max-width: none; }
 }
+
+/* ---------- Écoles, crèches et clubs ---------- */
+
+.ad-sc-kind { font-size: .7rem; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; color: var(--rose-deep); margin-bottom: .2rem; }
+.ad-sc-back { margin-bottom: .6rem; }
+.ad-sc-form { display: grid; gap: .9rem; max-width: 640px; }
+.ad-sc-form .ad-seg { justify-self: start; }
+.ad-sc-actions { display: flex; flex-wrap: wrap; gap: .6rem; align-items: center; }
+.ad-sc-years { display: flex; flex-wrap: wrap; gap: .6rem; align-items: center; }
+.ad-sc-years .ad-seg { flex-wrap: wrap; }
+.ad-sc-year-fields { grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: end; }
+.ad-sc-groups { list-style: none; margin: 0 0 1.2rem; padding: 0; display: grid; gap: .45rem; }
+.ad-sc-groups li {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto auto; gap: .6rem; align-items: center;
+  padding: .45rem .6rem; border: 1px solid var(--line); border-radius: 10px; background: #fff;
+}
+.ad-sc-in { font: inherit; font-size: .92rem; border: 1px solid transparent; border-radius: 6px; padding: .3rem .45rem; background: transparent; color: var(--ink); min-width: 0; }
+.ad-sc-in:hover { border-color: var(--line); }
+.ad-sc-in:focus { border-color: var(--rose); outline: none; background: var(--ivory); }
+.ad-sc-in-muted { color: var(--muted); }
+.ad-sc-count { white-space: nowrap; }
+.ad-sc-del { color: var(--danger); font-size: .82rem; }
+.ad-sc-add { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .8rem; align-items: end; max-width: 640px; }
+.ad-sc-add textarea { font: inherit; }
+.ad-sc-next { margin-top: 1rem; }
+.ad-sc-teaser ul { margin: .6rem 0 1rem 1.1rem; display: grid; gap: .3rem; }
+@media (max-width: 720px) {
+  .ad-sc-year-fields { grid-template-columns: 1fr; }
+  .ad-sc-groups li { grid-template-columns: minmax(0, 1fr) auto; }
+  .ad-sc-groups li .ad-sc-in-muted { grid-column: 1 / -1; grid-row: 2; }
+  .ad-sc-count { display: none; }
+  .ad-sc-add { grid-template-columns: 1fr; }
+}
+.ad-sc-year-fields select { width: 100%; font-family: var(--sans); font-size: .95rem; padding: .6rem .75rem; border: 1px solid var(--line); border-radius: 8px; background: var(--ivory); color: var(--ink); }
+.ad-sc-year-fields .ad-field, .ad-sc-add .ad-field { margin-bottom: 0; }
+.ad-plans-group { grid-column: 1 / -1; margin: 1.2rem 0 0; font-size: 1.1rem; }

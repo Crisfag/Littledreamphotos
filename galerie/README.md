@@ -444,6 +444,23 @@ Le tableau de bord s'organise en trois onglets, chacun avec son propre lien
   manqué) et l'enregistre au lieu d'en créer un second. Les renouvellements
   et résiliations, eux, n'arrivent que par le webhook : un refus de
   signature est journalisé (`npx wrangler tail`, « signature invalide »).
+- **Écoles, crèches et clubs** (`worker/src/school.js`, onglet « Écoles &
+  clubs ») : module photo de groupe, en cours de construction.
+  - *Organisation* : un établissement (école, crèche ou club sportif, le
+    vocabulaire suit : classe, section, équipe ; année scolaire ou saison)
+    se crée une fois ; chaque année reprend en un clic les groupes et leurs
+    responsables de l'année précédente. Statut de l'année (en préparation,
+    en vente, ventes closes, archivée), date de la commande groupée (livrée
+    à l'établissement) et de la commande à domicile.
+  - *Formules* : **Scolaire** (sans abonnement, 4,5 % des ventes scolaires,
+    frais bancaires compris, galeries classiques comme Découverte ; activée
+    d'un clic) et **Studio** (49 €/mois ou 490 €/an : tout Pro plus le
+    scolaire sans commission ; offre Fondateurs à part, 30 places : 440 € la
+    1re année ou 45 €/mois pendant 12 mois). Elles ne sont proposées qu'avec
+    `SCHOOL_LAUNCHED = "1"` (wrangler.toml) ; d'ici là seule la propriétaire
+    voit le module, pour le préparer.
+  - *À venir* : import des photos par groupe et regroupement par enfant,
+    fiches parents QR, espace famille, commande groupée et labo intégré.
 - **Campagnes de vente des tirages** (`worker/src/campaigns.js`) :
   - *Promotion à durée limitée* sur une galerie (−10 à −50 % jusqu'à une
     date, depuis la section boutique de la fiche) : bandeau et prix barrés

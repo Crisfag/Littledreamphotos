@@ -25,6 +25,9 @@ ADMIN_URL = "https://holypixx-admin.onrender.com"
 # foi du client : chaque route /api/owner/* revérifie côté serveur que le
 # compte connecté correspond bien à cette adresse.
 OWNER_EMAIL = "fagnantchristine@gmail.com"
+# Module écoles, crèches et clubs (school.js) et ses formules Scolaire et
+# Studio : "1" pour les proposer à tous ; sinon seule la propriétaire le voit.
+SCHOOL_LAUNCHED = "0"
 # Adresse publique du site qui héberge web/galerie.html : sert à construire
 # le lien « Revoir ma galerie » des e-mails de relance envoyés aux clients.
 PUBLIC_SITE_ORIGIN = "https://www.holypixx.com"

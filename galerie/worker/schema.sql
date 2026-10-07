@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS photographers (
   founder_at     INTEGER,                    -- place prise dans l'offre Fondateurs
   plan_started_at INTEGER,                   -- début de l'abonnement en cours (start_date Stripe)
   last_login_at  INTEGER,                    -- dernière connexion au tableau de bord
+  founder_plan   TEXT NOT NULL DEFAULT '',   -- formule souscrite au prix Fondateurs (offre galeries ou Studio)
   -- Paiement en ligne des suppléments (Stripe Connect, comptes « Express ») :
   -- chaque photographe connecte son propre compte, l'argent lui arrive
   -- directement, jamais via un compte pivot. stripe_charges_enabled reflète
@@ -469,6 +470,7 @@ CREATE INDEX IF NOT EXISTS idx_email_changes_photographer ON email_changes(photo
 --   ALTER TABLE photographers ADD COLUMN founder_at INTEGER;
 --   ALTER TABLE photographers ADD COLUMN plan_started_at INTEGER;
 --   ALTER TABLE photographers ADD COLUMN last_login_at INTEGER;
+--   ALTER TABLE photographers ADD COLUMN founder_plan TEXT NOT NULL DEFAULT '';
 --   ALTER TABLE galleries ADD COLUMN promo_percent INTEGER NOT NULL DEFAULT 0;
 --   ALTER TABLE galleries ADD COLUMN promo_ends_at INTEGER;
 --   ALTER TABLE galleries ADD COLUMN promo_sent_at INTEGER;
@@ -629,3 +631,46 @@ CREATE TABLE IF NOT EXISTS portfolio_messages (
 );
 CREATE INDEX IF NOT EXISTS idx_portfolio_messages ON portfolio_messages(photographer_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_portfolio_messages_ip ON portfolio_messages(ip_hash, created_at);
+
+-- Module photo de groupe (écoles, crèches, clubs sportifs) : voir school.js.
+-- Un établissement se crée une fois ; chaque année (ou saison) reprend ses
+-- groupes (classes, sections, équipes). Les enfants et leurs photos se
+-- rattachent aux groupes.
+CREATE TABLE IF NOT EXISTS schools (
+  id              TEXT PRIMARY KEY,
+  photographer_id TEXT NOT NULL REFERENCES photographers(id) ON DELETE CASCADE,
+  kind            TEXT NOT NULL DEFAULT 'ecole',   -- ecole, creche, club
+  name            TEXT NOT NULL,
+  address         TEXT NOT NULL DEFAULT '',
+  contact_name    TEXT NOT NULL DEFAULT '',
+  contact_email   TEXT NOT NULL DEFAULT '',
+  contact_phone   TEXT NOT NULL DEFAULT '',
+  created_at      INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_schools_photographer ON schools(photographer_id, created_at);
+
+CREATE TABLE IF NOT EXISTS school_years (
+  id             TEXT PRIMARY KEY,
+  school_id      TEXT NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
+  label          TEXT NOT NULL,                    -- « 2026-2027 »
+  -- Commande groupée (livrée à l'établissement) jusqu'à order_deadline, puis
+  -- commande à domicile jusqu'à late_deadline (epoch secondes, NULL = non fixée).
+  order_deadline INTEGER,
+  late_deadline  INTEGER,
+  status         TEXT NOT NULL DEFAULT 'draft',    -- draft, open, closed, archived
+  created_at     INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_school_years_school ON school_years(school_id, created_at);
+
+CREATE TABLE IF NOT EXISTS school_groups (
+  id         TEXT PRIMARY KEY,
+  year_id    TEXT NOT NULL REFERENCES school_years(id) ON DELETE CASCADE,
+  name       TEXT NOT NULL,                        -- « P3 », « Section des grands », « U9 »
+  leader     TEXT NOT NULL DEFAULT '',             -- enseignant, puéricultrice, entraîneur
+  sort       INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_school_groups_year ON school_groups(year_id, sort);
+
+-- Migration (bases créées avant le module) : les trois CREATE TABLE
+-- ci-dessus, plus la colonne photographers.founder_plan (voir plus haut).
