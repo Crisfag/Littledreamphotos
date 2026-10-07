@@ -182,6 +182,29 @@ export function buildPasswordResetEmail({ studioName, resetUrl, ts }) {
 }
 
 // Fonction pure : facile à tester unitairement, sans accès réseau.
+// Lien de connexion à l'espace famille du module scolaire (ecole.html).
+export function buildFamilyLoginLinkEmail({ loginUrl, ts }) {
+  const subject = "Votre lien pour retrouver les photos de vos enfants";
+  const bodyHtml = [
+    eyebrow("Espace famille"),
+    heading("Retrouver vos photos"),
+    paragraph(`Vous avez demandé à vous connecter à votre espace famille le ${escapeHtml(formatWhen(ts))}.`),
+    emailButton(loginUrl, "Ouvrir mon espace famille"),
+    `<div style="height:20px;"></div>`,
+    paragraph(
+      "Ce lien n'est valable qu'une demi-heure et ne fonctionne qu'une seule fois. Si vous n'êtes pas à l'origine de cette demande, ignorez simplement cet e-mail.",
+      { small: true }
+    ),
+  ].join("\n");
+  const html = emailShell({ preheader: "Votre lien de connexion à l'espace famille", bodyHtml });
+  const text =
+    `Vous avez demandé à vous connecter à votre espace famille le ${formatWhen(ts)}. ` +
+    `Ouvrez-le ici : ${loginUrl} ` +
+    "Ce lien n'est valable qu'une demi-heure et ne fonctionne qu'une seule fois.";
+  return { subject, html, text };
+}
+
+// Fonction pure : facile à tester unitairement, sans accès réseau.
 export function buildEmailChangeConfirmationEmail({ studioName, confirmUrl, ts }) {
   const subject = "Confirmez votre nouvelle adresse e-mail Holypixx";
 
@@ -558,6 +581,10 @@ export async function sendCaptureAlert(env, params) {
 
 export async function sendPasswordResetEmail(env, params) {
   await sendEmail(env, { to: params.to, ...buildPasswordResetEmail(params) });
+}
+
+export async function sendFamilyLoginLink(env, params) {
+  await sendEmail(env, { to: params.to, ...buildFamilyLoginLinkEmail(params) });
 }
 
 export async function sendEmailChangeConfirmation(env, params) {

@@ -9,6 +9,7 @@
 // Variables :
 //   ALLOWED_ORIGINS → origines autorisées, séparées par des virgules
 
+import { handleFamily, purgeFamilies } from "./family.js";
 import { handleAdmin } from "./admin.js";
 import { handleViewer } from "./viewer.js";
 import { handleAuth } from "./authPhotographer.js";
@@ -86,6 +87,9 @@ export default {
         response = await handleOwner(request, env, path);
       } else if (path.startsWith("/api/gallery/")) {
         response = await handleViewer(request, env, ctx, path);
+      } else if (path.startsWith("/api/family/")) {
+        // Espace famille du module scolaire (ecole.html) : code + e-mail.
+        response = await handleFamily(request, env, path);
       } else if (path === "/api/public/plans" && request.method === "GET") {
         // Formules, essai et places Fondateurs restantes (page d'accueil).
         response = await plansForPublic(env);
@@ -148,6 +152,12 @@ export default {
     ctx.waitUntil(
       purgeOldPortfolioMessages(env).catch((err) => {
         console.error("Purge des messages : échec :", err && err.stack ? err.stack : err);
+      })
+    );
+    // Espaces famille vides depuis un an, liens de connexion périmés.
+    ctx.waitUntil(
+      purgeFamilies(env).catch((err) => {
+        console.error("Purge des espaces famille : échec :", err && err.stack ? err.stack : err);
       })
     );
     // Conservation limitée des journaux d'accès (voir privacy.js).
