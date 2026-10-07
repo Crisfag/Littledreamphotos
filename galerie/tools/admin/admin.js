@@ -3935,6 +3935,25 @@
     });
   }
 
+  // Fiches parents (une par enfant : portrait, code, QR, date limite), pour
+  // toute l'année ou un seul groupe. Le code d'accès est attribué au premier
+  // téléchargement, puis ne change plus.
+  function couponsSectionHtml(year, group, kind) {
+    var base = "/local/school/years/" + encodeURIComponent(year.id) + "/coupons?" + (group ? "group=" + encodeURIComponent(group.id) + "&" : "");
+    return (
+      '<section class="ad-sc-coupons"><div class="ad-section-header"><h3>Fiches parents' + (group ? "" : " · toutes les " + esc(kind.groups.toLowerCase())) + "</h3></div>" +
+      '<p class="ad-hint">Une fiche par enfant : son portrait, ' + (group ? "le " + esc(kind.group.toLowerCase()) : "son " + esc(kind.group.toLowerCase())) +
+      ", la date limite, un code d'accès personnel et un QR code qui ouvre l'espace famille. À distribuer par l'établissement.</p>" +
+      '<div class="ad-sc-actions">' +
+      '<a class="ad-btn ad-btn-primary" href="' + base + 'format=pdf" download>PDF à imprimer (A4, 4 par feuille)</a>' +
+      '<a class="ad-btn" href="' + base + 'format=lab" download>Images 10×15 pour le labo (ZIP)</a></div>' +
+      '<p class="ad-hint">Le PDF regroupe les fiches ' + (group ? "" : esc(kind.group.toLowerCase()) + " par " + esc(kind.group.toLowerCase()) + ", ") +
+      "chacune précédée d'une feuille-paquet (liste des enfants à cocher à la distribution) ; les images 10×15 se tirent comme des photos, rangées par dossier.</p>" +
+      (year.orderDeadline ? "" : '<p class="ad-hint ad-acc-warn">Aucune date de commande groupée n\'est fixée : elle n\'apparaîtra pas sur les fiches.</p>') +
+      "</section>"
+    );
+  }
+
   function renderSchoolList(data) {
     var cards = data.schools.map(function (s) {
       var kind = schoolKindOf(data, s.kind);
@@ -4036,7 +4055,8 @@
           '<textarea name="names" rows="3" placeholder="' + esc(school.kind === "club" ? "U7\nU9\nU11" : school.kind === "creche" ? "Bébés\nMoyens\nGrands" : "M1\nM2\nP1") + '"></textarea></label>' +
           '<button type="submit" class="ad-btn ad-btn-primary">Ajouter</button></form>' +
           '<p class="ad-hint ad-sc-next">Ouvrez chaque ' + esc(kind.group.toLowerCase()) + " pour importer ses photos : Holypixx les regroupe par enfant d'après l'heure de prise de vue.</p>" +
-          "</section>"
+          "</section>" +
+          couponsSectionHtml(year, null, kind)
         : "") +
 
       '<section class="ad-sc-danger"><div class="ad-section-header"><h3>Supprimer</h3></div>' +
@@ -4216,6 +4236,7 @@
         '<header><span class="ad-sc-child-num">' + c.number + "</span>" +
         '<input type="text" class="ad-sc-in" data-child-name maxlength="60" value="' + esc(c.firstName) + '" placeholder="Prénom (facultatif)" aria-label="Prénom de l\'enfant ' + c.number + '" />' +
         '<span class="ad-hint">' + (byChild[c.id] || []).length + " photo" + ((byChild[c.id] || []).length > 1 ? "s" : "") + "</span>" +
+        (c.code ? '<span class="ad-sc-code" title="Code d\'accès de la famille">' + esc(c.code) + "</span>" : "") +
         (prev ? '<button type="button" class="ad-link-btn" data-merge="' + esc(prev.id) + '" title="Même enfant : réunir avec ' + esc(childLabel(prev)) + '">Fusionner avec le n° ' + prev.number + "</button>" : "") +
         "</header>" + thumbs(byChild[c.id] || []) + "</article>"
       );
@@ -4260,6 +4281,7 @@
         : '<p class="ad-hint">Choisissez la ou les photos de groupe dans la grille, puis « Déplacer vers… » ' + esc(kind.groupPhoto.toLowerCase()) + ". Toutes les familles du groupe la verront.</p>") +
       "</section>" +
 
+      (data.children.length ? couponsSectionHtml({ id: data.year.id, orderDeadline: data.year.orderDeadline }, data.group, kind) : "") +
       '<section><div class="ad-section-header"><h3>Enfants (' + data.children.length + ")</h3></div>" +
       (data.children.length
         ? '<p class="ad-hint">Vérifiez d\'un coup d\'œil : chaque carte doit montrer un seul enfant. Cliquez sur des photos pour les choisir et les déplacer ; deux cartes du même enfant se fusionnent.</p>' +

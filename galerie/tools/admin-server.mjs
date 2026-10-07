@@ -25,6 +25,9 @@ import { fileURLToPath } from "node:url";
 import sharp from "sharp";
 import { processPhoto, DEFAULTS } from "./lib/pipeline.mjs";
 import { takenAtFromExif } from "./lib/exif.mjs";
+import { renderCoupon, renderPacketSheet, composeA4, formatDeadline, COUPON_MM, LAB_MM } from "./lib/coupons.mjs";
+import { PdfImageWriter, A4_LANDSCAPE_PT } from "./lib/pdf.mjs";
+import { ZipWriter } from "./lib/zip.mjs";
 import { PREVIEW_COLS, PREVIEW_ROWS } from "./lib/tiles.mjs";
 import { WorkerClient } from "./lib/client.mjs";
 import { identify, isMatch, MATCH_MIN_SNR, MATCH_MIN_BITS } from "./lib/forensic.mjs";
@@ -635,6 +638,68 @@ async function handleApi(req, res, url) {
     } catch (err) {
       console.error(`Échec du traitement de ${file.name || "?"} (groupe scolaire) :`, err);
       return relayError(res, err, `Échec du traitement de ${file.name || "cette photo"}`);
+    }
+  }
+
+  // GET /local/school/years/:id/coupons?format=pdf|lab[&group=…] — fiches
+  // parents, prêtes à imprimer : PDF A4 (4 par feuille, groupe par groupe,
+  // feuille-paquet en tête de chaque groupe) ou ZIP d'images 10×15 pour le
+  // labo. Écrit au fil de l'eau : une grande école ne tient pas en mémoire.
+  if (parts[0] === "school" && parts[1] === "years" && parts[3] === "coupons" && parts.length === 4 && req.method === "GET") {
+    const url = new URL(req.url, "http://localhost");
+    const format = url.searchParams.get("format") === "lab" ? "lab" : "pdf";
+    const groupId = url.searchParams.get("group") || "";
+    let data;
+    try {
+      data = await client.request("POST", `/api/admin/school/years/${encodeURIComponent(decodeURIComponent(parts[2]))}/coupons`, groupId ? { groupId } : {});
+    } catch (err) {
+      return relayError(res, err, "Les fiches n'ont pas pu être préparées");
+    }
+    const groups = data.groups.filter((g) => g.children.length);
+    if (!groups.length) return json(res, 400, { error: "Aucun enfant à qui remettre une fiche : importez et regroupez d'abord les photos." });
+    const deadline = formatDeadline(data.year.orderDeadline);
+    const base = { school: data.school, kind: data.kind, deadline, studioName: data.studioName, familyUrl: data.familyUrl };
+    const portraitOf = async (child) => (child.portraitPhotoId ? client.getOriginal(child.portraitPhotoId).catch(() => null) : null);
+    const safe = (s) => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Za-z0-9-]+/g, "_").replace(/^_+|_+$/g, "") || "groupe";
+    const stem = `fiches-${safe(data.school.name)}-${data.year.label}${groupId && groups[0] ? "-" + safe(groups[0].name) : ""}`;
+    try {
+      if (format === "lab") {
+        res.writeHead(200, { "content-type": "application/zip", "content-disposition": `attachment; filename="${stem}-10x15.zip"`, "cache-control": "no-store" });
+        const zip = new ZipWriter((chunk) => res.write(chunk));
+        for (const [gi, group] of groups.entries()) {
+          for (const child of group.children) {
+            const jpeg = await withProcessingSlot(async () => renderCoupon({
+              ...base, group, child, widthMm: LAB_MM.width, heightMm: LAB_MM.height, dpi: 300, portrait: await portraitOf(child),
+            }));
+            const name = `${String(gi + 1).padStart(2, "0")}_${safe(group.name)}/${safe(group.name)}_${String(child.number).padStart(3, "0")}${child.firstName ? "_" + safe(child.firstName) : ""}.jpg`;
+            zip.addFile(name, jpeg);
+          }
+        }
+        zip.end();
+        return res.end();
+      }
+      const DPI = 200;
+      const pages = groups.reduce((n, g) => n + 1 + Math.ceil(g.children.length / 4), 0);
+      res.writeHead(200, { "content-type": "application/pdf", "content-disposition": `attachment; filename="${stem}.pdf"`, "cache-control": "no-store" });
+      const pdf = new PdfImageWriter((chunk) => res.write(chunk), pages, A4_LANDSCAPE_PT);
+      for (const group of groups) {
+        await pdf.addPage(await withProcessingSlot(() => renderPacketSheet({ dpi: DPI, school: data.school, kind: data.kind, year: data.year, group, children: group.children, studioName: data.studioName })));
+        for (let i = 0; i < group.children.length; i += 4) {
+          const sheet = [];
+          for (const child of group.children.slice(i, i + 4)) {
+            sheet.push(await withProcessingSlot(async () => renderCoupon({
+              ...base, group, child, widthMm: COUPON_MM.width, heightMm: COUPON_MM.height, dpi: DPI, portrait: await portraitOf(child),
+            })));
+          }
+          await pdf.addPage(await withProcessingSlot(() => composeA4(sheet, DPI)));
+        }
+      }
+      pdf.end();
+      return res.end();
+    } catch (err) {
+      console.error("Échec de la génération des fiches :", err);
+      if (!res.headersSent) return relayError(res, err, "Les fiches n'ont pas pu être générées");
+      return res.destroy(err);
     }
   }
 

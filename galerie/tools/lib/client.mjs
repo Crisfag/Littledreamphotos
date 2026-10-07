@@ -225,6 +225,18 @@ export class WorkerClient {
     return this.request("PUT", `/api/admin/tiles/${photoId}/${level}/${col}/${row}`, buffer, true);
   }
 
+  // Fichier d'impression d'une photo (JPEG pleine définition), ou null.
+  async getOriginal(photoId) {
+    if (!this.token) await this.login();
+    const url = `${this.base}/api/admin/photos/${encodeURIComponent(photoId)}/original`;
+    let response = await fetch(url, { headers: { authorization: `Bearer ${this.token}` } });
+    if (response.status === 401 && this.canRelogin) {
+      await this.login();
+      response = await fetch(url, { headers: { authorization: `Bearer ${this.token}` } });
+    }
+    return response.ok ? Buffer.from(await response.arrayBuffer()) : null;
+  }
+
   // Renvoie la réponse brute (pas de JSON) : c'est un flux d'octets JPEG.
   async getTileResponse(photoId, level, col, row) {
     if (!this.token) await this.login();

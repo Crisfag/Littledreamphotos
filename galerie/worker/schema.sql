@@ -695,9 +695,14 @@ CREATE TABLE IF NOT EXISTS school_children (
   group_id   TEXT NOT NULL REFERENCES school_groups(id) ON DELETE CASCADE,
   number     INTEGER NOT NULL,
   first_name TEXT NOT NULL DEFAULT '',
+  -- Code d'accès de la famille (fiche parent) : 8 caractères sans
+  -- ambiguïté (ni 0/O ni 1/I), unique sur la plateforme ; '' tant que les
+  -- fiches n'ont pas été préparées. Stable une fois attribué.
+  access_code TEXT NOT NULL DEFAULT '',
   created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_school_children_group ON school_children(group_id, number);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_school_children_code ON school_children(access_code) WHERE access_code != '';
 
 -- Migration (bases créées avant le module) : les CREATE TABLE ci-dessus,
 -- plus :
@@ -708,3 +713,4 @@ CREATE INDEX IF NOT EXISTS idx_school_children_group ON school_children(group_id
 --   ALTER TABLE photos ADD COLUMN source_name TEXT NOT NULL DEFAULT '';
 --   ALTER TABLE photos ADD COLUMN child_id TEXT NOT NULL DEFAULT '';
 --   ALTER TABLE photos ADD COLUMN school_role TEXT NOT NULL DEFAULT '';
+--   ALTER TABLE school_children ADD COLUMN access_code TEXT NOT NULL DEFAULT '';

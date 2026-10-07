@@ -121,6 +121,39 @@ await page.reload({ waitUntil: "domcontentloaded" });
 await page.waitForSelector(".ad-sc-child");
 check("le prénom (facultatif) est enregistré", (await page.locator(".ad-sc-child").first().locator("[data-child-name]").inputValue()) === "Léa");
 
+// Fiches parents : PDF (feuille-paquet + 4 fiches par feuille) et ZIP 10×15.
+const pdfHref = await page.getAttribute('.ad-sc-coupons a[href*="format=pdf"]', "href");
+const pdf = await page.request.get(BASE + pdfHref);
+const pdfBody = await pdf.body();
+const pdfPages = (pdfBody.toString("latin1").match(/\/Type \/Page\b/g) || []).length;
+check("les fiches de la classe sortent en PDF : une feuille-paquet puis 4 fiches par feuille A4",
+      pdf.status() === 200 && pdfBody.subarray(0, 5).toString() === "%PDF-" && pdfPages === 2 && pdfBody.toString("latin1").trim().endsWith("%%EOF"),
+      `${pdf.status()} · ${pdfPages} page(s) · ${pdfBody.length} octets`);
+const zip = await page.request.get(BASE + pdfHref.replace("format=pdf", "format=lab"));
+const zipBody = await zip.body();
+const zipNames = [];
+for (let i = 0; i + 30 < zipBody.length; ) {
+  if (zipBody.readUInt32LE(i) !== 0x04034b50) break;
+  const size = zipBody.readUInt32LE(i + 18);
+  const nameLength = zipBody.readUInt16LE(i + 26);
+  zipNames.push(zipBody.subarray(i + 30, i + 30 + nameLength).toString("utf8"));
+  i += 30 + nameLength + size;
+}
+const firstImage = await sharp(zipBody.subarray(30 + Buffer.byteLength(zipNames[0] || "", "utf8"))).metadata().catch(() => ({}));
+check("et en images 10×15 pour le labo, une par enfant, rangées par classe",
+      zip.status() === 200 && zipNames.length === 2 && zipNames.every((n) => n.startsWith("01_P3/P3_00")) && zipNames[0].endsWith("_Lea.jpg") &&
+      firstImage.width >= 1790 && firstImage.height >= 1200, zipNames.join(", "));
+await page.reload({ waitUntil: "domcontentloaded" });
+await page.waitForSelector(".ad-sc-code");
+const codes = await page.$$eval(".ad-sc-code", (els) => els.map((e) => e.textContent));
+await page.request.get(BASE + pdfHref);
+await page.reload({ waitUntil: "domcontentloaded" });
+await page.waitForSelector(".ad-sc-code");
+const codesAgain = await page.$$eval(".ad-sc-code", (els) => els.map((e) => e.textContent));
+check("chaque enfant reçoit un code d'accès lisible (8 caractères sans 0/O ni 1/I), stable d'un téléchargement à l'autre",
+      codes.length === 2 && codes.every((c) => /^[A-HJ-NP-Z2-9]{4} [A-HJ-NP-Z2-9]{4}$/.test(c)) && codes.join() === codesAgain.join() && codes[0] !== codes[1],
+      codes.join(" / "));
+
 await page.click("#ad-sc-back-school");
 await page.waitForSelector("[data-open-group]");
 const summary = await page.textContent("[data-open-group]");

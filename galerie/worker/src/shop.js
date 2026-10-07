@@ -462,6 +462,15 @@ export async function handleShopAdmin(request, env, photographerId, parts, helpe
     if (!photo) return fail(404, "Photo introuvable");
     return putOriginal(request, env, photo, photographerId);
   }
+  // Relecture du fichier d'impression par son propriétaire (vignette des
+  // fiches parents du module scolaire, générées par admin-server).
+  if (section === "photos" && parts.length === 5 && parts[4] === "original" && method === "GET") {
+    const photo = await helpers.ownedPhoto(env, photographerId, parts[3]);
+    if (!photo || !photo.has_original) return fail(404, "Fichier d'impression introuvable");
+    const object = await env.TILES.get(originalKey(photo.gallery_id, photo.id));
+    if (!object) return fail(404, "Fichier d'impression introuvable");
+    return new Response(object.body, { headers: { "content-type": "image/jpeg", "cache-control": "private, no-store" } });
+  }
   return null;
 }
 
