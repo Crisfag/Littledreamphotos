@@ -30,6 +30,8 @@ CREATE TABLE IF NOT EXISTS photographers (
   plan_interval  TEXT NOT NULL DEFAULT '',   -- 'month' ou 'year' (facturation de l'abonnement)
   trial_used_at  INTEGER,                    -- essai gratuit consommé (une fois par compte)
   founder_at     INTEGER,                    -- place prise dans l'offre Fondateurs
+  plan_started_at INTEGER,                   -- début de l'abonnement en cours (start_date Stripe)
+  last_login_at  INTEGER,                    -- dernière connexion au tableau de bord
   -- Paiement en ligne des suppléments (Stripe Connect, comptes « Express ») :
   -- chaque photographe connecte son propre compte, l'argent lui arrive
   -- directement, jamais via un compte pivot. stripe_charges_enabled reflète
@@ -465,6 +467,8 @@ CREATE INDEX IF NOT EXISTS idx_email_changes_photographer ON email_changes(photo
 --   ALTER TABLE photographers ADD COLUMN plan_interval TEXT NOT NULL DEFAULT '';
 --   ALTER TABLE photographers ADD COLUMN trial_used_at INTEGER;
 --   ALTER TABLE photographers ADD COLUMN founder_at INTEGER;
+--   ALTER TABLE photographers ADD COLUMN plan_started_at INTEGER;
+--   ALTER TABLE photographers ADD COLUMN last_login_at INTEGER;
 --   ALTER TABLE galleries ADD COLUMN promo_percent INTEGER NOT NULL DEFAULT 0;
 --   ALTER TABLE galleries ADD COLUMN promo_ends_at INTEGER;
 --   ALTER TABLE galleries ADD COLUMN promo_sent_at INTEGER;

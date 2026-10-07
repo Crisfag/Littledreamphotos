@@ -90,6 +90,17 @@ export function planFor(env, photographer) {
   return PLANS.free;
 }
 
+// Ce que l'abonnement rapporte par mois, ramené au mois pour l'annuel. Un
+// essai ne rapporte encore rien ; le prix Fondateurs vaut pour la 1re année.
+const YEAR_SECONDS = 365 * 24 * 60 * 60;
+export function monthlyRevenueCents(photographer, at = now()) {
+  const plan = PLANS[photographer?.plan];
+  if (!plan || plan.key === "free" || !["active", "past_due"].includes(photographer.plan_status)) return 0;
+  const founder = photographer.founder_at && at < photographer.founder_at + YEAR_SECONDS;
+  if (photographer.plan_interval === "year") return Math.round((founder ? plan.founderYearlyCents : plan.yearlyCents) / 12);
+  return founder ? plan.founderCents : plan.priceCents;
+}
+
 export function hasFeature(env, photographer, feature) {
   return Boolean(planFor(env, photographer).features[feature]);
 }
@@ -358,11 +369,12 @@ export async function handleSubscriptionEvent(env, event) {
       await env.DB.prepare(
         `UPDATE photographers SET plan = ?, plan_status = ?, stripe_customer_id = ?, stripe_subscription_id = ?,
            trial_used_at = CASE WHEN ? THEN COALESCE(trial_used_at, ?) ELSE trial_used_at END,
-           founder_at = CASE WHEN ? THEN COALESCE(founder_at, ?) ELSE founder_at END
+           founder_at = CASE WHEN ? THEN COALESCE(founder_at, ?) ELSE founder_at END,
+           plan_started_at = ?
          WHERE id = ?`
       )
         .bind(planKey, trial ? "trialing" : "active", object.customer || "", object.subscription || "",
-              trial ? 1 : 0, now(), founder ? 1 : 0, now(), photographerId)
+              trial ? 1 : 0, now(), founder ? 1 : 0, now(), now(), photographerId)
         .run();
     }
     return true;
@@ -388,13 +400,14 @@ export async function handleSubscriptionEvent(env, event) {
     await env.DB.prepare(
       `UPDATE photographers SET plan = ?, plan_status = ?, plan_renews_at = ?, plan_cancel_at_period_end = ?,
          stripe_subscription_id = ?, stripe_customer_id = CASE WHEN ? != '' THEN ? ELSE stripe_customer_id END,
-         plan_interval = CASE WHEN ? != '' THEN ? ELSE plan_interval END
+         plan_interval = CASE WHEN ? != '' THEN ? ELSE plan_interval END,
+         plan_started_at = CASE WHEN ? THEN ? ELSE plan_started_at END
        WHERE id = ?`
     )
       .bind(
         planKey, status, periodEnd, object.cancel_at_period_end ? 1 : 0,
         deleted ? "" : object.id || "", object.customer || "", object.customer || "",
-        interval, interval, photographer.id
+        interval, interval, !deleted && object.start_date ? 1 : 0, object.start_date || null, photographer.id
       )
       .run();
     return true;

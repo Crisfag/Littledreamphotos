@@ -15,7 +15,8 @@ import { runReminders } from "./reminders.js";
 import { handleOwnerMusic } from "./music.js";
 import { runSalesReminders } from "./campaigns.js";
 import { shopState } from "./shop.js";
-import { runStoragePurge } from "./storage.js";
+import { runStoragePurge, storageUsage, storageQuotaFor } from "./storage.js";
+import { PLANS, FOUNDERS_LIMIT, planFor, isOwner, monthlyRevenueCents } from "./subscription.js";
 
 async function requireOwner(env, photographerId) {
   if (!env.OWNER_EMAIL) return null;
@@ -34,27 +35,73 @@ async function listPhotographers(env, photographerId) {
   if (!owner) return fail(403, "Accès réservé");
 
   const { results } = await env.DB.prepare(
-    `SELECT p.id, p.email, p.first_name, p.last_name, p.studio_name, p.created_at,
-            p.stripe_charges_enabled,
+    `SELECT p.id, p.email, p.first_name, p.last_name, p.studio_name, p.created_at, p.last_login_at,
+            p.stripe_charges_enabled, p.plan, p.plan_status, p.plan_interval, p.plan_renews_at,
+            p.plan_cancel_at_period_end, p.plan_started_at, p.trial_used_at, p.founder_at,
+            p.stripe_customer_id, p.stripe_account_id,
             (SELECT COUNT(*) FROM galleries g WHERE g.photographer_id = p.id) AS galleries_count,
             (SELECT COUNT(*) FROM photos ph JOIN galleries g ON g.id = ph.gallery_id
-             WHERE g.photographer_id = p.id) AS photos_count
+             WHERE g.photographer_id = p.id) AS photos_count,
+            (SELECT COALESCE(SUM(pay.amount_cents), 0) FROM payments pay JOIN galleries g ON g.id = pay.gallery_id
+             WHERE g.photographer_id = p.id AND pay.status = 'paid') AS sales_cents,
+            (SELECT MAX(g.created_at) FROM galleries g WHERE g.photographer_id = p.id) AS last_gallery_at
      FROM photographers p ORDER BY p.created_at DESC`
   ).all();
 
-  const photographers = results.map((p) => ({
-    id: p.id,
-    email: p.email,
-    firstName: p.first_name || "",
-    lastName: p.last_name || "",
-    studioName: p.studio_name || "",
-    createdAt: p.created_at,
-    galleriesCount: p.galleries_count,
-    photosCount: p.photos_count,
-    stripeChargesEnabled: Boolean(p.stripe_charges_enabled),
-  }));
+  const photographers = [];
+  for (const p of results) {
+    const owner = isOwner(env, p);
+    const effective = planFor(env, p);
+    const usage = await storageUsage(env, p.id);
+    photographers.push({
+      id: p.id,
+      email: p.email,
+      firstName: p.first_name || "",
+      lastName: p.last_name || "",
+      studioName: p.studio_name || "",
+      createdAt: p.created_at,
+      lastLoginAt: p.last_login_at || null,
+      lastGalleryAt: p.last_gallery_at || null,
+      galleriesCount: p.galleries_count,
+      photosCount: p.photos_count,
+      salesCents: p.sales_cents || 0,
+      stripeChargesEnabled: Boolean(p.stripe_charges_enabled),
+      stripeConnected: Boolean(p.stripe_account_id),
+      isOwner: owner,
+      subscription: {
+        // Formule souscrite (même si l'abonnement ne l'ouvre plus) et formule
+        // effectivement accordée aujourd'hui.
+        plan: PLANS[p.plan] ? p.plan : "free",
+        planLabel: (PLANS[p.plan] || PLANS.free).label,
+        effectivePlan: effective.key,
+        status: p.plan_status || "",
+        interval: p.plan_interval || "",
+        startedAt: p.plan_started_at || null,
+        renewsAt: p.plan_renews_at || null,
+        cancelAtPeriodEnd: Boolean(p.plan_cancel_at_period_end),
+        trialUsed: Boolean(p.trial_used_at),
+        founder: Boolean(p.founder_at),
+        monthlyRevenueCents: owner ? 0 : monthlyRevenueCents(p),
+        stripeCustomerId: p.stripe_customer_id || "",
+      },
+      storage: { usedBytes: usage.totalBytes, quotaBytes: storageQuotaFor(env, p) },
+    });
+  }
 
-  return json({ photographers });
+  // Vue d'ensemble des abonnements, en tête de la liste.
+  const others = photographers.filter((p) => !p.isOwner);
+  const summary = {
+    accounts: others.length,
+    paying: others.filter((p) => ["active", "past_due"].includes(p.subscription.status) && p.subscription.plan !== "free").length,
+    trialing: others.filter((p) => p.subscription.status === "trialing" && p.subscription.plan !== "free").length,
+    pastDue: others.filter((p) => p.subscription.status === "past_due").length,
+    cancelling: others.filter((p) => p.subscription.cancelAtPeriodEnd && p.subscription.effectivePlan !== "free").length,
+    monthlyRevenueCents: others.reduce((n, p) => n + p.subscription.monthlyRevenueCents, 0),
+    founders: others.filter((p) => p.subscription.founder).length,
+    foundersLimit: FOUNDERS_LIMIT,
+  };
+
+  return json({ photographers, summary });
 }
 
 // Compteurs plateforme — même calcul que getStats (admin.js), mais sans

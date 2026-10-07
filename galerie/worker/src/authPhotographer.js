@@ -60,7 +60,10 @@ async function tooManyFailures(env, emailHash) {
   return (row?.n || 0) >= MAX_FAILED_LOGINS;
 }
 
-function issueSession(env, photographer) {
+// Toute ouverture de session (inscription, connexion, nouveau mot de passe)
+// est notée : la propriétaire repère ainsi les comptes inactifs.
+async function issueSession(env, photographer) {
+  await env.DB.prepare("UPDATE photographers SET last_login_at = ? WHERE id = ?").bind(now(), photographer.id).run();
   return signToken(env.AUTH_SECRET, {
     typ: "photographer",
     sub: photographer.id,

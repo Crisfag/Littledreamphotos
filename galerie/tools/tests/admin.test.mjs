@@ -405,6 +405,22 @@ const ownerPageText = await ownerPage.textContent("#ad-view");
 check("le compte créé plus haut dans ce test apparaît dans la liste, avec son prénom/nom",
       ownerPageText.indexOf("Julie Testeuse") !== -1 && ownerPageText.indexOf(email) !== -1,
       ownerPageText.indexOf(email) !== -1 ? "e-mail présent" : "e-mail absent");
+{
+  // Comptes : formule et dernière connexion par compte, filtres et recherche.
+  const row = ownerPage.locator("#ad-acc-table tbody tr", { hasText: email });
+  const rowText = await row.textContent();
+  check("chaque compte montre sa formule, son activité et sa dernière connexion",
+        /Pro|Essentiel|Découverte/.test(rowText) && rowText.includes("Connexion : aujourd'hui") &&
+        (await ownerPage.textContent("#ad-view")).includes("Revenu mensuel récurrent"), rowText.replace(/\s+/g, " ").slice(0, 160));
+  await ownerPage.fill("#ad-acc-search", email);
+  const visible = await ownerPage.locator("#ad-acc-table tbody tr:not([hidden])").count();
+  await ownerPage.fill("#ad-acc-search", "");
+  await ownerPage.click('[data-filter="free"]');
+  const ownerHiddenInFree = await ownerPage.locator("#ad-acc-table tbody tr:not([hidden])", { hasText: OWNER_EMAIL }).count() === 0;
+  await ownerPage.click('[data-filter="all"]');
+  check("la recherche isole un compte, le filtre « Gratuits » écarte le compte propriétaire",
+        visible === 1 && ownerHiddenInFree, `${visible} ligne(s) trouvée(s)`);
+}
 check("la section trafic & sources explique comment brancher Cloudflare Web Analytics",
       ownerPageText.indexOf("Cloudflare Web Analytics") !== -1);
 

@@ -661,8 +661,16 @@ restent propres à chaque photographe :
   compte, simplement sans filtrer par photographe.
 - **Inscriptions par mois** : un simple décompte des nouveaux comptes,
   douze derniers mois, pour voir la croissance d'un coup d'œil.
-- **Comptes photographes** : la liste complète — prénom, nom, studio,
-  e-mail, date d'inscription, nombre de galeries et de photos, statut
+- **Comptes photographes** : en tête, abonnés payants, essais en cours,
+  revenu mensuel récurrent (annuels ramenés au mois, prix Fondateurs la
+  1re année), places Fondateurs prises et comptes à surveiller (paiement en
+  retard, résiliation programmée, pas de connexion depuis 30 jours). Puis
+  la liste complète, filtrable (payants, essai, gratuits, à surveiller) et
+  cherchable : studio, nom, e-mail, date d'inscription ; formule, statut,
+  mensuel ou annuel, Fondateur ; début de l'abonnement et prochaine
+  échéance (fin d'essai, renouvellement ou fin programmée) ; revenu ;
+  galeries, photos et dernière connexion ; stockage utilisé sur le quota ;
+  ventes encaissées ; statut Stripe Connect et lien vers la fiche client
   Stripe. Jamais les mots de passe, bien sûr, ni rien que vous n'ayez pas
   déjà le droit de voir sur votre propre compte.
 - **Trafic du site et sources de visiteurs** : ce Worker ne suit pas le

@@ -1910,29 +1910,183 @@
     );
   }
 
+  /* ---------- Admin : comptes photographes ---------- */
+
+  function shortDate(ts) {
+    if (!ts) return "";
+    return new Date(ts * 1000).toLocaleDateString("fr-BE", { day: "numeric", month: "short", year: "numeric" });
+  }
+
+  // « aujourd'hui », « il y a 3 j », « il y a 2 mois ».
+  function sinceText(ts) {
+    if (!ts) return "jamais";
+    var days = Math.floor((Date.now() / 1000 - ts) / 86400);
+    if (days < 1) return "aujourd'hui";
+    if (days < 60) return "il y a " + days + " j";
+    return "il y a " + Math.floor(days / 30) + " mois";
+  }
+
+  var ACCOUNT_STATUS = {
+    trialing: { text: "Essai", cls: "ad-acc-status-trial" },
+    active: { text: "Actif", cls: "ad-acc-status-ok" },
+    past_due: { text: "Paiement en retard", cls: "ad-acc-status-warn" },
+    unpaid: { text: "Impayé", cls: "ad-acc-status-bad" },
+    canceled: { text: "Résilié", cls: "ad-acc-status-muted" },
+    incomplete: { text: "Paiement inachevé", cls: "ad-acc-status-warn" },
+    incomplete_expired: { text: "Paiement abandonné", cls: "ad-acc-status-muted" },
+  };
+
+  // Catégorie d'un compte pour les filtres.
+  function accountGroup(p) {
+    var sub = p.subscription;
+    if (p.isOwner) return "owner";
+    if (sub.plan !== "free" && sub.status === "trialing") return "trial";
+    if (sub.plan !== "free" && (sub.status === "active" || sub.status === "past_due")) return "paying";
+    return "free";
+  }
+
+  // À surveiller : paiement en retard, résiliation programmée, ou plus
+  // connecté depuis 30 jours.
+  function accountNeedsAttention(p) {
+    if (p.isOwner) return false;
+    var sub = p.subscription;
+    var idle = !p.lastLoginAt || Date.now() / 1000 - p.lastLoginAt > 30 * 86400;
+    return sub.status === "past_due" || sub.status === "unpaid" || (sub.cancelAtPeriodEnd && sub.effectivePlan !== "free") || idle;
+  }
+
+  function accountRowHtml(p) {
+    var sub = p.subscription;
+    var name = [p.firstName, p.lastName].filter(Boolean).join(" ");
+    var title = p.studioName || name || p.email;
+    var who = [p.studioName && name ? name : "", p.email].filter(Boolean).join(" · ");
+
+    var planCell;
+    if (p.isOwner) {
+      planCell = '<span class="ad-acc-plan ad-acc-plan-pro">Propriétaire</span>';
+    } else {
+      var status = ACCOUNT_STATUS[sub.status];
+      var details = [];
+      if (sub.plan !== "free" && sub.interval) details.push(sub.interval === "year" ? "Annuel" : "Mensuel");
+      if (sub.founder) details.push("Fondateur");
+      planCell =
+        '<span class="ad-acc-plan ad-acc-plan-' + esc(sub.plan) + '">' + esc(sub.planLabel) + "</span>" +
+        (sub.plan !== "free" && status ? ' <span class="ad-acc-status ' + status.cls + '">' + status.text + "</span>" : "") +
+        (details.length ? '<span class="ad-acc-sub">' + esc(details.join(" · ")) + "</span>" : "");
+    }
+
+    var dates = [];
+    if (!p.isOwner && sub.plan !== "free") {
+      if (sub.startedAt) dates.push("Depuis le " + shortDate(sub.startedAt));
+      if (sub.renewsAt && sub.effectivePlan !== "free") {
+        if (sub.status === "trialing") dates.push("Essai jusqu'au " + shortDate(sub.renewsAt));
+        else if (sub.cancelAtPeriodEnd) dates.push('<span class="ad-acc-warn">Se termine le ' + shortDate(sub.renewsAt) + "</span>");
+        else dates.push((sub.interval === "year" ? "Renouvelé le " : "Prochain prélèvement le ") + shortDate(sub.renewsAt));
+      }
+    }
+
+    var storage = p.storage || {};
+    var pct = storage.quotaBytes ? Math.min(100, Math.round((storage.usedBytes / storage.quotaBytes) * 100)) : 0;
+    var idle = !p.lastLoginAt || Date.now() / 1000 - p.lastLoginAt > 30 * 86400;
+
+    return (
+      '<tr data-group="' + accountGroup(p) + '" data-attention="' + (accountNeedsAttention(p) ? "1" : "0") + '" ' +
+        'data-search="' + esc((title + " " + who).toLowerCase()) + '">' +
+      '<td><span class="ad-acc-name">' + esc(title) + "</span>" +
+        (who ? '<span class="ad-acc-sub">' + esc(who) + "</span>" : "") +
+        '<span class="ad-acc-sub">Inscrit le ' + esc(shortDate(p.createdAt)) + "</span></td>" +
+      "<td>" + planCell + "</td>" +
+      "<td>" + (dates.length ? dates.map(function (d) { return '<span class="ad-acc-line">' + d + "</span>"; }).join("") : '<span class="ad-hint">—</span>') + "</td>" +
+      '<td class="ad-acc-num">' + (sub.monthlyRevenueCents ? euros(sub.monthlyRevenueCents) + '<span class="ad-acc-sub">/ mois</span>' : '<span class="ad-hint">—</span>') + "</td>" +
+      "<td>" + '<span class="ad-acc-line">' + p.galleriesCount + " galerie" + (p.galleriesCount > 1 ? "s" : "") + " · " + p.photosCount + " photo" + (p.photosCount > 1 ? "s" : "") + "</span>" +
+        '<span class="ad-acc-sub' + (idle && !p.isOwner ? " ad-acc-warn" : "") + '">Connexion : ' + esc(sinceText(p.lastLoginAt)) + "</span></td>" +
+      "<td>" + '<span class="ad-acc-line">' + esc(formatBytes(storage.usedBytes || 0)) + (storage.quotaBytes ? " / " + esc(formatBytes(storage.quotaBytes)) : "") + "</span>" +
+        (storage.quotaBytes ? '<span class="ad-acc-meter"><span style="width:' + pct + '%"' + (pct >= 90 ? ' class="ad-acc-meter-full"' : "") + "></span></span>" : "") + "</td>" +
+      '<td class="ad-acc-num">' + (p.salesCents ? euros(p.salesCents) : '<span class="ad-hint">—</span>') + "</td>" +
+      "<td>" + (p.stripeChargesEnabled
+          ? '<span class="ad-acc-status ad-acc-status-ok">Encaisse</span>'
+          : p.stripeConnected ? '<span class="ad-acc-status ad-acc-status-warn">À finaliser</span>' : '<span class="ad-hint">—</span>') +
+        (sub.stripeCustomerId
+          ? '<a class="ad-acc-link" href="https://dashboard.stripe.com/customers/' + encodeURIComponent(sub.stripeCustomerId) + '" target="_blank" rel="noopener">Client Stripe ↗</a>'
+          : "") + "</td>" +
+      "</tr>"
+    );
+  }
+
+  function accountsSummaryHtml(sum, photographers) {
+    if (!sum) return "";
+    // Même définition que le filtre « À surveiller » : retard de paiement,
+    // résiliation programmée, ou plus de connexion depuis 30 jours.
+    var watched = photographers.filter(accountNeedsAttention);
+    var idle = watched.filter(function (p) { return !p.lastLoginAt || Date.now() / 1000 - p.lastLoginAt > 30 * 86400; }).length;
+    var watchedParts = [
+      sum.pastDue ? sum.pastDue + " en retard de paiement" : "",
+      sum.cancelling ? sum.cancelling + " résiliation" + (sum.cancelling > 1 ? "s" : "") + " programmée" + (sum.cancelling > 1 ? "s" : "") : "",
+      idle ? idle + " inactif" + (idle > 1 ? "s" : "") + " depuis 30 j" : "",
+    ].filter(Boolean).join(" · ");
+    return (
+      '<div class="ad-stats">' +
+      statTile("Abonnés payants", sum.paying, sum.accounts + " compte" + (sum.accounts > 1 ? "s" : "") + " au total", sum.paying ? "ad-stat-success" : "") +
+      statTile("En essai gratuit", sum.trialing) +
+      statTile("Revenu mensuel récurrent", euros(sum.monthlyRevenueCents), "annuels ramenés au mois") +
+      statTile("Places Fondateurs", sum.founders + " / " + sum.foundersLimit) +
+      statTile("À surveiller", watched.length, watchedParts, watched.length ? "ad-stat-warn" : "") +
+      "</div>"
+    );
+  }
+
   function photographersTableHtml(photographers) {
     if (!photographers.length) return '<p class="ad-hint">Aucun compte pour l\'instant.</p>';
-    var rows = photographers.map(function (p) {
-      var name = [p.firstName, p.lastName].filter(Boolean).join(" ");
-      return (
-        "<tr>" +
-        "<td>" + (name ? esc(name) : '<span class="ad-hint">—</span>') + "</td>" +
-        "<td>" + (p.studioName ? esc(p.studioName) : '<span class="ad-hint">—</span>') + "</td>" +
-        "<td>" + esc(p.email) + "</td>" +
-        "<td>" + esc(formatDate(p.createdAt)) + "</td>" +
-        "<td>" + p.galleriesCount + "</td>" +
-        "<td>" + p.photosCount + "</td>" +
-        "<td>" + (p.stripeChargesEnabled
-          ? '<span class="ad-stripe-badge ad-stripe-badge-ok">✓ Actif</span>'
-          : '<span class="ad-hint">—</span>') + "</td>" +
-        "</tr>"
-      );
+    var counts = { all: 0, paying: 0, trial: 0, free: 0, attention: 0 };
+    photographers.forEach(function (p) {
+      var g = accountGroup(p);
+      counts.all += 1;
+      if (counts[g] !== undefined) counts[g] += 1;
+      if (accountNeedsAttention(p)) counts.attention += 1;
     });
+    var filters = [["all", "Tous"], ["paying", "Payants"], ["trial", "En essai"], ["free", "Gratuits"], ["attention", "À surveiller"]];
     return (
-      '<div class="ad-table-wrap"><table class="ad-table"><thead><tr>' +
-      "<th>Nom</th><th>Studio</th><th>E-mail</th><th>Inscrit le</th><th>Galeries</th><th>Photos</th><th>Stripe</th>" +
-      "</tr></thead><tbody>" + rows.join("") + "</tbody></table></div>"
+      '<div class="ad-acc-toolbar">' +
+        '<div class="ad-seg" id="ad-acc-filters" role="group" aria-label="Filtrer les comptes">' +
+        filters.map(function (f, i) {
+          return '<button type="button" class="ad-seg-btn" data-filter="' + f[0] + '" aria-pressed="' + (i === 0) + '">' +
+            f[1] + ' <span class="ad-acc-count">' + counts[f[0]] + "</span></button>";
+        }).join("") +
+        "</div>" +
+        '<input type="search" class="ad-acc-search" id="ad-acc-search" placeholder="Rechercher un studio, un e-mail…" aria-label="Rechercher un compte" />' +
+      "</div>" +
+      '<div class="ad-table-wrap"><table class="ad-table ad-acc-table" id="ad-acc-table"><thead><tr>' +
+      "<th>Compte</th><th>Formule</th><th>Abonnement</th><th>Revenu</th><th>Activité</th><th>Stockage</th><th>Ventes</th><th>Stripe</th>" +
+      "</tr></thead><tbody>" + photographers.map(accountRowHtml).join("") + "</tbody></table></div>" +
+      '<p class="ad-hint" id="ad-acc-empty" hidden>Aucun compte ne correspond.</p>'
     );
+  }
+
+  function wireAccountsTable() {
+    var table = document.getElementById("ad-acc-table");
+    if (!table) return;
+    var filter = "all";
+    var search = document.getElementById("ad-acc-search");
+    function apply() {
+      var q = search.value.trim().toLowerCase();
+      var shown = 0;
+      table.querySelectorAll("tbody tr").forEach(function (tr) {
+        var okFilter = filter === "all" || (filter === "attention" ? tr.getAttribute("data-attention") === "1" : tr.getAttribute("data-group") === filter);
+        var ok = okFilter && (!q || tr.getAttribute("data-search").indexOf(q) !== -1);
+        tr.hidden = !ok;
+        if (ok) shown += 1;
+      });
+      document.getElementById("ad-acc-empty").hidden = shown > 0;
+    }
+    document.getElementById("ad-acc-filters").addEventListener("click", function (event) {
+      var btn = event.target.closest("[data-filter]");
+      if (!btn) return;
+      filter = btn.getAttribute("data-filter");
+      this.querySelectorAll("[data-filter]").forEach(function (b) {
+        b.setAttribute("aria-pressed", String(b === btn));
+      });
+      apply();
+    });
+    search.addEventListener("input", apply);
   }
 
   // Le trafic du site (visites, pages vues) et les sources de visiteurs
@@ -1991,6 +2145,7 @@
 
       '<section><div class="ad-section-header"><h3>Comptes photographes (' +
       photographersData.photographers.length + ")</h3></div>" +
+      accountsSummaryHtml(photographersData.summary, photographersData.photographers) +
       photographersTableHtml(photographersData.photographers) +
       "</section>" +
 
@@ -2008,6 +2163,7 @@
       "</section>";
 
     wireOwnerMusic();
+    wireAccountsTable();
     document.getElementById("ad-run-reminders").addEventListener("click", async function () {
       var btn = this;
       var out = document.getElementById("ad-run-reminders-result");

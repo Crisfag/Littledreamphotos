@@ -4,7 +4,7 @@
 //
 //   node tests/subscription.test.mjs
 
-import { PLANS, planFor, hasFeature, planKeyFromSubscription, handleSubscriptionEvent, TRIAL_DAYS, FOUNDERS_LIMIT, founderCoupon, trialAvailable, founderEligible, publicPlans, syncSubscription } from "../src/subscription.js";
+import { PLANS, planFor, hasFeature, planKeyFromSubscription, handleSubscriptionEvent, TRIAL_DAYS, FOUNDERS_LIMIT, founderCoupon, trialAvailable, founderEligible, publicPlans, syncSubscription, monthlyRevenueCents } from "../src/subscription.js";
 
 const checks = [];
 function check(label, ok, detail) {
@@ -113,6 +113,23 @@ check("abonnement résilié : retour au gratuit", db4.calls[1].binds.slice(0, 2)
 const db5 = fakeDb({ id: "pho_1", stripe_subscription_id: "sub_2" });
 await handleSubscriptionEvent({ DB: db5 }, { type: "customer.subscription.deleted", data: { object: { id: "sub_1", customer: "cus_1" } } });
 check("la fin d'un ancien abonnement n'écrase pas un abonnement plus récent", db5.calls.length === 1);
+
+{
+  const t = 1800000000, YEAR = 365 * 86400;
+  check("revenu mensuel : mensuel au prix normal, annuel ramené au mois, prix Fondateurs la 1re année seulement",
+        monthlyRevenueCents({ plan: "pro", plan_status: "active", plan_interval: "month" }, t) === 2900 &&
+        monthlyRevenueCents({ plan: "essentiel", plan_status: "active", plan_interval: "year" }, t) === 1250 &&
+        monthlyRevenueCents({ plan: "pro", plan_status: "active", plan_interval: "year", founder_at: t - 10 }, t) === 2000 &&
+        monthlyRevenueCents({ plan: "essentiel", plan_status: "active", plan_interval: "month", founder_at: t - YEAR - 1 }, t) === 1500);
+  check("un essai, un impayé ou un compte gratuit ne rapportent rien",
+        monthlyRevenueCents({ plan: "pro", plan_status: "trialing", plan_interval: "month" }, t) === 0 &&
+        monthlyRevenueCents({ plan: "pro", plan_status: "canceled" }, t) === 0 && monthlyRevenueCents({ plan: "free", plan_status: "" }, t) === 0);
+  const dbStart = fakeDb({ id: "pho_1", stripe_subscription_id: "sub_1" });
+  await handleSubscriptionEvent({ DB: dbStart }, { type: "customer.subscription.updated",
+    data: { object: { id: "sub_1", customer: "cus_1", status: "active", start_date: 1790000000, metadata: { plan: "pro" } } } });
+  check("la date de début de l'abonnement (start_date Stripe) est enregistrée",
+        /plan_started_at = CASE/.test(dbStart.calls[1].sql) && dbStart.calls[1].binds.at(-3) === 1 && dbStart.calls[1].binds.at(-2) === 1790000000);
+}
 
 /* ---------- Rattrapage au retour de Stripe (webhook manqué) ---------- */
 // fetch intercepté : on répond comme Stripe et on note ce qui a été demandé.
