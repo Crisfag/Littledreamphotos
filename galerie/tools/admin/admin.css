@@ -1034,3 +1034,5 @@ h3 { font-size: 1.15rem; margin-bottom: .9rem; }
 .ad-sc-child .ad-sc-thumbs { grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); }
 @media (max-width: 720px) { .ad-sc-children { grid-template-columns: 1fr; } }
 .ad-sc-child [data-child-name] { border-bottom: 1px dashed var(--line); border-radius: 6px 6px 0 0; }
+.ad-sc-code { font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: .74rem; letter-spacing: .06em; padding: .1rem .45rem; border-radius: 6px; background: var(--sand); color: var(--ink); }
+.ad-sc-coupons .ad-sc-actions { margin: .8rem 0; }

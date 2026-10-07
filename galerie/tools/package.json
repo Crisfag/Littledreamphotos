@@ -9,6 +9,7 @@
     "galerie-signup": "./signup.mjs"
   },
   "dependencies": {
+    "qrcode": "^1.5.4",
     "sharp": "^0.33.5"
   },
   "devDependencies": {

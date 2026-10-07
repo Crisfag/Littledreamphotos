@@ -127,6 +127,16 @@ check("l'année suivante reprend les classes et leurs enseignants, en préparati
 check("l'année d'origine garde ses dates et ses classes ; la même année ne se crée pas deux fois",
       firstYear.status === "open" && firstYear.orderDeadline > 0 && firstYear.groups.length === 2 && again.status === 409);
 
+/* ---------- Fiches parents ---------- */
+
+const couponsEmpty = await studio.call("POST", `/api/admin/school/years/${yearId}/coupons`, {});
+check("les données des fiches suivent l'ordre des classes, avec l'adresse de l'espace famille",
+      couponsEmpty.status === 200 && couponsEmpty.body.groups.map((g) => g.name).join(",") === "M1,P3 A" &&
+      /\/ecole$/.test(couponsEmpty.body.familyUrl) && couponsEmpty.body.year.orderDeadline > 0,
+      couponsEmpty.body.familyUrl);
+const unknownGroup = await studio.call("POST", `/api/admin/school/years/${yearId}/coupons`, { groupId: "scg_inconnu" });
+check("un groupe inconnu est refusé", unknownGroup.status === 404);
+
 /* ---------- Cloisonnement ---------- */
 
 await setPlan(free.email, "studio");
@@ -134,8 +144,9 @@ const otherSees = (await free.call("GET", "/api/admin/school")).body.schools.len
 const otherEdit = await free.call("POST", `/api/admin/school/schools/${schoolId}`, { kind: "ecole", name: "Piratée" });
 const otherGroup = await free.call("DELETE", `/api/admin/school/groups/${groups.body.ids[0]}`);
 const otherYear = await free.call("POST", `/api/admin/school/years/${yearId}/groups`, { names: ["Intrus"] });
+const otherCoupons = await free.call("POST", `/api/admin/school/years/${yearId}/coupons`, {});
 check("un autre photographe ne voit ni ne modifie rien de cet établissement",
-      otherSees === 0 && otherEdit.status === 404 && otherGroup.status === 404 && otherYear.status === 404);
+      otherSees === 0 && otherEdit.status === 404 && otherGroup.status === 404 && otherYear.status === 404 && otherCoupons.status === 404);
 
 /* ---------- Suppression ---------- */
 

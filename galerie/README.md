@@ -472,8 +472,19 @@ Le tableau de bord s'organise en trois onglets, chacun avec son propre lien
     cartes ; prénom facultatif. Les enfants sont numérotés dans l'ordre de
     la séance. Pas de reconnaissance faciale (données biométriques
     d'enfants).
-  - *À venir* : fiches parents QR, espace famille, commande groupée et labo
-    intégré (BePhoto à l'étude).
+  - *Fiches parents* (`tools/lib/coupons.mjs`) : un code d'accès par enfant
+    (8 caractères sans 0/O ni 1/I, unique, stable une fois attribué) et une
+    fiche avec son portrait en vignette (fichier d'impression, recadrage
+    automatique), l'établissement, le groupe, la date limite de commande
+    groupée, le code et un QR code vers l'espace famille (`/ecole?c=…`).
+    Deux sorties, pour l'année entière ou un groupe : PDF A4 paysage,
+    4 fiches par feuille (coupe en croix), chaque groupe précédé d'une
+    feuille-paquet (enfants à cocher à la distribution, jamais les codes) ;
+    ou ZIP d'images 10×15 à 300 dpi, rangées par groupe, à tirer au labo.
+    PDF et ZIP sont écrits au fil de l'eau (`lib/pdf.mjs`, `lib/zip.mjs`).
+    Polices : DejaVu, installée dans l'image Docker.
+  - *À venir* : espace famille, commande groupée et labo intégré (BePhoto à
+    l'étude).
 - **Campagnes de vente des tirages** (`worker/src/campaigns.js`) :
   - *Promotion à durée limitée* sur une galerie (−10 à −50 % jusqu'à une
     date, depuis la section boutique de la fiche) : bandeau et prix barrés

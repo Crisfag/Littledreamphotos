@@ -366,7 +366,7 @@ export function splitIntoBursts(items) {
 
 async function groupContext(env, photographerId, groupId) {
   return env.DB.prepare(
-    `SELECT g.*, y.label AS year_label, y.id AS year_id, s.id AS school_id, s.name AS school_name, s.kind AS school_kind
+    `SELECT g.*, y.label AS year_label, y.id AS year_id, y.order_deadline AS year_order_deadline, s.id AS school_id, s.name AS school_name, s.kind AS school_kind
      FROM school_groups g JOIN school_years y ON y.id = g.year_id JOIN schools s ON s.id = y.school_id
      WHERE g.id = ? AND s.photographer_id = ?`
   ).bind(groupId, photographerId).first();
@@ -427,7 +427,7 @@ async function groupDetail(env, photographer, groupId) {
     ).bind(group.id, group.gallery_id).run();
   }
   const [{ results: children }, { results: photos }] = await Promise.all([
-    env.DB.prepare("SELECT id, number, first_name FROM school_children WHERE group_id = ? ORDER BY number").bind(group.id).all(),
+    env.DB.prepare("SELECT id, number, first_name, access_code FROM school_children WHERE group_id = ? ORDER BY number").bind(group.id).all(),
     group.gallery_id
       ? env.DB.prepare(
           `SELECT id, position, width, height, preview_width, preview_height, taken_at, source_name, child_id, school_role
@@ -441,9 +441,9 @@ async function groupDetail(env, photographer, groupId) {
   return json({
     kinds: SCHOOL_KINDS,
     school: { id: group.school_id, name: group.school_name, kind: group.school_kind },
-    year: { id: group.year_id, label: group.year_label },
+    year: { id: group.year_id, label: group.year_label, orderDeadline: group.year_order_deadline },
     group: { id: group.id, name: group.name, leader: group.leader, gallerySlug: gallery?.slug || "" },
-    children: children.map((c) => ({ id: c.id, number: c.number, firstName: c.first_name })),
+    children: children.map((c) => ({ id: c.id, number: c.number, firstName: c.first_name, code: formatAccessCode(c.access_code) })),
     photos: photos.map((p) => ({
       id: p.id, position: p.position, width: p.width, height: p.height,
       takenAt: p.taken_at, sourceName: p.source_name, childId: p.child_id, role: p.school_role,
@@ -559,6 +559,80 @@ async function deleteChild(env, photographer, childId) {
   return json({ ok: true });
 }
 
+/* ---------- Fiches parents : codes d'accès ---------- */
+
+// 32 symboles sans ambiguïté à la lecture (ni 0/O ni 1/I) : 8 caractères
+// font ~10^12 combinaisons, affichés « K7P4 29QX ».
+const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+export function newAccessCode() {
+  return [...randomBytes(8)].map((b) => CODE_ALPHABET[b % 32]).join("");
+}
+// Ce que tape un parent : espaces, tirets et minuscules acceptés.
+export function normalizeAccessCode(value) {
+  return String(value || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 16);
+}
+export function formatAccessCode(code) {
+  return code ? `${code.slice(0, 4)} ${code.slice(4)}` : "";
+}
+
+// POST …/years/:id/coupons { groupId? } — attribue un code à chaque enfant
+// qui n'en a pas encore, puis renvoie de quoi composer les fiches : groupes
+// dans l'ordre, enfants dans l'ordre de la séance, portrait (première photo
+// de l'enfant), date limite. Les fiches elles-mêmes sont dessinées par
+// admin-server (PDF à imprimer, ou images 10×15 pour le labo).
+async function couponsForYear(request, env, photographer, yearId) {
+  const year = await ownedYear(env, photographer.id, yearId);
+  if (!year) return fail(404, "Année introuvable");
+  const body = await request.json().catch(() => ({}));
+  const school = await env.DB.prepare("SELECT * FROM schools WHERE id = ?").bind(year.school_id).first();
+  const { results: allGroups } = await env.DB.prepare("SELECT * FROM school_groups WHERE year_id = ? ORDER BY sort, name COLLATE NOCASE").bind(yearId).all();
+  const groups = body?.groupId ? allGroups.filter((g) => g.id === body.groupId) : allGroups;
+  if (body?.groupId && !groups.length) return fail(404, "Groupe introuvable");
+
+  const out = [];
+  for (const g of groups) {
+    const { results: children } = await env.DB.prepare("SELECT * FROM school_children WHERE group_id = ? ORDER BY number").bind(g.id).all();
+    for (const c of children.filter((c) => !c.access_code)) {
+      // Collision quasi impossible ; on retente simplement si l'index unique refuse.
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const code = newAccessCode();
+        try {
+          await env.DB.prepare("UPDATE school_children SET access_code = ? WHERE id = ? AND access_code = ''").bind(code, c.id).run();
+          c.access_code = code;
+          break;
+        } catch (err) {
+          if (attempt === 4) throw err;
+        }
+      }
+    }
+    const portraits = new Map();
+    if (g.gallery_id && children.length) {
+      const { results: photos } = await env.DB.prepare(
+        `SELECT id, child_id, has_original FROM photos WHERE gallery_id = ? AND child_id != '' AND school_role = ''
+         ORDER BY COALESCE(taken_at, 0), position`
+      ).bind(g.gallery_id).all();
+      for (const p of photos) if (!portraits.has(p.child_id)) portraits.set(p.child_id, p.has_original ? p.id : "");
+    }
+    out.push({
+      id: g.id, name: g.name, leader: g.leader,
+      children: children.map((c) => ({
+        id: c.id, number: c.number, firstName: c.first_name,
+        code: c.access_code, codeDisplay: formatAccessCode(c.access_code),
+        portraitPhotoId: portraits.get(c.id) || "",
+      })),
+    });
+  }
+  const origin = String(env.PUBLIC_SITE_ORIGIN || "https://www.holypixx.com").replace(/\/+$/, "");
+  return json({
+    school: { name: school.name, kind: school.kind },
+    kind: SCHOOL_KINDS[school.kind] || SCHOOL_KINDS.ecole,
+    year: { id: year.id, label: year.label, orderDeadline: year.order_deadline },
+    studioName: photographer.studio_name || "",
+    familyUrl: `${origin}/ecole`,
+    groups: out,
+  });
+}
+
 /* ---------- Routeur : /api/admin/school/… ---------- */
 
 export async function handleSchoolAdmin(request, env, photographer, rest, helpers = {}) {
@@ -577,6 +651,7 @@ export async function handleSchoolAdmin(request, env, photographer, rest, helper
   if (kind === "years" && rest.length === 2 && method === "POST") return updateYear(request, env, photographer, id);
   if (kind === "years" && rest.length === 2 && method === "DELETE") return deleteYear(env, photographer, id, helpers);
   if (kind === "years" && sub === "groups" && rest.length === 3 && method === "POST") return createGroups(request, env, photographer, id);
+  if (kind === "years" && sub === "coupons" && rest.length === 3 && method === "POST") return couponsForYear(request, env, photographer, id);
   if (kind === "groups" && rest.length === 2 && method === "POST") return updateGroup(request, env, photographer, id);
   if (kind === "groups" && rest.length === 2 && method === "DELETE") return deleteGroup(env, photographer, id, helpers);
   if (kind === "groups" && rest.length === 2 && method === "GET") return groupDetail(env, photographer, id);
