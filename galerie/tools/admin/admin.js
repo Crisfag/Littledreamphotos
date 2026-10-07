@@ -2036,6 +2036,11 @@
 
   function photographersTableHtml(photographers) {
     if (!photographers.length) return '<p class="ad-hint">Aucun compte pour l\'instant.</p>';
+    // Worker pas encore redéployé : l'ancien format n'a pas ces champs.
+    photographers.forEach(function (p) {
+      if (!p.subscription) p.subscription = { plan: "free", planLabel: "—", effectivePlan: "free", status: "", monthlyRevenueCents: 0 };
+      if (!p.storage) p.storage = { usedBytes: 0, quotaBytes: null };
+    });
     var counts = { all: 0, paying: 0, trial: 0, free: 0, attention: 0 };
     photographers.forEach(function (p) {
       var g = accountGroup(p);
