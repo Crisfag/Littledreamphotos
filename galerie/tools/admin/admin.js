@@ -4206,7 +4206,7 @@
       '<label class="ad-sc-price"><input type="text" inputmode="decimal" class="ad-sc-in" data-pfield="price" value="' + eurosInput(p.priceCents).replace(".", ",") + '" aria-label="Prix en euros" /> €</label>' +
       '<label class="ad-sc-toggle"><input type="checkbox" data-pfield="active"' + (p.active ? " checked" : "") + " /> En vente</label>" +
       '<button type="button" class="ad-link-btn ad-sc-del" data-del-product aria-label="Supprimer ' + esc(p.name) + '">Supprimer</button>' +
-      '<div class="ad-sc-prod-lab">' + (p.kind === "numerique"
+      '<div class="ad-sc-prod-lab">' + (p.preview ? '<img class="ad-sc-prod-thumb" src="' + esc(labPreviewUrl(p.preview)) + '" alt="Visuel de la planche" loading="lazy" />' : "") + (p.kind === "numerique"
         ? '<span class="ad-hint">Labo : rien à imprimer (téléchargé par la famille)</span>'
         : '<span class="' + (p.labItems.length ? "ad-hint" : "ad-hint ad-acc-warn") + '">Labo : ' + esc(labItemsSummary(p.labItems)) + "</span> " +
           '<button type="button" class="ad-link-btn" data-lab-product>' + (p.labItems.length ? "Modifier" : "Indiquer") + "</button>") +
@@ -4218,6 +4218,10 @@
   var PAPER_NAMES = { 1: "brillant", 2: "lustré" };
   var schoolLabCatalogue = null;
 
+  function labPreviewUrl(path) {
+    return path ? state.config.api + path : "";
+  }
+
   function labItemsSummary(items) {
     if (!items || !items.length) return "à indiquer (ce que BePhoto imprime pour un exemplaire)";
     return items.map(function (i) {
@@ -4225,20 +4229,111 @@
     }).join(" + ");
   }
 
-  function labCostCents(items) {
+  // Nom court d'un élément de composition (résumé, nom de fichier au labo).
+  function labLabel(entry) {
+    return entry.planche ? "Planche " + entry.sheet + " n°" + entry.idproduct : entry.name;
+  }
+
+  function labEntry(idproduct) {
     if (!schoolLabCatalogue) return null;
-    var total = 0;
+    return schoolLabCatalogue.planches.concat(schoolLabCatalogue.others).find(function (c) { return c.idproduct === idproduct; }) || null;
+  }
+
+  // Coût labo d'une composition : fourchette (paliers de la grille pour les
+  // planches, prix du papier pour les autres produits), ou null si inconnu.
+  function labCostRange(items) {
+    var min = 0, max = 0;
     for (var k = 0; k < items.length; k++) {
-      var prod = schoolLabCatalogue.find(function (c) { return c.idproduct === items[k].idproduct; });
-      var price = prod && prod.prices.find(function (pr) { return pr.idpaper === items[k].idpaper; });
-      if (!price) return null;
-      total += price.cents * items[k].quantity;
+      var entry = labEntry(items[k].idproduct);
+      if (!entry) return null;
+      if (entry.planche) {
+        min += entry.minCents * items[k].quantity;
+        max += entry.maxCents * items[k].quantity;
+      } else {
+        var price = entry.prices.find(function (pr) { return pr.idpaper === items[k].idpaper; });
+        if (!price) return null;
+        min += price.cents * items[k].quantity;
+        max += price.cents * items[k].quantity;
+      }
     }
-    return total;
+    return { min: min, max: max };
+  }
+
+  function eurosRange(r) {
+    return r.min === r.max ? formatEuros(r.min) : formatEuros(r.min) + " à " + formatEuros(r.max);
+  }
+
+  // Menu déroulant illustré : un bouton qui montre le choix (vignette, nom,
+  // détail) et une liste à vignettes. Clavier : flèches, Entrée, Échap.
+  function visualSelect(host, opts) {
+    var current = opts.value;
+    host.className = "ad-vsel";
+    function itemHtml(o) {
+      return (o.img ? '<img src="' + esc(o.img) + '" alt="" loading="lazy" />' : '<span class="ad-vsel-noimg" aria-hidden="true"></span>') +
+        '<span class="ad-vsel-text"><strong>' + esc(o.label) + "</strong>" + (o.sub ? "<small>" + esc(o.sub) + "</small>" : "") + "</span>";
+    }
+    var selected = function () { return opts.options.find(function (o) { return o.value === current; }); };
+    var groups = [];
+    opts.options.forEach(function (o) {
+      var g = groups.find(function (x) { return x.name === (o.group || ""); });
+      if (!g) groups.push(g = { name: o.group || "", items: [] });
+      g.items.push(o);
+    });
+    host.innerHTML =
+      '<button type="button" class="ad-vsel-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="' + esc(opts.ariaLabel) + '"></button>' +
+      '<div class="ad-vsel-pop" hidden><ul role="listbox" tabindex="-1" aria-label="' + esc(opts.ariaLabel) + '">' +
+      groups.map(function (g) {
+        return (g.name ? '<li class="ad-vsel-group" role="presentation">' + esc(g.name) + "</li>" : "") +
+          g.items.map(function (o) {
+            return '<li role="option" tabindex="-1" data-value="' + esc(String(o.value)) + '" aria-selected="' + (o.value === current) + '">' + itemHtml(o) + "</li>";
+          }).join("");
+      }).join("") + "</ul></div>";
+    var btn = host.querySelector(".ad-vsel-btn");
+    var pop = host.querySelector(".ad-vsel-pop");
+    var optionsEls = Array.prototype.slice.call(host.querySelectorAll('[role="option"]'));
+    function paint() {
+      var o = selected();
+      btn.innerHTML = (o ? itemHtml(o) : '<span class="ad-vsel-noimg" aria-hidden="true"></span><span class="ad-vsel-text"><strong>' + esc(opts.placeholder) + "</strong></span>") + '<span class="ad-vsel-caret" aria-hidden="true">▾</span>';
+      optionsEls.forEach(function (li) { li.setAttribute("aria-selected", String(li.getAttribute("data-value") === String(current))); });
+    }
+    function outside(event) { if (!host.contains(event.target)) close(); }
+    function open() {
+      pop.hidden = false;
+      btn.setAttribute("aria-expanded", "true");
+      document.addEventListener("mousedown", outside);
+      var target = optionsEls.find(function (li) { return li.getAttribute("aria-selected") === "true"; }) || optionsEls[0];
+      if (target) target.focus();
+    }
+    function close(refocus) {
+      pop.hidden = true;
+      btn.setAttribute("aria-expanded", "false");
+      document.removeEventListener("mousedown", outside);
+      if (refocus) btn.focus();
+    }
+    function choose(li) {
+      var o = opts.options.find(function (x) { return String(x.value) === li.getAttribute("data-value"); });
+      current = o.value;
+      paint();
+      close(true);
+      opts.onChange(o.value);
+    }
+    btn.addEventListener("click", function () { if (pop.hidden) open(); else close(); });
+    btn.addEventListener("keydown", function (e) { if (e.key === "ArrowDown") { e.preventDefault(); open(); } });
+    optionsEls.forEach(function (li, i) {
+      li.addEventListener("click", function () { choose(li); });
+      li.addEventListener("keydown", function (e) {
+        if (e.key === "ArrowDown" && optionsEls[i + 1]) { e.preventDefault(); optionsEls[i + 1].focus(); }
+        else if (e.key === "ArrowUp") { e.preventDefault(); (optionsEls[i - 1] || btn).focus(); }
+        else if (e.key === "Enter" || e.key === " ") { e.preventDefault(); choose(li); }
+        else if (e.key === "Escape" || e.key === "Tab") { close(e.key === "Escape"); }
+      });
+    });
+    paint();
   }
 
   // Composition labo d'un produit : ce que BePhoto imprime pour UN
-  // exemplaire (une pochette = plusieurs tirages), avec le coût et la marge.
+  // exemplaire. Les planches (montages composés par le labo à partir d'une
+  // seule photo) se choisissent sur leur visuel ; coût et marge s'affichent.
   async function openLabEditor(li, product, onSaved) {
     var box = li.querySelector(".ad-sc-lab-editor");
     if (!box.hidden) { box.hidden = true; return; }
@@ -4246,49 +4341,60 @@
     box.innerHTML = '<p class="ad-loading">Catalogue BePhoto…</p>';
     if (!schoolLabCatalogue) {
       try {
-        schoolLabCatalogue = (await api("GET", "/school/lab/products")).products;
+        schoolLabCatalogue = await api("GET", "/school/lab/catalogue");
       } catch (err) {
-        box.innerHTML = '<p class="ad-hint ad-acc-warn">' + esc(err.message) + " Connectez votre compte BePhoto dans « Envois au labo », plus bas.</p>";
+        box.innerHTML = '<p class="ad-hint ad-acc-warn">' + esc(err.message) + "</p>";
         return;
       }
     }
+    var cat = schoolLabCatalogue;
+    var options = cat.planches.map(function (c) {
+      return { value: c.idproduct, label: c.name, sub: "Sur " + c.sheet + " · n° " + c.idproduct + " · " + eurosRange({ min: c.minCents, max: c.maxCents }), img: labPreviewUrl(c.preview), group: "Planches composées par le labo" };
+    }).concat(cat.others.map(function (c) {
+      var prices = c.prices.map(function (pr) { return pr.cents; });
+      return { value: c.idproduct, label: c.name, sub: "n° " + c.idproduct + (c.dimensions ? " · " + c.dimensions + " mm" : "") + (prices.length ? " · " + eurosRange({ min: Math.min.apply(null, prices), max: Math.max.apply(null, prices) }) : ""), img: "", group: "Tirages et autres produits BePhoto" };
+    }));
     var rows = product.labItems.length ? product.labItems.map(function (i) { return Object.assign({}, i); }) : [{ idproduct: 0, idpaper: 1, quantity: 1 }];
-    function optionHtml(c, selected) {
-      return '<option value="' + c.idproduct + '"' + (c.idproduct === selected ? " selected" : "") + ">" + esc(c.name + (c.dimensions ? " (" + c.dimensions + " mm)" : "")) + "</option>";
-    }
     function draw() {
-      var cost = labCostCents(rows.filter(function (r) { return r.idproduct; }));
+      var filled = rows.filter(function (r) { return r.idproduct; });
+      var cost = filled.length ? labCostRange(filled) : null;
       box.innerHTML =
         '<p class="ad-hint">Pour <strong>un</strong> exemplaire de « ' + esc(product.name) + " », BePhoto imprime :</p>" +
+        (cat.warning ? '<p class="ad-hint ad-acc-warn">' + esc(cat.warning) + "</p>" : "") +
         rows.map(function (r, i) {
-          var prod = schoolLabCatalogue.find(function (c) { return c.idproduct === r.idproduct; });
-          var papers = prod ? prod.prices : [{ idpaper: 1 }, { idpaper: 2 }];
+          var entry = labEntry(r.idproduct);
+          var papers = entry && !entry.planche && entry.prices.length ? entry.prices : [{ idpaper: 1 }, { idpaper: 2 }];
           return '<div class="ad-sc-lab-row" data-row="' + i + '">' +
             '<input type="number" min="1" max="50" value="' + r.quantity + '" data-f="quantity" aria-label="Quantité" />' +
             '<span aria-hidden="true">×</span>' +
-            '<select data-f="idproduct" aria-label="Produit BePhoto"><option value="0">Choisir un produit…</option>' + schoolLabCatalogue.map(function (c) { return optionHtml(c, r.idproduct); }).join("") + "</select>" +
+            '<div data-vsel></div>' +
             '<select data-f="idpaper" aria-label="Papier">' + papers.map(function (pp) {
               return '<option value="' + pp.idpaper + '"' + (pp.idpaper === r.idpaper ? " selected" : "") + ">" + esc((PAPER_NAMES[pp.idpaper] || "papier " + pp.idpaper) + (pp.cents !== undefined ? " · " + formatEuros(pp.cents) : "")) + "</option>";
             }).join("") + "</select>" +
             '<button type="button" class="ad-link-btn ad-sc-del" data-remove-row aria-label="Retirer">Retirer</button></div>';
         }).join("") +
-        '<div class="ad-sc-actions"><button type="button" class="ad-link-btn" data-add-row>+ Ajouter un tirage</button>' +
-        (cost !== null && rows.some(function (r) { return r.idproduct; })
-          ? '<span class="ad-hint">Coût labo ≈ ' + formatEuros(cost) + " · marge ≈ " + formatEuros(product.priceCents - cost) + " (prix de base, avant remise au volume et livraison)</span>"
-          : "") +
+        '<div class="ad-sc-actions"><button type="button" class="ad-link-btn" data-add-row>+ Ajouter une planche ou un tirage</button>' +
+        (cost ? '<span class="ad-hint" data-lab-cost>Coût labo ≈ ' + eurosRange(cost) + " · marge ≈ " + eurosRange({ min: product.priceCents - cost.max, max: product.priceCents - cost.min }) +
+          " (selon la taille du lot, avant pochette et livraison)</span>" : "") +
         "</div>" +
+        (cat.connected ? "" : '<p class="ad-hint">Sans compte BePhoto connecté, seules les planches de la grille publique sont proposées.</p>') +
         '<div class="ad-sc-actions"><button type="button" class="ad-btn ad-btn-primary" data-save-lab>Enregistrer</button>' +
         '<button type="button" class="ad-btn" data-cancel-lab>Annuler</button></div>';
       box.querySelectorAll(".ad-sc-lab-row").forEach(function (rowEl) {
         var i = Number(rowEl.getAttribute("data-row"));
+        visualSelect(rowEl.querySelector("[data-vsel]"), {
+          options: options, value: rows[i].idproduct || null, placeholder: "Choisir une planche ou un tirage…", ariaLabel: "Produit BePhoto",
+          onChange: function (value) {
+            rows[i].idproduct = value;
+            var entry = labEntry(value);
+            rows[i].label = entry ? labLabel(entry) : "";
+            if (entry && !entry.planche && entry.prices.length && !entry.prices.some(function (pp) { return pp.idpaper === rows[i].idpaper; })) rows[i].idpaper = entry.prices[0].idpaper;
+            draw();
+          },
+        });
         rowEl.querySelectorAll("[data-f]").forEach(function (input) {
           input.addEventListener("change", function () {
             rows[i][input.getAttribute("data-f")] = Number(input.value);
-            if (input.getAttribute("data-f") === "idproduct") {
-              var prod = schoolLabCatalogue.find(function (c) { return c.idproduct === rows[i].idproduct; });
-              rows[i].label = prod ? prod.name : "";
-              if (prod && prod.prices.length && !prod.prices.some(function (pp) { return pp.idpaper === rows[i].idpaper; })) rows[i].idpaper = prod.prices[0].idpaper;
-            }
             draw();
           });
         });
@@ -4298,8 +4404,8 @@
       box.querySelector("[data-cancel-lab]").addEventListener("click", function () { box.hidden = true; });
       box.querySelector("[data-save-lab]").addEventListener("click", async function () {
         var items = rows.filter(function (r) { return r.idproduct; }).map(function (r) {
-          var prod = schoolLabCatalogue.find(function (c) { return c.idproduct === r.idproduct; });
-          return { idproduct: r.idproduct, idpaper: r.idpaper, quantity: r.quantity, label: prod ? prod.name : r.label || "" };
+          var entry = labEntry(r.idproduct);
+          return { idproduct: r.idproduct, idpaper: r.idpaper, quantity: r.quantity, label: entry ? labLabel(entry) : r.label || "" };
         });
         try {
           await api("POST", "/school/products/" + encodeURIComponent(product.id) + "/lab", { items: items });

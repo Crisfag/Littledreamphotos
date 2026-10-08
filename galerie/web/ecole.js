@@ -483,7 +483,8 @@
       '<p class="ec-hint">' + esc(deliveryText(shop, child)) + " Un seul panier pour tous vos enfants.</p>" +
       '<div class="ec-products">' + products.map(function (p) {
         return (
-          '<article class="ec-product">' +
+          '<article class="ec-product' + (p.preview ? " ec-product-visual" : "") + '">' +
+          (p.preview ? '<img class="ec-product-img" src="' + esc(previewUrl(p.preview)) + '" alt="Composition : ' + esc(p.name) + '" loading="lazy" />' : "") +
           '<p class="ec-product-kind">' + esc(p.scope === "group" ? child.vocabulary.groupPhoto : "Portrait") + "</p>" +
           "<h4>" + esc(p.name) + "</h4>" +
           (p.description ? '<p class="ec-product-desc">' + esc(p.description) + "</p>" : "") +
@@ -573,6 +574,69 @@
   el.sheet.addEventListener("click", function (event) { if (event.target === el.sheet) closeSheet(); });
   document.getElementById("ec-cartbar-open").addEventListener("click", openCart);
 
+  // Visuel d'exemple d'un produit (planche du labo), servi par l'API.
+  function previewUrl(path) {
+    return path ? API + path : "";
+  }
+
+  // Menu déroulant illustré pour choisir l'article : vignette, nom, contenu
+  // et prix. Clavier : flèches, Entrée, Échap.
+  function visualSelect(host, opts) {
+    var current = opts.value;
+    function itemHtml(o) {
+      return (o.img ? '<img src="' + esc(o.img) + '" alt="" />' : '<span class="ec-vsel-noimg" aria-hidden="true"></span>') +
+        '<span class="ec-vsel-text"><strong>' + esc(o.label) + "</strong>" + (o.sub ? "<small>" + esc(o.sub) + "</small>" : "") + "</span>" +
+        '<span class="ec-price">' + esc(o.price) + "</span>";
+    }
+    host.className = "ec-vsel";
+    host.innerHTML =
+      '<button type="button" class="ec-vsel-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="' + esc(opts.ariaLabel) + '"></button>' +
+      '<ul class="ec-vsel-list" role="listbox" aria-label="' + esc(opts.ariaLabel) + '" hidden>' +
+      opts.options.map(function (o) {
+        return '<li role="option" tabindex="-1" data-value="' + esc(o.value) + '" aria-selected="' + (o.value === current) + '">' + itemHtml(o) + "</li>";
+      }).join("") + "</ul>";
+    var btn = host.querySelector(".ec-vsel-btn");
+    var list = host.querySelector(".ec-vsel-list");
+    var items = Array.prototype.slice.call(list.children);
+    function paint() {
+      var o = opts.options.find(function (x) { return x.value === current; });
+      btn.innerHTML = itemHtml(o) + '<span class="ec-vsel-caret" aria-hidden="true">▾</span>';
+      items.forEach(function (li) { li.setAttribute("aria-selected", String(li.getAttribute("data-value") === current)); });
+    }
+    function outside(event) { if (!host.contains(event.target)) close(); }
+    function open() {
+      list.hidden = false;
+      btn.setAttribute("aria-expanded", "true");
+      document.addEventListener("mousedown", outside);
+      (items.find(function (li) { return li.getAttribute("aria-selected") === "true"; }) || items[0]).focus();
+    }
+    function close(refocus) {
+      list.hidden = true;
+      btn.setAttribute("aria-expanded", "false");
+      document.removeEventListener("mousedown", outside);
+      if (refocus) btn.focus();
+    }
+    function choose(li) {
+      current = li.getAttribute("data-value");
+      paint();
+      close(true);
+      opts.onChange(current);
+    }
+    btn.addEventListener("click", function () { if (list.hidden) open(); else close(); });
+    btn.addEventListener("keydown", function (e) { if (e.key === "ArrowDown") { e.preventDefault(); open(); } });
+    items.forEach(function (li, i) {
+      li.addEventListener("click", function () { choose(li); });
+      li.addEventListener("keydown", function (e) {
+        if (e.key === "ArrowDown" && items[i + 1]) { e.preventDefault(); items[i + 1].focus(); }
+        else if (e.key === "ArrowUp") { e.preventDefault(); (items[i - 1] || btn).focus(); }
+        else if (e.key === "Enter" || e.key === " ") { e.preventDefault(); choose(li); }
+        else if (e.key === "Escape") { e.stopPropagation(); close(true); }
+        else if (e.key === "Tab") { close(false); }
+      });
+    });
+    paint();
+  }
+
   function miniPhotoHtml(photo) {
     return '<canvas style="aspect-ratio:' + photo.width + "/" + photo.height + '" data-photo="' + esc(JSON.stringify(photo)) + '"></canvas>';
   }
@@ -594,12 +658,8 @@
     openSheet(
       '<p class="ec-eyebrow">' + esc(childName(child)) + " · " + esc(child.group.name) + "</p>" +
       '<h2 id="ec-sheet-title">Ajouter au panier</h2>' +
-      '<fieldset class="ec-pick"><legend>Article</legend><div class="ec-pick-products">' +
-      products.map(function (p) {
-        return '<label class="ec-pick-product"><input type="radio" name="ec-product" value="' + esc(p.id) + '"' + (p.id === sel.productId ? " checked" : "") + " />" +
-          '<span><strong>' + esc(p.name) + "</strong>" + (p.description ? "<small>" + esc(p.description) + "</small>" : "") + "</span>" +
-          '<span class="ec-price">' + esc(euros(p.priceCents)) + "</span></label>";
-      }).join("") + "</div></fieldset>" +
+      '<div class="ec-pick"><p class="ec-pick-label" id="ec-pick-article">Article</p><div id="ec-pick-select"></div>' +
+      '<figure class="ec-pick-visual" id="ec-pick-visual" hidden><img alt="" /><figcaption>Composition de la planche : chaque case reçoit la photo choisie (cases grises : noir et blanc).</figcaption></figure></div>' +
       '<fieldset class="ec-pick"><legend>' + (photos.length > 1 ? "Photo choisie" : "Photo") + '</legend><div class="ec-pick-photos' + (scope === "group" ? " ec-pick-wide" : "") + '">' +
       photos.map(function (p) {
         return '<button type="button" class="ec-pick-photo" data-photo-id="' + esc(p.id) + '" aria-pressed="' + (p.id === sel.photoId) + '" aria-label="Choisir cette photo">' + miniPhotoHtml(p) + "</button>";
@@ -611,15 +671,26 @@
     );
 
     var addBtn = document.getElementById("ec-pick-add");
+    var visual = document.getElementById("ec-pick-visual");
     function refresh() {
       var product = products.find(function (p) { return p.id === sel.productId; });
       document.getElementById("ec-qty").textContent = String(sel.quantity);
       addBtn.textContent = "Ajouter · " + euros(product.priceCents * sel.quantity);
+      visual.hidden = !product.preview;
+      if (product.preview) {
+        visual.querySelector("img").src = previewUrl(product.preview);
+        visual.querySelector("img").alt = "Composition de la planche : " + product.name;
+      }
     }
-    refresh();
-    el.sheetBody.querySelectorAll('input[name="ec-product"]').forEach(function (radio) {
-      radio.addEventListener("change", function () { sel.productId = radio.value; refresh(); });
+    visualSelect(document.getElementById("ec-pick-select"), {
+      options: products.map(function (p) {
+        return { value: p.id, label: p.name, sub: p.description, price: euros(p.priceCents), img: previewUrl(p.preview) };
+      }),
+      value: sel.productId,
+      ariaLabel: "Article",
+      onChange: function (value) { sel.productId = value; refresh(); },
     });
+    refresh();
     el.sheetBody.querySelectorAll("[data-photo-id]").forEach(function (btn) {
       btn.addEventListener("click", function () {
         sel.photoId = btn.getAttribute("data-photo-id");

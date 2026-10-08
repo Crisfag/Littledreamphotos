@@ -541,6 +541,17 @@ Le tableau de bord s'organise en trois onglets, chacun avec son propre lien
     confirmation. L'API BePhoto n'ayant pas de champ adresse, les lots à
     domicile partent encore avec leur fichier. `BEPHOTO_API_BASE` ne sert
     qu'aux tests locaux (faux labo) : ne la définissez jamais en production.
+  - *Planches et visuels* : les 26 planches de la grille publique BePhoto
+    (`BEPHOTO_PLANCHES`, bephoto.js : numéro, description en français,
+    format de feuille, prix par palier) se choisissent sans compte connecté,
+    dans un menu déroulant illustré (le labo compose la planche à partir
+    d'une seule photo). Leur visuel (schéma de composition) est recopié une
+    fois du labo dans R2 et servi par `/api/lab-previews/bephoto/:id.jpg`
+    (planches connues seulement) ; un produit prend le visuel de la première
+    planche de sa composition. Côté famille : visuel sur la carte du produit
+    et choix de l'article dans un menu déroulant illustré ; la composition
+    labo n'est jamais envoyée aux familles. `BEPHOTO_PREVIEW_BASE` ne sert
+    qu'aux tests locaux.
   - *À venir* : réponses de BePhoto (adresse, tri par enfant, pochettes),
     relances des familles, part de l'établissement, ventes scolaires dans le
     tableau des ventes.
@@ -1483,7 +1494,7 @@ node tests/marks.test.mjs             # codes couleur + repères client, autonom
 node tests/subdomain.test.mjs         # sous-domaine par studio, autonome (PUBLIC_SITE_ORIGIN=http://localhost:8000 dans worker/.dev.vars)
 node tests/shop.test.mjs              # boutique de tirages côté client, autonome (PRODIGI_API_BASE=http://127.0.0.1:8790/v4.0 dans worker/.dev.vars)
 node tests/schoolshop.test.mjs        # commande des photos scolaires (gamme, panier famille, suivi, production), autonome
-node tests/schoollab.test.mjs         # lots et envoi à un faux BePhoto, autonome (BEPHOTO_API_BASE=http://127.0.0.1:8791 dans worker/.dev.vars)
+node tests/schoollab.test.mjs         # lots, planches et envoi à un faux BePhoto, autonome (BEPHOTO_API_BASE et BEPHOTO_PREVIEW_BASE=http://127.0.0.1:8791 dans worker/.dev.vars)
 node tests/music.test.mjs             # musique côté client (bibliothèque, lien Spotify), autonome
 node tests/delivery.test.mjs          # livraison des photos définitives côté client, autonome
 node tests/sales.test.mjs             # onglet Ventes, autonome (admin-server.mjs lancé)

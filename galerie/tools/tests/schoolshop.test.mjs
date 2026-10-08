@@ -99,20 +99,20 @@ await admin.goto(`${BASE}/#/scolaire/${encodeURIComponent(school.id)}/${encodeUR
 await admin.waitForSelector("#ad-sc-starter", { timeout: 10000 });
 check("une année sans gamme propose de partir d'une gamme type", await admin.isVisible("#ad-sc-starter"));
 await admin.click("#ad-sc-starter");
-await admin.waitForSelector(".ad-sc-products li");
+await admin.waitForSelector(".ad-sc-products > li");
 check("la gamme de départ compte pochettes, tirages, fichier numérique et photo de groupe",
-      (await admin.locator(".ad-sc-products li").count()) === 6, String(await admin.locator(".ad-sc-products li").count()));
+      (await admin.locator(".ad-sc-products > li").count()) === 6, String(await admin.locator(".ad-sc-products > li").count()));
 
-const firstPrice = admin.locator('.ad-sc-products li').first().locator('[data-pfield="price"]');
+const firstPrice = admin.locator('.ad-sc-products > li').first().locator('[data-pfield="price"]');
 await firstPrice.fill("24,50");
 await firstPrice.press("Tab");
-const tirage20 = admin.locator(".ad-sc-products li", { has: admin.locator('[data-pfield="name"][value="Tirage 20×30"]') });
+const tirage20 = admin.locator(".ad-sc-products > li", { has: admin.locator('[data-pfield="name"][value="Tirage 20×30"]') });
 await tirage20.locator('[data-pfield="active"]').uncheck();
 await admin.fill('#ad-sc-add-product [name="name"]', "Pochette Duo");
 await admin.fill('#ad-sc-add-product [name="description"]', "2 tirages 13×18");
 await admin.fill('#ad-sc-add-product [name="price"]', "18");
 await admin.click('#ad-sc-add-product [type="submit"]');
-await admin.waitForFunction(() => document.querySelectorAll(".ad-sc-products li").length === 7);
+await admin.waitForFunction(() => document.querySelectorAll(".ad-sc-products > li").length === 7);
 await admin.fill("#ad-sc-shipping", "6,90");
 await admin.press("#ad-sc-shipping", "Tab");
 await admin.waitForTimeout(800);
@@ -123,6 +123,11 @@ check("prix modifié, article retiré de la vente, nouveau produit et frais de p
       byName("Pochette Duo").priceCents === 1800 && shop.homeShippingCents === 690,
       JSON.stringify({ classique: byName("Pochette Classique").priceCents, actif: byName("Tirage 20×30").active, port: shop.homeShippingCents }));
 check("sans commande, le suivi l'annonce simplement", (await admin.textContent("#ad-sc-orders")).includes("Aucune commande"));
+
+// Pochette Classique composée d'une planche du labo : elle aura son visuel.
+await client.request("POST", `/api/admin/school/products/${byName("Pochette Classique").id}/lab`, {
+  items: [{ idproduct: 1051, idpaper: 1, quantity: 1, label: "Planche 13×18 n°1051" }],
+});
 
 /* ---------- Espace famille : panier pour deux enfants ---------- */
 
@@ -164,9 +169,28 @@ check("la famille voit la gamme en vente (pas l'article retiré) et ses prix",
       productNames.join(", "));
 check("la livraison gratuite à l'école et la date limite sont annoncées", /gratuite à l'établissement.*2030/.test(await page.textContent(".ec-order")));
 
+const cardImg = await page.getAttribute('.ec-product:has(h4:text-is("Pochette Classique")) .ec-product-img', "src").catch(() => null);
+check("un produit composé d'une planche montre son visuel ; les autres non",
+      /\/api\/lab-previews\/bephoto\/1051\.jpg$/.test(cardImg || "") && (await page.locator(".ec-product-img").count()) === 1, cardImg);
+const familyShop = await page.evaluate(() => fetch("https://galerie-protegee.littledreamphotos-be.workers.dev/api/family/me", {
+  headers: { authorization: "Bearer " + JSON.parse(localStorage.getItem("holypixx-famille")).token },
+}).then((r) => r.json()));
+check("la composition labo reste côté photographe (jamais envoyée aux familles)",
+      Object.values(familyShop.shops)[0].products.every((p) => !("labItems" in p)));
+
 // Pochette Classique, sur la 2e photo de Léa, en 2 exemplaires.
 await page.click('.ec-product:has(h4:text-is("Pochette Classique")) [data-pick]');
 await page.waitForSelector("#ec-sheet:not([hidden]) .ec-pick-photo");
+check("le choix de l'article est un menu déroulant illustré, avec la composition de la planche",
+      (await page.textContent(".ec-vsel-btn")).includes("Pochette Classique") && !(await page.isHidden("#ec-pick-visual")));
+await page.click(".ec-vsel-btn");
+await page.waitForSelector('.ec-vsel-list:not([hidden])');
+if (process.env.SCREENSHOT_DIR) await page.screenshot({ path: join(process.env.SCREENSHOT_DIR, "famille-menu-article.png") });
+const articleOptions = await page.$$eval('.ec-vsel [role="option"] strong', (els) => els.map((e) => e.textContent));
+await page.keyboard.press("Escape");
+check("le menu propose les articles « portrait » ; Échap le referme sans fermer le panneau",
+      articleOptions.length === 5 && !articleOptions.includes("Photo de groupe 20×30") && (await page.isHidden(".ec-vsel-list")) && !(await page.isHidden("#ec-sheet")),
+      articleOptions.join(", "));
 check("le choix propose les portraits de l'enfant", (await page.locator(".ec-pick-photo").count()) === photosOf(kidA.id).length);
 await page.locator(".ec-pick-photo").nth(1).click();
 await page.click('[data-qty="1"]');
@@ -180,7 +204,7 @@ await page.locator('.ec-thumb[data-list="groupPhotos"]').first().click();
 await page.waitForSelector("#ec-lightbox-order:not([hidden])");
 await page.click("#ec-lightbox-order");
 await page.waitForSelector("#ec-sheet:not([hidden])");
-const groupChoices = await page.$$eval(".ec-pick-product strong", (els) => els.map((e) => e.textContent));
+const groupChoices = await page.$$eval('.ec-vsel [role="option"] strong', (els) => els.map((e) => e.textContent));
 check("depuis la photo de classe en grand, seuls les articles « photo de groupe » sont proposés",
       groupChoices.length === 1 && groupChoices[0] === "Photo de groupe 20×30", groupChoices.join(", "));
 await page.click("#ec-pick-add");
