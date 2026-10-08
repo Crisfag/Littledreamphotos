@@ -21,6 +21,7 @@ import { originalKey } from "./storage.js";
 import {
   BephotoError, PAPERS, bephotoLogin, bephotoProducts, bephotoCreateOrder, bephotoAddProduct,
   bephotoCloseOrder, bephotoGetOrder, labFilename, normalizeLabItems,
+  BEPHOTO_PLANCHES, BEPHOTO_PREVIEW_BASE, plancheById, planchePreviewPath, plancheRange, plancheSheet,
 } from "./bephoto.js";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -111,6 +112,61 @@ async function labProducts(env, photographer) {
   } catch (err) {
     return labFailure(err);
   }
+}
+
+// GET …/lab/catalogue — de quoi composer un produit, même sans compte
+// connecté : les planches de la grille publique (avec leur visuel et leur
+// fourchette de prix), puis, si le compte est connecté, les autres produits
+// du catalogue BePhoto (tirages simples…).
+async function labCatalogue(env, photographer) {
+  const planches = BEPHOTO_PLANCHES.map((p) => ({
+    idproduct: p.id, name: p.label, labName: p.name, sheet: plancheSheet(p), dimensions: p.dimensions, preview: planchePreviewPath(p.id),
+    ...plancheRange(p), tiers: p.cents, planche: true,
+  }));
+  let others = [];
+  let warning = "";
+  if (photographer.bephoto_password_enc) {
+    try {
+      const ids = new Set(BEPHOTO_PLANCHES.map((p) => p.id));
+      others = (await withBephoto(env, photographer, (token) => bephotoProducts(env, token)))
+        .filter((p) => !ids.has(p.idproduct))
+        .map((p) => ({ idproduct: p.idproduct, name: p.name, dimensions: p.dimensions, preview: "", prices: p.prices, planche: false }));
+    } catch (err) {
+      if (!(err instanceof BephotoError)) throw err;
+      warning = "Le catalogue BePhoto ne répond pas : seules les planches sont proposées.";
+    }
+  }
+  return json({ planches, others, connected: Boolean(photographer.bephoto_password_enc), papers: PAPERS, warning });
+}
+
+/* ---------- Visuels des planches ---------- */
+
+// GET /api/lab-previews/bephoto/:id.jpg — visuel d'exemple d'une planche,
+// public (une illustration de produit, rien de personnel). Recopié une fois
+// depuis le labo dans R2, puis servi depuis chez nous : seules les planches
+// connues sont servies, ce n'est jamais un relais ouvert.
+export async function handleLabPreview(env, file) {
+  const planche = plancheById(String(file || "").replace(/\.jpg$/i, ""));
+  if (!planche?.preview) return fail(404, "Visuel inconnu");
+  const key = `lab-previews/bephoto/${planche.preview.split("/").pop()}`;
+  let object = await env.TILES.get(key);
+  if (!object) {
+    let response;
+    try {
+      response = await fetch(String(env.BEPHOTO_PREVIEW_BASE || BEPHOTO_PREVIEW_BASE).replace(/\/+$/, "") + planche.preview);
+    } catch {
+      return fail(502, "Visuel indisponible");
+    }
+    const type = response.headers.get("content-type") || "";
+    const bytes = response.ok && /^image\/jpe?g/i.test(type) ? new Uint8Array(await response.arrayBuffer()) : null;
+    if (!bytes || bytes.length > 3 * 1024 * 1024) return fail(502, "Visuel indisponible");
+    await env.TILES.put(key, bytes, { httpMetadata: { contentType: "image/jpeg" } });
+    object = await env.TILES.get(key);
+    if (!object) return fail(502, "Visuel indisponible");
+  }
+  return new Response(object.body, {
+    headers: { "content-type": "image/jpeg", "cache-control": "public, max-age=604800" },
+  });
 }
 
 /* ---------- Composition labo d'un produit ---------- */
@@ -357,6 +413,7 @@ export async function handleSchoolLabAdmin(request, env, photographer, rest, ori
     if (method === "DELETE") return disconnectAccount(env, photographer);
   }
   if (kind === "lab" && id === "products" && rest.length === 2 && method === "GET") return labProducts(env, photographer);
+  if (kind === "lab" && id === "catalogue" && rest.length === 2 && method === "GET") return labCatalogue(env, photographer);
   if (kind === "products" && sub === "lab" && rest.length === 3 && method === "POST") return setProductLab(request, env, photographer, id);
   if (kind === "years" && sub === "batches" && rest.length === 3) {
     const year = await ownedYear(env, photographer.id, id);

@@ -99,20 +99,20 @@ await admin.goto(`${BASE}/#/scolaire/${encodeURIComponent(school.id)}/${encodeUR
 await admin.waitForSelector("#ad-sc-starter", { timeout: 10000 });
 check("une année sans gamme propose de partir d'une gamme type", await admin.isVisible("#ad-sc-starter"));
 await admin.click("#ad-sc-starter");
-await admin.waitForSelector(".ad-sc-products li");
+await admin.waitForSelector(".ad-sc-products > li");
 check("la gamme de départ compte pochettes, tirages, fichier numérique et photo de groupe",
-      (await admin.locator(".ad-sc-products li").count()) === 6, String(await admin.locator(".ad-sc-products li").count()));
+      (await admin.locator(".ad-sc-products > li").count()) === 6, String(await admin.locator(".ad-sc-products > li").count()));
 
-const firstPrice = admin.locator('.ad-sc-products li').first().locator('[data-pfield="price"]');
+const firstPrice = admin.locator('.ad-sc-products > li').first().locator('[data-pfield="price"]');
 await firstPrice.fill("24,50");
 await firstPrice.press("Tab");
-const tirage20 = admin.locator(".ad-sc-products li", { has: admin.locator('[data-pfield="name"][value="Tirage 20×30"]') });
+const tirage20 = admin.locator(".ad-sc-products > li", { has: admin.locator('[data-pfield="name"][value="Tirage 20×30"]') });
 await tirage20.locator('[data-pfield="active"]').uncheck();
 await admin.fill('#ad-sc-add-product [name="name"]', "Pochette Duo");
 await admin.fill('#ad-sc-add-product [name="description"]', "2 tirages 13×18");
 await admin.fill('#ad-sc-add-product [name="price"]', "18");
 await admin.click('#ad-sc-add-product [type="submit"]');
-await admin.waitForFunction(() => document.querySelectorAll(".ad-sc-products li").length === 7);
+await admin.waitForFunction(() => document.querySelectorAll(".ad-sc-products > li").length === 7);
 await admin.fill("#ad-sc-shipping", "6,90");
 await admin.press("#ad-sc-shipping", "Tab");
 await admin.waitForTimeout(800);
@@ -123,6 +123,15 @@ check("prix modifié, article retiré de la vente, nouveau produit et frais de p
       byName("Pochette Duo").priceCents === 1800 && shop.homeShippingCents === 690,
       JSON.stringify({ classique: byName("Pochette Classique").priceCents, actif: byName("Tirage 20×30").active, port: shop.homeShippingCents }));
 check("sans commande, le suivi l'annonce simplement", (await admin.textContent("#ad-sc-orders")).includes("Aucune commande"));
+
+// Pochette Classique composée d'une planche du labo : elle aura son visuel.
+await client.request("POST", `/api/admin/school/products/${byName("Pochette Classique").id}/lab`, {
+  items: [{ idproduct: 1051, idpaper: 1, quantity: 1, label: "Planche 13×18 n°1051" }],
+});
+// Pochette Duo : planche 1033, dont une case en noir et blanc.
+await client.request("POST", `/api/admin/school/products/${byName("Pochette Duo").id}/lab`, {
+  items: [{ idproduct: 1033, idpaper: 1, quantity: 1, label: "Planche 13×18 n°1033" }],
+});
 
 /* ---------- Espace famille : panier pour deux enfants ---------- */
 
@@ -164,9 +173,42 @@ check("la famille voit la gamme en vente (pas l'article retiré) et ses prix",
       productNames.join(", "));
 check("la livraison gratuite à l'école et la date limite sont annoncées", /gratuite à l'établissement.*2030/.test(await page.textContent(".ec-order")));
 
+await page.waitForFunction(() => document.querySelectorAll("canvas.ec-mockup[data-mockup].ec-loaded").length === 2, null, { timeout: 15000 });
+// Lit des pixels de l'aperçu : centre d'une case (photo #c98, rosée) et
+// marge blanche ; pour 1033, la case noir et blanc doit être grise.
+const sample = (selector, points) => page.$eval(selector, (canvas, pts) => {
+  const ctx = canvas.getContext("2d");
+  return pts.map(([x, y]) => Array.from(ctx.getImageData(Math.round(x * canvas.width), Math.round(y * canvas.height), 1, 1).data).slice(0, 3));
+}, points);
+const classique = await sample('.ec-product:has(h4:text-is("Pochette Classique")) canvas.ec-mockup', [[0.25, 0.25], [0.01, 0.5]]);
+const duo = await sample('.ec-product:has(h4:text-is("Pochette Duo")) canvas.ec-mockup', [[0.5, 0.2], [0.75, 0.8]]);
+const isPhoto = ([r, g, b]) => r > g + 20 && g > b && r < 245;
+const isWhite = ([r, g, b]) => r > 245 && g > 245 && b > 245;
+const isGrey = ([r, g, b]) => Math.abs(r - g) < 6 && Math.abs(g - b) < 6 && r < 240;
+check("chaque produit composé d'une planche montre l'aperçu avec la photo de l'enfant dans les cases",
+      isPhoto(classique[0]) && isWhite(classique[1]) && (await page.locator(".ec-product-img").count()) === 2, JSON.stringify(classique));
+check("les cases noir et blanc de la planche le sont aussi dans l'aperçu", isPhoto(duo[0]) && isGrey(duo[1]), JSON.stringify(duo));
+const familyShop = await page.evaluate(() => fetch("https://galerie-protegee.littledreamphotos-be.workers.dev/api/family/me", {
+  headers: { authorization: "Bearer " + JSON.parse(localStorage.getItem("holypixx-famille")).token },
+}).then((r) => r.json()));
+check("la composition labo reste côté photographe (jamais envoyée aux familles)",
+      Object.values(familyShop.shops)[0].products.every((p) => !("labItems" in p)));
+
 // Pochette Classique, sur la 2e photo de Léa, en 2 exemplaires.
 await page.click('.ec-product:has(h4:text-is("Pochette Classique")) [data-pick]');
 await page.waitForSelector("#ec-sheet:not([hidden]) .ec-pick-photo");
+await page.waitForSelector("#ec-pick-visual canvas.ec-loaded", { timeout: 10000 });
+check("le choix de l'article est un menu déroulant illustré, avec l'aperçu de la planche et de la photo choisie",
+      (await page.textContent(".ec-vsel-btn")).includes("Pochette Classique") && !(await page.isHidden("#ec-pick-visual canvas")) &&
+      (await page.textContent("#ec-pick-visual figcaption")).includes("filigrane"));
+await page.click(".ec-vsel-btn");
+await page.waitForSelector('.ec-vsel-list:not([hidden])');
+if (process.env.SCREENSHOT_DIR) await page.screenshot({ path: join(process.env.SCREENSHOT_DIR, "famille-menu-article.png") });
+const articleOptions = await page.$$eval('.ec-vsel [role="option"] strong', (els) => els.map((e) => e.textContent));
+await page.keyboard.press("Escape");
+check("le menu propose les articles « portrait » ; Échap le referme sans fermer le panneau",
+      articleOptions.length === 5 && !articleOptions.includes("Photo de groupe 20×30") && (await page.isHidden(".ec-vsel-list")) && !(await page.isHidden("#ec-sheet")),
+      articleOptions.join(", "));
 check("le choix propose les portraits de l'enfant", (await page.locator(".ec-pick-photo").count()) === photosOf(kidA.id).length);
 await page.locator(".ec-pick-photo").nth(1).click();
 await page.click('[data-qty="1"]');
@@ -180,7 +222,7 @@ await page.locator('.ec-thumb[data-list="groupPhotos"]').first().click();
 await page.waitForSelector("#ec-lightbox-order:not([hidden])");
 await page.click("#ec-lightbox-order");
 await page.waitForSelector("#ec-sheet:not([hidden])");
-const groupChoices = await page.$$eval(".ec-pick-product strong", (els) => els.map((e) => e.textContent));
+const groupChoices = await page.$$eval('.ec-vsel [role="option"] strong', (els) => els.map((e) => e.textContent));
 check("depuis la photo de classe en grand, seuls les articles « photo de groupe » sont proposés",
       groupChoices.length === 1 && groupChoices[0] === "Photo de groupe 20×30", groupChoices.join(", "));
 await page.click("#ec-pick-add");

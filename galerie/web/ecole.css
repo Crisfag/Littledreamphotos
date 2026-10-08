@@ -238,16 +238,8 @@ h3 { font-family: var(--serif); font-weight: 600; font-size: 1.35rem; color: var
 .ec-sheet h2 { font-size: 1.6rem; margin-top: -.6rem; }
 .ec-pick { border: 0; display: grid; gap: .5rem; }
 .ec-pick legend { font-size: .78rem; letter-spacing: .04em; color: var(--muted); margin-bottom: .4rem; }
-.ec-pick-products { display: grid; gap: .4rem; }
-.ec-pick-product {
-  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: .7rem; align-items: center;
-  padding: .65rem .8rem; border: 1px solid var(--line); border-radius: 12px; cursor: pointer;
-}
-.ec-pick-product:has(input:checked) { border-color: var(--rose); box-shadow: 0 0 0 3px rgba(185, 138, 122, .16); }
-.ec-pick-product input { accent-color: var(--rose-deep); width: 1.05rem; height: 1.05rem; }
-.ec-pick-product span:not(.ec-price) { display: grid; }
-.ec-pick-product strong, .ec-cart-name strong { font-weight: 500; color: var(--ink); }
-.ec-pick-product small, .ec-cart-name small { color: var(--muted); font-size: .8rem; }
+.ec-cart-name strong { font-weight: 500; color: var(--ink); }
+.ec-cart-name small { color: var(--muted); font-size: .8rem; }
 .ec-pick-photos { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: .5rem; }
 .ec-pick-wide { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
 .ec-pick-photo { position: relative; padding: 0; border: 0; background: none; border-radius: 10px; cursor: pointer; }
@@ -283,3 +275,40 @@ h3 { font-family: var(--serif); font-weight: 600; font-size: 1.35rem; color: var
   .ec-cart-lines li .ec-price { grid-column: 2 / -1; justify-self: end; }
   .ec-lightbox-order { bottom: 4.4rem; }
 }
+
+/* Visuels des planches et menu déroulant illustré. */
+.ec-product-visual { grid-template-rows: auto auto auto 1fr auto; }
+.ec-product-img { width: 100%; aspect-ratio: 4 / 3; object-fit: contain; background: var(--cream); border-radius: 10px; margin-bottom: .5rem; padding: .4rem; }
+.ec-pick-label { font-size: .78rem; letter-spacing: .04em; color: var(--muted); margin-bottom: .4rem; }
+.ec-vsel { position: relative; }
+.ec-vsel-btn, .ec-vsel [role="option"] {
+  display: grid; grid-template-columns: 52px minmax(0, 1fr) auto; gap: .7rem; align-items: center;
+  width: 100%; text-align: left; font: inherit; color: var(--charcoal);
+}
+.ec-vsel-btn { grid-template-columns: 52px minmax(0, 1fr) auto auto; padding: .45rem .7rem .45rem .45rem; border: 1px solid var(--rose); border-radius: 12px; background: #fff; cursor: pointer; box-shadow: 0 0 0 3px rgba(185, 138, 122, .12); }
+.ec-vsel img, .ec-vsel-noimg { width: 52px; height: 52px; object-fit: contain; border-radius: 8px; background: var(--cream); }
+.ec-vsel-noimg { display: block; }
+.ec-vsel-text { display: grid; min-width: 0; }
+.ec-vsel-text strong { font-weight: 500; color: var(--ink); }
+.ec-vsel-text small { color: var(--muted); font-size: .8rem; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.ec-vsel-caret { color: var(--muted); }
+.ec-vsel-list {
+  list-style: none; position: absolute; z-index: 2; top: calc(100% + 6px); left: 0; right: 0;
+  max-height: 320px; overflow-y: auto; padding: .35rem; background: #fff;
+  border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 20px 44px -20px rgba(43, 37, 33, .5);
+}
+.ec-vsel [role="option"] { padding: .45rem; border-radius: 10px; cursor: pointer; }
+.ec-vsel [role="option"]:hover, .ec-vsel [role="option"]:focus { background: var(--cream); outline: none; }
+.ec-vsel [role="option"][aria-selected="true"] { background: #f6ebe6; }
+.ec-vsel-btn:focus-visible, .ec-vsel [role="option"]:focus-visible { outline: 2px solid var(--rose-deep); outline-offset: 1px; }
+.ec-pick-visual { margin-top: .6rem; display: grid; gap: .3rem; justify-items: center; }
+.ec-pick-visual img { max-width: 100%; max-height: 220px; object-fit: contain; border-radius: 10px; background: var(--cream); padding: .4rem; }
+.ec-pick-visual figcaption { font-size: .78rem; color: var(--muted); text-align: center; }
+
+/* Aperçu de la planche avec la photo de l'enfant (canvas). */
+.ec-mockup { display: block; background: linear-gradient(110deg, var(--sand) 30%, var(--cream) 50%, var(--sand) 70%) 0 0 / 300% 100%; animation: ec-shimmer 1.4s linear infinite; -webkit-user-drag: none; }
+.ec-mockup.ec-loaded, .ec-mockup.ec-failed { animation: none; background: #fff; }
+.ec-product-img.ec-mockup { height: auto; max-height: 260px; width: auto; max-width: 100%; justify-self: center; padding: 0; box-shadow: 0 6px 18px -10px rgba(43, 37, 33, .45); border-radius: 4px; }
+.ec-pick-visual canvas { max-width: 100%; max-height: 300px; width: auto; height: auto; border-radius: 4px; box-shadow: 0 8px 24px -12px rgba(43, 37, 33, .5); }
+.ec-pick-visual [hidden] { display: none !important; }
+@media (prefers-reduced-motion: reduce) { .ec-mockup { animation: none; } }

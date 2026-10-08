@@ -10,7 +10,7 @@
 //   ALLOWED_ORIGINS → origines autorisées, séparées par des virgules
 
 import { handleFamily, purgeFamilies } from "./family.js";
-import { handleLabFile } from "./schoollab.js";
+import { handleLabFile, handleLabPreview } from "./schoollab.js";
 import { handleAdmin } from "./admin.js";
 import { handleViewer } from "./viewer.js";
 import { handleAuth } from "./authPhotographer.js";
@@ -105,6 +105,9 @@ export default {
         // Fichier d'impression, téléchargé par le labo via une URL signée.
         const [, , , orderId, photoId] = path.split("/");
         response = await handlePrintAsset(request, env, decodeURIComponent(orderId || ""), decodeURIComponent(photoId || ""));
+      } else if (path.startsWith("/api/lab-previews/bephoto/") && request.method === "GET") {
+        // Visuel d'exemple d'une planche du labo (illustration de produit, public).
+        response = await handleLabPreview(env, decodeURIComponent(path.split("/")[4] || ""));
       } else if (path.startsWith("/api/school-lab-files/") && request.method === "GET") {
         // Fichier d'impression d'un lot scolaire, téléchargé par BePhoto (URL signée).
         const [, , , batchId, photoFile] = path.split("/");

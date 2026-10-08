@@ -16,7 +16,7 @@ import { createServer } from "node:http";
 import { WorkerClient } from "../lib/client.mjs";
 import { processPhoto } from "../lib/pipeline.mjs";
 import { createTestAccount, localSql } from "./lib/testAccount.mjs";
-import { labFilename, normalizeLabItems, normalizeProducts } from "../../worker/src/bephoto.js";
+import { labFilename, normalizeLabItems, normalizeProducts, BEPHOTO_PLANCHES, plancheSheet, previewForLabItems } from "../../worker/src/bephoto.js";
 
 const BASE = process.env.ADMIN_BASE || "http://127.0.0.1:4000";
 const API = process.env.GALERIE_API || "http://127.0.0.1:8788";
@@ -42,11 +42,16 @@ check("catalogue : chaînes converties, prix en centimes",
       JSON.stringify(normalizeProducts([{ idproduct: "12", product: "Tirage", dimensions: "127x178", prices: [{ price: "0.35", idpaper: "1" }] }])) ===
       JSON.stringify([{ idproduct: 12, name: "Tirage", dimensions: "127x178", prices: [{ idpaper: 1, cents: 35 }] }]));
 
+check("planches : 26 références, formats de feuille lisibles (305 mm = 30 cm), visuel de la première planche d'une composition",
+      BEPHOTO_PLANCHES.length === 26 && new Set(BEPHOTO_PLANCHES.map((p) => p.id)).size === 26 &&
+      BEPHOTO_PLANCHES.every((p) => p.label && plancheSheet(p)) && plancheSheet(BEPHOTO_PLANCHES.find((p) => p.id === 118)) === "20×30" &&
+      previewForLabItems([{ idproduct: 102 }, { idproduct: 1120 }, { idproduct: 1054 }]) === "/api/lab-previews/bephoto/1054.jpg" && previewForLabItems([]) === "");
+
 /* ---------- Faux BePhoto ---------- */
 
 const LAB_EMAIL = "labo@test.invalid";
 const LAB_PASSWORD = "bon-mot-de-passe";
-const lab = { logins: 0, token: "", orders: new Map(), downloads: [], expireAfterFirstAdd: true };
+const lab = { logins: 0, token: "", orders: new Map(), downloads: [], expireAfterFirstAdd: true, previewFetches: 0 };
 const CATALOGUE = [
   { idproduct: "101", product: "Tirage 13x18", dimensions: "127x178", prices: [{ price: "0.45", idpaper: "1" }, { price: "0.50", idpaper: "2" }] },
   { idproduct: "102", product: "Tirage 9x13", dimensions: "89x127", prices: [{ price: "0.25", idpaper: "1" }] },
@@ -58,6 +63,11 @@ const labServer = createServer(async (req, res) => {
   const data = body ? JSON.parse(body) : null;
   const reply = (status, payload) => { res.writeHead(status, { "content-type": "application/json" }); res.end(JSON.stringify(payload)); };
   const authed = req.headers.authorization === `Bearer ${lab.token}` && lab.token;
+  if (req.method === "GET" && req.url.startsWith("/images/products/formats/montages/")) {
+    lab.previewFetches++;
+    res.writeHead(200, { "content-type": "image/jpeg" });
+    return res.end(await sharp({ create: { width: 120, height: 170, channels: 3, background: "#123a6e" } }).jpeg().toBuffer());
+  }
   if (req.method === "POST" && req.url === "/user/login") {
     if (data?.email !== LAB_EMAIL || data?.password !== LAB_PASSWORD) return reply(401, { error: "Unauthorized" });
     lab.logins++;
@@ -133,6 +143,25 @@ const productNamed = (n) => shop.products.find((p) => p.name === n);
 
 /* ---------- Compte BePhoto et catalogue ---------- */
 
+const offlineCatalogue = await call("GET", "/api/admin/school/lab/catalogue");
+const p1051 = offlineCatalogue.body.planches?.find((p) => p.idproduct === 1051);
+check("sans compte BePhoto, les 26 planches de la grille publique sont proposées, en français, avec visuel et prix",
+      offlineCatalogue.status === 200 && offlineCatalogue.body.planches.length === 26 && offlineCatalogue.body.others.length === 0 &&
+      p1051.name === "3 photos 6×9 + 4 photos d'identité" && p1051.sheet === "13×18" && p1051.preview === "/api/lab-previews/bephoto/1051.jpg" &&
+      p1051.minCents === 32 && p1051.maxCents === 65, JSON.stringify(p1051));
+const preview1 = await fetch(`${API}/api/lab-previews/bephoto/1051.jpg`);
+const previewBytes = Buffer.from(await preview1.arrayBuffer());
+const fetchesAfterFirst = lab.previewFetches;
+const preview2 = await fetch(`${API}/api/lab-previews/bephoto/1051.jpg`);
+await preview2.arrayBuffer();
+check("le visuel d'une planche est recopié une fois chez Holypixx, puis servi depuis chez nous",
+      preview1.status === 200 && preview1.headers.get("content-type") === "image/jpeg" && previewBytes.length > 100 &&
+      preview2.status === 200 && fetchesAfterFirst <= 1 && lab.previewFetches === fetchesAfterFirst, `${lab.previewFetches} téléchargement(s) chez le labo`);
+const unknownPreview = await fetch(`${API}/api/lab-previews/bephoto/999.jpg`);
+const noVisual = await fetch(`${API}/api/lab-previews/bephoto/1120.jpg`);
+const traversal = await fetch(`${API}/api/lab-previews/bephoto/..%2F..%2Fsecret.jpg`);
+check("seules les planches connues ont un visuel (jamais un relais ouvert)", unknownPreview.status === 404 && noVisual.status === 404 && traversal.status === 404);
+
 const noAccount = await call("GET", "/api/admin/school/lab/products");
 check("sans compte BePhoto, le catalogue n'est pas accessible (message clair)", noAccount.status === 409 && /Connectez/.test(noAccount.body.error), noAccount.body.error);
 const wrong = await call("POST", "/api/admin/school/lab", { email: LAB_EMAIL, password: "faux" });
@@ -148,6 +177,9 @@ check("l'export RGPD du compte ne contient ni le mot de passe ni le jeton BePhot
 const catalogue = await call("GET", "/api/admin/school/lab/products");
 check("le catalogue BePhoto se lit, prix en centimes par papier",
       catalogue.status === 200 && catalogue.body.products.length === 3 && catalogue.body.products[0].prices[1].cents === 50);
+const onlineCatalogue = await call("GET", "/api/admin/school/lab/catalogue");
+check("compte connecté : les tirages du catalogue BePhoto s'ajoutent aux planches",
+      onlineCatalogue.body.planches.length === 26 && onlineCatalogue.body.others.length === 3 && onlineCatalogue.body.connected === true);
 
 /* ---------- Composition labo des produits ---------- */
 
@@ -159,6 +191,13 @@ const pochette = await call("POST", `/api/admin/school/products/${productNamed("
 await call("POST", `/api/admin/school/products/${productNamed("Photo de groupe 20×30").id}/lab`, { items: [{ idproduct: 103, idpaper: 2, quantity: 1, label: "Tirage 20x30" }] });
 check("composition : refusée pour un fichier numérique ou un papier inconnu, enregistrée pour une pochette",
       onDigital.status === 400 && badPaper.status === 400 && pochette.status === 200 && pochette.body.labItems.length === 2);
+await call("POST", `/api/admin/school/products/${productNamed("Pochette Famille").id}/lab`, {
+  items: [{ idproduct: 102, idpaper: 1, quantity: 1, label: "Tirage 9x13" }, { idproduct: 165, idpaper: 1, quantity: 1, label: "Planche 18×24 n°165" }],
+});
+const shopAfter = (await call("GET", `/api/admin/school/years/${yearId}/shop`)).body;
+check("le visuel d'un produit est celui de la première planche de sa composition",
+      shopAfter.products.find((p) => p.name === "Pochette Famille").preview === "/api/lab-previews/bephoto/165.jpg" &&
+      shopAfter.products.find((p) => p.name === "Pochette Classique").preview === "");
 
 /* ---------- Commandes payées (comme après Stripe) ---------- */
 
@@ -268,12 +307,31 @@ await page.waitForSelector("#ad-sc-lab .ad-sc-pending", { timeout: 15000 });
 const labText = await page.textContent("#ad-sc-lab");
 check("l'écran « Envois au labo » montre l'attente, le lot parti chez BePhoto et le compte connecté",
       /Lot 1/.test(labText) && /BePhoto n° 501/.test(labText) && /Compte BePhoto connecté/.test(labText) && /1 article/.test(labText), labText.replace(/\s+/g, " ").slice(0, 200));
-const pochetteRow = page.locator(".ad-sc-products li", { has: page.locator('[data-pfield="name"][value="Pochette Classique"]') });
+const pochetteRow = page.locator(".ad-sc-products > li", { has: page.locator('[data-pfield="name"][value="Pochette Classique"]') });
 check("chaque produit montre ce que le labo imprime", (await pochetteRow.locator(".ad-sc-prod-lab").textContent()).includes("2× Tirage 9x13"));
 await pochetteRow.locator("[data-lab-product]").click();
 await pochetteRow.locator(".ad-sc-lab-row").first().waitFor();
 const editorText = await pochetteRow.locator(".ad-sc-lab-editor").textContent();
 check("l'éditeur de composition affiche le coût labo et la marge", /Coût labo ≈ 0,95/.test(editorText) && /marge ≈ 21,05/.test(editorText), editorText.replace(/\s+/g, " ").slice(-140));
+const famRow = page.locator(".ad-sc-products > li", { has: page.locator('[data-pfield="name"][value="Photo de groupe 20×30"]') });
+await famRow.locator("[data-lab-product]").click();
+await famRow.locator(".ad-vsel-btn").first().click();
+await famRow.locator('.ad-vsel [role="option"][data-value="420"]').waitFor();
+const groupsShown = await famRow.locator(".ad-vsel-group").allTextContents();
+const thumbs = await famRow.locator('.ad-vsel [role="option"] img').count();
+if (process.env.SCREENSHOT_DIR) {
+  await page.waitForTimeout(800);
+  await famRow.screenshot({ path: `${process.env.SCREENSHOT_DIR}/ecole-labo-menu.png` });
+  await page.screenshot({ path: `${process.env.SCREENSHOT_DIR}/ecole-labo-menu-page.png` });
+}
+await famRow.locator('.ad-vsel [role="option"][data-value="118"]').click();
+await famRow.locator("[data-lab-cost]").waitFor();
+check("éditeur : menu déroulant illustré (planches avec vignette, puis tirages), coût et marge mis à jour",
+      groupsShown.join("|") === "Planches composées par le labo|Tirages et autres produits BePhoto" && thumbs === 24 &&
+      /Coût labo ≈ 1,20 € à 2,19 €/.test(await famRow.locator("[data-lab-cost]").textContent()), `${thumbs} vignettes`);
+await famRow.locator("[data-save-lab]").click();
+await page.waitForFunction(() => [...document.querySelectorAll(".ad-sc-products > li")].some((li) => li.querySelector(".ad-sc-prod-thumb") && li.textContent.includes("Planche 20×30 n°118")));
+check("après enregistrement, le produit montre la vignette de sa planche", true);
 await page.click('[data-new-batch="home"]');
 await page.waitForSelector('[data-cancel-batch]');
 check("« Préparer un lot » crée le lot depuis l'écran (le numéro d'un lot annulé est repris)",
