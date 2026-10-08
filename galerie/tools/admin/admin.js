@@ -4206,8 +4206,274 @@
       '<label class="ad-sc-price"><input type="text" inputmode="decimal" class="ad-sc-in" data-pfield="price" value="' + eurosInput(p.priceCents).replace(".", ",") + '" aria-label="Prix en euros" /> €</label>' +
       '<label class="ad-sc-toggle"><input type="checkbox" data-pfield="active"' + (p.active ? " checked" : "") + " /> En vente</label>" +
       '<button type="button" class="ad-link-btn ad-sc-del" data-del-product aria-label="Supprimer ' + esc(p.name) + '">Supprimer</button>' +
+      '<div class="ad-sc-prod-lab">' + (p.kind === "numerique"
+        ? '<span class="ad-hint">Labo : rien à imprimer (téléchargé par la famille)</span>'
+        : '<span class="' + (p.labItems.length ? "ad-hint" : "ad-hint ad-acc-warn") + '">Labo : ' + esc(labItemsSummary(p.labItems)) + "</span> " +
+          '<button type="button" class="ad-link-btn" data-lab-product>' + (p.labItems.length ? "Modifier" : "Indiquer") + "</button>") +
+      '<div class="ad-sc-lab-editor" hidden></div></div>' +
       "</li>"
     );
+  }
+
+  var PAPER_NAMES = { 1: "brillant", 2: "lustré" };
+  var schoolLabCatalogue = null;
+
+  function labItemsSummary(items) {
+    if (!items || !items.length) return "à indiquer (ce que BePhoto imprime pour un exemplaire)";
+    return items.map(function (i) {
+      return i.quantity + "× " + (i.label || "produit " + i.idproduct) + " " + (PAPER_NAMES[i.idpaper] || "");
+    }).join(" + ");
+  }
+
+  function labCostCents(items) {
+    if (!schoolLabCatalogue) return null;
+    var total = 0;
+    for (var k = 0; k < items.length; k++) {
+      var prod = schoolLabCatalogue.find(function (c) { return c.idproduct === items[k].idproduct; });
+      var price = prod && prod.prices.find(function (pr) { return pr.idpaper === items[k].idpaper; });
+      if (!price) return null;
+      total += price.cents * items[k].quantity;
+    }
+    return total;
+  }
+
+  // Composition labo d'un produit : ce que BePhoto imprime pour UN
+  // exemplaire (une pochette = plusieurs tirages), avec le coût et la marge.
+  async function openLabEditor(li, product, onSaved) {
+    var box = li.querySelector(".ad-sc-lab-editor");
+    if (!box.hidden) { box.hidden = true; return; }
+    box.hidden = false;
+    box.innerHTML = '<p class="ad-loading">Catalogue BePhoto…</p>';
+    if (!schoolLabCatalogue) {
+      try {
+        schoolLabCatalogue = (await api("GET", "/school/lab/products")).products;
+      } catch (err) {
+        box.innerHTML = '<p class="ad-hint ad-acc-warn">' + esc(err.message) + " Connectez votre compte BePhoto dans « Envois au labo », plus bas.</p>";
+        return;
+      }
+    }
+    var rows = product.labItems.length ? product.labItems.map(function (i) { return Object.assign({}, i); }) : [{ idproduct: 0, idpaper: 1, quantity: 1 }];
+    function optionHtml(c, selected) {
+      return '<option value="' + c.idproduct + '"' + (c.idproduct === selected ? " selected" : "") + ">" + esc(c.name + (c.dimensions ? " (" + c.dimensions + " mm)" : "")) + "</option>";
+    }
+    function draw() {
+      var cost = labCostCents(rows.filter(function (r) { return r.idproduct; }));
+      box.innerHTML =
+        '<p class="ad-hint">Pour <strong>un</strong> exemplaire de « ' + esc(product.name) + " », BePhoto imprime :</p>" +
+        rows.map(function (r, i) {
+          var prod = schoolLabCatalogue.find(function (c) { return c.idproduct === r.idproduct; });
+          var papers = prod ? prod.prices : [{ idpaper: 1 }, { idpaper: 2 }];
+          return '<div class="ad-sc-lab-row" data-row="' + i + '">' +
+            '<input type="number" min="1" max="50" value="' + r.quantity + '" data-f="quantity" aria-label="Quantité" />' +
+            '<span aria-hidden="true">×</span>' +
+            '<select data-f="idproduct" aria-label="Produit BePhoto"><option value="0">Choisir un produit…</option>' + schoolLabCatalogue.map(function (c) { return optionHtml(c, r.idproduct); }).join("") + "</select>" +
+            '<select data-f="idpaper" aria-label="Papier">' + papers.map(function (pp) {
+              return '<option value="' + pp.idpaper + '"' + (pp.idpaper === r.idpaper ? " selected" : "") + ">" + esc((PAPER_NAMES[pp.idpaper] || "papier " + pp.idpaper) + (pp.cents !== undefined ? " · " + formatEuros(pp.cents) : "")) + "</option>";
+            }).join("") + "</select>" +
+            '<button type="button" class="ad-link-btn ad-sc-del" data-remove-row aria-label="Retirer">Retirer</button></div>';
+        }).join("") +
+        '<div class="ad-sc-actions"><button type="button" class="ad-link-btn" data-add-row>+ Ajouter un tirage</button>' +
+        (cost !== null && rows.some(function (r) { return r.idproduct; })
+          ? '<span class="ad-hint">Coût labo ≈ ' + formatEuros(cost) + " · marge ≈ " + formatEuros(product.priceCents - cost) + " (prix de base, avant remise au volume et livraison)</span>"
+          : "") +
+        "</div>" +
+        '<div class="ad-sc-actions"><button type="button" class="ad-btn ad-btn-primary" data-save-lab>Enregistrer</button>' +
+        '<button type="button" class="ad-btn" data-cancel-lab>Annuler</button></div>';
+      box.querySelectorAll(".ad-sc-lab-row").forEach(function (rowEl) {
+        var i = Number(rowEl.getAttribute("data-row"));
+        rowEl.querySelectorAll("[data-f]").forEach(function (input) {
+          input.addEventListener("change", function () {
+            rows[i][input.getAttribute("data-f")] = Number(input.value);
+            if (input.getAttribute("data-f") === "idproduct") {
+              var prod = schoolLabCatalogue.find(function (c) { return c.idproduct === rows[i].idproduct; });
+              rows[i].label = prod ? prod.name : "";
+              if (prod && prod.prices.length && !prod.prices.some(function (pp) { return pp.idpaper === rows[i].idpaper; })) rows[i].idpaper = prod.prices[0].idpaper;
+            }
+            draw();
+          });
+        });
+        rowEl.querySelector("[data-remove-row]").addEventListener("click", function () { rows.splice(i, 1); draw(); });
+      });
+      box.querySelector("[data-add-row]").addEventListener("click", function () { rows.push({ idproduct: 0, idpaper: 1, quantity: 1 }); draw(); });
+      box.querySelector("[data-cancel-lab]").addEventListener("click", function () { box.hidden = true; });
+      box.querySelector("[data-save-lab]").addEventListener("click", async function () {
+        var items = rows.filter(function (r) { return r.idproduct; }).map(function (r) {
+          var prod = schoolLabCatalogue.find(function (c) { return c.idproduct === r.idproduct; });
+          return { idproduct: r.idproduct, idpaper: r.idpaper, quantity: r.quantity, label: prod ? prod.name : r.label || "" };
+        });
+        try {
+          await api("POST", "/school/products/" + encodeURIComponent(product.id) + "/lab", { items: items });
+          toast("Composition labo enregistrée.");
+          onSaved();
+        } catch (err) {
+          toast(err.message, true);
+        }
+      });
+    }
+    draw();
+  }
+
+  /* ---------- Envois au labo : lots, compte BePhoto ---------- */
+
+  var BATCH_STATUS = {
+    ready: { text: "Prêt", cls: "ad-acc-status-trial" },
+    sending: { text: "Envoi en cours", cls: "ad-acc-status-warn" },
+    sent: { text: "Parti", cls: "ad-acc-status-ok" },
+  };
+
+  async function loadSchoolLab(year, kind) {
+    var host = document.getElementById("ad-sc-lab");
+    if (!host) return;
+    var data;
+    try {
+      data = await api("GET", "/school/years/" + encodeURIComponent(year.id) + "/batches");
+    } catch (err) {
+      host.innerHTML = '<p class="ad-hint ad-acc-warn">' + esc(err.message) + "</p>";
+      return;
+    }
+    renderSchoolLab(host, year, kind, data);
+  }
+
+  function renderSchoolLab(host, year, kind, data) {
+    var base = "/local/school/years/" + encodeURIComponent(year.id) + "/production?batch=";
+    var pendingCard = function (delivery, title, hint) {
+      var p = data.pending[delivery];
+      return '<div class="ad-sc-pending">' +
+        "<div><strong>" + esc(title) + "</strong><span>" + (p.lines
+          ? p.quantity + " article" + (p.quantity > 1 ? "s" : "") + " · " + p.children + " enfant" + (p.children > 1 ? "s" : "") + " · " + p.orders + " commande" + (p.orders > 1 ? "s" : "")
+          : "Rien en attente") + "</span>" + (hint ? '<span class="ad-hint">' + esc(hint) + "</span>" : "") + "</div>" +
+        '<button type="button" class="ad-btn' + (p.lines ? " ad-btn-primary" : "") + '" data-new-batch="' + delivery + '"' + (p.lines ? "" : " disabled") + ">Préparer un lot</button></div>";
+    };
+    var rows = data.batches.map(function (b) {
+      var st = BATCH_STATUS[b.status] || BATCH_STATUS.ready;
+      var statusText = b.status === "sent"
+        ? "Parti le " + new Date(b.sentAt * 1000).toLocaleDateString("fr-BE") + (b.lab === "bephoto" ? " · BePhoto n° " + esc(b.labOrderId) : " · à la main")
+        : b.status === "sending" ? "Envoi : " + b.progress.sent + " / " + b.progress.total + " lignes" : "Prêt à partir";
+      var actions = '<a class="ad-link-btn" href="' + base + encodeURIComponent(b.id) + '" download>Fichier (ZIP)</a>';
+      if (b.status === "ready") {
+        if (b.delivery === "school" && data.lab.connected) actions += ' <button type="button" class="ad-btn ad-btn-primary ad-sc-mini" data-send-batch="' + esc(b.id) + '" data-number="' + b.number + '">Envoyer à BePhoto</button>';
+        actions += ' <button type="button" class="ad-link-btn" data-mark-sent="' + esc(b.id) + '">Marquer comme parti</button>' +
+          ' <button type="button" class="ad-link-btn ad-sc-del" data-cancel-batch="' + esc(b.id) + '">Annuler</button>';
+      } else if (b.status === "sending") {
+        actions += ' <button type="button" class="ad-btn ad-btn-primary ad-sc-mini" data-send-batch="' + esc(b.id) + '" data-resume="1" data-number="' + b.number + '">Reprendre l\'envoi</button>';
+      }
+      return "<tr><td><strong>Lot " + b.number + "</strong></td>" +
+        "<td>" + (b.delivery === "home" ? "À domicile" : "École") + "</td>" +
+        '<td class="ad-num">' + b.quantity + "</td>" +
+        '<td class="ad-num">' + b.children + "</td>" +
+        '<td><span class="ad-acc-status ' + st.cls + '">' + st.text + '</span> <span class="ad-hint" data-batch-status="' + esc(b.id) + '">' + statusText + "</span>" +
+        (b.error ? '<br /><span class="ad-hint ad-acc-warn">' + esc(b.error) + "</span>" : "") + "</td>" +
+        '<td class="ad-sc-batch-actions">' + actions + "</td></tr>";
+    }).join("");
+
+    host.innerHTML =
+      '<section class="ad-sc-shop"><div class="ad-section-header"><h3>Envois au labo · ' + esc(year.label) + "</h3></div>" +
+      '<p class="ad-hint">Conseil du labo : regroupez les commandes une ou deux fois pendant la vente (toutes les deux semaines, par exemple) plutôt que de les envoyer une à une. Un article ne part qu\'une fois : il entre dans un seul lot.</p>' +
+      '<div class="ad-sc-pendings">' +
+      pendingCard("school", "À livrer à l'établissement", "") +
+      pendingCard("home", "À livrer à domicile", "Adresse des familles dans le fichier du lot") +
+      "</div>" +
+      (data.unmappedProducts.length
+        ? '<p class="ad-hint ad-acc-warn">Pour envoyer à BePhoto, indiquez ce que le labo imprime pour : ' + esc(data.unmappedProducts.join(", ")) + " (Gamme et prix → Labo).</p>"
+        : "") +
+      (data.batches.length
+        ? '<div class="ad-table-wrap"><table class="ad-table"><thead><tr><th>Lot</th><th>Livraison</th><th class="ad-num">Articles</th><th class="ad-num">Enfants</th><th>Statut</th><th><span class="ad-visually-hidden">Actions</span></th></tr></thead><tbody>' + rows + "</tbody></table></div>"
+        : '<p class="ad-hint">Aucun lot pour l\'instant.</p>') +
+      '<div class="ad-sc-labacct">' +
+      (data.lab.connected
+        ? "<p><strong>Compte BePhoto connecté</strong> · " + esc(data.lab.email) + ' <button type="button" class="ad-link-btn" id="ad-sc-lab-off">Déconnecter</button></p>' +
+          '<p class="ad-hint">Les lots « école » peuvent partir directement chez BePhoto, qui vous facture l\'impression. Les envois à domicile partent encore avec leur fichier : l\'API BePhoto n\'a pas de champ adresse pour l\'instant.</p>'
+        : '<form id="ad-sc-lab-form" class="ad-sc-lab-form"><p><strong>Connecter votre compte BePhoto</strong> <span class="ad-hint">(facultatif)</span></p>' +
+          '<p class="ad-hint">Pour envoyer vos lots directement au labo. Votre mot de passe est chiffré et ne s\'affiche plus jamais ; c\'est vous que BePhoto facture.</p>' +
+          '<label class="ad-field"><span>E-mail du compte BePhoto</span><input type="email" name="email" required autocomplete="off" /></label>' +
+          '<label class="ad-field"><span>Mot de passe</span><input type="password" name="password" required autocomplete="new-password" /></label>' +
+          '<button type="submit" class="ad-btn">Connecter</button></form>') +
+      "</div></section>";
+
+    function refresh() { loadSchoolLab(year, kind); }
+
+    host.querySelectorAll("[data-new-batch]").forEach(function (btn) {
+      btn.addEventListener("click", async function () {
+        btn.disabled = true;
+        try {
+          var created = await api("POST", "/school/years/" + encodeURIComponent(year.id) + "/batches", { delivery: btn.getAttribute("data-new-batch") });
+          toast("Lot " + created.number + " préparé.");
+          refresh();
+        } catch (err) {
+          toast(err.message, true);
+          btn.disabled = false;
+        }
+      });
+    });
+    host.querySelectorAll("[data-mark-sent]").forEach(function (btn) {
+      btn.addEventListener("click", async function () {
+        try {
+          await api("POST", "/school/batches/" + encodeURIComponent(btn.getAttribute("data-mark-sent")), { status: "sent" });
+          refresh();
+        } catch (err) { toast(err.message, true); }
+      });
+    });
+    host.querySelectorAll("[data-cancel-batch]").forEach(function (btn) {
+      btn.addEventListener("click", async function () {
+        if (btn.getAttribute("data-confirm") !== "1") {
+          btn.setAttribute("data-confirm", "1");
+          btn.textContent = "Confirmer l'annulation";
+          return;
+        }
+        try {
+          await api("DELETE", "/school/batches/" + encodeURIComponent(btn.getAttribute("data-cancel-batch")));
+          toast("Lot annulé : ses articles sont de nouveau en attente.");
+          refresh();
+        } catch (err) { toast(err.message, true); }
+      });
+    });
+    host.querySelectorAll("[data-send-batch]").forEach(function (btn) {
+      btn.addEventListener("click", async function () {
+        var id = btn.getAttribute("data-send-batch");
+        if (!btn.getAttribute("data-resume") && btn.getAttribute("data-confirm") !== "1") {
+          btn.setAttribute("data-confirm", "1");
+          btn.textContent = "Confirmer : BePhoto imprime et vous facture";
+          return;
+        }
+        btn.disabled = true;
+        var status = host.querySelector('[data-batch-status="' + id + '"]');
+        try {
+          for (var guard = 0; guard < 2000; guard++) {
+            var step = await api("POST", "/school/batches/" + encodeURIComponent(id) + "/send", {});
+            if (status) status.textContent = step.done ? "Terminé" : "Envoi : " + step.sent + " / " + step.total + " lignes";
+            if (step.done) break;
+          }
+          toast("Lot " + btn.getAttribute("data-number") + " envoyé à BePhoto.");
+        } catch (err) {
+          toast(err.message, true);
+        }
+        refresh();
+      });
+    });
+    var form = document.getElementById("ad-sc-lab-form");
+    if (form) form.addEventListener("submit", async function (event) {
+      event.preventDefault();
+      var submit = form.querySelector('[type="submit"]');
+      submit.disabled = true;
+      try {
+        await api("POST", "/school/lab", { email: form.email.value, password: form.password.value });
+        schoolLabCatalogue = null;
+        toast("Compte BePhoto connecté.");
+        refresh();
+      } catch (err) {
+        toast(err.message, true);
+        submit.disabled = false;
+      }
+    });
+    var off = document.getElementById("ad-sc-lab-off");
+    if (off) off.addEventListener("click", async function () {
+      try {
+        await api("DELETE", "/school/lab");
+        schoolLabCatalogue = null;
+        toast("Compte BePhoto déconnecté.");
+        refresh();
+      } catch (err) { toast(err.message, true); }
+    });
   }
 
   function renderSchoolShop(host, year, kind, shop) {
@@ -4274,9 +4540,11 @@
           '<th class="ad-num">Articles</th><th class="ad-num">Montant</th></tr></thead><tbody>' + orderRows + "</tbody></table></div>"
         : '<p class="ad-hint">Aucune commande pour l\'instant. Elles apparaîtront ici dès que les familles auront payé.</p>') +
       '<p class="ad-hint">Le fichier de production range les fichiers d\'impression par ' + esc(groupWord) + " puis par enfant, avec un récapitulatif (CSV) et la liste de distribution.</p>" +
-      "</section>";
+      "</section>" +
+      '<div id="ad-sc-lab"></div>';
 
     function refresh() { loadSchoolShop(year, kind); }
+    loadSchoolLab(year, kind);
 
     var starter = document.getElementById("ad-sc-starter");
     if (starter) starter.addEventListener("click", async function () {
@@ -4293,6 +4561,10 @@
 
     host.querySelectorAll("[data-product]").forEach(function (li) {
       var id = li.getAttribute("data-product");
+      var labBtn = li.querySelector("[data-lab-product]");
+      if (labBtn) labBtn.addEventListener("click", function () {
+        openLabEditor(li, shop.products.find(function (p) { return p.id === id; }), refresh);
+      });
       li.querySelectorAll("[data-pfield]").forEach(function (input) {
         input.addEventListener("change", async function () {
           var field = input.getAttribute("data-pfield");

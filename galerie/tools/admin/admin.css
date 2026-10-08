@@ -1077,3 +1077,28 @@ h3 { font-size: 1.15rem; margin-bottom: .9rem; }
   .ad-sc-products li .ad-sc-prod-main { grid-column: 1 / -1; }
   .ad-sc-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* Envois au labo : composition labo des produits, lots, compte BePhoto. */
+.ad-sc-prod-lab { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: baseline; gap: .2rem .6rem; padding: .1rem .45rem 0; font-size: .82rem; }
+.ad-sc-prod-lab .ad-hint { margin: 0; font-size: .82rem; }
+.ad-sc-lab-editor { flex-basis: 100%; display: grid; gap: .55rem; margin-top: .5rem; padding: .8rem .9rem; border: 1px dashed var(--line); border-radius: 10px; background: var(--ivory); }
+.ad-sc-lab-row { display: grid; grid-template-columns: 4.2rem auto minmax(0, 1fr) minmax(0, 11rem) auto; gap: .5rem; align-items: center; }
+.ad-sc-lab-row input, .ad-sc-lab-row select { font-family: var(--sans); font-size: .88rem; padding: .4rem .5rem; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--ink); min-width: 0; }
+.ad-sc-pendings { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .6rem; margin: .4rem 0 1rem; }
+.ad-sc-pending { display: flex; align-items: center; justify-content: space-between; gap: .8rem; padding: .8rem .9rem; border: 1px solid var(--line); border-radius: 12px; background: #fff; }
+.ad-sc-pending > div { display: grid; gap: .1rem; }
+.ad-sc-pending strong { font-weight: 500; color: var(--ink); }
+.ad-sc-pending span { font-size: .84rem; color: var(--muted); }
+.ad-sc-pending .ad-hint { font-size: .76rem; margin: 0; }
+.ad-sc-batch-actions { white-space: nowrap; text-align: right; }
+.ad-sc-mini { font-size: .8rem; padding: .3rem .7rem; }
+.ad-sc-labacct { margin-top: 1.2rem; padding-top: 1rem; border-top: 1px solid var(--line); }
+.ad-sc-lab-form { display: grid; gap: .6rem; max-width: 420px; }
+.ad-sc-lab-form .ad-field { margin-bottom: 0; }
+@media (max-width: 720px) {
+  .ad-sc-pendings { grid-template-columns: 1fr; }
+  .ad-sc-lab-row { grid-template-columns: 3.6rem minmax(0, 1fr) auto; }
+  .ad-sc-lab-row > span[aria-hidden] { display: none; }
+  .ad-sc-lab-row select[data-f="idpaper"] { grid-column: 2; }
+  .ad-sc-batch-actions { white-space: normal; text-align: left; }
+}

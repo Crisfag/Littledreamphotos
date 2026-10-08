@@ -703,7 +703,7 @@ async function handleApi(req, res, url) {
     }
   }
 
-  // GET /local/school/years/:id/production[?group=…] — fichier de
+  // GET /local/school/years/:id/production[?group=…|?batch=…] — fichier de
   // production des commandes payées : un ZIP rangé comme on distribue.
   //   01_P2/007_Lea/2x_Pochette_Classique_ab12cd.jpg  (livraison à l'école)
   //   A_domicile/Dupont_Marie_sco123/1x_Tirage_20x30_ab12cd.jpg + adresse.txt
@@ -713,13 +713,16 @@ async function handleApi(req, res, url) {
   if (parts[0] === "school" && parts[1] === "years" && parts[3] === "production" && parts.length === 4 && req.method === "GET") {
     const url = new URL(req.url, "http://localhost");
     const groupId = url.searchParams.get("group") || "";
+    const batchId = url.searchParams.get("batch") || "";
     let data;
     try {
-      data = await client.request("POST", `/api/admin/school/years/${encodeURIComponent(decodeURIComponent(parts[2]))}/production`, groupId ? { groupId } : {});
+      data = await client.request("POST", `/api/admin/school/years/${encodeURIComponent(decodeURIComponent(parts[2]))}/production`, {
+        ...(groupId ? { groupId } : {}), ...(batchId ? { batchId } : {}),
+      });
     } catch (err) {
       return relayError(res, err, "Le fichier de production n'a pas pu être préparé");
     }
-    if (!data.lines.length) return json(res, 400, { error: "Aucune commande payée pour l'instant." });
+    if (!data.lines.length) return json(res, 400, { error: batchId ? "Ce lot est vide." : "Aucune commande payée pour l'instant." });
     const safe = (s) => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Za-z0-9-]+/g, "_").replace(/^_+|_+$/g, "");
     const csvCell = (v) => {
       // Une cellule saisie par une famille ne doit jamais devenir une formule.
@@ -735,7 +738,7 @@ async function handleApi(req, res, url) {
     const dirOf = (l) => l.delivery === "home"
       ? `A_domicile/${safe(l.shippingName) || "commande"}_${l.orderId.slice(-6)}`
       : `${String(groupIndex.get(l.groupId)).padStart(2, "0")}_${safe(l.groupName)}/${childDir(l)}`;
-    const stem = `production-${safe(data.school.name)}-${data.year.label}${groupId ? "-" + safe(data.lines[0].groupName) : ""}`;
+    const stem = `production-${safe(data.school.name)}-${data.year.label}${data.batch ? "-lot" + data.batch.number : ""}${groupId ? "-" + safe(data.lines[0].groupName) : ""}`;
     try {
       res.writeHead(200, { "content-type": "application/zip", "content-disposition": `attachment; filename="${stem}.zip"`, "cache-control": "no-store" });
       const zip = new ZipWriter((chunk) => res.write(chunk));

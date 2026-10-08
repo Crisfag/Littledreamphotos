@@ -297,13 +297,13 @@ for (let i = 0; i < zipBody.length - 4;) {
   zipFiles.set(name, zipBody.subarray(i + 30 + nameLength, i + 30 + nameLength + size));
   i += 30 + nameLength + size;
 }
-check("le fichier de production range les photos par classe puis par enfant",
+check("le fichier de production range les tirages par classe puis par enfant (le fichier numérique, rien à imprimer, n'y est pas)",
       zip.status() === 200 && zipNames.some((n) => /^01_P2\/001_Lea\/2x_Pochette_Classique_\w{6}\.jpg$/.test(n)) &&
-      zipNames.some((n) => /^01_P2\/002_Tom\/1x_Fichier_numerique_HD_\w{6}\.jpg$/.test(n)), zipNames.join(", "));
+      !zipNames.some((n) => /Fichier_numerique/.test(n)), zipNames.join(", "));
 const recap = (zipFiles.get("recapitulatif.csv") || Buffer.alloc(0)).toString("utf8");
 const distribution = (zipFiles.get("distribution.csv") || Buffer.alloc(0)).toString("utf8");
 check("le récapitulatif CSV liste chaque article, et la liste de distribution chaque enfant",
-      recap.split("\r\n").filter(Boolean).length === 3 && recap.includes("Pochette Classique;;2;24,50;École") &&
+      recap.split("\r\n").filter(Boolean).length === 2 && recap.includes("Pochette Classique;;2;24,50;École") &&
       distribution.includes("P2;1;Léa;2× Pochette Classique;"), recap.split("\r\n")[1]);
 
 check("aucune exception JavaScript", exceptions.length === 0, exceptions.join(" | "));

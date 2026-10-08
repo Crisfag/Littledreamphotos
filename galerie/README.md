@@ -518,9 +518,32 @@ Le tableau de bord s'organise en trois onglets, chacun avec son propre lien
     rangés par classe puis par enfant (`01_P2/007_Lea/2x_Pochette….jpg`),
     commandes à domicile à part avec leur adresse, `recapitulatif.csv` (une
     ligne par article) et `distribution.csv` (à cocher à la remise).
-    Paniers jamais payés effacés après deux jours.
-  - *À venir* : labo intégré (BePhoto à l'étude), relances des familles,
-    part de l'établissement, ventes scolaires dans le tableau des ventes.
+    Paniers jamais payés effacés après deux jours. Les fichiers numériques
+    n'entrent ni dans la production ni dans les lots (rien à imprimer).
+  - *Envois au labo* (`worker/src/schoollab.js`, `worker/src/bephoto.js`) :
+    le photographe regroupe les articles payés pas encore partis en *lots*
+    (conseil du labo : une ou deux fois pendant la vente), un pour
+    l'établissement, un pour les envois à domicile ; un article n'entre que
+    dans un lot. Chaque lot a son fichier de production (`?batch=`), part à
+    la main (« Marquer comme parti ») ou directement chez **BePhoto** si le
+    photographe a connecté son compte (e-mail et mot de passe BePhoto,
+    chiffrés comme la clé Prodigi ; le jeton de session est gardé chiffré
+    et renouvelé seul quand il expire). Chaque produit de la gamme indique
+    ce que le labo imprime pour un exemplaire (`lab_items` : produits et
+    papiers du catalogue `/products`, avec coût et marge affichés). L'envoi
+    se fait pas à pas (`POST …/batches/:id/send`, 8 lignes par appel, curseur
+    en base : jamais une ligne envoyée deux fois, reprise après coupure) :
+    création de la commande (métadonnées : établissement, année, lot,
+    adresse de livraison), une ligne par tirage avec un nom de fichier qui
+    range par groupe et par enfant (`01_P2_007_Lea_Pochette-Classique_…jpg`)
+    et l'adresse signée du fichier d'impression
+    (`/api/school-lab-files/…?s=`, valable 60 jours après l'envoi), puis
+    confirmation. L'API BePhoto n'ayant pas de champ adresse, les lots à
+    domicile partent encore avec leur fichier. `BEPHOTO_API_BASE` ne sert
+    qu'aux tests locaux (faux labo) : ne la définissez jamais en production.
+  - *À venir* : réponses de BePhoto (adresse, tri par enfant, pochettes),
+    relances des familles, part de l'établissement, ventes scolaires dans le
+    tableau des ventes.
 - **Campagnes de vente des tirages** (`worker/src/campaigns.js`) :
   - *Promotion à durée limitée* sur une galerie (−10 à −50 % jusqu'à une
     date, depuis la section boutique de la fiche) : bandeau et prix barrés
@@ -1459,6 +1482,8 @@ node tests/comments.test.mjs          # commentaires client, autonome (crée sa 
 node tests/marks.test.mjs             # codes couleur + repères client, autonome (crée sa propre galerie)
 node tests/subdomain.test.mjs         # sous-domaine par studio, autonome (PUBLIC_SITE_ORIGIN=http://localhost:8000 dans worker/.dev.vars)
 node tests/shop.test.mjs              # boutique de tirages côté client, autonome (PRODIGI_API_BASE=http://127.0.0.1:8790/v4.0 dans worker/.dev.vars)
+node tests/schoolshop.test.mjs        # commande des photos scolaires (gamme, panier famille, suivi, production), autonome
+node tests/schoollab.test.mjs         # lots et envoi à un faux BePhoto, autonome (BEPHOTO_API_BASE=http://127.0.0.1:8791 dans worker/.dev.vars)
 node tests/music.test.mjs             # musique côté client (bibliothèque, lien Spotify), autonome
 node tests/delivery.test.mjs          # livraison des photos définitives côté client, autonome
 node tests/sales.test.mjs             # onglet Ventes, autonome (admin-server.mjs lancé)
