@@ -80,6 +80,9 @@ await page.waitForSelector("#ad-sc-add-groups");
 await page.fill('#ad-sc-add-groups [name="names"]', "P3");
 await page.click('#ad-sc-add-groups [type="submit"]');
 await page.waitForSelector("[data-open-group]");
+const emptyCoupons = await page.locator(".ad-sc-coupons").innerText();
+check("sans enfant, pas de lien de fiches (le serveur les refuserait) mais une explication ; « sa classe » accordé",
+      (await page.locator('.ad-sc-coupons a[href*="/coupons"]').count()) === 0 && /importées et regroupées par enfant/.test(emptyCoupons) && /son portrait, sa classe,/.test(emptyCoupons), emptyCoupons.slice(0, 80));
 await page.click("[data-open-group]");
 await page.waitForSelector("#ad-sc-files", { state: "attached" });
 

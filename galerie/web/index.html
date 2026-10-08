@@ -4,17 +4,17 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Holypixx — Galeries clients protégées pour photographes</title>
-  <meta name="description" content="Galeries clients protégées pour photographes : filigrane invisible traçable, alerte de capture d'écran, sélection et annotations du client, livraison HD, boutique de tirages intégrée, portfolio et adresse à votre nom." />
+  <meta name="description" content="Galeries clients protégées pour photographes : photos impossibles à télécharger, empreinte invisible traçable, alerte de capture, sélection et annotations du client, suppléments payés en ligne, boutique de tirages, livraison HD et portfolio à votre nom." />
   <link rel="canonical" href="https://www.holypixx.com/" />
-  <meta name="theme-color" content="#14100d" />
+  <meta name="theme-color" content="#ffffff" />
   <meta name="color-scheme" content="light" />
 
   <meta property="og:type" content="website" />
   <meta property="og:locale" content="fr_BE" />
   <meta property="og:site_name" content="Holypixx" />
   <meta property="og:url" content="https://www.holypixx.com/" />
-  <meta property="og:title" content="Holypixx — vos galeries clients, protégées et vendues" />
-  <meta property="og:description" content="Filigrane invisible traçable, alerte de capture, sélection client, relances automatiques et tirages livrés chez vos clients." />
+  <meta property="og:title" content="Holypixx — montrez vos photos, gardez-les" />
+  <meta property="og:description" content="Galeries privées que vos clients ne peuvent pas télécharger : ils choisissent, annotent, paient leurs suppléments et commandent leurs tirages." />
   <meta property="og:image" content="https://www.holypixx.com/assets/og.jpg" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
@@ -23,15 +23,14 @@
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Jost:wght@300;400;500&display=swap" rel="stylesheet" />
-  <link rel="preload" as="image" href="assets/g1.webp" type="image/webp" />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="preload" as="image" href="assets/home/golden.webp" type="image/webp" />
   <link rel="stylesheet" href="home.css" />
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='26' fill='%23c49380'/><text y='71' x='50' text-anchor='middle' font-size='60' font-family='Georgia' fill='white'>H</text></svg>" />
-  <noscript><style>.rv { opacity: 1 !important; transform: none !important; }</style></noscript>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%233b3bf6'/><path d='M10 8v16M22 8v16M10 16h12' stroke='white' stroke-width='3' stroke-linecap='round'/></svg>" />
 
   <script>
-    // Adresse de l'interface d'administration (connexion / création de compte).
     window.HOME_CONFIG = {
+      // Interface photographe (connexion, création de compte).
       adminUrl: "https://holypixx-admin.onrender.com/",
       // Places restantes de l'offre Fondateurs (GET /api/public/plans).
       api: "https://galerie-protegee.littledreamphotos-be.workers.dev",
@@ -47,8 +46,13 @@
     "applicationCategory": "BusinessApplication",
     "operatingSystem": "Web",
     "inLanguage": "fr",
-    "description": "Galeries clients protégées pour photographes : filigrane invisible traçable, alerte de capture d'écran, sélection et annotations du client, relances automatiques, paiement des suppléments, boutique de tirages intégrée et sous-domaine à votre nom.",
-    "image": "https://www.holypixx.com/assets/og.jpg"
+    "description": "Galeries clients protégées pour photographes : photos impossibles à télécharger pendant la sélection, empreinte invisible traçable, alerte de capture d'écran, sélection et annotations du client, relances automatiques, suppléments payés en ligne, boutique de tirages, livraison HD, portfolio et adresse à votre nom.",
+    "image": "https://www.holypixx.com/assets/og.jpg",
+    "offers": [
+      { "@type": "Offer", "name": "Découverte", "price": "0", "priceCurrency": "EUR" },
+      { "@type": "Offer", "name": "Essentiel", "price": "15", "priceCurrency": "EUR" },
+      { "@type": "Offer", "name": "Pro", "price": "29", "priceCurrency": "EUR" }
+    ]
   }
   </script>
   <script type="application/ld+json">
@@ -57,19 +61,19 @@
     "@type": "FAQPage",
     "mainEntity": [
       { "@type": "Question", "name": "Un client peut-il télécharger les photos ?",
-        "acceptedAnswer": { "@type": "Answer", "text": "Pas pendant la sélection : les photos sont découpées en tuiles et recomposées à l'écran, aucun fichier n'est téléchargeable. Quand la séance est terminée, vous ouvrez la livraison : il télécharge alors les fichiers définitifs en haute définition que vous avez déposés, en ZIP ou une par une." } },
+        "acceptedAnswer": { "@type": "Answer", "text": "Pas pendant la sélection : les photos sont découpées en tuiles et recomposées à l'écran, aucun fichier n'est téléchargeable. Quand la séance est terminée, vous déposez les fichiers définitifs : il les télécharge alors en haute définition, en ZIP ou une par une." } },
       { "@type": "Question", "name": "Peut-on empêcher une capture d'écran ?",
         "acceptedAnswer": { "@type": "Answer", "text": "Aucun site au monde ne le peut. Holypixx rend une capture inutile (basse définition, filigrane dense), vous prévient par e-mail quand une capture est tentée, et retrouve la galerie d'origine d'une image grâce à son empreinte invisible." } },
       { "@type": "Question", "name": "Mon client doit-il créer un compte ?",
         "acceptedAnswer": { "@type": "Answer", "text": "Non. Il reçoit un lien et un mot de passe, rien d'autre." } },
       { "@type": "Question", "name": "Comment fonctionne la boutique de tirages ?",
-        "acceptedAnswer": { "@type": "Answer", "text": "Vous choisissez vos formats en menus déroulants et fixez votre marge. Le client commande depuis sa galerie et paie en ligne sur votre compte Stripe ; le laboratoire Prodigi imprime et livre directement chez lui, avec suivi." } },
-      { "@type": "Question", "name": "Puis-je avoir une adresse à mon nom ?",
-        "acceptedAnswer": { "@type": "Answer", "text": "Oui : choisissez un sous-domaine dans vos paramètres, et vos galeries s'ouvrent sur votre-studio.holypixx.com avec le nom de votre studio." } },
+        "acceptedAnswer": { "@type": "Answer", "text": "Vous choisissez vos formats et fixez votre marge. Le client commande depuis sa galerie et paie en ligne sur votre compte Stripe ; le laboratoire Prodigi imprime et livre directement chez lui, avec suivi." } },
       { "@type": "Question", "name": "Prenez-vous une commission sur mes ventes ?",
         "acceptedAnswer": { "@type": "Answer", "text": "Non. Sur chaque paiement en ligne (suppléments, tirages), seuls les frais de paiement sont retenus : 2 % + 0,30 €, ce que coûtent la carte bancaire et le virement vers votre compte." } },
-      { "@type": "Question", "name": "Puis-je présenter mon travail à de futurs clients ?",
-        "acceptedAnswer": { "@type": "Answer", "text": "Oui, avec le portfolio inclus dans toutes les formules : une page vitrine avec vos photos, votre présentation et un formulaire de contact dont les messages arrivent dans votre boîte e-mail." } },
+      { "@type": "Question", "name": "Puis-je avoir une adresse à mon nom ?",
+        "acceptedAnswer": { "@type": "Answer", "text": "Oui, avec la formule Pro : vos galeries et votre portfolio s'ouvrent sur votre-studio.holypixx.com, avec le nom de votre studio." } },
+      { "@type": "Question", "name": "Et la photo scolaire ?",
+        "acceptedAnswer": { "@type": "Answer", "text": "Un module complet arrive bientôt : classes, fiches parents avec QR code, espace famille, pochettes avec aperçu de la photo de l'enfant, commande groupée et envoi au laboratoire." } },
       { "@type": "Question", "name": "Où sont hébergées les photos ?",
         "acceptedAnswer": { "@type": "Answer", "text": "Sur l'infrastructure Cloudflare (stockage R2 et base D1). Les mots de passe ne sont jamais stockés en clair et chaque compte est strictement cloisonné." } }
     ]
@@ -79,366 +83,450 @@
 <body>
   <a class="skip" href="#contenu">Aller au contenu</a>
 
+  <!-- Icônes (tracé 1,5, une seule famille) -->
+  <svg width="0" height="0" class="sprite" aria-hidden="true" focusable="false">
+    <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/></symbol>
+    <symbol id="i-drop" viewBox="0 0 24 24"><path d="M4 20 20 4"/><path d="M4 12 12 4"/><path d="M12 20l8-8"/></symbol>
+    <symbol id="i-finger" viewBox="0 0 24 24"><path d="M6.5 9.5a5.5 5.5 0 0 1 11 0v2.5"/><path d="M9 20.5c-1-1.6-1.5-3.6-1.5-6v-5a4.5 4.5 0 0 1 9 0"/><path d="M12 9.5v5c0 2.2.6 4.3 1.8 6"/><path d="M16.5 15c0 1.7.3 3.2.9 4.5"/><path d="M4.5 13.5c.2-1 .2-2 0-3"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15L6 16Z"/><path d="M10 20.5a2.2 2.2 0 0 0 4 0"/></symbol>
+    <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 20s-7.5-4.6-7.5-10.1A4.4 4.4 0 0 1 12 7.4a4.4 4.4 0 0 1 7.5 2.5C19.5 15.4 12 20 12 20Z"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s6-5.4 6-10.5a6 6 0 0 0-12 0C6 15.6 12 21 12 21Z"/><circle cx="12" cy="10.5" r="2.2"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
+    <symbol id="i-music" viewBox="0 0 24 24"><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/></symbol>
+    <symbol id="i-layout" viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M3.5 10h17M10 10v9.5"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4.5" y="10.5" width="15" height="10" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></symbol>
+    <symbol id="i-cart" viewBox="0 0 24 24"><path d="M3.5 4.5h2.2l2 11h10.6l1.9-7.5H6.6"/><circle cx="9.5" cy="19.5" r="1.3"/><circle cx="17" cy="19.5" r="1.3"/></symbol>
+    <symbol id="i-receipt" viewBox="0 0 24 24"><path d="M6 3.5h12v17l-2.5-1.5-2 1.5-1.5-1.5-1.5 1.5-2-1.5L6 20.5v-17Z"/><path d="M9 8.5h6M9 12h6M9 15.5h3.5"/></symbol>
+    <symbol id="i-tag" viewBox="0 0 24 24"><path d="M3.5 12.6V4.5a1 1 0 0 1 1-1h8.1l8 8a1.4 1.4 0 0 1 0 2L13.6 20.5a1.4 1.4 0 0 1-2 0l-8.1-7.9Z"/><circle cx="8" cy="8" r="1.4"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 20.5h16"/><path d="M7 16.5v-5M12 16.5v-9M17 16.5v-7"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11"/><path d="m7.5 10.5 4.5 4.5 4.5-4.5"/><path d="M4.5 18.5v1a1 1 0 0 0 1 1h13a1 1 0 0 0 1-1v-1"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.4 2.4 3.5 5.2 3.5 8.5s-1.1 6.1-3.5 8.5c-2.4-2.4-3.5-5.2-3.5-8.5S9.6 5.9 12 3.5Z"/></symbol>
+    <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.8"/><path d="M4.5 20.5c1.2-3.6 4-5.5 7.5-5.5s6.3 1.9 7.5 5.5"/></symbol>
+    <symbol id="i-qr" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="6.5" height="6.5" rx="1"/><rect x="14" y="3.5" width="6.5" height="6.5" rx="1"/><rect x="3.5" y="14" width="6.5" height="6.5" rx="1"/><path d="M14 14h2.5v2.5H14zM18 18h2.5v2.5H18zM14 19h1.5M19 14h1.5"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="9" r="3.3"/><path d="M3 19.5c.9-3 3.2-4.6 6-4.6s5.1 1.6 6 4.6"/><path d="M15.5 5.9a3.3 3.3 0 0 1 0 6.3M17.5 14.9c1.6.5 2.8 1.9 3.5 4.6"/></symbol>
+    <symbol id="i-box" viewBox="0 0 24 24"><path d="m3.5 7.5 8.5-4 8.5 4v9l-8.5 4-8.5-4v-9Z"/><path d="m3.5 7.5 8.5 4 8.5-4M12 11.5v9"/></symbol>
+    <symbol id="i-mail" viewBox="0 0 24 24"><rect x="3.5" y="5.5" width="17" height="13" rx="2"/><path d="m4 7 8 6 8-6"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3.5 19.5 6v5.5c0 4.5-3.2 7.9-7.5 9-4.3-1.1-7.5-4.5-7.5-9V6L12 3.5Z"/><path d="m9 12 2.2 2.2L15.5 10"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13.5 6.5 19 12l-5.5 5.5"/></symbol>
+    <symbol id="i-camera" viewBox="0 0 24 24"><path d="M4.5 8.5h3l1.5-2h6l1.5 2h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-15a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1Z"/><circle cx="12" cy="13.5" r="3.5"/></symbol>
+    <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+  </svg>
+
   <!-- ============ Navigation ============ -->
   <header class="nav" id="nav">
-    <div class="nav-row wrap">
+    <div class="wrap nav-row">
       <a class="brand" href="#top" aria-label="Holypixx, retour en haut">
-        <span class="brand-mark" aria-hidden="true">H</span>
+        <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M10 8v16M22 8v16M10 16h12"/></svg></span>
         <span class="brand-name">Holypixx</span>
       </a>
-      <nav class="nav-links" aria-label="Sections">
+      <nav class="nav-links" id="nav-links" aria-label="Sections">
         <a href="#protection">Protection</a>
-        <a href="#fonctionnalites">Fonctionnalités</a>
-        <a href="#boutique">Boutique</a>
+        <a href="#selection">Sélection</a>
+        <a href="#vente">Vente</a>
+        <a href="#scolaire">Scolaire</a>
         <a href="#tarifs">Tarifs</a>
         <a href="#faq">Questions</a>
+        <a class="nav-login-mobile" data-admin href="#">Connexion</a>
       </nav>
       <div class="nav-actions">
         <a class="nav-login" data-admin href="#">Connexion</a>
-        <a class="btn btn-light btn-sm" data-signup href="#">Créer un compte</a>
+        <a class="btn btn-primary btn-sm" data-signup href="#">Créer un compte</a>
+        <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="nav-links" aria-label="Ouvrir le menu">
+          <svg class="ico"><use href="#i-menu"/></svg>
+        </button>
       </div>
     </div>
   </header>
 
   <main id="contenu">
 
-    <!-- ============ Hero ============ -->
+    <!-- ============ Ouverture ============ -->
     <section class="hero" id="top">
-      <div class="hero-glow" aria-hidden="true"></div>
-      <div class="hero-grid wrap">
-        <div class="hero-copy">
-          <a class="pill" href="#boutique"><span class="pill-dot"></span>Nouveau : boutique de tirages intégrée <span aria-hidden="true">→</span></a>
-          <h1>Vos galeries clients.<br /><span class="grad">Protégées. Choisies. Vendues.</span></h1>
+      <div class="wrap hero-head">
+        <h1>Montrez vos photos.<br />Gardez-les.</h1>
+        <div class="hero-side">
           <p class="hero-lede">
-            La plateforme qui livre vos séances sans jamais lâcher vos photos :
-            filigrane invisible traçable, alerte dès qu'une capture est tentée,
-            sélection et retouches annotées par le client — et des tirages
-            livrés chez lui, à vos prix.
+            Des galeries privées que vos clients ne peuvent pas télécharger.
+            Ils choisissent, annotent, paient leurs suppléments et commandent
+            leurs tirages&nbsp;— vous gardez vos images, votre nom et votre marge.
           </p>
           <div class="hero-actions">
-            <a class="btn btn-rose btn-lg" data-signup href="#">Créer mon compte</a>
-            <a class="btn btn-ghost btn-lg" href="#parcours">Voir le parcours client</a>
+            <a class="btn btn-primary btn-lg" data-signup href="#">Créer mon compte gratuit</a>
+            <a class="btn btn-quiet btn-lg" href="#tarifs">Voir les tarifs</a>
           </div>
-          <ul class="hero-proof">
-            <li>Aucune carte bancaire</li>
-            <li>Prêt en une minute</li>
-            <li>Aucune inscription pour vos clients</li>
+          <p class="hero-assure">Gratuit jusqu'à 3 galeries · sans carte bancaire · aucun compte pour vos clients</p>
+        </div>
+      </div>
+
+      <!-- Une galerie client, telle que la voit le client (photos de démonstration) -->
+      <div class="wrap">
+        <div class="stage">
+          <figure class="window" aria-label="Aperçu d'une galerie client Holypixx">
+            <div class="window-bar">
+              <span class="window-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+              <span class="window-url"><svg class="ico ico-xs"><use href="#i-lock"/></svg>votre-studio.holypixx.com<span class="window-path">/seance-martin</span></span>
+            </div>
+            <div class="gal">
+              <div class="gal-head">
+                <div>
+                  <p class="gal-title">Séance Martin</p>
+                  <p class="gal-by">Votre studio · 32 photos</p>
+                </div>
+                <div class="gal-tools">
+                  <span class="gal-chip"><svg class="ico ico-xs"><use href="#i-heart"/></svg>12 coups de cœur</span>
+                  <span class="gal-chip gal-chip-hide"><svg class="ico ico-xs"><use href="#i-music"/></svg>Musique</span>
+                  <span class="gal-validate">Valider ma sélection</span>
+                </div>
+              </div>
+              <div class="gal-grid">
+                <div class="ph ph-a tiled"><img src="assets/home/golden.webp" width="1400" height="934" alt="" fetchpriority="high" /><span class="mark mark-heart on"><svg class="ico ico-xs"><use href="#i-heart"/></svg></span></div>
+                <div class="ph ph-b tiled"><img src="assets/home/newborn.webp" width="900" height="900" alt="" /><span class="mark mark-dot ok"></span></div>
+                <div class="ph ph-c tiled"><img src="assets/home/leaves.webp" width="900" height="1348" alt="" /><span class="mark mark-heart on"><svg class="ico ico-xs"><use href="#i-heart"/></svg></span><span class="mark-pin">1</span></div>
+                <div class="ph ph-d tiled"><img src="assets/home/red.webp" width="900" height="1125" alt="" /><span class="mark mark-dot warn"></span></div>
+                <div class="ph ph-e tiled"><img src="assets/home/swing.webp" width="900" height="1200" alt="" /><span class="mark mark-heart"><svg class="ico ico-xs"><use href="#i-heart"/></svg></span></div>
+              </div>
+            </div>
+          </figure>
+
+          <div class="note note-1" aria-hidden="true">
+            <span class="note-ico warn"><svg class="ico"><use href="#i-bell"/></svg></span>
+            <span><strong>Capture tentée</strong><em>Séance Martin · photo&nbsp;n°&nbsp;7 · <span class="nowrap">e-mail</span> envoyé</em></span>
+          </div>
+          <div class="note note-2" aria-hidden="true">
+            <span class="note-ico ok"><svg class="ico"><use href="#i-check"/></svg></span>
+            <span><strong>Sélection validée</strong><em>14 photos · 2 suppléments payés</em></span>
+          </div>
+          <div class="note note-3" aria-hidden="true">
+            <span class="note-ico"><svg class="ico"><use href="#i-cart"/></svg></span>
+            <span><strong>Nouvelle commande</strong><em>Tirage 30 × 45 · livré par le labo</em></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="wrap">
+        <ul class="caps" aria-label="En bref">
+          <li><svg class="ico"><use href="#i-shield"/></svg>Galeries protégées</li>
+          <li><svg class="ico"><use href="#i-pin"/></svg>Sélection annotée</li>
+          <li><svg class="ico"><use href="#i-receipt"/></svg>Suppléments en ligne</li>
+          <li><svg class="ico"><use href="#i-cart"/></svg>Boutique de tirages</li>
+          <li><svg class="ico"><use href="#i-download"/></svg>Livraison HD</li>
+          <li><svg class="ico"><use href="#i-globe"/></svg>Portfolio à votre nom</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============ Protection (chapitre sombre) ============ -->
+    <section class="chapter night" id="protection">
+      <div class="wrap">
+        <div class="chapter-head">
+          <h2>Une capture d'écran ne s'empêche pas.<br /><span class="soft">Elle se rend inutile — et se trace.</span></h2>
+          <p class="chapter-lede">
+            Aucun site ne peut bloquer une capture : c'est l'ordinateur qui a le
+            dernier mot. Holypixx empile quatre protections qui rendent une fuite
+            sans valeur, puis vous dit d'où elle vient. Essayez.
+          </p>
+        </div>
+
+        <div class="lab" id="lab">
+          <div class="lab-photo" data-tiles="off" data-wm="on" data-print="off">
+            <img src="assets/home/portrait.webp" width="1200" height="1500" alt="Portrait d'une fillette, tel qu'un client le voit dans sa galerie" loading="lazy" />
+            <span class="lab-tiles" aria-hidden="true"></span>
+            <span class="lab-wm" aria-hidden="true"></span>
+            <span class="lab-print" aria-hidden="true"><code>HPX · 7F3A-21C9 · Séance Martin</code></span>
+            <span class="lab-flash" aria-hidden="true"></span>
+          </div>
+
+          <div class="lab-side">
+            <div class="lab-controls" role="group" aria-label="Couches de protection">
+              <button type="button" class="lab-toggle" data-layer="tiles" aria-pressed="false">
+                <svg class="ico"><use href="#i-grid"/></svg>
+                <span><strong>Zéro fichier à télécharger</strong><em>Chaque photo est découpée en tuiles et recomposée à l'écran, en basse définition. Pas de clic droit, pas d'«&nbsp;enregistrer sous&nbsp;».</em></span>
+              </button>
+              <button type="button" class="lab-toggle" data-layer="wm" aria-pressed="true">
+                <svg class="ico"><use href="#i-drop"/></svg>
+                <span><strong>Filigrane dense</strong><em>Une trame qui traverse tout le sujet, visage compris : longue et coûteuse à effacer proprement, même avec l'IA.</em></span>
+              </button>
+              <button type="button" class="lab-toggle" data-layer="print" aria-pressed="false">
+                <svg class="ico"><use href="#i-finger"/></svg>
+                <span><strong>Empreinte invisible</strong><em>Propre à chaque galerie, elle résiste au recadrage, au noir et blanc et à la capture. Déposez une image retrouvée en ligne : Holypixx vous dit de quelle galerie elle sort.</em></span>
+              </button>
+            </div>
+            <button type="button" class="btn btn-light btn-lg lab-capture" id="lab-capture">
+              <svg class="ico"><use href="#i-camera"/></svg>Simuler une capture d'écran
+            </button>
+            <div class="lab-result" id="lab-result" aria-live="polite" hidden>
+              <div class="lab-mail">
+                <span class="note-ico warn"><svg class="ico"><use href="#i-mail"/></svg></span>
+                <span><strong>E-mail au photographe, dans la minute</strong><em>« Capture tentée sur Séance Martin — photo n° 7, ce soir à 21 h 42. »</em></span>
+              </div>
+              <div class="lab-mail">
+                <span class="note-ico"><svg class="ico"><use href="#i-finger"/></svg></span>
+                <span><strong>Et si l'image ressort un jour en ligne</strong><em>Son empreinte désigne la galerie d'origine : Séance Martin, ouverte le 12 septembre.</em></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <a class="chapter-cta" data-signup href="#">Protéger ma première galerie<svg class="ico"><use href="#i-arrow"/></svg></a>
+      </div>
+    </section>
+
+    <!-- ============ Sélection ============ -->
+    <section class="chapter" id="selection">
+      <div class="wrap">
+        <div class="chapter-head">
+          <h2>Vos clients choisissent. Vous savez exactement quoi retoucher.</h2>
+          <p class="chapter-lede">Un lien à votre nom et un mot de passe : pas de compte à créer, rien à installer. Le client parcourt, met de côté, commente, puis valide — vous recevez tout, photo par photo.</p>
+        </div>
+
+        <div class="duo">
+          <figure class="annot">
+            <img src="assets/home/studio.webp" width="1367" height="913" alt="Photo de famille en studio, annotée par le client" loading="lazy" />
+            <span class="annot-pin" style="left:31%;top:30%">1</span>
+            <span class="annot-note" style="left:35%;top:13%">Adoucir l'ombre sous les yeux</span>
+            <span class="annot-pin" style="left:63%;top:56%">2</span>
+            <span class="annot-note annot-note-b" style="left:67%;top:62%">Retirer la mèche</span>
+            <figcaption class="annot-bar">
+              <span class="annot-tags" aria-label="Code couleur : à retoucher">
+                <i class="t-ok" title="Validée"></i><i class="t-warn on" title="À retoucher"></i><i class="t-no" title="À écarter"></i>
+              </span>
+              <span class="annot-count"><svg class="ico ico-xs"><use href="#i-heart"/></svg>14 / 15 photos incluses</span>
+              <span class="annot-btn">Valider ma sélection</span>
+            </figcaption>
+          </figure>
+
+          <ul class="rows">
+            <li><svg class="ico"><use href="#i-heart"/></svg><div><h3>Coups de cœur et codes couleur</h3><p>Validée, à retoucher, à écarter : chaque photo garde l'avis du client.</p></div></li>
+            <li><svg class="ico"><use href="#i-pin"/></svg><div><h3>Repères annotés</h3><p>Un repère posé à l'endroit précis, avec sa remarque. Fini les captures entourées au feutre.</p></div></li>
+            <li><svg class="ico"><use href="#i-clock"/></svg><div><h3>Relances automatiques</h3><p>Rappel au client 7 et 2 jours avant l'expiration, à vous 2 jours avant. Chaque relance ne part qu'une fois.</p></div></li>
+            <li><svg class="ico"><use href="#i-layout"/></svg><div><h3>Trois mises en page, votre musique</h3><p>Grille, mosaïque ou défilement éditorial, avec une bibliothèque libre de droits ou votre playlist.</p></div></li>
+            <li><svg class="ico"><use href="#i-lock"/></svg><div><h3>Accès sous contrôle</h3><p>Mot de passe régénérable d'un clic, expiration automatique, écran d'accueil à vos couleurs.</p></div></li>
           </ul>
         </div>
-
-        <!-- Maquette produit (décorative) -->
-        <div class="hero-visual" aria-hidden="true">
-          <div class="browser">
-            <div class="browser-bar">
-              <span class="dots"><i></i><i></i><i></i></span>
-              <span class="url"><span class="url-lock">🔒</span>votre-studio.holypixx.com<span class="url-path">/?g=seance-dupont</span></span>
-            </div>
-            <div class="browser-body">
-              <div class="mock-head">
-                <span class="mock-eyebrow">VOTRE STUDIO</span>
-                <span class="mock-title">Séance Dupont</span>
-                <span class="mock-actions"><span class="mock-music">♪ Musique</span><span class="mock-validate">Valider ma sélection</span></span>
-              </div>
-              <div class="mock-grid">
-                <figure class="wm"><img src="assets/g1.webp" width="520" height="347" alt="" fetchpriority="high" /><span class="heart on">♥</span></figure>
-                <figure class="wm tall"><img src="assets/g3.webp" width="520" height="779" alt="" /><span class="dot dot-green"></span></figure>
-                <figure class="wm"><img src="assets/g2.webp" width="520" height="347" alt="" /><span class="heart on">♥</span><span class="pin">1</span></figure>
-                <figure class="wm"><img src="assets/g4.webp" width="520" height="347" alt="" /><span class="dot dot-yellow"></span></figure>
-                <figure class="wm"><img src="assets/g5.webp" width="520" height="347" alt="" /><span class="heart">♡</span></figure>
-              </div>
-            </div>
-          </div>
-          <div class="toast toast-1"><span class="toast-ico">🔔</span><span><strong>Capture tentée</strong><em>Photo n° 7 · e-mail envoyé</em></span></div>
-          <div class="toast toast-2"><span class="toast-ico ok">✓</span><span><strong>Sélection validée</strong><em>14 photos · 2 suppléments</em></span></div>
-          <div class="toast toast-3"><span class="toast-ico">🖼</span><span><strong>Nouvelle commande</strong><em>Toile 40 × 50 · 89 €</em></span></div>
-        </div>
-      </div>
-
-      <div class="ticker" aria-hidden="true">
-        <div class="ticker-track">
-          <span>Empreinte invisible</span><span>Alerte de capture</span><span>Zéro téléchargement</span><span>Coups de cœur</span><span>Repères annotés</span><span>Relances automatiques</span><span>Paiement en ligne</span><span>Factures automatiques</span><span>Tirages & toiles</span><span>Livraison HD</span><span>Portfolio</span><span>votre-studio.holypixx.com</span><span>Musique d'ambiance</span>
-          <span>Empreinte invisible</span><span>Alerte de capture</span><span>Zéro téléchargement</span><span>Coups de cœur</span><span>Repères annotés</span><span>Relances automatiques</span><span>Paiement en ligne</span><span>Factures automatiques</span><span>Tirages & toiles</span><span>Livraison HD</span><span>Portfolio</span><span>votre-studio.holypixx.com</span><span>Musique d'ambiance</span>
-        </div>
       </div>
     </section>
 
-    <!-- ============ Protection ============ -->
-    <section class="section" id="protection">
-      <div class="wrap split">
-        <div class="split-copy rv">
-          <p class="kicker">Protection</p>
-          <h2>Une capture d'écran ne s'empêche pas.<br /><span class="grad-dark">Elle se rend inutile — et se trace.</span></h2>
-          <p class="lede">
-            Aucun site au monde ne peut bloquer une capture : c'est le système
-            d'exploitation qui a le dernier mot. Holypixx empile trois couches qui
-            rendent une fuite sans valeur, puis vous dit exactement d'où elle vient.
-          </p>
-          <a class="link-arrow" href="#faq">Ce que nous promettons, et ce que nous ne promettons pas</a>
-        </div>
-        <ol class="layers rv">
-          <li class="layer">
-            <span class="layer-num">01</span>
-            <div><h3>Zéro fichier à télécharger</h3><p>Chaque photo est découpée en tuiles et recomposée à l'écran, en basse définition. Pas de clic droit, pas d'« enregistrer sous ».</p></div>
-          </li>
-          <li class="layer">
-            <span class="layer-num">02</span>
-            <div><h3>Filigrane dense, même face à l'IA</h3><p>Une trame qui traverse tout le sujet, visages compris : coûteuse à effacer proprement.</p></div>
-          </li>
-          <li class="layer">
-            <span class="layer-num">03</span>
-            <div><h3>Empreinte invisible traçable</h3><p>Propre à chaque galerie, elle résiste au recadrage, au noir et blanc et à la capture. Déposez une image retrouvée en ligne : elle vous dit de quelle galerie elle sort.</p></div>
-          </li>
-          <li class="layer layer-alert">
-            <span class="layer-num">!</span>
-            <div><h3>Alerte en direct</h3><p>Impr. écran ou raccourci macOS repéré chez un client : un e-mail dans la minute, avec la photo exacte qui était affichée.</p></div>
-          </li>
-        </ol>
-      </div>
-    </section>
-
-    <!-- ============ Bento fonctionnalités ============ -->
-    <section class="section section-sand" id="fonctionnalites">
+    <!-- ============ Vente ============ -->
+    <section class="chapter tint" id="vente">
       <div class="wrap">
-        <div class="head rv">
-          <p class="kicker">Fonctionnalités</p>
-          <h2>Tout le métier de la galerie,<br />dans un seul outil.</h2>
+        <div class="chapter-head">
+          <h2>Ils commandent leurs tirages. Vous encaissez la marge.</h2>
+          <p class="chapter-lede">Suppléments, tirages, toiles et cadres se paient en ligne, directement sur votre compte Stripe. Le laboratoire imprime et livre chez votre client. Vous, vous photographiez.</p>
         </div>
 
-        <div class="bento">
-          <article class="tile tile-xl tile-dark rv">
-            <div class="tile-copy">
-              <h3>Le client choisit, annote, valide</h3>
-              <p>Coups de cœur, codes couleur (validée, à retoucher, à écarter), repères posés à l'endroit précis avec une note — puis « Valider ma sélection » d'un clic. Vous recevez tout, photo par photo.</p>
+      </div>
+
+      <figure class="sale">
+        <img class="sale-photo" src="assets/home/field.webp" width="2000" height="1335" alt="Portrait d'une petite fille assise dans un champ doré" loading="lazy" />
+        <div class="wrap sale-over">
+          <figcaption class="shop-card">
+            <span class="shop-title">Tirage d'art 40 × 60 cm</span>
+            <span class="shop-row"><span>Coût labo</span><span class="num">32,00 €</span></span>
+            <span class="shop-row"><span>Votre marge</span><span class="num up">+ 57,00 €</span></span>
+            <span class="shop-row total"><span>Prix client</span><span class="num">89,00 €</span></span>
+            <span class="shop-foot">Exemple de prix : c'est vous qui les fixez.</span>
+          </figcaption>
+        </div>
+      </figure>
+
+      <div class="wrap">
+        <ul class="sale-facts">
+          <li><h3>Boutique de tirages intégrée</h3><p>Choisissez vos formats, voyez le coût réel du labo, fixez votre prix. Prodigi imprime et livre chez votre client, avec suivi.</p></li>
+          <li><h3>Forfait et suppléments payés en ligne</h3><p>Photos incluses, prix au-delà, paiement à la validation et facture PDF envoyée toute seule.</p></li>
+          <li><h3>Campagnes et tableau de bord</h3><p>Promotions à durée limitée, relance des paniers oubliés et des coups de cœur ; chiffre d'affaires, marge et formats qui se vendent.</p></li>
+          <li><h3>Aucune commission</h3><p>Seuls les frais de paiement sont retenus : 2&nbsp;% + 0,30&nbsp;€ par vente, ce que coûtent la carte et le virement.</p></li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============ Livraison et marque ============ -->
+    <section class="chapter" id="marque">
+      <div class="wrap">
+        <div class="chapter-head">
+          <h2>Votre nom, du premier lien à la dernière photo livrée.</h2>
+        </div>
+
+        <div class="trio">
+          <article class="panel panel-url">
+            <div class="url-bar"><svg class="ico ico-xs"><use href="#i-lock"/></svg><span class="url-host"><b>votre-studio</b>.holypixx.com</span></div>
+            <h3>Une adresse à votre nom</h3>
+            <p>Galeries et portfolio s'ouvrent sur votre <span class="nowrap">sous-domaine</span>, avec le nom de votre studio. Vos clients ne voient que vous. <span class="tagline">Formule Pro</span></p>
+          </article>
+
+          <article class="panel panel-hd">
+            <div class="hd-list" aria-hidden="true">
+              <span class="hd-row"><span class="hd-name">seance-martin-001.jpg</span><span class="num">24,1 Mo</span></span>
+              <span class="hd-row"><span class="hd-name">seance-martin-002.jpg</span><span class="num">22,8 Mo</span></span>
+              <span class="hd-row"><span class="hd-name">seance-martin-003.jpg</span><span class="num">25,3 Mo</span></span>
+              <span class="hd-btn"><svg class="ico ico-xs"><use href="#i-download"/></svg>Tout télécharger (ZIP)</span>
             </div>
-            <div class="annot" aria-hidden="true">
-              <img src="assets/note.webp" width="900" height="601" alt="" loading="lazy" />
-              <span class="annot-pin" style="left:38%;top:30%">1</span>
-              <span class="annot-pin" style="left:66%;top:62%">2</span>
-              <span class="annot-note" style="left:44%;top:16%">Adoucir l'ombre ici</span>
-              <span class="annot-tags"><i class="t-g"></i><i class="t-y on"></i><i class="t-r"></i></span>
-            </div>
-          </article>
-
-          <article class="tile rv">
-            <span class="tile-ico">⏰</span>
-            <h3>Relances automatiques</h3>
-            <p>Rappel au client à J-7 et J-2 de l'expiration, à vous à J-2. Chaque relance ne part qu'une fois.</p>
-          </article>
-
-          <article class="tile rv">
-            <span class="tile-ico">💶</span>
-            <h3>Suppléments payés en ligne</h3>
-            <p>Forfait de photos incluses, prix au-delà, paiement Stripe sur votre compte et facture PDF automatique.</p>
-          </article>
-
-          <article class="tile tile-wide tile-rose rv">
-            <span class="tile-ico">🌐</span>
-            <div>
-              <h3>Une adresse à votre nom</h3>
-              <p>Vos galeries s'ouvrent sur <strong>votre-studio.holypixx.com</strong>, avec le nom de votre studio en tête. Vos clients ne voient que vous.</p>
-            </div>
-          </article>
-
-          <article class="tile tile-photo rv">
-            <img src="assets/music.webp" width="900" height="1260" alt="" loading="lazy" />
-            <div class="tile-overlay">
-              <span class="eq" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
-              <h3>Musique d'ambiance</h3>
-              <p>Bibliothèque libre de droits, ou votre playlist Spotify, Deezer, SoundCloud ou YouTube.</p>
-            </div>
-          </article>
-
-          <article class="tile rv">
-            <span class="tile-ico">🖼</span>
-            <h3>Trois mises en page</h3>
-            <p>Grille, mosaïque façon presse ou défilement éditorial, selon la séance.</p>
-          </article>
-
-          <article class="tile rv">
-            <span class="tile-ico">📊</span>
-            <h3>Tableau de bord des ventes</h3>
-            <p>Chiffre d'affaires des 12 derniers mois, marge sur les tirages, formats qui se vendent, suppléments en attente.</p>
-          </article>
-
-          <article class="tile rv">
-            <span class="tile-ico">🔑</span>
-            <h3>Accès sous contrôle</h3>
-            <p>Mot de passe régénérable d'un clic, expiration automatique, écran d'accueil à vos couleurs.</p>
-          </article>
-
-          <article class="tile rv">
-            <span class="tile-ico">📦</span>
-            <h3>Livraison des photos HD</h3>
+            <h3>Livraison des fichiers HD</h3>
             <p>Déposez les fichiers définitifs : votre client est prévenu par e-mail et les télécharge depuis sa galerie, en ZIP ou une par une.</p>
           </article>
 
-          <article class="tile tile-wide rv">
-            <span class="tile-ico">✨</span>
-            <div>
-              <h3>Votre portfolio en ligne</h3>
-              <p>Une page vitrine avec vos plus belles photos, votre présentation, vos prestations et un formulaire de contact. En formule Pro, elle s'ouvre sur votre-studio.holypixx.com.</p>
+          <article class="panel panel-folio">
+            <div class="folio" aria-hidden="true">
+              <img src="assets/home/mother.webp" width="900" height="1348" alt="" loading="lazy" />
+              <span class="folio-name">Votre studio</span>
+              <span class="folio-btn">Me contacter</span>
             </div>
-          </article>
-
-          <article class="tile rv">
-            <span class="tile-ico">🏷</span>
-            <h3>Campagnes de vente</h3>
-            <p>Promotion à durée limitée sur les tirages, panier retrouvé sur tous les appareils, relance des paniers oubliés et des coups de cœur.</p>
+            <h3>Votre portfolio en ligne</h3>
+            <p>Vos plus belles photos, votre présentation, vos prestations et un formulaire de contact qui arrive dans votre boîte e-mail.</p>
           </article>
         </div>
       </div>
     </section>
 
-    <!-- ============ Boutique ============ -->
-    <section class="section section-dark" id="boutique">
-      <div class="wrap split split-reverse">
-        <div class="shop-visual rv" aria-hidden="true">
-          <div class="frame"><img src="assets/frame.webp" width="900" height="1348" alt="" loading="lazy" /></div>
-          <div class="price-card">
-            <span class="pc-row"><span>Cadre 40 × 50 cm · noir</span></span>
-            <span class="pc-row muted"><span>Coût labo</span><span>48,00 €</span></span>
-            <span class="pc-row muted"><span>Votre marge</span><span>+ 61,00 €</span></span>
-            <span class="pc-row total"><span>Prix client</span><span>109,00 €</span></span>
-          </div>
-        </div>
-        <div class="split-copy rv">
-          <p class="kicker kicker-light">Boutique de tirages</p>
-          <h2>Vos clients commandent leurs tirages.<br /><span class="grad">Vous encaissez la marge.</span></h2>
-          <p class="lede lede-light">
-            Tirages photo, tirages d'art, toiles, cadres : choisissez vos formats en
-            menus déroulants, voyez le coût réel du laboratoire et fixez votre marge.
-            Le client commande depuis sa galerie, paie sur votre compte Stripe, et
-            notre laboratoire partenaire Prodigi imprime et livre chez lui.
-          </p>
-          <ul class="checks checks-light">
-            <li>Fichier d'impression pleine définition, jamais montré au client</li>
-            <li>Facture et suivi d'expédition envoyés automatiquement</li>
-            <li>Aucun stock, aucun envoi, aucune saisie de commande</li>
-          </ul>
-        </div>
-      </div>
-    </section>
-
-    <!-- ============ Parcours client ============ -->
-    <section class="section" id="parcours">
+    <!-- ============ Scolaire (bientôt) ============ -->
+    <section class="chapter school" id="scolaire">
       <div class="wrap">
-        <div class="head rv">
-          <p class="kicker">Le parcours client</p>
-          <h2>Simple pour eux. Rentable pour vous.</h2>
+        <div class="chapter-head">
+          <h2>La photo scolaire, de la classe à la pochette.</h2>
+          <p class="chapter-lede"><span class="soon"><span class="soon-dot" aria-hidden="true"></span>Bientôt disponible</span> Écoles, crèches et clubs : un module complet arrive dans Holypixx, jusqu'à l'envoi des commandes au laboratoire.</p>
         </div>
-        <ol class="journey">
-          <li class="rv"><span class="j-num">1</span><h3>Vous importez</h3><p>Glissez vos photos : filigrane, empreinte et tuiles se font tout seuls.</p></li>
-          <li class="rv"><span class="j-num">2</span><h3>Il reçoit un lien</h3><p>Un lien à votre nom et un mot de passe. Aucun compte à créer.</p></li>
-          <li class="rv"><span class="j-num">3</span><h3>Il choisit et annote</h3><p>Cœurs, couleurs, repères et remarques, puis il valide sa sélection.</p></li>
-          <li class="rv"><span class="j-num">4</span><h3>Il paie et commande</h3><p>Suppléments et tirages réglés en ligne, factures envoyées automatiquement.</p></li>
-        </ol>
+
+        <div class="school-grid">
+          <div class="school-visual" aria-hidden="true">
+            <div class="coupon">
+              <img class="coupon-photo" src="assets/home/swing.webp" width="900" height="1200" alt="" loading="lazy" />
+              <div class="coupon-body">
+                <span class="coupon-name">Léa</span>
+                <span class="coupon-school">École du Centre · P2</span>
+                <span class="coupon-code">Code <b>K7PM 4QXA</b></span>
+                <span class="coupon-date">Commande jusqu'au 4&nbsp;juin</span>
+              </div>
+              <svg class="coupon-qr" id="coupon-qr" viewBox="0 0 25 25" shape-rendering="crispEdges"></svg>
+            </div>
+            <div class="planche" id="planche">
+              <span class="planche-label">Aperçu de la pochette avec la photo de l'enfant</span>
+            </div>
+          </div>
+
+          <ol class="steps">
+            <li><svg class="ico"><use href="#i-users"/></svg><div><h3>Importez une classe, Holypixx range par enfant</h3><p>Les photos se regroupent toutes seules d'après l'heure de prise de vue ; vous vérifiez et corrigez d'un geste.</p></div></li>
+            <li><svg class="ico"><use href="#i-qr"/></svg><div><h3>Fiches parents avec QR code</h3><p>Une fiche par enfant, son portrait, son code personnel : à imprimer ou à faire tirer par le labo.</p></div></li>
+            <li><svg class="ico"><use href="#i-user"/></svg><div><h3>Un espace famille, frères et sœurs réunis</h3><p>Un seul panier pour tous les enfants, l'aperçu de chaque pochette avec la photo choisie, le paiement en ligne.</p></div></li>
+            <li><svg class="ico"><use href="#i-box"/></svg><div><h3>Commande groupée, labo par lots</h3><p>Livraison à l'école rangée par classe et par enfant, rappels automatiques aux familles, envoi au laboratoire en un clic.</p></div></li>
+          </ol>
+        </div>
       </div>
     </section>
 
     <!-- ============ Engagements ============ -->
-    <section class="section section-sand">
+    <section class="chapter pledges-sec">
       <div class="wrap">
-        <div class="head rv">
-          <p class="kicker">Engagements</p>
-          <h2>Une sécurité honnête,<br />pas des promesses de brochure.</h2>
-        </div>
         <div class="pledges">
-          <div class="pledge rv"><h3>Mots de passe jamais en clair</h3><p>Ni ceux des galeries, ni ceux des comptes : seulement des empreintes à sens unique.</p></div>
-          <div class="pledge rv"><h3>Comptes cloisonnés</h3><p>Un photographe ne peut ni voir ni deviner les galeries d'un autre — vérifié par des centaines de tests automatiques.</p></div>
-          <div class="pledge rv"><h3>Rien avant le mot de passe</h3><p>Un lien de galerie ne confirme jamais son existence à qui n'a pas le bon mot de passe.</p></div>
+          <h2 class="pledges-title">Une sécurité honnête,<br />pas des promesses de brochure.</h2>
+          <div class="pledge"><h3>Mots de passe jamais en clair</h3><p>Ni ceux des galeries, ni ceux des comptes : seulement des empreintes à sens unique.</p></div>
+          <div class="pledge"><h3>Comptes cloisonnés</h3><p>Un photographe ne peut ni voir ni deviner les galeries d'un autre, vérifié par des centaines de tests automatiques.</p></div>
+          <div class="pledge"><h3>Rien avant le mot de passe</h3><p>Un lien de galerie ne confirme jamais son existence à qui n'a pas le bon mot de passe.</p></div>
+          <div class="pledge"><h3>Vos données vous appartiennent</h3><p>Export complet et suppression définitive de votre compte, à tout moment, depuis vos paramètres.</p></div>
         </div>
       </div>
     </section>
 
     <!-- ============ Tarifs ============ -->
-    <section class="section section-sand" id="tarifs">
+    <section class="chapter tint" id="tarifs">
       <div class="wrap">
-        <div class="head rv">
-          <p class="kicker">Tarifs</p>
-          <h2>Commencez gratuitement.<br />Passez à la vitesse supérieure quand vous voulez.</h2>
+        <div class="chapter-head center">
+          <h2>Commencez gratuitement.<br /><span class="soft">Changez de formule librement.</span></h2>
+          <div class="billing" role="group" aria-label="Rythme de paiement">
+            <button type="button" class="billing-opt" data-billing="month" aria-pressed="true">Mensuel</button>
+            <button type="button" class="billing-opt" data-billing="year" aria-pressed="false">Annuel <span class="billing-save">2 mois offerts</span></button>
+          </div>
         </div>
-        <p class="founders rv" id="founders" hidden>
-          <strong>Offre Fondateurs</strong> : <span id="founders-left">50 places</span>. Essentiel à 12 € et Pro à 24 € par mois pendant toute la première année, puis le prix normal.
+
+        <p class="founders" id="founders" hidden>
+          <strong>Offre Fondateurs</strong> — Essentiel à <span data-founder="essentiel"></span> et Pro à <span data-founder="pro"></span> la première année, puis le prix normal. <span class="founders-left" id="founders-left"></span>
         </p>
+
         <div class="plans">
-          <article class="plan rv">
+          <article class="plan">
             <h3>Découverte</h3>
-            <p class="plan-price">Gratuit</p>
-            <ul class="checks">
-              <li>3 galeries actives, 5 Go de stockage</li>
-              <li>Protection complète : filigrane, empreinte, alertes</li>
+            <p class="plan-for">Pour essayer avec vos premières séances.</p>
+            <p class="plan-price"><span class="plan-amount">0 €</span><span class="plan-per">/ mois</span></p>
+            <p class="plan-alt">Gratuit, sans limite de durée</p>
+            <a class="btn btn-outline" data-signup href="#">Créer mon compte</a>
+            <ul class="ticks">
+              <li>3 galeries actives, 5 Go</li>
+              <li>Protection complète : tuiles, filigrane, empreinte, alertes</li>
               <li>Sélection, annotations, relances</li>
               <li>Livraison des photos HD</li>
+              <li>Portfolio en ligne</li>
             </ul>
-            <a class="btn btn-ghost-dark" data-signup href="#">Créer mon compte</a>
           </article>
-          <article class="plan rv">
+          <article class="plan">
             <h3>Essentiel</h3>
-            <p class="plan-price">15 € <span>/ mois</span></p>
-            <p class="plan-alt">ou 150 € / an, 2 mois offerts</p>
-            <ul class="checks">
-              <li>25 galeries actives, 200 Go de stockage</li>
+            <p class="plan-for">Pour vendre vos suppléments et vos tirages.</p>
+            <p class="plan-price" data-plan="essentiel"><span class="plan-amount">15 €</span><span class="plan-per">/ mois</span></p>
+            <p class="plan-alt" data-alt="essentiel">ou 150 € par an</p>
+            <a class="btn btn-outline" data-signup href="#">Essayer 10 jours gratuitement</a>
+            <ul class="ticks">
+              <li>25 galeries actives, 200 Go</li>
               <li>Tout Découverte</li>
               <li>Boutique de tirages intégrée</li>
-              <li>Suppléments payés en ligne</li>
+              <li>Suppléments payés en ligne, factures</li>
+              <li>Campagnes et tableau des ventes</li>
             </ul>
-            <a class="btn btn-ghost-dark" data-signup href="#">Essayer 10 jours gratuitement</a>
           </article>
-          <article class="plan plan-featured rv">
+          <article class="plan plan-pro">
+            <p class="plan-flag">Le plus complet</p>
             <h3>Pro</h3>
-            <p class="plan-price">29 € <span>/ mois</span></p>
-            <p class="plan-alt">ou 290 € / an, 2 mois offerts</p>
-            <ul class="checks">
-              <li>Galeries illimitées, 1 To de stockage</li>
+            <p class="plan-for">Pour un studio à votre nom, sans limite.</p>
+            <p class="plan-price" data-plan="pro"><span class="plan-amount">29 €</span><span class="plan-per">/ mois</span></p>
+            <p class="plan-alt" data-alt="pro">ou 290 € par an</p>
+            <a class="btn btn-primary" data-signup href="#">Essayer 10 jours gratuitement</a>
+            <ul class="ticks">
+              <li>Galeries illimitées, 1 To</li>
               <li>Tout Essentiel</li>
-              <li>Vos galeries à votre nom : votre-studio.holypixx.com</li>
-              <li>Toutes les fonctionnalités</li>
+              <li>Adresse à votre nom : <span class="nowrap">votre-studio.holypixx.com</span></li>
+              <li>Portfolio sur votre adresse</li>
             </ul>
-            <a class="btn btn-rose" data-signup href="#">Essayer 10 jours gratuitement</a>
           </article>
         </div>
-        <p class="plans-note rv">Prix TTC, sans engagement : 10 jours d'essai gratuit sur les formules payantes, résiliable à tout moment depuis votre compte. Aucune commission sur vos ventes : seuls les frais de paiement (2 % + 0,30 € par vente) sont retenus.</p>
+        <p class="plans-note">Prix TTC, sans engagement, résiliable à tout moment depuis votre compte. Aucune commission sur vos ventes : seuls les frais de paiement (2&nbsp;% + 0,30&nbsp;€ par vente) sont retenus. Formules dédiées à la photo scolaire annoncées au lancement du module.</p>
       </div>
     </section>
 
-    <!-- ============ FAQ ============ -->
-    <section class="section" id="faq">
+    <!-- ============ Questions ============ -->
+    <section class="chapter" id="faq">
       <div class="wrap faq-wrap">
-        <div class="head head-left rv">
-          <p class="kicker">Questions</p>
-          <h2>Les bonnes questions,<br />des réponses franches.</h2>
-        </div>
-        <div class="faq rv">
-          <details open><summary>Un client peut-il télécharger les photos ?</summary><p>Pas pendant la sélection : les photos sont découpées en tuiles et recomposées à l'écran, aucun fichier n'est téléchargeable. Quand la séance est terminée, vous ouvrez la livraison : il télécharge alors les fichiers définitifs en haute définition que vous avez déposés, en ZIP ou une par une.</p></details>
+        <h2>Les bonnes questions, des réponses franches.</h2>
+        <div class="faq">
+          <details><summary>Un client peut-il télécharger les photos ?</summary><p>Pas pendant la sélection : les photos sont découpées en tuiles et recomposées à l'écran, aucun fichier n'est téléchargeable. Quand la séance est terminée, vous déposez les fichiers définitifs : il les télécharge alors en haute définition, en ZIP ou une par une.</p></details>
           <details><summary>Peut-on empêcher une capture d'écran ?</summary><p>Aucun site au monde ne le peut. Holypixx rend une capture inutile (basse définition, filigrane dense), vous prévient par e-mail quand une capture est tentée, et retrouve la galerie d'origine d'une image grâce à son empreinte invisible.</p></details>
           <details><summary>Mon client doit-il créer un compte ?</summary><p>Non. Il reçoit un lien et un mot de passe, rien d'autre.</p></details>
-          <details><summary>Comment fonctionne la boutique de tirages ?</summary><p>Vous choisissez vos formats en menus déroulants et fixez votre marge. Le client commande depuis sa galerie et paie en ligne sur votre compte Stripe ; le laboratoire Prodigi imprime et livre directement chez lui, avec suivi.</p></details>
-          <details><summary>Puis-je avoir une adresse à mon nom ?</summary><p>Oui : choisissez un sous-domaine dans vos paramètres, et vos galeries s'ouvrent sur votre-studio.holypixx.com avec le nom de votre studio.</p></details>
-          <details><summary>Prenez-vous une commission sur mes ventes ?</summary><p>Non. Sur chaque paiement en ligne (suppléments, tirages), seuls les frais de paiement sont retenus : 2 % + 0,30 €, ce que coûtent la carte bancaire et le virement vers votre compte.</p></details>
-          <details><summary>Puis-je présenter mon travail à de futurs clients ?</summary><p>Oui, avec le portfolio inclus dans toutes les formules : une page vitrine avec vos photos, votre présentation et un formulaire de contact dont les messages arrivent dans votre boîte e-mail.</p></details>
+          <details><summary>Comment fonctionne la boutique de tirages ?</summary><p>Vous choisissez vos formats et fixez votre marge. Le client commande depuis sa galerie et paie en ligne sur votre compte Stripe ; le laboratoire Prodigi imprime et livre directement chez lui, avec suivi.</p></details>
+          <details><summary>Prenez-vous une commission sur mes ventes ?</summary><p>Non. Sur chaque paiement en ligne (suppléments, tirages), seuls les frais de paiement sont retenus : 2&nbsp;% + 0,30&nbsp;€, ce que coûtent la carte bancaire et le virement vers votre compte.</p></details>
+          <details><summary>Puis-je avoir une adresse à mon nom ?</summary><p>Oui, avec la formule Pro : vos galeries et votre portfolio s'ouvrent sur <span class="nowrap">votre-studio.holypixx.com</span>, avec le nom de votre studio.</p></details>
+          <details><summary>Et la photo scolaire ?</summary><p>Un module complet arrive bientôt : classes, fiches parents avec QR code, espace famille, pochettes avec aperçu de la photo de l'enfant, commande groupée et envoi au laboratoire.</p></details>
           <details><summary>Où sont hébergées les photos ?</summary><p>Sur l'infrastructure Cloudflare (stockage R2 et base D1). Les mots de passe ne sont jamais stockés en clair et chaque compte est strictement cloisonné.</p></details>
         </div>
       </div>
     </section>
 
     <!-- ============ Appel final ============ -->
-    <section class="cta">
-      <div class="cta-glow" aria-hidden="true"></div>
-      <div class="wrap cta-inner rv">
-        <h2>Votre prochaine galerie mérite mieux qu'un simple lien.</h2>
-        <p>Créez votre compte en une minute, depuis votre navigateur.</p>
-        <a class="btn btn-rose btn-lg" data-signup href="#">Créer mon compte</a>
+    <section class="closing">
+      <div class="wrap closing-inner">
+        <h2>Votre prochaine séance mérite mieux<br />qu'un lien de téléchargement.</h2>
+        <p>Créez votre compte en une minute, depuis votre navigateur. Gratuit jusqu'à 3 galeries.</p>
+        <a class="btn btn-primary btn-lg" data-signup href="#">Créer mon compte gratuit</a>
       </div>
     </section>
   </main>
 
   <footer class="footer">
     <div class="wrap footer-row">
-      <a class="brand" href="#top"><span class="brand-mark" aria-hidden="true">H</span><span class="brand-name">Holypixx</span></a>
+      <a class="brand" href="#top" aria-label="Holypixx, retour en haut">
+        <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M10 8v16M22 8v16M10 16h12"/></svg></span>
+        <span class="brand-name">Holypixx</span>
+      </a>
       <nav class="footer-links" aria-label="Pied de page">
         <a href="#protection">Protection</a>
-        <a href="#fonctionnalites">Fonctionnalités</a>
-        <a href="#boutique">Boutique</a>
+        <a href="#selection">Sélection</a>
+        <a href="#vente">Vente</a>
         <a href="#tarifs">Tarifs</a>
         <a href="#faq">Questions</a>
         <a data-admin href="#">Connexion</a>
@@ -446,53 +534,12 @@
         <a href="confidentialite.html">Confidentialité</a>
         <a href="mentions-legales.html">Mentions légales</a>
       </nav>
-      <p class="footer-copy">© <span id="year">2026</span> Holypixx · Galeries protégées pour photographes</p>
+      <p class="footer-copy">© <span id="year">2026</span> Holypixx · Galeries protégées pour photographes · Photos : Little Dream Photos</p>
     </div>
   </footer>
 
-  <script>
-    (function () {
-      "use strict";
-      var admin = (window.HOME_CONFIG || {}).adminUrl || "#";
-      document.querySelectorAll("[data-admin]").forEach(function (a) { a.href = admin; });
-      document.querySelectorAll("[data-signup]").forEach(function (a) { a.href = admin + "#/inscription"; });
-      var year = document.getElementById("year");
-      if (year) year.textContent = new Date().getFullYear();
+  <div class="toast" id="toast" role="status" hidden></div>
 
-      // Offre Fondateurs : affichée seulement tant qu'il reste des places.
-      var api = (window.HOME_CONFIG || {}).api;
-      if (api && window.fetch) {
-        fetch(api.replace(/\/+$/, "") + "/api/public/plans")
-          .then(function (r) { return r.ok ? r.json() : null; })
-          .then(function (data) {
-            var left = data && data.founders ? data.founders.remaining : 0;
-            if (!left) return;
-            document.getElementById("founders-left").textContent = "plus que " + left + " place" + (left > 1 ? "s" : "");
-            document.getElementById("founders").hidden = false;
-          })
-          .catch(function () { /* sans réponse, l'offre n'est simplement pas affichée */ });
-      }
-
-      // Barre de navigation : fond plein dès qu'on quitte le haut de page.
-      var nav = document.getElementById("nav");
-      var onScroll = function () { nav.classList.toggle("nav-solid", window.scrollY > 24); };
-      window.addEventListener("scroll", onScroll, { passive: true });
-      onScroll();
-
-      // Apparition douce des blocs au défilement.
-      var items = document.querySelectorAll(".rv");
-      var still = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      if (still || !("IntersectionObserver" in window)) {
-        items.forEach(function (el) { el.classList.add("in"); });
-        return;
-      }
-      var io = new IntersectionObserver(function (entries) {
-        entries.forEach(function (e) {
-          if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); }
-        });
-      }, { threshold: 0.12, rootMargin: "0px 0px -40px 0px" });
-      items.forEach(function (el) { io.observe(el); });
-    })();
-  </script>
+  <script src="home.js"></script>
 </body>
 </html>
