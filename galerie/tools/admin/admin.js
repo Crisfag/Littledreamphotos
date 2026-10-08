@@ -3938,15 +3938,23 @@
   // Fiches parents (une par enfant : portrait, code, QR, date limite), pour
   // toute l'année ou un seul groupe. Le code d'accès est attribué au premier
   // téléchargement, puis ne change plus.
-  function couponsSectionHtml(year, group, kind) {
+  function couponsSectionHtml(year, group, kind, childCount) {
     var base = "/local/school/years/" + encodeURIComponent(year.id) + "/coupons?" + (group ? "group=" + encodeURIComponent(group.id) + "&" : "");
+    // Classe, section, équipe : toutes féminines, « son » devant une voyelle.
+    var groupName = kind.group.toLowerCase();
+    var vowel = /^[aeéèêiîouy]/.test(groupName);
     return (
       '<section class="ad-sc-coupons"><div class="ad-section-header"><h3>Fiches parents' + (group ? "" : " · toutes les " + esc(kind.groups.toLowerCase())) + "</h3></div>" +
-      '<p class="ad-hint">Une fiche par enfant : son portrait, ' + (group ? "le " + esc(kind.group.toLowerCase()) : "son " + esc(kind.group.toLowerCase())) +
+      '<p class="ad-hint">Une fiche par enfant : son portrait, ' + (group ? (vowel ? "l'" : "la ") : (vowel ? "son " : "sa ")) + esc(groupName) +
       ", la date limite, un code d'accès personnel et un QR code qui ouvre l'espace famille. À distribuer par l'établissement.</p>" +
-      '<div class="ad-sc-actions">' +
-      '<a class="ad-btn ad-btn-primary" href="' + base + 'format=pdf" download>PDF à imprimer (A4, 4 par feuille)</a>' +
-      '<a class="ad-btn" href="' + base + 'format=lab" download>Images 10×15 pour le labo (ZIP)</a></div>' +
+      // Sans enfant, le serveur refuse les fiches : un lien de téléchargement
+      // n'afficherait qu'un échec muet dans le navigateur.
+      (childCount
+        ? '<div class="ad-sc-actions">' +
+          '<a class="ad-btn ad-btn-primary" href="' + base + 'format=pdf" download>PDF à imprimer (A4, 4 par feuille)</a>' +
+          '<a class="ad-btn" href="' + base + 'format=lab" download>Images 10×15 pour le labo (ZIP)</a></div>'
+        : '<p class="ad-hint ad-acc-warn">Les fiches seront prêtes dès que les photos d\'au moins une ' + esc(kind.group.toLowerCase()) +
+          " auront été importées et regroupées par enfant.</p>") +
       '<p class="ad-hint">Le PDF regroupe les fiches ' + (group ? "" : esc(kind.group.toLowerCase()) + " par " + esc(kind.group.toLowerCase()) + ", ") +
       "chacune précédée d'une feuille-paquet (liste des enfants à cocher à la distribution) ; les images 10×15 se tirent comme des photos, rangées par dossier.</p>" +
       (year.orderDeadline ? "" : '<p class="ad-hint ad-acc-warn">Aucune date de commande groupée n\'est fixée : elle n\'apparaîtra pas sur les fiches.</p>') +
@@ -4058,7 +4066,7 @@
           '<button type="submit" class="ad-btn ad-btn-primary">Ajouter</button></form>' +
           '<p class="ad-hint ad-sc-next">Ouvrez chaque ' + esc(kind.group.toLowerCase()) + " pour importer ses photos : Holypixx les regroupe par enfant d'après l'heure de prise de vue.</p>" +
           "</section>" +
-          couponsSectionHtml(year, null, kind) +
+          couponsSectionHtml(year, null, kind, year.groups.reduce(function (n, g) { return n + (g.childrenCount || 0); }, 0)) +
           '<div id="ad-sc-shop"><p class="ad-loading">Chargement de la boutique…</p></div>'
         : "") +
 
@@ -4840,7 +4848,7 @@
         : '<p class="ad-hint">Choisissez la ou les photos de groupe dans la grille, puis « Déplacer vers… » ' + esc(kind.groupPhoto.toLowerCase()) + ". Toutes les familles du groupe la verront.</p>") +
       "</section>" +
 
-      (data.children.length ? couponsSectionHtml({ id: data.year.id, orderDeadline: data.year.orderDeadline }, data.group, kind) : "") +
+      (data.children.length ? couponsSectionHtml({ id: data.year.id, orderDeadline: data.year.orderDeadline }, data.group, kind, data.children.length) : "") +
       '<section><div class="ad-section-header"><h3>Enfants (' + data.children.length + ")</h3></div>" +
       (data.children.length
         ? '<p class="ad-hint">Vérifiez d\'un coup d\'œil : chaque carte doit montrer un seul enfant. Cliquez sur des photos pour les choisir et les déplacer ; deux cartes du même enfant se fusionnent.</p>' +
