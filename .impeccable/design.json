@@ -1,0 +1,630 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-08T12:00:00Z",
+  "title": "Design System: Holypixx",
+  "scope": "Système marketing de la marque, relevé sur la page d'accueil publique (galerie/web/index.html, home.css, home.js). L'admin, la galerie client et l'espace famille ont leur propre style, non couvert ici.",
+  "extensions": {
+    "colorMeta": {
+      "accent": {
+        "role": "primary",
+        "displayName": "Outremer franc",
+        "canonical": "oklch(50.1% 0.265 272)",
+        "tonalRamp": [
+          "#040033",
+          "#140075",
+          "#2700c0",
+          "#3a38f3",
+          "#5970fe",
+          "#859efe",
+          "#b6c7ff",
+          "#e9eefe"
+        ]
+      },
+      "accent-deep": {
+        "role": "primary",
+        "displayName": "Outremer profond",
+        "canonical": "oklch(42.9% 0.249 269)",
+        "tonalRamp": [
+          "#030034",
+          "#0f0177",
+          "#2001c2",
+          "#3141eb",
+          "#5272fe",
+          "#819ffe",
+          "#b4c8ff",
+          "#e8eefe"
+        ]
+      },
+      "accent-soft": {
+        "role": "primary",
+        "displayName": "Voile outremer",
+        "canonical": "oklch(95.1% 0.024 286)",
+        "tonalRamp": [
+          "#0a0a15",
+          "#242330",
+          "#41404f",
+          "#605f6f",
+          "#818191",
+          "#a3a3b4",
+          "#c7c7d9",
+          "#ededff"
+        ]
+      },
+      "night-accent": {
+        "role": "primary",
+        "displayName": "Pervenche de nuit",
+        "canonical": "oklch(81.1% 0.098 284)",
+        "tonalRamp": [
+          "#0b002e",
+          "#221a52",
+          "#3d3874",
+          "#5b5897",
+          "#7b7abb",
+          "#9d9de1",
+          "#c2c2ff",
+          "#ecedff"
+        ]
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "Papier",
+        "canonical": "oklch(100.0% 0.000 90)",
+        "tonalRamp": [
+          "#0b0b0b",
+          "#252525",
+          "#424242",
+          "#616161",
+          "#828282",
+          "#a5a5a5",
+          "#c9c9c9",
+          "#eeeeee"
+        ]
+      },
+      "mist": {
+        "role": "neutral",
+        "displayName": "Brume",
+        "canonical": "oklch(97.4% 0.004 286)",
+        "tonalRamp": [
+          "#0b0b0d",
+          "#252527",
+          "#424244",
+          "#616163",
+          "#828285",
+          "#a5a5a7",
+          "#c9c9cc",
+          "#eeeef1"
+        ]
+      },
+      "mist-2": {
+        "role": "neutral",
+        "displayName": "Brume appuyée",
+        "canonical": "oklch(95.1% 0.008 286)",
+        "tonalRamp": [
+          "#0b0b0e",
+          "#252529",
+          "#414146",
+          "#616166",
+          "#828287",
+          "#a4a4aa",
+          "#c8c8ce",
+          "#eeeef4"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Encre",
+        "canonical": "oklch(15.2% 0.011 285)",
+        "tonalRamp": [
+          "#0b0b10",
+          "#24242a",
+          "#414148",
+          "#606067",
+          "#818289",
+          "#a4a4ac",
+          "#c8c8d0",
+          "#edeef6"
+        ]
+      },
+      "ink-2": {
+        "role": "neutral",
+        "displayName": "Encre douce",
+        "canonical": "oklch(31.0% 0.020 285)",
+        "tonalRamp": [
+          "#0a0a13",
+          "#24242e",
+          "#41414c",
+          "#60606c",
+          "#81818e",
+          "#a3a4b1",
+          "#c7c8d6",
+          "#ededfc"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Gris d'appoint",
+        "canonical": "oklch(50.1% 0.020 286)",
+        "tonalRamp": [
+          "#0a0a13",
+          "#24242f",
+          "#41414d",
+          "#60606d",
+          "#81818e",
+          "#a3a3b2",
+          "#c7c8d6",
+          "#ededfc"
+        ]
+      },
+      "ink-soft": {
+        "role": "neutral",
+        "displayName": "Gris de seconde ligne",
+        "canonical": "oklch(63.8% 0.021 286)",
+        "tonalRamp": [
+          "#0a0a14",
+          "#24242f",
+          "#41414d",
+          "#60606d",
+          "#81818f",
+          "#a3a3b2",
+          "#c7c7d6",
+          "#ededfc"
+        ]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Filet",
+        "canonical": "oklch(92.7% 0.011 286)",
+        "tonalRamp": [
+          "#0b0b10",
+          "#24242a",
+          "#414148",
+          "#606067",
+          "#818189",
+          "#a4a4ac",
+          "#c8c8d0",
+          "#eeeef6"
+        ]
+      },
+      "line-2": {
+        "role": "neutral",
+        "displayName": "Filet appuyé",
+        "canonical": "oklch(88.0% 0.016 286)",
+        "tonalRamp": [
+          "#0a0a12",
+          "#24242d",
+          "#41414b",
+          "#60606a",
+          "#81818c",
+          "#a4a4af",
+          "#c8c8d4",
+          "#ededf9"
+        ]
+      },
+      "night": {
+        "role": "neutral",
+        "displayName": "Nuit",
+        "canonical": "oklch(14.9% 0.017 284)",
+        "tonalRamp": [
+          "#0a0a12",
+          "#24242d",
+          "#41414b",
+          "#60606b",
+          "#81818d",
+          "#a3a4b0",
+          "#c7c8d4",
+          "#ededfa"
+        ]
+      },
+      "night-2": {
+        "role": "neutral",
+        "displayName": "Nuit relevée",
+        "canonical": "oklch(19.2% 0.022 284)",
+        "tonalRamp": [
+          "#0a0a14",
+          "#242430",
+          "#40414e",
+          "#5f606e",
+          "#808190",
+          "#a3a3b3",
+          "#c7c8d8",
+          "#ecedfd"
+        ]
+      },
+      "night-3": {
+        "role": "neutral",
+        "displayName": "Nuit de survol",
+        "canonical": "oklch(23.4% 0.029 284)",
+        "tonalRamp": [
+          "#0a0917",
+          "#232333",
+          "#404051",
+          "#5f5f71",
+          "#808093",
+          "#a2a3b7",
+          "#c6c7dc",
+          "#ecedfe"
+        ]
+      },
+      "night-line": {
+        "role": "neutral",
+        "displayName": "Filet de nuit",
+        "canonical": "oklch(29.4% 0.034 284)",
+        "tonalRamp": [
+          "#0a0919",
+          "#232335",
+          "#3f4054",
+          "#5e5f75",
+          "#7f8097",
+          "#a2a3ba",
+          "#c6c7df",
+          "#ecedff"
+        ]
+      },
+      "night-text": {
+        "role": "neutral",
+        "displayName": "Texte de nuit",
+        "canonical": "oklch(94.4% 0.013 291)",
+        "tonalRamp": [
+          "#0b0a10",
+          "#25242b",
+          "#424149",
+          "#616068",
+          "#82818a",
+          "#a5a4ad",
+          "#c9c8d1",
+          "#eeedf7"
+        ]
+      },
+      "night-muted": {
+        "role": "neutral",
+        "displayName": "Gris de nuit",
+        "canonical": "oklch(72.3% 0.033 286)",
+        "tonalRamp": [
+          "#0a0918",
+          "#232335",
+          "#404053",
+          "#5f5f74",
+          "#808096",
+          "#a3a3ba",
+          "#c7c7de",
+          "#ecedfe"
+        ]
+      },
+      "ok": {
+        "role": "status",
+        "displayName": "Vert validé",
+        "canonical": "oklch(62.7% 0.170 149)",
+        "tonalRamp": [
+          "#001003",
+          "#002e0f",
+          "#01511f",
+          "#017631",
+          "#029d44",
+          "#44c167",
+          "#6de78a",
+          "#c8ffd0"
+        ]
+      },
+      "warn": {
+        "role": "status",
+        "displayName": "Ambre à retoucher",
+        "canonical": "oklch(76.3% 0.156 80)",
+        "tonalRamp": [
+          "#120900",
+          "#332200",
+          "#573c00",
+          "#7f5a04",
+          "#a97905",
+          "#d59905",
+          "#febc39",
+          "#feecce"
+        ]
+      },
+      "alert": {
+        "role": "status",
+        "displayName": "Rouge coup de cœur / alerte",
+        "canonical": "oklch(62.6% 0.193 23)",
+        "tonalRamp": [
+          "#1f0002",
+          "#4c0109",
+          "#800216",
+          "#b60d26",
+          "#de4148",
+          "#fe7371",
+          "#feb3ae",
+          "#fee9e7"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Le titre d'ouverture seul."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Un titre par chapitre, phrase complète."
+      },
+      "price": {
+        "displayName": "Prix",
+        "purpose": "Montants des formules, chiffres tabulaires."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Titres de liste, de panneau et de carte."
+      },
+      "lede": {
+        "displayName": "Lede",
+        "purpose": "Paragraphe d'introduction sous chaque titre de chapitre."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Texte courant, 17 px (16 px sous 640 px)."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Boutons, puces, notifications, navigation ; jamais en capitales."
+      },
+      "mono": {
+        "displayName": "Mono",
+        "purpose": "Empreintes, codes d'accès, tailles de fichiers, montants de ticket."
+      }
+    },
+    "shadows": [
+      {
+        "name": "window",
+        "value": "0 40px 80px -32px rgba(20, 20, 60, .35), 0 12px 28px -12px rgba(20, 20, 60, .18), 0 0 0 1px rgba(20, 20, 60, .08)",
+        "purpose": "Fenêtre de galerie, photo annotée, planche scolaire."
+      },
+      {
+        "name": "float",
+        "value": "0 18px 40px -16px rgba(20, 20, 60, .35), 0 4px 10px -4px rgba(20, 20, 60, .12), 0 0 0 1px rgba(20, 20, 60, .06)",
+        "purpose": "Notifications, ticket de prix, étiquettes d'annotation, fiche scolaire, message éphémère."
+      },
+      {
+        "name": "plan-featured",
+        "value": "0 30px 60px -30px rgba(20, 20, 60, .6)",
+        "purpose": "La carte de la formule Pro seule."
+      },
+      {
+        "name": "button-accent",
+        "value": "0 1px 0 rgba(255, 255, 255, .25) inset, 0 1px 2px rgba(11, 11, 16, .16), 0 8px 18px -10px rgba(11, 11, 16, .45)",
+        "purpose": "Bouton outremer : liseré clair et ombre d'encre neutre, jamais de halo coloré."
+      },
+      {
+        "name": "marker",
+        "value": "0 0 0 2px #fff, 0 4px 10px rgba(11, 11, 16, .3)",
+        "purpose": "Repères numérotés posés sur une photo."
+      },
+      {
+        "name": "hairline",
+        "value": "0 0 0 1px var(--line) inset",
+        "purpose": "Contour d'un pixel des cartes, puces et champs, à la place d'une bordure."
+      },
+      {
+        "name": "focus",
+        "value": "outline: 2px solid var(--accent); outline-offset: 3px",
+        "purpose": "Focus clavier de tout élément interactif."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease",
+        "value": "cubic-bezier(.16, 1, .3, 1)",
+        "purpose": "Courbe unique de la page : décélération longue, sans rebond."
+      },
+      {
+        "name": "control",
+        "value": "200ms",
+        "purpose": "Changements d'état des boutons, liens et sélecteurs ; montée de 1 px au survol du bouton principal."
+      },
+      {
+        "name": "state",
+        "value": "250ms",
+        "purpose": "Commandes du labo, filet de navigation, flèche des liens d'appel, chevron des questions."
+      },
+      {
+        "name": "layer",
+        "value": "450ms",
+        "purpose": "Apparition des couches de protection du labo."
+      },
+      {
+        "name": "tile-recompose",
+        "value": "550ms par tuile, 38ms entre tuiles, 90ms entre photos, une seule fois",
+        "purpose": "Recomposition des photos d'ouverture en 16 tuiles, ordre pseudo-aléatoire stable."
+      },
+      {
+        "name": "note-rise",
+        "value": "600ms, translateY(10px) vers 0, départ 900ms puis 650ms d'écart",
+        "purpose": "Entrée des notifications flottantes et des cartes de résultat."
+      },
+      {
+        "name": "flash",
+        "value": "500ms",
+        "purpose": "Flash blanc de la capture simulée."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "animation: none; transition: none",
+        "purpose": "Sous prefers-reduced-motion, tout mouvement est coupé et les notifications sont affichées d'emblée."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "lg",
+        "value": "1080px",
+        "purpose": "Engagements et trio sur deux colonnes."
+      },
+      {
+        "name": "md",
+        "value": "900px",
+        "purpose": "Menu replié, compositions à une colonne, formules empilées."
+      },
+      {
+        "name": "sm",
+        "value": "640px",
+        "purpose": "Corps 16 px, galerie en 2 colonnes, notifications et ticket dans le flux."
+      },
+      {
+        "name": "xs",
+        "value": "480px",
+        "purpose": "Boutons d'ouverture pleine largeur."
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Bouton principal",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "L'action « Créer mon compte » : outremer plein, ombre d'encre neutre.",
+      "html": "<a class=\"ds-btn-primary\" href=\"#\">Créer mon compte gratuit</a>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 52px; padding: 0 26px; border-radius: 12px; background: var(--accent, #3b3bf6); color: #fff; font-family: Geist, ui-sans-serif, system-ui, sans-serif; font-weight: 500; font-size: 1.04rem; letter-spacing: -0.005em; text-decoration: none; box-shadow: 0 1px 0 rgba(255,255,255,.25) inset, 0 1px 2px rgba(11,11,16,.16), 0 8px 18px -10px rgba(11,11,16,.45); transition: background-color .2s cubic-bezier(.16,1,.3,1), transform .2s cubic-bezier(.16,1,.3,1); } .ds-btn-primary:hover { background: var(--accent-deep, #2626d4); transform: translateY(-1px); } .ds-btn-primary:active { transform: translateY(0) scale(.99); } .ds-btn-primary:focus-visible { outline: 2px solid var(--accent, #3b3bf6); outline-offset: 3px; }"
+    },
+    {
+      "name": "Bouton discret",
+      "kind": "button",
+      "refersTo": "button-quiet",
+      "description": "Action secondaire à côté du bouton principal (« Voir les tarifs »).",
+      "html": "<a class=\"ds-btn-quiet\" href=\"#\">Voir les tarifs</a>",
+      "css": ".ds-btn-quiet { display: inline-flex; align-items: center; min-height: 52px; padding: 0 26px; border-radius: 12px; background: var(--mist, #f6f6f9); color: var(--ink, #0b0b10); font-family: Geist, ui-sans-serif, system-ui, sans-serif; font-weight: 500; font-size: 1.04rem; text-decoration: none; transition: background-color .2s cubic-bezier(.16,1,.3,1); } .ds-btn-quiet:hover { background: var(--mist-2, #eeeef4); } .ds-btn-quiet:focus-visible { outline: 2px solid var(--accent, #3b3bf6); outline-offset: 3px; }"
+    },
+    {
+      "name": "Bouton contour",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "Appel des formules non mises en avant.",
+      "html": "<a class=\"ds-btn-outline\" href=\"#\">Essayer 10 jours gratuitement</a>",
+      "css": ".ds-btn-outline { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 20px; border-radius: 10px; background: #fff; color: var(--ink, #0b0b10); font-family: Geist, ui-sans-serif, system-ui, sans-serif; font-weight: 500; text-decoration: none; box-shadow: 0 0 0 1px var(--line-2, #d6d6e2) inset; transition: box-shadow .2s cubic-bezier(.16,1,.3,1); } .ds-btn-outline:hover { box-shadow: 0 0 0 1px var(--ink, #0b0b10) inset; } .ds-btn-outline:focus-visible { outline: 2px solid var(--accent, #3b3bf6); outline-offset: 3px; }"
+    },
+    {
+      "name": "Navigation",
+      "kind": "nav",
+      "refersTo": "nav-link",
+      "description": "Barre collante de 68 px : marque, liens en gris d'appoint, connexion et bouton compact.",
+      "html": "<header class=\"ds-nav\"><a class=\"ds-brand\" href=\"#\"><span class=\"ds-brand-mark\"><svg viewBox=\"0 0 32 32\" width=\"30\" height=\"30\" fill=\"none\" stroke=\"#fff\" stroke-width=\"3\" stroke-linecap=\"round\"><path d=\"M10 8v16M22 8v16M10 16h12\"/></svg></span>Holypixx</a><nav class=\"ds-nav-links\"><a href=\"#\">Protection</a><a href=\"#\">Sélection</a><a href=\"#\">Vente</a><a href=\"#\">Tarifs</a></nav><a class=\"ds-nav-cta\" href=\"#\">Créer un compte</a></header>",
+      "css": ".ds-nav { display: flex; align-items: center; gap: 28px; height: 68px; padding: 0 24px; background: rgba(255,255,255,.96); border-bottom: 1px solid var(--line, #e6e6ee); font-family: Geist, ui-sans-serif, system-ui, sans-serif; } .ds-brand { display: inline-flex; align-items: center; gap: 10px; color: var(--ink, #0b0b10); font-weight: 600; font-size: 1.08rem; letter-spacing: -0.02em; text-decoration: none; } .ds-brand-mark { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; background: var(--accent, #3b3bf6); } .ds-nav-links { display: flex; gap: 4px; } .ds-nav-links a { padding: 8px 12px; border-radius: 8px; font-size: .94rem; color: var(--muted, #62626f); text-decoration: none; transition: color .2s, background-color .2s; } .ds-nav-links a:hover { color: var(--ink, #0b0b10); background: var(--mist, #f6f6f9); } .ds-nav-cta { margin-left: auto; display: inline-flex; align-items: center; min-height: 38px; padding: 0 14px; border-radius: 10px; background: var(--accent, #3b3bf6); color: #fff; font-weight: 500; font-size: .92rem; text-decoration: none; box-shadow: 0 1px 2px rgba(11,11,16,.16), 0 8px 18px -10px rgba(11,11,16,.45); } .ds-nav-cta:hover { background: var(--accent-deep, #2626d4); } .ds-nav a:focus-visible { outline: 2px solid var(--accent, #3b3bf6); outline-offset: 3px; }"
+    },
+    {
+      "name": "Puces et badges",
+      "kind": "chip",
+      "refersTo": "chip",
+      "description": "Puce produit à contour d'un pixel et badge sur voile outremer (« Bientôt disponible »).",
+      "html": "<div class=\"ds-chips\"><span class=\"ds-chip\"><svg viewBox=\"0 0 24 24\" width=\"20\" height=\"20\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"ds-heart\"><path d=\"M12 20s-7.5-4.6-7.5-10.1A4.4 4.4 0 0 1 12 7.4a4.4 4.4 0 0 1 7.5 2.5C19.5 15.4 12 20 12 20Z\"/></svg>12 coups de cœur</span><span class=\"ds-badge\"><i></i>Bientôt disponible</span></div>",
+      "css": ".ds-chips { display: flex; gap: 10px; align-items: center; font-family: Geist, ui-sans-serif, system-ui, sans-serif; } .ds-chip { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: 999px; font-size: .84rem; color: var(--ink-2, #2f2f3a); box-shadow: 0 0 0 1px var(--line, #e6e6ee) inset; } .ds-chip svg { width: 14px; height: 14px; color: var(--alert, #e5484d); fill: var(--alert, #e5484d); } .ds-badge { display: inline-flex; align-items: center; gap: 8px; padding: 3px 12px 3px 10px; border-radius: 999px; background: var(--accent-soft, #ededff); color: var(--accent-deep, #2626d4); font-size: .86rem; font-weight: 500; } .ds-badge i { width: 7px; height: 7px; border-radius: 50%; background: var(--accent, #3b3bf6); }"
+    },
+    {
+      "name": "Fenêtre produit",
+      "kind": "card",
+      "refersTo": "window",
+      "description": "Reconstitution de la galerie client : barre d'adresse, titre de séance, photos sous filigrane. Les aplats chauds tiennent lieu des photos de la fondatrice.",
+      "html": "<figure class=\"ds-window\"><div class=\"ds-window-bar\"><span class=\"ds-dots\"><i></i><i></i><i></i></span><span class=\"ds-url\">votre-studio.holypixx.com<span>/seance-martin</span></span></div><div class=\"ds-gal\"><p class=\"ds-gal-title\">Séance Martin</p><p class=\"ds-gal-by\">Votre studio · 32 photos</p><div class=\"ds-gal-grid\"><span></span><span></span><span></span></div></div></figure>",
+      "css": ".ds-window { margin: 0; max-width: 520px; border-radius: 16px; background: #fff; overflow: hidden; font-family: Geist, ui-sans-serif, system-ui, sans-serif; box-shadow: 0 40px 80px -32px rgba(20,20,60,.35), 0 12px 28px -12px rgba(20,20,60,.18), 0 0 0 1px rgba(20,20,60,.08); } .ds-window-bar { display: flex; align-items: center; gap: 16px; height: 44px; padding: 0 16px; background: var(--mist, #f6f6f9); border-bottom: 1px solid var(--line, #e6e6ee); } .ds-dots { display: flex; gap: 7px; } .ds-dots i { width: 11px; height: 11px; border-radius: 50%; background: var(--line-2, #d6d6e2); } .ds-url { margin-inline: auto; padding: 5px 14px; border-radius: 8px; background: #fff; box-shadow: 0 0 0 1px var(--line, #e6e6ee) inset; font-size: .84rem; color: var(--ink, #0b0b10); } .ds-url span { color: var(--muted, #62626f); } .ds-gal { padding: 20px; } .ds-gal-title { margin: 0; font-size: 1.4rem; font-weight: 600; letter-spacing: -0.03em; color: var(--ink, #0b0b10); } .ds-gal-by { margin: 2px 0 14px; font-size: .86rem; color: var(--muted, #62626f); } .ds-gal-grid { display: grid; grid-template-columns: 1.55fr 1fr 1fr; gap: 10px; height: 140px; } .ds-gal-grid span { border-radius: 8px; background: #b8753d; } .ds-gal-grid span:nth-child(2) { background: #d6a24a; } .ds-gal-grid span:nth-child(3) { background: #5a2528; }"
+    },
+    {
+      "name": "Notification flottante",
+      "kind": "custom",
+      "refersTo": "note",
+      "description": "Événement de séance (capture tentée, sélection validée, commande) posé au bord de la fenêtre.",
+      "html": "<div class=\"ds-note\"><span class=\"ds-note-ico\"><svg viewBox=\"0 0 24 24\" width=\"20\" height=\"20\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15L6 16Z\"/><path d=\"M10 20.5a2.2 2.2 0 0 0 4 0\"/></svg></span><span><strong>Capture tentée</strong><em>Séance Martin · photo n° 7 · e-mail envoyé</em></span></div>",
+      "css": ".ds-note { display: inline-flex; align-items: center; gap: 12px; max-width: 320px; padding: 12px 16px 12px 12px; border-radius: 14px; background: #fff; font-family: Geist, ui-sans-serif, system-ui, sans-serif; font-size: .86rem; line-height: 1.35; box-shadow: 0 18px 40px -16px rgba(20,20,60,.35), 0 4px 10px -4px rgba(20,20,60,.12), 0 0 0 1px rgba(20,20,60,.06); animation: ds-rise .6s cubic-bezier(.16,1,.3,1) both; } .ds-note strong { display: block; color: var(--ink, #0b0b10); font-weight: 600; } .ds-note em { font-style: normal; color: var(--muted, #62626f); } .ds-note-ico { display: grid; place-items: center; width: 36px; height: 36px; flex: none; border-radius: 10px; background: #fff3e8; color: #c2410c; } @keyframes ds-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } } @media (prefers-reduced-motion: reduce) { .ds-note { animation: none; } }"
+    },
+    {
+      "name": "Commande du labo",
+      "kind": "custom",
+      "refersTo": "lab-toggle",
+      "description": "Interrupteur d'une couche de protection, sur fond nuit ; état actif en pervenche.",
+      "html": "<div class=\"ds-night\"><button type=\"button\" class=\"ds-lab-toggle\" aria-pressed=\"true\"><svg viewBox=\"0 0 24 24\" width=\"20\" height=\"20\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M6.5 9.5a5.5 5.5 0 0 1 11 0v2.5\"/><path d=\"M9 20.5c-1-1.6-1.5-3.6-1.5-6v-5a4.5 4.5 0 0 1 9 0\"/><path d=\"M12 9.5v5c0 2.2.6 4.3 1.8 6\"/></svg><span><strong>Empreinte invisible <b>Visible</b></strong><em>Propre à chaque galerie, elle désigne la galerie d'origine.</em></span></button></div>",
+      "css": ".ds-night { padding: 24px; background: var(--night, #0a0a12); font-family: Geist, ui-sans-serif, system-ui, sans-serif; } .ds-lab-toggle { display: grid; grid-template-columns: 24px minmax(0,1fr); gap: 14px; width: 100%; max-width: 440px; text-align: left; padding: 18px 20px; border: 0; border-radius: 14px; background: var(--night-2, #13131e); color: var(--night-muted, #a3a3ba); font: inherit; cursor: pointer; box-shadow: 0 0 0 1px var(--night-line, #2a2a3d) inset; transition: background-color .25s cubic-bezier(.16,1,.3,1), box-shadow .25s cubic-bezier(.16,1,.3,1); } .ds-lab-toggle:hover { background: var(--night-3, #1c1c2b); } .ds-lab-toggle svg { width: 22px; height: 22px; color: #8c8cb0; } .ds-lab-toggle strong { display: flex; align-items: center; gap: 10px; color: var(--night-text, #ecebf5); font-weight: 600; } .ds-lab-toggle b { margin-left: auto; padding: 3px 9px; border-radius: 999px; font-size: .72rem; font-weight: 500; color: var(--night, #0a0a12); background: #b9b9ff; } .ds-lab-toggle em { display: block; margin-top: 4px; font-style: normal; font-size: .92rem; line-height: 1.5; } .ds-lab-toggle[aria-pressed=\"true\"] { background: #17172a; box-shadow: 0 0 0 1px #4a4aa8 inset; } .ds-lab-toggle[aria-pressed=\"true\"] svg { color: #b9b9ff; } .ds-lab-toggle:focus-visible { outline: 2px solid var(--accent, #3b3bf6); outline-offset: 3px; }"
+    },
+    {
+      "name": "Ticket de prix",
+      "kind": "custom",
+      "refersTo": "shop-ticket",
+      "description": "Décomposition coût labo / marge / prix client, posée sur la bande photo pleine largeur.",
+      "html": "<div class=\"ds-ticket\"><span class=\"ds-ticket-title\">Tirage d'art 40 × 60 cm</span><span class=\"ds-row\"><span>Coût labo</span><span class=\"ds-num\">32,00 €</span></span><span class=\"ds-row\"><span>Votre marge</span><span class=\"ds-num ds-up\">+ 57,00 €</span></span><span class=\"ds-row ds-total\"><span>Prix client</span><span class=\"ds-num\">89,00 €</span></span><span class=\"ds-foot\">Exemple de prix : c'est vous qui les fixez.</span></div>",
+      "css": ".ds-ticket { display: grid; gap: 8px; width: 300px; padding: 18px; border-radius: 14px; background: #fff; font-family: Geist, ui-sans-serif, system-ui, sans-serif; font-size: .9rem; box-shadow: 0 18px 40px -16px rgba(20,20,60,.35), 0 4px 10px -4px rgba(20,20,60,.12), 0 0 0 1px rgba(20,20,60,.06); } .ds-ticket-title { color: var(--ink, #0b0b10); font-weight: 600; } .ds-row { display: flex; justify-content: space-between; gap: 12px; color: var(--muted, #62626f); } .ds-num { font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-variant-numeric: tabular-nums; } .ds-up { color: var(--ok, #16a34a); } .ds-total { padding-top: 10px; border-top: 1px solid var(--line, #e6e6ee); color: var(--ink, #0b0b10); font-weight: 600; } .ds-foot { font-size: .78rem; color: var(--muted, #62626f); }"
+    },
+    {
+      "name": "Formule mise en avant",
+      "kind": "card",
+      "refersTo": "plan-card-featured",
+      "description": "Carte Pro sur fond nuit, seule carte de formule à porter une ombre.",
+      "html": "<article class=\"ds-plan\"><p class=\"ds-flag\">Le plus complet</p><h3>Pro</h3><p class=\"ds-for\">Pour un studio à votre nom, sans limite.</p><p class=\"ds-price\"><span>29 €</span> / mois</p><a class=\"ds-plan-btn\" href=\"#\">Essayer 10 jours gratuitement</a><ul><li>Galeries illimitées, 1 To</li><li>Adresse à votre nom</li></ul></article>",
+      "css": ".ds-plan { position: relative; display: flex; flex-direction: column; gap: 6px; max-width: 360px; padding: 28px; border-radius: 16px; background: var(--night, #0a0a12); color: var(--night-muted, #a3a3ba); font-family: Geist, ui-sans-serif, system-ui, sans-serif; box-shadow: 0 30px 60px -30px rgba(20,20,60,.6); } .ds-plan h3 { margin: 0; color: #fff; font-size: 1.25rem; font-weight: 600; letter-spacing: -0.03em; } .ds-flag { position: absolute; top: 20px; right: 20px; margin: 0; padding: 4px 10px; border-radius: 999px; background: var(--accent, #3b3bf6); color: #fff; font-size: .76rem; font-weight: 500; } .ds-for { margin: 0; font-size: .94rem; } .ds-price { margin: 8px 0 0; } .ds-price span { color: #fff; font-size: 2.8rem; font-weight: 600; letter-spacing: -0.04em; line-height: 1; font-variant-numeric: tabular-nums; } .ds-plan-btn { display: inline-flex; justify-content: center; align-items: center; min-height: 44px; margin: 14px 0 20px; border-radius: 10px; background: var(--accent, #3b3bf6); color: #fff; font-weight: 500; text-decoration: none; box-shadow: 0 1px 0 rgba(255,255,255,.25) inset, 0 1px 2px rgba(11,11,16,.16), 0 8px 18px -10px rgba(11,11,16,.45); transition: background-color .2s cubic-bezier(.16,1,.3,1); } .ds-plan-btn:hover { background: var(--accent-deep, #2626d4); } .ds-plan-btn:focus-visible { outline: 2px solid #b9b9ff; outline-offset: 3px; } .ds-plan ul { list-style: none; margin: 0; padding: 20px 0 0; display: grid; gap: 10px; border-top: 1px solid var(--night-line, #2a2a3d); color: var(--night-text, #ecebf5); font-size: .94rem; } .ds-plan li { position: relative; padding-left: 26px; } .ds-plan li::before { content: \"\"; position: absolute; left: 0; top: .3em; width: 16px; height: 16px; border-radius: 50%; background: rgba(185,185,255,.16) url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23b9b9ff' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 12.5 4 4 8-9'/%3E%3C/svg%3E\") center / 11px no-repeat; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "La vitrine sous verre",
+    "overview": "Une page blanche et nette, de l'encre presque noire, un seul bleu outremer pour agir. Les photos sont montrées en grand, mais toujours derrière une vitre : celle d'une fenêtre produit arrondie, d'un filigrane, d'un ticket posé dessus. La page ne promet pas la protection, elle la fait voir et tester ; un chapitre sombre, le seul de la page avec la conclusion et le pied de page, sert de salle d'essai où l'on active les couches de protection une à une.\n\nLe registre est celui du SaaS haut de gamme classique (barre de finition : Pixieset, Stripe, Linear/Framer) : densité calme, grands chapitres aérés, titres serrés en Geist 600, texte en Geist 400 à 17 px, filets d'un pixel plutôt que des cartes. Le produit se démontre par des objets d'interface reconstitués (fenêtre de galerie, notifications, ticket de prix, fiche scolaire), jamais par des pictogrammes en grille. Le mouvement est unique et signifiant : les photos d'ouverture se recomposent tuile par tuile une seule fois, comme elles arrivent dans une vraie galerie Holypixx.\n\nL'imagerie est exclusivement celle de la fondatrice (Little Dream Photos) : famille, naissance, maternité, portrait d'enfant, en lumière chaude. Ces tons dorés et rouges sont la seule chaleur de la page ; l'interface autour reste froide et neutre pour les laisser parler.",
+    "keyCharacteristics": [
+      "Blanc net, encre `#0b0b10`, un seul accent outremer réservé à l'action et à l'état actif.",
+      "Un chapitre sombre (nuit) pour la protection, repris en conclusion, en pied de page et sur la formule Pro.",
+      "Geist en deux graisses utiles (600 titres, 400 texte, 500 commandes) ; Geist Mono pour codes, empreintes, tailles de fichiers et montants de ticket.",
+      "Fenêtres produit arrondies 16 px aux ombres longues et froides ; tout le reste est plat, tenu par des filets.",
+      "Photos réelles de la fondatrice, en grand, dont une bande pleine largeur dans la section Vente.",
+      "Icônes SVG au trait 1,5, une seule famille."
+    ],
+    "rules": [
+      {
+        "name": "La règle de la voix unique",
+        "body": "L'outremer marque ce qui agit ou ce qui est actif : boutons, liens d'appel, repères, coches, icônes de liste. Jamais en aplat décoratif, jamais en dégradé, jamais en couleur de titre.",
+        "section": "colors"
+      },
+      {
+        "name": "La règle de la nuit qui protège",
+        "body": "Le fond nuit est réservé au chapitre protection, à la formule Pro et au serre-livres final (conclusion + pied de page). Une nouvelle section ne passe pas en sombre pour « varier le rythme ».",
+        "section": "colors"
+      },
+      {
+        "name": "La règle des statuts réels",
+        "body": "Vert, ambre et rouge ne servent qu'à montrer des états du produit (sélection, alerte de capture, marge). Pas d'accent décoratif secondaire.",
+        "section": "colors"
+      },
+      {
+        "name": "La règle du titre d'une seule encre",
+        "body": "Les titres sont d'une seule couleur, l'encre. Deux exceptions seulement, le chapitre protection et les tarifs, portent une seconde ligne en gris doux (`ink-soft`, ou son équivalent nuit) : un énoncé, puis sa nuance. Pas de mot coloré en accent, pas de texte en dégradé.",
+        "section": "typography"
+      },
+      {
+        "name": "La règle de l'entrée directe",
+        "body": "Un chapitre s'ouvre sur son titre. Pas de surtitre en petites capitales espacées au-dessus.",
+        "section": "typography"
+      },
+      {
+        "name": "La règle du chiffre aligné",
+        "body": "Tout chiffre comparé ou facturé (prix, tailles, codes) est en chiffres tabulaires ; ceux qui imitent une pièce produit (ticket, fichiers, empreinte, code) passent en Geist Mono.",
+        "section": "typography"
+      },
+      {
+        "name": "La règle des objets qui flottent",
+        "body": "L'ombre signale un objet produit reconstitué (fenêtre, notification, ticket, fiche). Une section, un panneau ou une liste n'en porte jamais ; ils se séparent par un filet ou un changement de fond.",
+        "section": "elevation"
+      },
+      {
+        "name": "La règle de l'ombre neutre sous l'accent",
+        "body": "Les boutons outremer portent une ombre d'encre neutre, jamais un halo coloré de l'accent.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** réserver l'outremer `#3b3bf6` à l'action et à l'état actif ; sur fond nuit, utiliser la pervenche `#b9b9ff` pour les états et liens, en gardant le bouton principal outremer.",
+      "**Do** démontrer chaque fonction par un objet d'interface reconstitué (fenêtre, notification, ticket, fiche) plutôt que par une carte icône + titre + texte.",
+      "**Do** montrer les photos de la fondatrice en grand, avec le filigrane de démonstration quand elles figurent dans une galerie client.",
+      "**Do** séparer par des filets d'un pixel (`line`, `line-2` sur brume, `night-line` sur nuit) et par l'alternance papier / brume / nuit.",
+      "**Do** donner aux objets produit l'ombre longue et froide `rgba(20,20,60,…)` et laisser tout le reste à plat.",
+      "**Do** composer prix, codes, empreintes et tailles de fichiers en chiffres tabulaires, en Geist Mono pour les pièces de produit.",
+      "**Do** jouer la recomposition en tuiles une seule fois, avec la courbe `cubic-bezier(.16,1,.3,1)`, et tout couper sous `prefers-reduced-motion`.",
+      "**Do** utiliser les icônes SVG maison au trait 1,5, une seule famille, 20 à 22 px."
+    ],
+    "donts": [
+      "**Don't** colorer un mot de titre en accent ni utiliser de texte en dégradé ; seule la seconde ligne grise des chapitres protection et tarifs est admise.",
+      "**Don't** poser de surtitre en capitales espacées au-dessus d'un titre de chapitre.",
+      "**Don't** donner un halo coloré aux boutons outremer ; leur ombre reste une ombre d'encre neutre.",
+      "**Don't** passer une section en fond nuit en dehors de la protection, de la formule Pro et du serre-livres final.",
+      "**Don't** utiliser de photo de banque d'images ou générée ; la page ne montre que les photos de la fondatrice.",
+      "**Don't** utiliser vert, ambre ou rouge comme couleurs d'ambiance ; ce sont des statuts du produit.",
+      "**Don't** présenter un module à venir comme un module ouvert : il se signale par le badge « Bientôt disponible », sans grille de prix, et le chapitre scolaire garde sa teinte lavande claire tant que le module n'est pas lancé."
+    ]
+  }
+}
