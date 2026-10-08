@@ -304,3 +304,11 @@ h3 { font-family: var(--serif); font-weight: 600; font-size: 1.35rem; color: var
 .ec-pick-visual { margin-top: .6rem; display: grid; gap: .3rem; justify-items: center; }
 .ec-pick-visual img { max-width: 100%; max-height: 220px; object-fit: contain; border-radius: 10px; background: var(--cream); padding: .4rem; }
 .ec-pick-visual figcaption { font-size: .78rem; color: var(--muted); text-align: center; }
+
+/* Aperçu de la planche avec la photo de l'enfant (canvas). */
+.ec-mockup { display: block; background: linear-gradient(110deg, var(--sand) 30%, var(--cream) 50%, var(--sand) 70%) 0 0 / 300% 100%; animation: ec-shimmer 1.4s linear infinite; -webkit-user-drag: none; }
+.ec-mockup.ec-loaded, .ec-mockup.ec-failed { animation: none; background: #fff; }
+.ec-product-img.ec-mockup { height: auto; max-height: 260px; width: auto; max-width: 100%; justify-self: center; padding: 0; box-shadow: 0 6px 18px -10px rgba(43, 37, 33, .45); border-radius: 4px; }
+.ec-pick-visual canvas { max-width: 100%; max-height: 300px; width: auto; height: auto; border-radius: 4px; box-shadow: 0 8px 24px -12px rgba(43, 37, 33, .5); }
+.ec-pick-visual [hidden] { display: none !important; }
+@media (prefers-reduced-motion: reduce) { .ec-mockup { animation: none; } }

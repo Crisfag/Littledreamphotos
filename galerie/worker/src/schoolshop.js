@@ -23,7 +23,7 @@ import { schoolFeeRule, feeCentsFor } from "./fees.js";
 import { originalKey } from "./storage.js";
 import { SCHOOL_KINDS } from "./school.js";
 import { sendSchoolOrderConfirmation } from "./notify.js";
-import { previewForLabItems } from "./bephoto.js";
+import { previewForLabItems, layoutForLabItems } from "./bephoto.js";
 
 export const PRODUCT_KINDS = { pochette: "Pochette", tirage: "Tirage", numerique: "Fichier numérique" };
 const SCOPES = ["portrait", "group"];
@@ -83,6 +83,8 @@ function productOut(p) {
     id: p.id, kind: p.kind, scope: p.scope, name: p.name, description: p.description,
     priceCents: p.price_cents, sort: p.sort, active: Boolean(p.active), labItems: parseJson(p.lab_items, []),
     preview: previewForLabItems(parseJson(p.lab_items, [])),
+    // Cases de la planche, pour l'aperçu avec la photo de l'enfant.
+    layout: layoutForLabItems(parseJson(p.lab_items, [])),
   };
 }
 

@@ -552,6 +552,13 @@ Le tableau de bord s'organise en trois onglets, chacun avec son propre lien
     et choix de l'article dans un menu déroulant illustré ; la composition
     labo n'est jamais envoyée aux familles. `BEPHOTO_PREVIEW_BASE` ne sert
     qu'aux tests locaux.
+  - *Aperçu avec la photo de l'enfant* : les cases de 24 planches ont été
+    relevées sur les schémas du labo (`BEPHOTO_LAYOUTS` : position, taille,
+    teinte couleur / noir et blanc / sépia). L'espace famille compose dans
+    le navigateur (canvas) la planche avec la photo de l'enfant — sur chaque
+    carte produit, puis dans le choix de l'article avec la photo choisie —
+    à partir de la vignette protégée déjà affichée (tuiles filigranées du
+    niveau 0) : l'aperçu ne révèle rien de plus que la galerie.
   - *À venir* : réponses de BePhoto (adresse, tri par enfant, pochettes),
     relances des familles, part de l'établissement, ventes scolaires dans le
     tableau des ventes.
