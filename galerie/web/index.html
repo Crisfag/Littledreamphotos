@@ -166,13 +166,13 @@
           <figure class="window" aria-label="Aperçu d'une galerie client Holypixx">
             <div class="window-bar">
               <span class="window-dots" aria-hidden="true"><i></i><i></i><i></i></span>
-              <span class="window-url"><svg class="ico ico-xs"><use href="#i-lock"/></svg>votre-studio.holypixx.com<span>/seance-martin</span></span>
+              <span class="window-url"><svg class="ico ico-xs"><use href="#i-lock"/></svg>votre-studio.holypixx.com<span class="window-path">/seance-martin</span></span>
             </div>
             <div class="gal">
               <div class="gal-head">
                 <div>
-                  <p class="gal-studio">Votre studio</p>
                   <p class="gal-title">Séance Martin</p>
+                  <p class="gal-by">Votre studio · 32 photos</p>
                 </div>
                 <div class="gal-tools">
                   <span class="gal-chip"><svg class="ico ico-xs"><use href="#i-heart"/></svg>12 coups de cœur</span>
@@ -277,7 +277,7 @@
     <section class="chapter" id="selection">
       <div class="wrap">
         <div class="chapter-head">
-          <h2>Vos clients choisissent.<br /><span class="soft">Vous savez exactement quoi retoucher.</span></h2>
+          <h2>Vos clients choisissent. Vous savez exactement quoi retoucher.</h2>
           <p class="chapter-lede">Un lien à votre nom et un mot de passe : pas de compte à créer, rien à installer. Le client parcourt, met de côté, commente, puis valide — vous recevez tout, photo par photo.</p>
         </div>
 
@@ -312,30 +312,32 @@
     <section class="chapter tint" id="vente">
       <div class="wrap">
         <div class="chapter-head">
-          <h2>Ils commandent leurs tirages.<br /><span class="soft">Vous encaissez la marge.</span></h2>
+          <h2>Ils commandent leurs tirages. Vous encaissez la marge.</h2>
           <p class="chapter-lede">Suppléments, tirages, toiles et cadres se paient en ligne, directement sur votre compte Stripe. Le laboratoire imprime et livre chez votre client. Vous, vous photographiez.</p>
         </div>
 
-        <div class="duo duo-rev">
-          <ul class="rows">
-            <li><svg class="ico"><use href="#i-cart"/></svg><div><h3>Boutique de tirages intégrée</h3><p>Choisissez vos formats, voyez le coût réel du labo, fixez votre prix. Prodigi imprime et livre, avec suivi.</p></div></li>
-            <li><svg class="ico"><use href="#i-receipt"/></svg><div><h3>Forfait et suppléments payés en ligne</h3><p>Photos incluses, prix au-delà, paiement à la validation et facture PDF envoyée toute seule.</p></div></li>
-            <li><svg class="ico"><use href="#i-tag"/></svg><div><h3>Campagnes de vente</h3><p>Promotion à durée limitée, panier retrouvé sur tous les appareils, relance des paniers oubliés et des coups de cœur.</p></div></li>
-            <li><svg class="ico"><use href="#i-chart"/></svg><div><h3>Tableau de bord des ventes</h3><p>Chiffre d'affaires sur douze mois, marge des tirages, formats qui se vendent, suppléments en attente.</p></div></li>
-            <li><svg class="ico"><use href="#i-shield"/></svg><div><h3>Aucune commission</h3><p>Seuls les frais de paiement sont retenus : 2&nbsp;% + 0,30&nbsp;€ par vente, ce que coûtent la carte et le virement.</p></div></li>
-          </ul>
+      </div>
 
-          <figure class="shop">
-            <div class="shop-frame"><img src="assets/home/print.webp" width="1000" height="1498" alt="Tirage encadré d'une photo de maternité en robe rouge" loading="lazy" /></div>
-            <figcaption class="shop-card">
-              <span class="shop-title">Tirage d'art 40 × 60 cm</span>
-              <span class="shop-row"><span>Coût labo</span><span class="num">32,00 €</span></span>
-              <span class="shop-row"><span>Votre marge</span><span class="num up">+ 57,00 €</span></span>
-              <span class="shop-row total"><span>Prix client</span><span class="num">89,00 €</span></span>
-              <span class="shop-foot">Exemple de prix : c'est vous qui les fixez.</span>
-            </figcaption>
-          </figure>
+      <figure class="sale">
+        <img class="sale-photo" src="assets/home/field.webp" width="2000" height="1335" alt="Portrait d'une petite fille assise dans un champ doré" loading="lazy" />
+        <div class="wrap sale-over">
+          <figcaption class="shop-card">
+            <span class="shop-title">Tirage d'art 40 × 60 cm</span>
+            <span class="shop-row"><span>Coût labo</span><span class="num">32,00 €</span></span>
+            <span class="shop-row"><span>Votre marge</span><span class="num up">+ 57,00 €</span></span>
+            <span class="shop-row total"><span>Prix client</span><span class="num">89,00 €</span></span>
+            <span class="shop-foot">Exemple de prix : c'est vous qui les fixez.</span>
+          </figcaption>
         </div>
+      </figure>
+
+      <div class="wrap">
+        <ul class="sale-facts">
+          <li><h3>Boutique de tirages intégrée</h3><p>Choisissez vos formats, voyez le coût réel du labo, fixez votre prix. Prodigi imprime et livre chez votre client, avec suivi.</p></li>
+          <li><h3>Forfait et suppléments payés en ligne</h3><p>Photos incluses, prix au-delà, paiement à la validation et facture PDF envoyée toute seule.</p></li>
+          <li><h3>Campagnes et tableau de bord</h3><p>Promotions à durée limitée, relance des paniers oubliés et des coups de cœur ; chiffre d'affaires, marge et formats qui se vendent.</p></li>
+          <li><h3>Aucune commission</h3><p>Seuls les frais de paiement sont retenus : 2&nbsp;% + 0,30&nbsp;€ par vente, ce que coûtent la carte et le virement.</p></li>
+        </ul>
       </div>
     </section>
 
@@ -343,7 +345,7 @@
     <section class="chapter" id="marque">
       <div class="wrap">
         <div class="chapter-head">
-          <h2>Votre nom, du premier lien<br /><span class="soft">à la dernière photo livrée.</span></h2>
+          <h2>Votre nom, du premier lien à la dernière photo livrée.</h2>
         </div>
 
         <div class="trio">
@@ -381,7 +383,7 @@
     <section class="chapter school" id="scolaire">
       <div class="wrap">
         <div class="chapter-head">
-          <h2>La photo scolaire,<br /><span class="soft">de la classe à la pochette.</span></h2>
+          <h2>La photo scolaire, de la classe à la pochette.</h2>
           <p class="chapter-lede"><span class="soon"><span class="soon-dot" aria-hidden="true"></span>Bientôt disponible</span> Écoles, crèches et clubs : un module complet arrive dans Holypixx, jusqu'à l'envoi des commandes au laboratoire.</p>
         </div>
 
@@ -390,10 +392,10 @@
             <div class="coupon">
               <img class="coupon-photo" src="assets/home/swing.webp" width="900" height="1200" alt="" loading="lazy" />
               <div class="coupon-body">
-                <span class="coupon-school">École du Centre · P2</span>
                 <span class="coupon-name">Léa</span>
+                <span class="coupon-school">École du Centre · P2</span>
                 <span class="coupon-code">Code <b>K7PM 4QXA</b></span>
-                <span class="coupon-date">Commande groupée jusqu'au 4 juin</span>
+                <span class="coupon-date">Commande jusqu'au 4&nbsp;juin</span>
               </div>
               <svg class="coupon-qr" id="coupon-qr" viewBox="0 0 25 25" shape-rendering="crispEdges"></svg>
             </div>
@@ -491,7 +493,7 @@
     <!-- ============ Questions ============ -->
     <section class="chapter" id="faq">
       <div class="wrap faq-wrap">
-        <h2>Les bonnes questions,<br /><span class="soft">des réponses franches.</span></h2>
+        <h2>Les bonnes questions, des réponses franches.</h2>
         <div class="faq">
           <details><summary>Un client peut-il télécharger les photos ?</summary><p>Pas pendant la sélection : les photos sont découpées en tuiles et recomposées à l'écran, aucun fichier n'est téléchargeable. Quand la séance est terminée, vous déposez les fichiers définitifs : il les télécharge alors en haute définition, en ZIP ou une par une.</p></details>
           <details><summary>Peut-on empêcher une capture d'écran ?</summary><p>Aucun site au monde ne le peut. Holypixx rend une capture inutile (basse définition, filigrane dense), vous prévient par e-mail quand une capture est tentée, et retrouve la galerie d'origine d'une image grâce à son empreinte invisible.</p></details>

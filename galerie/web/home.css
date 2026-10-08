@@ -39,6 +39,11 @@
 * { margin: 0; padding: 0; }
 [hidden] { display: none !important; }
 html { scroll-behavior: smooth; scroll-padding-top: 84px; -webkit-text-size-adjust: 100%; }
+@media (max-width: 480px) {
+  .hero-actions .btn { width: 100%; justify-content: center; }
+  .window-path { display: none; }
+}
+
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
 
 body {
@@ -131,11 +136,12 @@ h3 { font-size: 1.06rem; line-height: 1.35; letter-spacing: -0.01em; }
   background: #fff; box-shadow: 0 0 0 1px var(--line) inset; font-size: .84rem; color: var(--ink); max-width: 100%; overflow: hidden; white-space: nowrap;
 }
 .window-url span { color: var(--muted); }
+.window-path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .window-url .ico { color: var(--ok); }
 
 .gal { padding: clamp(16px, 2.4vw, 28px); }
 .gal-head { display: flex; align-items: end; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
-.gal-studio { font-size: .76rem; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.gal-by { margin-top: 2px; font-size: .86rem; color: var(--muted); }
 .gal-title { font-size: clamp(1.3rem, 2.4vw, 1.8rem); font-weight: 600; color: var(--ink); letter-spacing: -0.03em; line-height: 1.15; }
 .gal-tools { display: flex; align-items: center; gap: 8px; }
 .gal-chip { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: 999px; font-size: .84rem; color: var(--ink-2); box-shadow: 0 0 0 1px var(--line) inset; }
@@ -209,7 +215,7 @@ h3 { font-size: 1.06rem; line-height: 1.35; letter-spacing: -0.01em; }
 .night .chapter-cta { color: #b9b9ff; }
 .night ::selection { background: #b9b9ff; color: var(--night); }
 
-.lab { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: clamp(28px, 4vw, 56px); align-items: start; }
+.lab { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: clamp(28px, 4vw, 56px); align-items: center; }
 .lab-photo { position: relative; overflow: hidden; border-radius: var(--radius); background: var(--night-2); box-shadow: 0 0 0 1px var(--night-line); aspect-ratio: 4 / 5; user-select: none; -webkit-user-select: none; }
 .lab-photo img { width: 100%; height: 100%; object-fit: cover; transition: filter .5s var(--ease); -webkit-user-drag: none; }
 .lab-tiles, .lab-wm, .lab-print, .lab-flash { position: absolute; inset: 0; pointer-events: none; transition: opacity .45s var(--ease); }
@@ -267,7 +273,6 @@ h3 { font-size: 1.06rem; line-height: 1.35; letter-spacing: -0.01em; }
 
 /* Duo : grand visuel + liste */
 .duo { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: clamp(32px, 5vw, 72px); align-items: center; }
-.duo-rev { grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); }
 .rows { list-style: none; display: grid; }
 .rows li { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 16px; padding: 20px 0; border-top: 1px solid var(--line); }
 .rows li:last-child { border-bottom: 1px solid var(--line); }
@@ -290,11 +295,15 @@ h3 { font-size: 1.06rem; line-height: 1.35; letter-spacing: -0.01em; }
 .annot-count .ico { color: var(--alert); fill: var(--alert); }
 .annot-btn { margin-left: auto; padding: 8px 14px; border-radius: 8px; background: var(--ink); color: #fff; font-weight: 500; }
 
-.shop { position: relative; display: grid; justify-items: center; padding: clamp(24px, 4vw, 48px) 0; }
-.shop-frame { width: min(340px, 74%); padding: 14px; background: #18181f; border-radius: 3px; box-shadow: 0 50px 70px -30px rgba(20, 20, 40, .55), 0 0 0 1px #000; }
-.shop-frame img { width: 100%; aspect-ratio: 2 / 3; object-fit: cover; border: clamp(14px, 2.4vw, 24px) solid #f4f2ee; }
+.sale { position: relative; margin-top: clamp(40px, 6vw, 72px); }
+.sale-photo { display: block; width: 100%; height: clamp(380px, 50vw, 700px); object-fit: cover; object-position: 38% 32%; }
+.sale-over { position: absolute; inset: 0; display: flex; align-items: flex-end; justify-content: flex-end; padding-bottom: clamp(28px, 5vw, 64px); pointer-events: none; }
+.sale-facts { list-style: none; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 clamp(32px, 5vw, 72px); margin-top: clamp(40px, 6vw, 72px); }
+.sale-facts li { padding: 22px 0 26px; border-top: 1px solid var(--line-2); }
+.sale-facts h3 { font-size: 1.15rem; letter-spacing: -0.02em; }
+.sale-facts p { margin-top: 6px; color: var(--muted); max-width: 46ch; }
 .shop-card {
-  position: absolute; right: 0; bottom: 12%; display: grid; gap: 8px; width: min(280px, 72%);
+  position: relative; display: grid; gap: 8px; width: 300px; pointer-events: auto;
   padding: 18px; border-radius: 14px; background: #fff; box-shadow: var(--shadow-float), 0 0 0 1px rgba(20, 20, 60, .06); font-size: .9rem;
 }
 .shop-title { color: var(--ink); font-weight: 600; margin-bottom: 2px; }
@@ -334,7 +343,7 @@ h3 { font-size: 1.06rem; line-height: 1.35; letter-spacing: -0.01em; }
 }
 .coupon-photo { width: 112px; height: 140px; object-fit: cover; border-radius: 3px; }
 .coupon-body { display: grid; gap: 2px; padding-right: 64px; font-size: .84rem; color: var(--muted); }
-.coupon-school { font-size: .74rem; letter-spacing: .08em; text-transform: uppercase; }
+.coupon-school { margin-bottom: 4px; }
 .coupon-name { font-size: 1.4rem; font-weight: 600; color: var(--ink); letter-spacing: -0.02em; }
 .coupon-code b { font-family: var(--mono); color: var(--ink); font-weight: 500; letter-spacing: .06em; }
 .coupon-qr { position: absolute; right: 14px; bottom: 14px; width: 62px; height: 62px; }
@@ -379,6 +388,7 @@ h3 { font-size: 1.06rem; line-height: 1.35; letter-spacing: -0.01em; }
 .plan-price { display: flex; align-items: baseline; gap: 6px; margin-top: 8px; }
 .plan-amount { font-size: 2.8rem; font-weight: 600; color: var(--ink); letter-spacing: -0.04em; line-height: 1; font-variant-numeric: tabular-nums; }
 .plan-per { color: var(--muted); }
+sup { line-height: 0; }
 .plan-alt { min-height: 1.6em; font-size: .88rem; color: var(--muted); }
 .plan-alt s { color: #9a9aa8; }
 .plan .btn { margin: 14px 0 20px; }
@@ -460,7 +470,6 @@ h3 { font-size: 1.06rem; line-height: 1.35; letter-spacing: -0.01em; }
   .nav-toggle { display: grid; }
   .hero-head { grid-template-columns: 1fr; align-items: start; }
   .lab, .duo, .duo-rev, .school-grid, .faq-wrap { grid-template-columns: 1fr; }
-  .duo-rev .shop { order: -1; }
   .lab-photo { max-width: 520px; }
   .faq-wrap h2 { position: static; }
   .plans { grid-template-columns: 1fr; max-width: 520px; margin-inline: auto; }
@@ -488,8 +497,13 @@ h3 { font-size: 1.06rem; line-height: 1.35; letter-spacing: -0.01em; }
   .annot-note { white-space: normal; max-width: 44%; font-size: .78rem; }
   .annot-note-b { display: none; }
   .annot-count { display: none; }
-  .shop-card { position: relative; right: auto; bottom: auto; width: 100%; margin-top: -40px; }
-  .school-visual { min-height: 470px; }
+  .sale-photo { height: 360px; object-position: 30% 50%; }
+  .sale-over { position: relative; inset: auto; display: block; margin-top: -56px; padding-bottom: 0; }
+  .shop-card { width: 100%; }
+  .sale-facts { grid-template-columns: 1fr; }
+  .school-visual { display: grid; min-height: 0; }
+  .coupon { position: relative; width: 100%; }
+  .planche { position: relative; justify-self: end; width: 62%; margin-top: 14px; }
   .coupon { grid-template-columns: 84px minmax(0, 1fr); }
   .coupon-photo { width: 84px; height: 105px; }
   .coupon-qr { width: 48px; height: 48px; }
