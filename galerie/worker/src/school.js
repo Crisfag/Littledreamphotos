@@ -19,6 +19,7 @@ import { json, fail } from "./http.js";
 import { randomBytes, b64url, hashPassword } from "./auth.js";
 import { hasFeature, isOwner, featureRefusal, schoolLaunched } from "./subscription.js";
 import { handleSchoolShopAdmin, copyProducts, eraseShopStatements } from "./schoolshop.js";
+import { handleSchoolLabAdmin } from "./schoollab.js";
 
 // Vocabulaire selon le type d'établissement (affiché tel quel par le
 // tableau de bord).
@@ -653,6 +654,8 @@ export async function handleSchoolAdmin(request, env, photographer, rest, helper
 
   const shop = await handleSchoolShopAdmin(request, env, photographer, rest);
   if (shop) return shop;
+  const lab = await handleSchoolLabAdmin(request, env, photographer, rest, new URL(request.url).origin);
+  if (lab) return lab;
   const [kind, id, sub] = rest;
   if (kind === "schools" && rest.length === 1 && method === "POST") return createSchool(request, env, photographer);
   if (kind === "schools" && rest.length === 2 && method === "POST") return updateSchool(request, env, photographer, id);

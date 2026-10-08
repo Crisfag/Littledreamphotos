@@ -39,6 +39,13 @@ function newId(prefix) {
 function text(value, max) {
   return String(value ?? "").trim().replace(/\s+/g, " ").slice(0, max);
 }
+function parseJson(value, fallback) {
+  try {
+    return value ? JSON.parse(value) : fallback;
+  } catch {
+    return fallback;
+  }
+}
 function parseAddress(value) {
   try {
     return value ? JSON.parse(value) : null;
@@ -73,7 +80,7 @@ async function ownedYear(env, photographerId, yearId) {
 function productOut(p) {
   return {
     id: p.id, kind: p.kind, scope: p.scope, name: p.name, description: p.description,
-    priceCents: p.price_cents, sort: p.sort, active: Boolean(p.active),
+    priceCents: p.price_cents, sort: p.sort, active: Boolean(p.active), labItems: parseJson(p.lab_items, []),
   };
 }
 
@@ -154,9 +161,9 @@ export async function copyProducts(env, fromYearId, toYearId) {
   const products = await listProducts(env, fromYearId);
   if (!products.length) return [];
   return products.map((p) => env.DB.prepare(
-    `INSERT INTO school_products (id, year_id, kind, scope, name, description, price_cents, sort, active, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).bind(newId("spr"), toYearId, p.kind, p.scope, p.name, p.description, p.price_cents, p.sort, p.active, now()));
+    `INSERT INTO school_products (id, year_id, kind, scope, name, description, price_cents, sort, active, lab_items, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(newId("spr"), toYearId, p.kind, p.scope, p.name, p.description, p.price_cents, p.sort, p.active, p.lab_items || "", now()));
 }
 
 // GET …/years/:id/shop — gamme, frais de port, commandes par groupe.
@@ -220,12 +227,18 @@ async function productionForYear(request, env, year) {
      LEFT JOIN photos ph ON ph.id = l.photo_id
      LEFT JOIN school_children c ON c.id = l.child_id
      LEFT JOIN school_groups g ON g.id = l.group_id
-     WHERE o.year_id = ? AND o.status = 'paid' ${body?.groupId ? "AND l.group_id = ?" : ""}
+     WHERE o.year_id = ? AND o.status = 'paid' AND l.kind != 'numerique'
+       ${body?.groupId ? "AND l.group_id = ?" : ""} ${body?.batchId ? "AND l.batch_id = ?" : ""}
      ORDER BY g.sort, g.name COLLATE NOCASE, c.number, o.paid_at`
-  ).bind(...[year.id, ...(body?.groupId ? [body.groupId] : [])]).all();
+  ).bind(year.id, ...(body?.groupId ? [String(body.groupId)] : []), ...(body?.batchId ? [String(body.batchId)] : [])).all();
+  const batch = body?.batchId
+    ? await env.DB.prepare("SELECT number, delivery FROM school_lab_batches WHERE id = ? AND year_id = ?").bind(String(body.batchId), year.id).first()
+    : null;
+  if (body?.batchId && !batch) return fail(404, "Lot introuvable");
   return json({
     school: { name: year.school_name, address: year.school_address },
     year: { label: year.label },
+    batch: batch ? { number: batch.number, delivery: batch.delivery } : null,
     lines: results.map((l) => ({
       orderId: l.order_id, groupId: l.group_id, groupName: l.group_name || "(groupe supprimé)", childId: l.child_id,
       childNumber: l.child_number || 0, childFirstName: l.child_first_name || "",
@@ -262,6 +275,7 @@ export function eraseShopStatements(env, where, value) {
     env.DB.prepare(`DELETE FROM school_order_lines WHERE order_id IN (SELECT id FROM school_orders WHERE year_id IN (${years}))`).bind(value),
     env.DB.prepare(`DELETE FROM school_orders WHERE year_id IN (${years})`).bind(value),
     env.DB.prepare(`DELETE FROM school_products WHERE year_id IN (${years})`).bind(value),
+    env.DB.prepare(`DELETE FROM school_lab_batches WHERE year_id IN (${years})`).bind(value),
   ];
 }
 

@@ -74,6 +74,13 @@ CREATE TABLE IF NOT EXISTS photographers (
   prodigi_api_key_enc  TEXT NOT NULL DEFAULT '',
   prodigi_environment  TEXT NOT NULL DEFAULT 'sandbox',
   shop_shipping_cents  INTEGER NOT NULL DEFAULT 0,
+  -- Compte BePhoto du photographe (labo des photos scolaires, schoollab.js) :
+  -- l'API ne connaît que l'e-mail et le mot de passe du compte, chiffré
+  -- comme la clé Prodigi ; le jeton de session obtenu est gardé (chiffré)
+  -- pour ne pas se reconnecter à chaque appel.
+  bephoto_email        TEXT NOT NULL DEFAULT '',
+  bephoto_password_enc TEXT NOT NULL DEFAULT '',
+  bephoto_token_enc    TEXT NOT NULL DEFAULT '',
   created_at     INTEGER NOT NULL
 );
 
@@ -762,6 +769,10 @@ CREATE TABLE IF NOT EXISTS school_products (
   price_cents INTEGER NOT NULL,
   sort        INTEGER NOT NULL DEFAULT 0,
   active      INTEGER NOT NULL DEFAULT 1,
+  -- Ce que le labo imprime pour un exemplaire : JSON
+  -- [{ idproduct, idpaper, quantity, label }] (produits BePhoto). Vide = pas
+  -- encore composé (ou fichier numérique, rien à imprimer).
+  lab_items   TEXT NOT NULL DEFAULT '',
   created_at  INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_school_products_year ON school_products(year_id, sort);
@@ -797,7 +808,38 @@ CREATE TABLE IF NOT EXISTS school_order_lines (
   name        TEXT NOT NULL,           -- nom du produit au moment de la commande
   description TEXT NOT NULL DEFAULT '',
   price_cents INTEGER NOT NULL,
-  quantity    INTEGER NOT NULL
+  quantity    INTEGER NOT NULL,
+  batch_id    TEXT NOT NULL DEFAULT ''  -- lot d'envoi au labo ('' = pas encore parti)
 );
 CREATE INDEX IF NOT EXISTS idx_school_order_lines_order ON school_order_lines(order_id);
 CREATE INDEX IF NOT EXISTS idx_school_order_lines_group ON school_order_lines(group_id);
+CREATE INDEX IF NOT EXISTS idx_school_order_lines_batch ON school_order_lines(batch_id);
+
+-- Lots d'envoi au labo (schoollab.js) : le photographe regroupe les articles
+-- payés pas encore partis, une ou deux fois pendant la vente (conseil du
+-- labo), soit pour l'établissement, soit pour les envois à domicile. Un
+-- article n'appartient qu'à un lot : il ne part jamais deux fois. Envoi à
+-- BePhoto pas à pas (lab_cursor = lignes déjà transmises), pour rester sous
+-- les limites d'un appel et reprendre après une coupure.
+CREATE TABLE IF NOT EXISTS school_lab_batches (
+  id               TEXT PRIMARY KEY,
+  year_id          TEXT NOT NULL REFERENCES school_years(id) ON DELETE CASCADE,
+  number           INTEGER NOT NULL,
+  delivery         TEXT NOT NULL DEFAULT 'school',  -- school, home
+  status           TEXT NOT NULL DEFAULT 'ready',   -- ready, sending, sent
+  lab              TEXT NOT NULL DEFAULT '',        -- '' (fichier envoyé à la main), bephoto
+  lab_order_id     TEXT NOT NULL DEFAULT '',
+  lab_items        TEXT NOT NULL DEFAULT '',        -- JSON figé au début de l'envoi
+  lab_cursor       INTEGER NOT NULL DEFAULT 0,
+  lab_total        TEXT NOT NULL DEFAULT '',        -- total annoncé par le labo
+  error            TEXT NOT NULL DEFAULT '',
+  created_at       INTEGER NOT NULL,
+  sent_at          INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_school_lab_batches_year ON school_lab_batches(year_id, number);
+-- Migration (base existante) :
+--   ALTER TABLE photographers ADD COLUMN bephoto_email TEXT NOT NULL DEFAULT '';
+--   ALTER TABLE photographers ADD COLUMN bephoto_password_enc TEXT NOT NULL DEFAULT '';
+--   ALTER TABLE photographers ADD COLUMN bephoto_token_enc TEXT NOT NULL DEFAULT '';
+--   ALTER TABLE school_products ADD COLUMN lab_items TEXT NOT NULL DEFAULT '';
+--   ALTER TABLE school_order_lines ADD COLUMN batch_id TEXT NOT NULL DEFAULT '';
