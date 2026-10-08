@@ -52,7 +52,9 @@ PAYMENT_FEE_FIXED_CENTS = "30"
 # sélection, photographe prévenu à J-2. Sans RESEND_API_KEY, la passe tourne
 # mais n'envoie rien.
 [triggers]
-crons = ["0 8 * * *"]
+# 8 h UTC : passes quotidiennes ; toutes les 30 min de 7 h à 18 h 30 UTC :
+# rappels de commande aux familles (module scolaire), par petits paquets.
+crons = ["0 8 * * *", "*/30 7-18 * * *"]
 
 # Base de métadonnées : galeries, photos, journal d'accès.
 # Créer avec :  npx wrangler d1 create galerie-protegee

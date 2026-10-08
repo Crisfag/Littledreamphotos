@@ -21,6 +21,7 @@ import { signToken, verifyToken, hashValue, hashToken, randomBytes, b64url } fro
 import { normalizeAccessCode, SCHOOL_KINDS } from "./school.js";
 import { sendFamilyLoginLink } from "./notify.js";
 import { shopForFamily, familyCheckout, familyCheckoutSync, familyDownload, purgePendingOrdersStatements } from "./schoolshop.js";
+import { unsubscribeFamily } from "./schoolreminders.js";
 
 const SESSION_TTL_SECONDS = 30 * 24 * 60 * 60;
 const LINK_TTL_SECONDS = 30 * 60;
@@ -169,7 +170,7 @@ async function familyView(env, family) {
       groupPhotos,
     });
   }
-  return { email: family.email, children, ...(await shopForFamily(env, family, children)) };
+  return { email: family.email, remindersOn: !family.reminders_off, children, ...(await shopForFamily(env, family, children)) };
 }
 
 /* ---------- Routes ---------- */
@@ -283,12 +284,19 @@ export async function handleFamily(request, env, path) {
   if (parts[0] === "access" && parts.length === 1 && method === "POST") return access(request, env);
   if (parts[0] === "login-link" && parts.length === 1 && method === "POST") return requestLink(request, env);
   if (parts[0] === "login-link" && parts[1] === "verify" && parts.length === 2 && method === "POST") return verifyLink(request, env);
+  if (parts[0] === "unsubscribe" && parts.length === 1 && method === "POST") return unsubscribeFamily(request, env);
 
   const family = await authenticateFamily(request, env);
   if (!family) return fail(401, "Session expirée : entrez à nouveau votre e-mail et votre code.");
   if (parts[0] === "me" && parts.length === 1 && method === "GET") return json(await familyView(env, family));
   if (parts[0] === "children" && parts.length === 1 && method === "POST") return addChild(request, env, family);
   if (parts[0] === "children" && parts.length === 2 && method === "DELETE") return removeChild(env, family, decodeURIComponent(parts[1]));
+  if (parts[0] === "reminders" && parts.length === 1 && method === "POST") {
+    // Rappels de commande par e-mail : la famille les coupe ou les remet.
+    const body = await readJson(request);
+    await env.DB.prepare("UPDATE families SET reminders_off = ? WHERE id = ?").bind(body?.on ? 0 : 1, family.id).run();
+    return json({ remindersOn: Boolean(body?.on) });
+  }
   if (parts[0] === "checkout" && parts.length === 1 && method === "POST") return familyCheckout(request, env, family);
   if (parts[0] === "checkout" && parts[1] === "sync" && parts.length === 2 && method === "POST") return familyCheckoutSync(request, env, family);
   if (parts[0] === "download" && parts.length === 2 && method === "GET") return familyDownload(env, family, decodeURIComponent(parts[1]));
@@ -309,6 +317,7 @@ export async function purgeFamilies(env, at = now()) {
          AND NOT EXISTS (SELECT 1 FROM family_children fc WHERE fc.family_id = families.id)`
     ).bind(at - 365 * 24 * 60 * 60),
     env.DB.prepare("DELETE FROM family_links WHERE created_at < ?").bind(at - 2 * 24 * 60 * 60),
+    env.DB.prepare("DELETE FROM school_reminders WHERE family_id NOT IN (SELECT id FROM families)"),
     ...purgePendingOrdersStatements(env, at),
   ]);
 }

@@ -391,6 +391,48 @@ export function buildSchoolOrderConfirmationEmail({ studioName, schoolName, deli
   return { subject, html: emailShell({ preheader: subject, bodyHtml }), text };
 }
 
+// Rappel de commande à une famille (module scolaire) : 7 et 2 jours avant
+// la date de commande groupée (« j7 », « j2 »), 2 jours avant la fin de la
+// commande à domicile (« late2 »). Toujours avec le lien pour ne plus en
+// recevoir.
+function childrenLabel(names, count) {
+  if (names.length === 1 && count === 1) return names[0];
+  if (names.length && names.length === count) return names.slice(0, -1).join(", ") + " et " + names[names.length - 1];
+  return count > 1 ? "vos enfants" : "votre enfant";
+}
+
+export function buildSchoolReminderEmail({ kind, studioName, schoolName, childNames = [], childrenCount = 1, deadline, familyUrl, stopUrl }) {
+  const who = childrenLabel(childNames, childrenCount);
+  const day = formatDay(deadline);
+  const subject = kind === "late2"
+    ? `Encore deux jours pour commander les photos de ${who}`
+    : kind === "j2"
+      ? `Dernier rappel : commande des photos de ${who} jusqu'au ${day}`
+      : `Les photos de ${who} vous attendent — commande jusqu'au ${day}`;
+  const lead = kind === "late2"
+    ? `La commande groupée de « <strong>${escapeHtml(schoolName)}</strong> » est terminée, mais vous pouvez encore commander les photos de ${escapeHtml(who)} jusqu'au <strong>${escapeHtml(day)}</strong>, avec livraison à domicile.`
+    : `Les photos de ${escapeHtml(who)} (« <strong>${escapeHtml(schoolName)}</strong> ») sont dans votre espace famille. Commandez avant le <strong>${escapeHtml(day)}</strong> : elles seront livrées à l'établissement, sans frais de port.`;
+  const bodyHtml =
+    eyebrow(studioName || "Photos scolaires") +
+    heading(kind === "j2" ? "C'est bientôt la fin de la commande" : kind === "late2" ? "Dernière chance" : "Vos photos vous attendent") +
+    paragraph(lead) +
+    emailButton(familyUrl, "Voir les photos et commander") +
+    `<div style="height:20px;"></div>` +
+    paragraph(`Une question ? Répondez simplement à cet e-mail${studioName ? ` : il arrive chez ${escapeHtml(studioName)}` : ""}.`, { small: true }) +
+    paragraph(`Vous recevez ce rappel parce que vous avez ouvert un espace famille. <a href="${escapeHtml(stopUrl)}" style="color:${MUTED};">Ne plus recevoir de rappels</a>.`, { small: true });
+  const text = [
+    kind === "late2"
+      ? `La commande groupée (${schoolName}) est terminée, mais vous pouvez encore commander les photos de ${who} jusqu'au ${day}, avec livraison à domicile.`
+      : `Les photos de ${who} (${schoolName}) sont dans votre espace famille. Commandez avant le ${day} : livraison à l'établissement, sans frais de port.`,
+    "",
+    `Voir les photos et commander : ${familyUrl}`,
+    "",
+    "Une question ? Répondez simplement à cet e-mail.",
+    `Ne plus recevoir de rappels : ${stopUrl}`,
+  ].join("\n");
+  return { subject, html: emailShell({ preheader: subject, bodyHtml }), text };
+}
+
 // Au photographe : nouvelle commande payée, et ce qu'il en est côté labo.
 export function buildPrintOrderPhotographerEmail({ galleryTitle, recipientName, lines, totalCents, labStatus, labError, adminUrl }) {
   const failed = labStatus === "failed";
@@ -640,6 +682,10 @@ export async function sendPrintOrderConfirmation(env, params) {
     ...buildPrintOrderConfirmationEmail(params),
     ...(params.pdfBytes ? { attachments: [{ filename: `facture-${params.invoiceNumber}.pdf`, content: bytesToBase64(params.pdfBytes) }] } : {}),
   });
+}
+
+export async function sendSchoolReminder(env, params) {
+  await sendEmail(env, { to: params.to, replyTo: params.replyTo, ...buildSchoolReminderEmail(params) });
 }
 
 export async function sendSchoolOrderConfirmation(env, params) {

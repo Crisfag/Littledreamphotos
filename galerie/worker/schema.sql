@@ -680,6 +680,9 @@ CREATE TABLE IF NOT EXISTS school_years (
   -- Frais de port d'une commande livrée à domicile (après la commande
   -- groupée), en centimes.
   home_shipping_cents INTEGER NOT NULL DEFAULT 0,
+  -- Rappels par e-mail aux familles sans commande (schoolreminders.js),
+  -- 7 et 2 jours avant la date limite : 1 oui, 0 non.
+  family_reminders INTEGER NOT NULL DEFAULT 1,
   created_at     INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_school_years_school ON school_years(school_id, created_at);
@@ -735,7 +738,8 @@ CREATE TABLE IF NOT EXISTS families (
   id            TEXT PRIMARY KEY,
   email         TEXT NOT NULL UNIQUE,
   created_at    INTEGER NOT NULL,
-  last_login_at INTEGER
+  last_login_at INTEGER,
+  reminders_off INTEGER NOT NULL DEFAULT 0  -- 1 : ne veut plus de rappels de commande
 );
 
 CREATE TABLE IF NOT EXISTS family_children (
@@ -843,3 +847,16 @@ CREATE INDEX IF NOT EXISTS idx_school_lab_batches_year ON school_lab_batches(yea
 --   ALTER TABLE photographers ADD COLUMN bephoto_token_enc TEXT NOT NULL DEFAULT '';
 --   ALTER TABLE school_products ADD COLUMN lab_items TEXT NOT NULL DEFAULT '';
 --   ALTER TABLE school_order_lines ADD COLUMN batch_id TEXT NOT NULL DEFAULT '';
+
+-- Rappels de commande envoyés aux familles (schoolreminders.js) : une ligne
+-- par année, famille et rappel (j7, j2, late2) ; jamais deux fois le même.
+CREATE TABLE IF NOT EXISTS school_reminders (
+  year_id   TEXT NOT NULL REFERENCES school_years(id) ON DELETE CASCADE,
+  family_id TEXT NOT NULL,
+  kind      TEXT NOT NULL,
+  sent_at   INTEGER NOT NULL,
+  PRIMARY KEY (year_id, family_id, kind)
+);
+-- Migration (base existante) :
+--   ALTER TABLE school_years ADD COLUMN family_reminders INTEGER NOT NULL DEFAULT 1;
+--   ALTER TABLE families ADD COLUMN reminders_off INTEGER NOT NULL DEFAULT 0;

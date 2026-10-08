@@ -24,6 +24,7 @@ import { originalKey } from "./storage.js";
 import { SCHOOL_KINDS } from "./school.js";
 import { sendSchoolOrderConfirmation } from "./notify.js";
 import { previewForLabItems, layoutForLabItems } from "./bephoto.js";
+import { reminderStats } from "./schoolreminders.js";
 
 export const PRODUCT_KINDS = { pochette: "Pochette", tirage: "Tirage", numerique: "Fichier numérique" };
 const SCOPES = ["portrait", "group"];
@@ -196,6 +197,8 @@ async function shopForAdmin(env, photographer, year) {
     products,
     kinds: PRODUCT_KINDS,
     homeShippingCents: year.home_shipping_cents || 0,
+    familyReminders: Boolean(year.family_reminders),
+    reminders: await reminderStats(env, year.id),
     totals: { orders: totals?.n || 0, amountCents: totals?.amount || 0, feeCents: totals?.fees || 0, families: totals?.families || 0 },
     groups: groups.map((g) => {
       const stat = perGroup.find((s) => s.group_id === g.id) || {};
@@ -280,6 +283,7 @@ export function eraseShopStatements(env, where, value) {
     env.DB.prepare(`DELETE FROM school_orders WHERE year_id IN (${years})`).bind(value),
     env.DB.prepare(`DELETE FROM school_products WHERE year_id IN (${years})`).bind(value),
     env.DB.prepare(`DELETE FROM school_lab_batches WHERE year_id IN (${years})`).bind(value),
+    env.DB.prepare(`DELETE FROM school_reminders WHERE year_id IN (${years})`).bind(value),
   ];
 }
 

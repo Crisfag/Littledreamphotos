@@ -329,6 +329,8 @@
       "<p class=\"ec-hint\">Frère, sœur, autre école : ajoutez-le avec le code de sa fiche pour tout retrouver ici, et commander en une fois.</p>" +
       addChildFormHtml() +
       '<p class="ec-hint ec-remove"><button type="button" class="ec-link-btn" id="ec-remove">Retirer ' + esc(childName(child)) + " de cet espace</button></p>" +
+      '<label class="ec-reminders"><input type="checkbox" id="ec-reminders"' + (data.remindersOn ? " checked" : "") + " /> " +
+      "Recevoir un rappel par e-mail avant la date limite de commande</label>" +
       "</section>";
 
     el.view.querySelectorAll("[data-child]").forEach(function (btn) {
@@ -358,6 +360,15 @@
       btn.addEventListener("click", function () { downloadFile(btn); });
     });
     wireAddChild();
+    var reminders = document.getElementById("ec-reminders");
+    if (reminders) reminders.addEventListener("change", async function () {
+      try {
+        state.data.remindersOn = (await api("POST", "/reminders", { on: reminders.checked })).remindersOn;
+      } catch (err) {
+        reminders.checked = !reminders.checked;
+        window.alert(err.message);
+      }
+    });
     var remove = document.getElementById("ec-remove");
     if (remove) remove.addEventListener("click", async function () {
       if (remove.getAttribute("data-confirm") !== "1") {
@@ -968,6 +979,20 @@
     var params = new URLSearchParams(location.search);
     var linkToken = params.get("l");
     var code = params.get("c");
+    // Lien « Ne plus recevoir de rappels » d'un e-mail : sans connexion.
+    var stop = params.get("stop");
+    if (stop) {
+      history.replaceState(null, "", location.pathname);
+      var notice = document.getElementById("ec-login-notice");
+      try {
+        await api("POST", "/unsubscribe", { token: stop });
+        var stopped = "C'est noté : vous ne recevrez plus de rappels de commande. Vous pouvez les réactiver dans votre espace famille.";
+        show(notice, stopped);
+        state.notice = { ok: true, text: stopped };
+      } catch (err) {
+        show(notice, err.message);
+      }
+    }
     if (linkToken) {
       history.replaceState(null, "", location.pathname);
       try {

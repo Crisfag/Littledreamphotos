@@ -4043,7 +4043,9 @@
           "</select></label>" +
           '<label class="ad-field"><span>Commande groupée jusqu\'au <em>(livrée à l\'établissement)</em></span><input type="date" id="ad-sc-deadline" value="' + dateInputValue(year.orderDeadline) + '" /></label>' +
           '<label class="ad-field"><span>Commande à domicile jusqu\'au <em>(facultatif)</em></span><input type="date" id="ad-sc-late" value="' + dateInputValue(year.lateDeadline) + '" /></label>' +
-          "</div>"
+          "</div>" +
+          '<label class="ad-sc-toggle ad-sc-reminders"><input type="checkbox" id="ad-sc-reminders"' + (year.familyReminders ? " checked" : "") + " /> " +
+          "Rappeler par e-mail les familles qui n\'ont pas encore commandé (7 et 2 jours avant la date limite)</label>"
         : '<p class="ad-hint">Créez l\'année en cours pour y ajouter les ' + esc(kind.groups.toLowerCase()) + ".</p>") +
       "</section>" +
 
@@ -4115,6 +4117,7 @@
       document.getElementById("ad-sc-status").addEventListener("change", function () { saveYear({ status: this.value }); });
       document.getElementById("ad-sc-deadline").addEventListener("change", function () { saveYear({ orderDeadline: this.value }); });
       document.getElementById("ad-sc-late").addEventListener("change", function () { saveYear({ lateDeadline: this.value }); });
+      document.getElementById("ad-sc-reminders").addEventListener("change", function () { saveYear({ familyReminders: this.checked }); });
 
       el.view.querySelectorAll("[data-group]").forEach(function (li) {
         var id = li.getAttribute("data-group");
@@ -4582,6 +4585,18 @@
     });
   }
 
+  // Rappels envoyés aux familles pour l'année (schoolreminders.js).
+  function remindersLineHtml(shop) {
+    if (!shop.familyReminders) return '<p class="ad-hint" id="ad-sc-reminders-stats">Rappels aux familles désactivés pour cette année.</p>';
+    var r = shop.reminders || {};
+    var parts = [["j7", "à 7 jours"], ["j2", "à 2 jours"], ["late2", "avant la fin des commandes à domicile"]]
+      .filter(function (k) { return r[k[0]]; })
+      .map(function (k) { return r[k[0]].families + " famille" + (r[k[0]].families > 1 ? "s" : "") + " " + k[1]; });
+    return '<p class="ad-hint" id="ad-sc-reminders-stats">' + (parts.length
+      ? "Rappels envoyés : " + esc(parts.join(", ")) + "."
+      : "Rappels aux familles : le premier part 7 jours avant la date limite, aux familles qui ont ouvert leur espace sans commander.") + "</p>";
+  }
+
   function renderSchoolShop(host, year, kind, shop) {
     var t = shop.totals;
     var groupWord = kind.group.toLowerCase();
@@ -4646,6 +4661,7 @@
           '<th class="ad-num">Articles</th><th class="ad-num">Montant</th></tr></thead><tbody>' + orderRows + "</tbody></table></div>"
         : '<p class="ad-hint">Aucune commande pour l\'instant. Elles apparaîtront ici dès que les familles auront payé.</p>') +
       '<p class="ad-hint">Le fichier de production range les fichiers d\'impression par ' + esc(groupWord) + " puis par enfant, avec un récapitulatif (CSV) et la liste de distribution.</p>" +
+      remindersLineHtml(shop) +
       "</section>" +
       '<div id="ad-sc-lab"></div>';
 

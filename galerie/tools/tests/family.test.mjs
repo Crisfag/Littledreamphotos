@@ -177,6 +177,15 @@ const mobile = await browser.newPage({ viewport: { width: 390, height: 844 } });
 await mobile.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
 await mobile.goto(`http://localhost:${SITE_PORT}/ecole?c=${kidA.code}`, { waitUntil: "domcontentloaded" });
 check("sur téléphone, pas de défilement horizontal", await mobile.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+await mobile.route(/workers\.dev\/api\//, async (route) => {
+  const upstream = await fetch(route.request().url().replace(/^https:\/\/[^/]+/, API), {
+    method: route.request().method(), headers: route.request().headers(), body: route.request().postData() || undefined,
+  });
+  await route.fulfill({ status: upstream.status, headers: { "content-type": "application/json", "access-control-allow-origin": "*" }, body: Buffer.from(await upstream.arrayBuffer()) });
+});
+await mobile.goto(`http://localhost:${SITE_PORT}/ecole?stop=fam_inconnu.faux`, { waitUntil: "domcontentloaded" });
+await mobile.waitForSelector("#ec-login-notice:not([hidden])");
+check("un lien de désinscription falsifié est signalé, sans rien casser", (await mobile.textContent("#ec-login-notice")).includes("invalide") && !mobile.url().includes("stop="));
 if (process.env.SCREENSHOT_DIR) await mobile.screenshot({ path: join(process.env.SCREENSHOT_DIR, "famille-connexion.png") });
 check("aucune exception JavaScript", exceptions.length === 0, exceptions.join(" | "));
 
