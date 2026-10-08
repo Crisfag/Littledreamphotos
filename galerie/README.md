@@ -559,9 +559,21 @@ Le tableau de bord s'organise en trois onglets, chacun avec son propre lien
     carte produit, puis dans le choix de l'article avec la photo choisie —
     à partir de la vignette protégée déjà affichée (tuiles filigranées du
     niveau 0) : l'aperçu ne révèle rien de plus que la galerie.
+  - *Rappels de commande* (`worker/src/schoolreminders.js`) : les familles
+    qui ont ouvert leur espace sans rien payer pour l'année reçoivent un
+    e-mail 7 jours puis 2 jours avant la date de commande groupée, et 2 jours
+    avant la fin de la commande à domicile (un seul rappel à la fois, jamais
+    deux fois le même : table `school_reminders`). Prénoms des enfants,
+    réponse directe au photographe (reply-to), lien « Ne plus recevoir de
+    rappels » (jeton signé, sans connexion) ; la famille peut aussi les
+    couper ou les remettre depuis son espace, et le photographe les couper
+    pour une année (`school_years.family_reminders`). Envoi par paquets de
+    20 au déclencheur `*/30 7-18 * * *` (jamais la nuit) ; le tableau de
+    bord compte les rappels envoyés. Les familles qui n'ont pas encore
+    ouvert leur espace ne sont pas connues : la fiche papier reste le
+    premier rappel.
   - *À venir* : réponses de BePhoto (adresse, tri par enfant, pochettes),
-    relances des familles, part de l'établissement, ventes scolaires dans le
-    tableau des ventes.
+    part de l'établissement, ventes scolaires dans le tableau des ventes.
 - **Campagnes de vente des tirages** (`worker/src/campaigns.js`) :
   - *Promotion à durée limitée* sur une galerie (−10 à −50 % jusqu'à une
     date, depuis la section boutique de la fiche) : bandeau et prix barrés
@@ -1501,6 +1513,7 @@ node tests/marks.test.mjs             # codes couleur + repères client, autonom
 node tests/subdomain.test.mjs         # sous-domaine par studio, autonome (PUBLIC_SITE_ORIGIN=http://localhost:8000 dans worker/.dev.vars)
 node tests/shop.test.mjs              # boutique de tirages côté client, autonome (PRODIGI_API_BASE=http://127.0.0.1:8790/v4.0 dans worker/.dev.vars)
 node tests/schoolshop.test.mjs        # commande des photos scolaires (gamme, panier famille, suivi, production), autonome
+node tests/schoolreminders.test.mjs   # rappels de commande aux familles, autonome (npm run dev:local -- --test-scheduled)
 node tests/schoollab.test.mjs         # lots, planches et envoi à un faux BePhoto, autonome (BEPHOTO_API_BASE et BEPHOTO_PREVIEW_BASE=http://127.0.0.1:8791 dans worker/.dev.vars)
 node tests/music.test.mjs             # musique côté client (bibliothèque, lien Spotify), autonome
 node tests/delivery.test.mjs          # livraison des photos définitives côté client, autonome

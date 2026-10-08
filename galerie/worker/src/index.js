@@ -11,6 +11,7 @@
 
 import { handleFamily, purgeFamilies } from "./family.js";
 import { handleLabFile, handleLabPreview } from "./schoollab.js";
+import { runSchoolReminders, SCHOOL_REMINDERS_CRON } from "./schoolreminders.js";
 import { handleAdmin } from "./admin.js";
 import { handleViewer } from "./viewer.js";
 import { handleAuth } from "./authPhotographer.js";
@@ -139,6 +140,15 @@ export default {
 
   // Déclencheur planifié (wrangler.toml, [triggers]) : relances automatiques.
   async scheduled(event, env, ctx) {
+    // Rappels de commande aux familles : leur propre déclencheur, de jour.
+    if (event.cron === SCHOOL_REMINDERS_CRON) {
+      ctx.waitUntil(
+        runSchoolReminders(env).catch((err) => {
+          console.error("Rappels des familles : échec :", err && err.stack ? err.stack : err);
+        })
+      );
+      return;
+    }
     ctx.waitUntil(
       runReminders(env).catch((err) => {
         console.error("Relances : échec de la passe planifiée :", err && err.stack ? err.stack : err);

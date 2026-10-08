@@ -1127,3 +1127,4 @@ h3 { font-size: 1.15rem; margin-bottom: .9rem; }
   .ad-sc-lab-row select[data-f="idpaper"] { grid-column: 2; }
   .ad-vsel-pop { min-width: 0; }
 }
+.ad-sc-reminders { margin-top: .8rem; font-size: .88rem; color: var(--charcoal); white-space: normal; }

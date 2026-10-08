@@ -111,6 +111,7 @@ async function schoolsOverview(env, photographerId) {
       status: y.status,
       orderDeadline: y.order_deadline,
       lateDeadline: y.late_deadline,
+      familyReminders: Boolean(y.family_reminders),
       createdAt: y.created_at,
       groups: groups.filter((g) => g.year_id === y.id).map((g) => ({
         id: g.id, name: g.name, leader: g.leader, sort: g.sort,
@@ -269,8 +270,9 @@ async function updateYear(request, env, photographer, yearId) {
   if (orderDeadline && lateDeadline && lateDeadline < orderDeadline) {
     return fail(400, "La commande à domicile doit se terminer après la commande groupée");
   }
-  await env.DB.prepare("UPDATE school_years SET status = ?, order_deadline = ?, late_deadline = ? WHERE id = ?")
-    .bind(status, orderDeadline, lateDeadline, yearId).run();
+  const reminders = body?.familyReminders === undefined ? year.family_reminders : (body.familyReminders ? 1 : 0);
+  await env.DB.prepare("UPDATE school_years SET status = ?, order_deadline = ?, late_deadline = ?, family_reminders = ? WHERE id = ?")
+    .bind(status, orderDeadline, lateDeadline, reminders, yearId).run();
   return json({ ok: true });
 }
 
