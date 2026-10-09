@@ -266,6 +266,46 @@ C'est une page statique sans dépendance au Worker : elle se déploie avec les
 mêmes outils que `galerie.html` (Cloudflare Pages, ou tout hébergement
 statique).
 
+#### Référencement
+
+- **Site principal** (`web/`) :
+  - Balises de la page d'accueil : titre, description, adresse de référence,
+    `robots` (`max-image-preview:large`), aperçu de lien Open Graph / X avec
+    `assets/og-holypixx.jpg` (1200×630).
+  - Données structurées JSON-LD : Organization, WebSite, WebPage,
+    SoftwareApplication avec les formules, et FAQPage.
+  - Pages légales en adresses sans `.html` (Cloudflare Pages redirige
+    `/conditions.html` vers `/conditions`) : liens, adresses de référence et
+    `sitemap.xml` utilisent la forme courte.
+  - Fichiers servis à la racine :
+    - icônes `favicon.ico` / `favicon.svg` / `apple-touch-icon.png` /
+      `icon-*.png`, manifeste `site.webmanifest` ;
+    - `robots.txt`, `sitemap.xml` (avec date de mise à jour) ;
+    - `llms.txt`, un résumé pour les moteurs de réponse ;
+    - `404.html`. Sans elle, Pages servirait l'accueil pour toute adresse
+      inconnue (code 200).
+  - Galerie client et espace famille : `noindex`, en balise et en en-tête
+    `X-Robots-Tag` (`_headers`).
+- **Portfolios** :
+  - Sous l'adresse d'un studio, le Worker écrit dans la page (`studio.js` →
+    `portfolioSeo` / `injectPortfolioSeo`) :
+    - titre « Studio — Photographe à Ville » et description ;
+    - adresse de référence ;
+    - aperçu de lien avec la première photo ;
+    - données structurées `ProfessionalService` : ville, téléphone, Instagram,
+      site, prestations.
+  - Chaque studio a aussi son `robots.txt` et son `sitemap.xml`. Le plan ne
+    liste la racine que si un portfolio y est publié.
+  - Sur `www…/portfolio.html?s=…`, la page ajoute l'adresse de référence
+    (celle du studio en formule Pro) et les données structurées. Un
+    portfolio absent passe en `noindex`.
+- **À faire une fois** :
+  - Déclarer le domaine dans Google Search Console (propriété « domaine »,
+    vérification par enregistrement TXT dans le DNS Cloudflare : elle couvre
+    aussi les adresses des studios).
+  - Soumettre `https://www.holypixx.com/sitemap.xml`.
+  - Importer le site dans Bing Webmaster Tools.
+
 ### 3. Les outils
 
 ```bash

@@ -153,7 +153,7 @@ async function photosOf(env, photographerId) {
 
 export async function publishedPortfolioByHandle(env, handle) {
   const row = await env.DB.prepare(
-    `SELECT p.*, ph.studio_name, ph.first_name, ph.last_name, ph.email, ph.subdomain
+    `SELECT p.*, ph.studio_name, ph.first_name, ph.last_name, ph.email, ph.subdomain, ph.plan, ph.plan_status
        FROM portfolios p JOIN photographers ph ON ph.id = p.photographer_id
       WHERE p.handle = ? AND p.published = 1`
   )
@@ -171,9 +171,18 @@ function displayName(row) {
   return row.studio_name || [row.first_name, row.last_name].filter(Boolean).join(" ") || "Photographe";
 }
 
-function publicOut(row, photos) {
+// Adresse de référence d'un portfolio publié : celle du studio (formule
+// Pro), sinon celle du site principal. Les deux servent la même page ; les
+// moteurs n'en retiennent qu'une.
+export function canonicalPortfolioUrl(env, row) {
+  const urls = portfolioUrls(env, row, row.handle);
+  return urls.studio || urls.site;
+}
+
+function publicOut(row, photos, url = "") {
   return {
     handle: row.handle,
+    url,
     studioName: displayName(row),
     headline: row.headline,
     bio: row.bio,
@@ -199,7 +208,7 @@ export async function handlePortfolioPublic(request, env, path) {
   if (!row) return fail(404, "Portfolio introuvable");
 
   if (parts.length === 3 && request.method === "GET") {
-    return json(publicOut(row, await photosOf(env, row.photographer_id)));
+    return json(publicOut(row, await photosOf(env, row.photographer_id), canonicalPortfolioUrl(env, row)));
   }
   if (parts.length === 5 && parts[3] === "photo" && request.method === "GET") {
     return servePhoto(env, row.photographer_id, decodeURIComponent(parts[4]), "public, max-age=86400");
@@ -485,4 +494,79 @@ export async function deletePortfolioFiles(env, photographerId) {
   const photos = await photosOf(env, photographerId);
   for (const p of photos) await env.TILES.delete(photoKey(photographerId, p.id));
   return photos.length;
+}
+
+/* ---------- Référencement ---------- */
+
+// Titre, description, adresse de référence, aperçu de lien (Open Graph) et
+// données structurées d'un portfolio publié. Sous l'adresse du studio, ces
+// balises sont écrites dans la page par le serveur (studio.js) : les moteurs
+// et les aperçus de liens (WhatsApp, Facebook, Messenger…) les lisent sans
+// exécuter JavaScript. `apiOrigin` : origine qui sert les photos.
+export async function portfolioSeo(env, handle, apiOrigin) {
+  const row = await publishedPortfolioByHandle(env, handle);
+  if (!row) return null;
+  const photos = await photosOf(env, row.photographer_id);
+  const canonical = canonicalPortfolioUrl(env, row);
+  const name = displayName(row);
+  const title = name + (row.city ? ` — Photographe à ${row.city}` : " — Photographe");
+  const description = clip(row.headline || row.bio || `Portfolio de ${name}, photographe${row.city ? " à " + row.city : ""}.`, 300);
+  const photoUrl = (p) => `${apiOrigin}/api/portfolio/${encodeURIComponent(row.handle)}/photo/${encodeURIComponent(p.id)}`;
+  const cover = photos[0] || null;
+  const services = parseJson(row.services || "[]", []);
+  const sameAs = [row.instagram ? `https://www.instagram.com/${row.instagram}/` : "", row.website || ""].filter(Boolean);
+  const data = {
+    "@context": "https://schema.org",
+    "@type": "ProfessionalService",
+    "@id": `${canonical}#studio`,
+    name,
+    url: canonical,
+    description,
+    ...(photos.length ? { image: photos.slice(0, 3).map(photoUrl) } : {}),
+    ...(row.city ? { address: { "@type": "PostalAddress", addressLocality: row.city }, areaServed: row.city } : {}),
+    ...(row.phone ? { telephone: row.phone } : {}),
+    ...(sameAs.length ? { sameAs } : {}),
+    ...(services.length
+      ? { hasOfferCatalog: { "@type": "OfferCatalog", name: "Prestations", itemListElement: services.map((s) => ({ "@type": "Offer", itemOffered: { "@type": "Service", name: s } })) } }
+      : {}),
+  };
+  return { title, description, canonical, image: cover ? { url: photoUrl(cover), width: cover.width, height: cover.height } : null, data, name };
+}
+
+function escapeAttr(value) {
+  return String(value ?? "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function clip(text, max) {
+  const t = String(text || "").replace(/\s+/g, " ").trim();
+  return t.length > max ? t.slice(0, max - 1).replace(/\s+\S*$/, "") + "…" : t;
+}
+
+// Écrit les balises de `seo` dans le HTML de portfolio.html.
+export function injectPortfolioSeo(html, seo) {
+  const tags = [
+    `<link rel="canonical" href="${escapeAttr(seo.canonical)}" />`,
+    `<meta name="robots" content="index, follow, max-image-preview:large" />`,
+    `<meta property="og:type" content="website" />`,
+    `<meta property="og:locale" content="fr_BE" />`,
+    `<meta property="og:site_name" content="${escapeAttr(seo.name)}" />`,
+    `<meta property="og:url" content="${escapeAttr(seo.canonical)}" />`,
+    `<meta property="og:title" content="${escapeAttr(seo.title)}" />`,
+    `<meta property="og:description" content="${escapeAttr(seo.description)}" />`,
+    ...(seo.image
+      ? [
+          `<meta property="og:image" content="${escapeAttr(seo.image.url)}" />`,
+          ...(seo.image.width ? [`<meta property="og:image:width" content="${seo.image.width}" />`, `<meta property="og:image:height" content="${seo.image.height}" />`] : []),
+          `<meta name="twitter:card" content="summary_large_image" />`,
+        ]
+      : [`<meta name="twitter:card" content="summary" />`]),
+    // « < » échappé : le JSON ne peut pas fermer la balise script.
+    `<script type="application/ld+json">${JSON.stringify(seo.data).replace(/</g, "\\u003c")}</script>`,
+  ];
+  // Remplacements par fonction : un « $& » dans le texte du photographe
+  // reste du texte.
+  return html
+    .replace(/<title>[\s\S]*?<\/title>/, () => `<title>${escapeAttr(seo.title)}</title>`)
+    .replace(/<meta name="description" content="[^"]*"\s*\/?>/, () => `<meta name="description" content="${escapeAttr(seo.description)}" />`)
+    .replace("</head>", () => `  ${tags.join("\n  ")}\n</head>`);
 }

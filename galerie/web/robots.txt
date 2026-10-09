@@ -1,5 +1,8 @@
+# Holypixx — www.holypixx.com
+# Les galeries clients et l'espace famille sont privés : ils portent un
+# « noindex » (balise et en-tête X-Robots-Tag) et restent explorables pour
+# que les moteurs puissent lire cette consigne.
 User-agent: *
 Allow: /
-Disallow: /galerie.html
 
 Sitemap: https://www.holypixx.com/sitemap.xml
