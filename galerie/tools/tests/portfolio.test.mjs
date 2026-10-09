@@ -146,6 +146,9 @@ check("la page publique porte le nom du studio, la ville et l'accroche",
       (await visitor.textContent("#pf-headline")).includes("lumière naturelle"));
 check("la couverture est la première photo, puis les trois photos en grille",
       (await visitor.getAttribute("#pf-hero-img", "src")).endsWith(`/photo/${admin.photos[0].id}`) && (await visitor.locator(".pf-tile").count()) === 3);
+check("référencement sur www : adresse de référence du portfolio et données structurées du photographe",
+      (await visitor.getAttribute('link[rel="canonical"]', "href")).endsWith(`/portfolio.html?s=${HANDLE}`) &&
+      JSON.parse(await visitor.textContent('script[type="application/ld+json"]'))["@type"] === "ProfessionalService");
 check("présentation en paragraphes et prestations",
       (await visitor.locator("#pf-bio p").count()) === 2 && (await visitor.locator("#pf-services li").count()) === 2);
 const linksText = await visitor.textContent("#pf-links");
@@ -216,8 +219,19 @@ const root = await hostFetch(`${API}/`, { headers: { host: `${SUB}.holypixx.com`
 const rootHtml = await root.text();
 check("la racine du sous-domaine affiche le portfolio publié",
       root.status === 200 && rootHtml.includes(`handle: "${HANDLE}"`) && rootHtml.includes(`api: "//${SUB}.holypixx.com"`) && rootHtml.includes("portfolio.js"));
+check("le serveur écrit titre, adresse de référence, aperçu de lien et données structurées du studio dans la page",
+      rootHtml.includes("— Photographe à Liège</title>") && rootHtml.includes(`<link rel="canonical" href="https://${SUB}.holypixx.com/" />`) &&
+      rootHtml.includes(`<meta property="og:image" content="https://${SUB}.holypixx.com/api/portfolio/${HANDLE}/photo/`) &&
+      /"@type":"ProfessionalService"/.test(rootHtml) && !rootHtml.includes("Portfolio — Holypixx"));
 const withGallery = await hostFetch(`${API}/?g=quelque-chose`, { headers: { host: `${SUB}.holypixx.com`} });
-check("un lien de galerie sous le sous-domaine mène toujours à la galerie", (await withGallery.text()).includes("GALERIE_CONFIG"));
+check("un lien de galerie sous le sous-domaine mène toujours à la galerie, jamais indexée",
+      (await withGallery.text()).includes("GALERIE_CONFIG") && (withGallery.headers.get("x-robots-tag") || "").includes("noindex"));
+const studioRobots = await (await hostFetch(`${API}/robots.txt`, { headers: { host: `${SUB}.holypixx.com` } })).text();
+const studioSitemap = await hostFetch(`${API}/sitemap.xml`, { headers: { host: `${SUB}.holypixx.com` } });
+const sitemapXml = await studioSitemap.text();
+check("le studio a son robots.txt et son plan du site (la racine, avec sa date)",
+      studioRobots.includes(`Sitemap: https://${SUB}.holypixx.com/sitemap.xml`) && studioSitemap.status === 200 &&
+      sitemapXml.includes(`<loc>https://${SUB}.holypixx.com/</loc>`) && /<lastmod>\d{4}-\d\d-\d\d<\/lastmod>/.test(sitemapXml));
 const rivalHandle = `rival-${stamp}`;
 await rival.request("PUT", "/api/admin/portfolio", { handle: rivalHandle });
 const foreign = await hostFetch(`${API}/api/portfolio/${rivalHandle}`, { headers: { host: `${SUB}.holypixx.com` } });
@@ -231,7 +245,11 @@ await client.request("PUT", "/api/admin/portfolio", { ...admin, published: false
 check("dépublié, le portfolio disparaît du public", (await fetch(`${API}/api/portfolio/${HANDLE}`)).status === 404);
 await visitor.goto(`http://localhost:${SITE_PORT}/portfolio.html?s=${HANDLE}`, { waitUntil: "domcontentloaded" });
 await visitor.waitForSelector("#pf-missing:not([hidden])", { timeout: 10000 });
-check("la page publique l'annonce simplement", (await visitor.textContent("#pf-missing")).includes("pas disponible"));
+check("la page publique l'annonce simplement, sans se faire indexer",
+      (await visitor.textContent("#pf-missing")).includes("pas disponible") && (await visitor.getAttribute('meta[name="robots"]', "content")) === "noindex");
+check("dépublié : plus de plan du site pour le studio",
+      (await hostFetch(`${API}/sitemap.xml`, { headers: { host: `${SUB}.holypixx.com` } })).status === 404 &&
+      !(await (await hostFetch(`${API}/robots.txt`, { headers: { host: `${SUB}.holypixx.com` } })).text()).includes("Sitemap"));
 
 const exported = await client.request("GET", "/api/admin/account/export");
 check("l'export RGPD contient le portfolio, ses photos et ses messages",

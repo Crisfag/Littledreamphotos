@@ -12,6 +12,7 @@
 
 import { hasFeature } from "./subscription.js";
 import { json, fail } from "./http.js";
+import { portfolioSeo, injectPortfolioSeo } from "./portfolio.js";
 
 export const RESERVED_SUBDOMAINS = new Set([
   "www", "api", "admin", "app", "mail", "smtp", "imap", "pop", "ftp", "ns1", "ns2",
@@ -108,16 +109,21 @@ async function servePage(request, env, url, { entry = PAGE_FILES[url.pathname], 
   if (isHtml) {
     body = body.replace(/api:\s*"[^"]*"/, `api: "//${url.host}"`);
   }
-  // Le portfolio servi à la racine du studio sait d'avance lequel afficher.
+  // Le portfolio servi à la racine du studio sait d'avance lequel afficher,
+  // et porte déjà ses balises de référencement (titre, description, aperçu
+  // de lien, données structurées).
   if (handle) {
     body = body.replace(/handle:\s*"[^"]*"/, `handle: ${JSON.stringify(handle)}`);
+    const seo = await portfolioSeo(env, handle, `https://${url.host}`).catch(() => null);
+    if (seo) body = injectPortfolioSeo(body, seo);
   }
-  return new Response(body, {
-    headers: {
-      "content-type": entry.type,
-      "cache-control": isHtml ? "no-store" : "public, max-age=300",
-    },
-  });
+  const headers = {
+    "content-type": entry.type,
+    "cache-control": isHtml ? "no-store" : "public, max-age=300",
+  };
+  // Une galerie client n'est jamais indexée, même si son lien circule.
+  if (entry.file === "galerie.html") headers["x-robots-tag"] = "noindex, nofollow, noarchive, noimageindex";
+  return new Response(body, { headers });
 }
 
 // Point d'entrée appelé par index.js pour tout hôte « <sub>.<STUDIO_DOMAIN> ».
@@ -128,6 +134,10 @@ export async function handleStudioHost(request, env, url, subdomain, path) {
   if (!studio) return studioNotFound();
 
   if (!path.startsWith("/api/")) {
+    // Moteurs de recherche : seul le portfolio (la racine) est à indexer.
+    if (url.pathname === "/robots.txt" || url.pathname === "/sitemap.xml") {
+      return studioCrawlFile(env, studio, url);
+    }
     // Racine du studio sans lien de galerie : son portfolio, s'il est publié.
     if (url.pathname === "/" && !url.searchParams.get("g")) {
       const handle = await publishedHandle(env, studio.id);
@@ -149,6 +159,26 @@ export async function handleStudioHost(request, env, url, subdomain, path) {
     if (!gallery || gallery.photographer_id !== studio.id) return fail(404, "Galerie introuvable");
   }
   return null;
+}
+
+// robots.txt et sitemap.xml d'une adresse de studio. Le plan du site ne
+// liste que la racine, et seulement quand un portfolio y est publié.
+async function studioCrawlFile(env, studio, url) {
+  const row = await env.DB.prepare("SELECT handle, updated_at FROM portfolios WHERE photographer_id = ? AND published = 1")
+    .bind(studio.id)
+    .first();
+  const origin = `https://${url.host}`;
+  const text = (body, type) =>
+    new Response(body, { headers: { "content-type": type, "cache-control": "public, max-age=3600" } });
+  if (url.pathname === "/robots.txt") {
+    return text(`User-agent: *\nAllow: /\n${row ? `\nSitemap: ${origin}/sitemap.xml\n` : ""}`, "text/plain; charset=utf-8");
+  }
+  if (!row) return fail(404, "Aucun plan du site");
+  const lastmod = row.updated_at ? `\n    <lastmod>${new Date(row.updated_at * 1000).toISOString().slice(0, 10)}</lastmod>` : "";
+  return text(
+    `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url>\n    <loc>${origin}/</loc>${lastmod}\n  </url>\n</urlset>\n`,
+    "application/xml; charset=utf-8"
+  );
 }
 
 export function studioLinkFor(env, photographer, slug) {

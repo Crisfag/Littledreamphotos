@@ -20,6 +20,38 @@
     $("pf-loading").hidden = true;
     $("pf-missing").hidden = false;
     document.title = "Portfolio introuvable — Holypixx";
+    // Une page vide n'a rien à faire dans les résultats de recherche.
+    var robots = document.createElement("meta");
+    robots.name = "robots";
+    robots.content = "noindex";
+    document.head.appendChild(robots);
+  }
+
+  // Adresse de référence (celle du studio quand il en a une) et données
+  // structurées, si le serveur ne les a pas déjà écrites dans la page.
+  function setSeo() {
+    if (data.url && !document.querySelector('link[rel="canonical"]')) {
+      var link = document.createElement("link");
+      link.rel = "canonical";
+      link.href = data.url;
+      document.head.appendChild(link);
+    }
+    if (document.querySelector('script[type="application/ld+json"]')) return;
+    var info = {
+      "@context": "https://schema.org",
+      "@type": "ProfessionalService",
+      name: data.studioName,
+      url: data.url || location.href,
+    };
+    if (data.headline) info.description = data.headline;
+    if (data.photos.length) info.image = photoUrl(data.photos[0]);
+    if (data.city) info.address = { "@type": "PostalAddress", addressLocality: data.city };
+    var sameAs = [data.links.instagram, data.links.website].filter(Boolean);
+    if (sameAs.length) info.sameAs = sameAs;
+    var script = document.createElement("script");
+    script.type = "application/ld+json";
+    script.textContent = JSON.stringify(info);
+    document.head.appendChild(script);
   }
 
   function setMeta(name, content) {
@@ -39,6 +71,7 @@
     var name = data.studioName;
     document.title = name + (data.city ? " — Photographe à " + data.city : " — Photographe");
     setMeta("description", data.headline || ("Portfolio de " + name + ", photographe" + (data.city ? " à " + data.city : "") + "."));
+    setSeo();
 
     $("pf-brand").textContent = name;
     $("pf-studio").textContent = name;

@@ -6,27 +6,38 @@
   <title>Holypixx — Galeries clients protégées pour photographes</title>
   <meta name="description" content="Galeries clients protégées pour photographes : photos impossibles à télécharger, empreinte invisible traçable, alerte de capture, sélection et annotations du client, suppléments payés en ligne, boutique de tirages, livraison HD et portfolio à votre nom." />
   <link rel="canonical" href="https://www.holypixx.com/" />
+  <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+  <meta name="author" content="Holypixx" />
   <meta name="theme-color" content="#ffffff" />
   <meta name="color-scheme" content="light" />
+  <link rel="icon" href="/favicon.ico" sizes="48x48" />
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <link rel="manifest" href="/site.webmanifest" />
 
   <meta property="og:type" content="website" />
   <meta property="og:locale" content="fr_BE" />
+  <meta property="og:locale:alternate" content="fr_FR" />
   <meta property="og:site_name" content="Holypixx" />
   <meta property="og:url" content="https://www.holypixx.com/" />
   <meta property="og:title" content="Holypixx — montrez vos photos, gardez-les" />
   <meta property="og:description" content="Galeries privées que vos clients ne peuvent pas télécharger : ils choisissent, annotent, paient leurs suppléments et commandent leurs tirages." />
-  <meta property="og:image" content="https://www.holypixx.com/assets/og.jpg" />
+  <meta property="og:image" content="https://www.holypixx.com/assets/og-holypixx.jpg" />
+  <meta property="og:image:type" content="image/jpeg" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="Holypixx : une galerie de photos protégées par un filigrane, avec l'alerte « Capture tentée »." />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:image" content="https://www.holypixx.com/assets/og.jpg" />
+  <meta name="twitter:title" content="Holypixx — montrez vos photos, gardez-les" />
+  <meta name="twitter:description" content="Galeries clients protégées pour photographes : sélection, suppléments, tirages et livraison HD." />
+  <meta name="twitter:image" content="https://www.holypixx.com/assets/og-holypixx.jpg" />
+  <meta name="twitter:image:alt" content="Holypixx : une galerie de photos protégées par un filigrane, avec l'alerte « Capture tentée »." />
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <link rel="preload" as="image" href="assets/home/golden.webp" type="image/webp" />
   <link rel="stylesheet" href="home.css" />
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%233b3bf6'/><path d='M10 8v16M22 8v16M10 16h12' stroke='white' stroke-width='3' stroke-linecap='round'/></svg>" />
 
   <script>
     window.HOME_CONFIG = {
@@ -40,18 +51,68 @@
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
-    "@type": "SoftwareApplication",
-    "name": "Holypixx",
-    "url": "https://www.holypixx.com/",
-    "applicationCategory": "BusinessApplication",
-    "operatingSystem": "Web",
-    "inLanguage": "fr",
-    "description": "Galeries clients protégées pour photographes : photos impossibles à télécharger pendant la sélection, empreinte invisible traçable, alerte de capture d'écran, sélection et annotations du client, relances automatiques, suppléments payés en ligne, boutique de tirages, livraison HD, portfolio et adresse à votre nom.",
-    "image": "https://www.holypixx.com/assets/og.jpg",
-    "offers": [
-      { "@type": "Offer", "name": "Découverte", "price": "0", "priceCurrency": "EUR" },
-      { "@type": "Offer", "name": "Essentiel", "price": "15", "priceCurrency": "EUR" },
-      { "@type": "Offer", "name": "Pro", "price": "29", "priceCurrency": "EUR" }
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": "https://www.holypixx.com/#organization",
+        "name": "Holypixx",
+        "url": "https://www.holypixx.com/",
+        "logo": { "@type": "ImageObject", "url": "https://www.holypixx.com/icon-512.png", "width": 512, "height": 512 },
+        "image": "https://www.holypixx.com/assets/og-holypixx.jpg",
+        "description": "Plateforme de galeries clients protégées pour photographes professionnels.",
+        "areaServed": ["BE", "FR", "LU"],
+        "knowsLanguage": "fr"
+      },
+      {
+        "@type": "WebSite",
+        "@id": "https://www.holypixx.com/#website",
+        "url": "https://www.holypixx.com/",
+        "name": "Holypixx",
+        "inLanguage": "fr",
+        "publisher": { "@id": "https://www.holypixx.com/#organization" }
+      },
+      {
+        "@type": "WebPage",
+        "@id": "https://www.holypixx.com/#webpage",
+        "url": "https://www.holypixx.com/",
+        "name": "Holypixx — Galeries clients protégées pour photographes",
+        "inLanguage": "fr",
+        "isPartOf": { "@id": "https://www.holypixx.com/#website" },
+        "about": { "@id": "https://www.holypixx.com/#software" },
+        "primaryImageOfPage": "https://www.holypixx.com/assets/og-holypixx.jpg"
+      },
+      {
+        "@type": "SoftwareApplication",
+        "@id": "https://www.holypixx.com/#software",
+        "name": "Holypixx",
+        "url": "https://www.holypixx.com/",
+        "applicationCategory": "BusinessApplication",
+        "applicationSubCategory": "Galeries photo clients",
+        "operatingSystem": "Web",
+        "inLanguage": "fr",
+        "description": "Galeries clients protégées pour photographes : photos impossibles à télécharger pendant la sélection, empreinte invisible traçable, alerte de capture d'écran, sélection et annotations du client, relances automatiques, suppléments payés en ligne, boutique de tirages, livraison HD, portfolio et adresse à votre nom.",
+        "image": "https://www.holypixx.com/assets/og-holypixx.jpg",
+        "publisher": { "@id": "https://www.holypixx.com/#organization" },
+        "featureList": [
+          "Photos découpées en tuiles, impossibles à télécharger pendant la sélection",
+          "Filigrane dense et empreinte invisible propre à chaque galerie",
+          "Alerte e-mail en cas de capture d'écran",
+          "Sélection, coups de cœur, codes couleur et repères annotés",
+          "Relances automatiques avant expiration",
+          "Forfait et suppléments payés en ligne, factures PDF",
+          "Boutique de tirages livrés par le laboratoire",
+          "Campagnes de vente et tableau de bord des ventes",
+          "Livraison des fichiers HD",
+          "Portfolio et adresse à votre nom"
+        ],
+        "offers": [
+          { "@type": "Offer", "name": "Découverte", "price": "0", "priceCurrency": "EUR", "description": "Gratuit, 3 galeries actives, 5 Go." },
+          { "@type": "Offer", "name": "Essentiel", "price": "15", "priceCurrency": "EUR", "description": "25 galeries actives, 200 Go, boutique de tirages et suppléments en ligne. Ou 150 € par an.",
+            "priceSpecification": { "@type": "UnitPriceSpecification", "price": "15", "priceCurrency": "EUR", "unitText": "mois", "billingDuration": "P1M" } },
+          { "@type": "Offer", "name": "Pro", "price": "29", "priceCurrency": "EUR", "description": "Galeries illimitées, 1 To, adresse à votre nom. Ou 290 € par an.",
+            "priceSpecification": { "@type": "UnitPriceSpecification", "price": "29", "priceCurrency": "EUR", "unitText": "mois", "billingDuration": "P1M" } }
+        ]
+      }
     ]
   }
   </script>
@@ -128,11 +189,11 @@
         <a href="#scolaire">Scolaire</a>
         <a href="#tarifs">Tarifs</a>
         <a href="#faq">Questions</a>
-        <a class="nav-login-mobile" data-admin href="#">Connexion</a>
+        <a class="nav-login-mobile" data-admin href="https://holypixx-admin.onrender.com/" rel="nofollow">Connexion</a>
       </nav>
       <div class="nav-actions">
-        <a class="nav-login" data-admin href="#">Connexion</a>
-        <a class="btn btn-primary btn-sm" data-signup href="#">Créer un compte</a>
+        <a class="nav-login" data-admin href="https://holypixx-admin.onrender.com/" rel="nofollow">Connexion</a>
+        <a class="btn btn-primary btn-sm" data-signup href="https://holypixx-admin.onrender.com/#/inscription" rel="nofollow">Créer un compte</a>
         <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="nav-links" aria-label="Ouvrir le menu">
           <svg class="ico"><use href="#i-menu"/></svg>
         </button>
@@ -153,7 +214,7 @@
             leurs tirages&nbsp;— vous gardez vos images, votre nom et votre marge.
           </p>
           <div class="hero-actions">
-            <a class="btn btn-primary btn-lg" data-signup href="#">Créer mon compte gratuit</a>
+            <a class="btn btn-primary btn-lg" data-signup href="https://holypixx-admin.onrender.com/#/inscription" rel="nofollow">Créer mon compte gratuit</a>
             <a class="btn btn-quiet btn-lg" href="#tarifs">Voir les tarifs</a>
           </div>
           <p class="hero-assure">Gratuit jusqu'à 3 galeries · sans carte bancaire · aucun compte pour vos clients</p>
@@ -181,11 +242,11 @@
                 </div>
               </div>
               <div class="gal-grid">
-                <div class="ph ph-a tiled"><img src="assets/home/golden.webp" width="1400" height="934" alt="" fetchpriority="high" /><span class="mark mark-heart on"><svg class="ico ico-xs"><use href="#i-heart"/></svg></span></div>
-                <div class="ph ph-b tiled"><img src="assets/home/newborn.webp" width="900" height="900" alt="" /><span class="mark mark-dot ok"></span></div>
-                <div class="ph ph-c tiled"><img src="assets/home/leaves.webp" width="900" height="1348" alt="" /><span class="mark mark-heart on"><svg class="ico ico-xs"><use href="#i-heart"/></svg></span><span class="mark-pin">1</span></div>
-                <div class="ph ph-d tiled"><img src="assets/home/red.webp" width="900" height="1125" alt="" /><span class="mark mark-dot warn"></span></div>
-                <div class="ph ph-e tiled"><img src="assets/home/swing.webp" width="900" height="1200" alt="" /><span class="mark mark-heart"><svg class="ico ico-xs"><use href="#i-heart"/></svg></span></div>
+                <div class="ph ph-a tiled"><img src="assets/home/golden.webp" width="1400" height="934" alt="Séance photo de famille dans un champ doré, au coucher du soleil" fetchpriority="high" /><span class="mark mark-heart on"><svg class="ico ico-xs"><use href="#i-heart"/></svg></span></div>
+                <div class="ph ph-b tiled"><img src="assets/home/newborn.webp" width="900" height="900" alt="Photo de naissance : nouveau-né endormi dans un nid au crochet" /><span class="mark mark-dot ok"></span></div>
+                <div class="ph ph-c tiled"><img src="assets/home/leaves.webp" width="900" height="1348" alt="Portrait d'enfant parmi des fleurs d'automne" /><span class="mark mark-heart on"><svg class="ico ico-xs"><use href="#i-heart"/></svg></span><span class="mark-pin">1</span></div>
+                <div class="ph ph-d tiled"><img src="assets/home/red.webp" width="900" height="1125" alt="Photo de grossesse en robe rouge, en studio" /><span class="mark mark-dot warn"></span></div>
+                <div class="ph ph-e tiled"><img src="assets/home/swing.webp" width="900" height="1200" alt="Portrait d'une petite fille souriante sur une balançoire" /><span class="mark mark-heart"><svg class="ico ico-xs"><use href="#i-heart"/></svg></span></div>
               </div>
             </div>
           </figure>
@@ -269,7 +330,7 @@
           </div>
         </div>
 
-        <a class="chapter-cta" data-signup href="#">Protéger ma première galerie<svg class="ico"><use href="#i-arrow"/></svg></a>
+        <a class="chapter-cta" data-signup href="https://holypixx-admin.onrender.com/#/inscription" rel="nofollow">Protéger ma première galerie<svg class="ico"><use href="#i-arrow"/></svg></a>
       </div>
     </section>
 
@@ -368,7 +429,7 @@
 
           <article class="panel panel-folio">
             <div class="folio" aria-hidden="true">
-              <img src="assets/home/mother.webp" width="900" height="1348" alt="" loading="lazy" />
+              <img src="assets/home/mother.webp" width="900" height="1348" alt="Portrait d'une mère et de sa fille, en couverture d'un portfolio" loading="lazy" />
               <span class="folio-name">Votre studio</span>
               <span class="folio-btn">Me contacter</span>
             </div>
@@ -448,7 +509,7 @@
             <p class="plan-for">Pour essayer avec vos premières séances.</p>
             <p class="plan-price"><span class="plan-amount">0 €</span><span class="plan-per">/ mois</span></p>
             <p class="plan-alt">Gratuit, sans limite de durée</p>
-            <a class="btn btn-outline" data-signup href="#">Créer mon compte</a>
+            <a class="btn btn-outline" data-signup href="https://holypixx-admin.onrender.com/#/inscription" rel="nofollow">Créer mon compte</a>
             <ul class="ticks">
               <li>3 galeries actives, 5 Go</li>
               <li>Protection complète : tuiles, filigrane, empreinte, alertes</li>
@@ -462,7 +523,7 @@
             <p class="plan-for">Pour vendre vos suppléments et vos tirages.</p>
             <p class="plan-price" data-plan="essentiel"><span class="plan-amount">15 €</span><span class="plan-per">/ mois</span></p>
             <p class="plan-alt" data-alt="essentiel">ou 150 € par an</p>
-            <a class="btn btn-outline" data-signup href="#">Essayer 10 jours gratuitement</a>
+            <a class="btn btn-outline" data-signup href="https://holypixx-admin.onrender.com/#/inscription" rel="nofollow">Essayer 10 jours gratuitement</a>
             <ul class="ticks">
               <li>25 galeries actives, 200 Go</li>
               <li>Tout Découverte</li>
@@ -477,7 +538,7 @@
             <p class="plan-for">Pour un studio à votre nom, sans limite.</p>
             <p class="plan-price" data-plan="pro"><span class="plan-amount">29 €</span><span class="plan-per">/ mois</span></p>
             <p class="plan-alt" data-alt="pro">ou 290 € par an</p>
-            <a class="btn btn-primary" data-signup href="#">Essayer 10 jours gratuitement</a>
+            <a class="btn btn-primary" data-signup href="https://holypixx-admin.onrender.com/#/inscription" rel="nofollow">Essayer 10 jours gratuitement</a>
             <ul class="ticks">
               <li>Galeries illimitées, 1 To</li>
               <li>Tout Essentiel</li>
@@ -512,7 +573,7 @@
       <div class="wrap closing-inner">
         <h2>Votre prochaine séance mérite mieux<br />qu'un lien de téléchargement.</h2>
         <p>Créez votre compte en une minute, depuis votre navigateur. Gratuit jusqu'à 3 galeries.</p>
-        <a class="btn btn-primary btn-lg" data-signup href="#">Créer mon compte gratuit</a>
+        <a class="btn btn-primary btn-lg" data-signup href="https://holypixx-admin.onrender.com/#/inscription" rel="nofollow">Créer mon compte gratuit</a>
       </div>
     </section>
   </main>
@@ -529,10 +590,10 @@
         <a href="#vente">Vente</a>
         <a href="#tarifs">Tarifs</a>
         <a href="#faq">Questions</a>
-        <a data-admin href="#">Connexion</a>
-        <a href="conditions.html">Conditions</a>
-        <a href="confidentialite.html">Confidentialité</a>
-        <a href="mentions-legales.html">Mentions légales</a>
+        <a data-admin href="https://holypixx-admin.onrender.com/" rel="nofollow">Connexion</a>
+        <a href="/conditions">Conditions</a>
+        <a href="/confidentialite">Confidentialité</a>
+        <a href="/mentions-legales">Mentions légales</a>
       </nav>
       <p class="footer-copy">© <span id="year">2026</span> Holypixx · Galeries protégées pour photographes · Photos : Little Dream Photos</p>
     </div>

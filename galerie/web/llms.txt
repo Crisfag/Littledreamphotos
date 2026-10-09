@@ -1,0 +1,24 @@
+# Holypixx
+
+> Holypixx est une plateforme de galeries clients protégées pour photographes professionnels (Belgique, France, Luxembourg). Le photographe importe une séance ; son client reçoit un lien et un mot de passe, choisit et annote ses photos, paie ses suppléments et commande ses tirages ; le photographe livre ensuite les fichiers HD. Site en français.
+
+## Ce que fait Holypixx
+
+- Protection : photos découpées en tuiles, jamais téléchargeables pendant la sélection ; filigrane dense ; empreinte invisible propre à chaque galerie, qui retrouve la galerie d'origine d'une image qui circule ; alerte e-mail quand une capture d'écran est tentée. Une capture d'écran ne peut être empêchée par aucun site : Holypixx la rend inutile et traçable.
+- Sélection : coups de cœur, codes couleur, repères annotés sur la photo, validation de la sélection, relances automatiques 7 et 2 jours avant l'expiration.
+- Vente : forfait et suppléments payés en ligne (Stripe, sur le compte du photographe) avec facture PDF ; boutique de tirages imprimés et livrés par le laboratoire Prodigi ; campagnes de vente ; tableau de bord des ventes. Aucune commission : seuls les frais de paiement (2 % + 0,30 € par vente) sont retenus.
+- Marque : livraison des fichiers HD, portfolio en ligne avec formulaire de contact, adresse à son nom (votre-studio.holypixx.com, formule Pro), musique d'ambiance, trois mises en page.
+- Photo scolaire (bientôt) : classes, fiches parents avec QR code, espace famille, pochettes avec aperçu de la photo de l'enfant, commande groupée et envoi au laboratoire BePhoto.
+
+## Formules (prix TTC, sans engagement)
+
+- Découverte : gratuit, 3 galeries actives, 5 Go.
+- Essentiel : 15 € par mois ou 150 € par an ; 25 galeries, 200 Go, boutique de tirages et suppléments en ligne. Essai de 10 jours.
+- Pro : 29 € par mois ou 290 € par an ; galeries illimitées, 1 To, adresse à votre nom. Essai de 10 jours.
+
+## Pages
+
+- [Accueil](https://www.holypixx.com/): présentation, fonctionnalités, tarifs et questions fréquentes.
+- [Conditions d'utilisation](https://www.holypixx.com/conditions)
+- [Politique de confidentialité](https://www.holypixx.com/confidentialite)
+- [Mentions légales](https://www.holypixx.com/mentions-legales)

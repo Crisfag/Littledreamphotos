@@ -1,23 +1,22 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
   <url>
     <loc>https://www.holypixx.com/</loc>
-    <changefreq>monthly</changefreq>
-    <priority>1.0</priority>
+    <lastmod>2026-10-09</lastmod>
+    <image:image>
+      <image:loc>https://www.holypixx.com/assets/og-holypixx.jpg</image:loc>
+    </image:image>
   </url>
   <url>
-    <loc>https://www.holypixx.com/conditions.html</loc>
-    <changefreq>yearly</changefreq>
-    <priority>0.3</priority>
+    <loc>https://www.holypixx.com/conditions</loc>
+    <lastmod>2026-10-06</lastmod>
   </url>
   <url>
-    <loc>https://www.holypixx.com/confidentialite.html</loc>
-    <changefreq>yearly</changefreq>
-    <priority>0.3</priority>
+    <loc>https://www.holypixx.com/confidentialite</loc>
+    <lastmod>2026-10-08</lastmod>
   </url>
   <url>
-    <loc>https://www.holypixx.com/mentions-legales.html</loc>
-    <changefreq>yearly</changefreq>
-    <priority>0.3</priority>
+    <loc>https://www.holypixx.com/mentions-legales</loc>
+    <lastmod>2026-10-06</lastmod>
   </url>
 </urlset>
