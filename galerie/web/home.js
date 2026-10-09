@@ -216,6 +216,15 @@
     fetch(String(config.api).replace(/\/+$/, "") + "/api/public/plans")
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (data) {
+        // Fondateurs Studio : prix de la première année dans la carte Studio.
+        var studioLeft = data && data.studioFounders ? data.studioFounders.remaining : 0;
+        var studio = data && data.plans && data.plans.filter(function (p) { return p.key === "studio"; })[0];
+        if (studioLeft && studio && studio.founderYearlyCents) {
+          document.querySelector("[data-studio-amount]").textContent = euros(studio.founderYearlyCents / 100);
+          // Montants et nombre de places viennent de notre API (nombres).
+          document.querySelector("[data-studio-alt]").innerHTML = "la 1<sup>re</sup> année, puis " + euros(studio.yearlyCents / 100) +
+            " par an · Fondateurs : plus que " + Number(studioLeft) + " place" + (studioLeft > 1 ? "s" : "");
+        }
         var left = data && data.founders ? data.founders.remaining : 0;
         if (!left) return;
         founders = true;

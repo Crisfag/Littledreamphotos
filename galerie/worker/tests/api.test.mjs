@@ -1643,9 +1643,11 @@ const freeEmail = `gratuit-${RUN}@test.invalid`;
 const freeSignup = (await signup(freeEmail, "mot-de-passe-gratuit-1234")).data;
 const free = adminClient(freeSignup.token);
 const freeSub = await (await free("GET", "/api/admin/subscription")).json();
-check("un nouveau compte démarre en formule Découverte (gratuite), avec les 3 formules proposées",
+// Scolaire et Studio s'ajoutent une fois le module photo de groupe ouvert (SCHOOL_LAUNCHED).
+const expectedPlans = freeSub.schoolOpen ? "free,essentiel,pro,scolaire,studio" : "free,essentiel,pro";
+check("un nouveau compte démarre en formule Découverte (gratuite), avec les formules proposées",
       freeSub.plan?.key === "free" && freeSub.plan.maxActiveGalleries === 3 && freeSub.usage?.activeGalleries === 0 &&
-      freeSub.plans?.map((p) => p.key).join(",") === "free,essentiel,pro" && freeSub.canManage === false,
+      freeSub.plans?.map((p) => p.key).join(",") === expectedPlans && freeSub.canManage === false,
       JSON.stringify(freeSub.plan));
 check("nouvelle grille : 15 € / 29 € par mois, 150 € / 290 € par an, prix Fondateurs 12 € / 24 €",
       freeSub.plans?.[1]?.priceCents === 1500 && freeSub.plans?.[1]?.yearlyCents === 15000 && freeSub.plans?.[1]?.founderCents === 1200 &&
@@ -1656,7 +1658,7 @@ check("un compte jamais abonné a droit à l'essai de 10 jours et, s'il reste de
 const publicPlansRes = await fetch(`${BASE}/api/public/plans`);
 const publicPlansBody = await publicPlansRes.json();
 check("les formules et les places Fondateurs restantes sont publiques (page d'accueil), sans aucune donnée de compte",
-      publicPlansRes.ok && publicPlansBody.founders?.remaining <= 50 && publicPlansBody.plans?.length === 3 && publicPlansBody.trialDays === 10 &&
+      publicPlansRes.ok && publicPlansBody.founders?.remaining <= 50 && publicPlansBody.plans?.map((p) => p.key).join(",") === expectedPlans && publicPlansBody.trialDays === 10 &&
       !JSON.stringify(publicPlansBody).includes("@"));
 for (let i = 1; i <= 3; i++) {
   await free("POST", "/api/admin/galleries", { slug: `${SLUG}-gratuit-${i}`, password: "mot-de-passe-solide", title: `Gratuite ${i}` });

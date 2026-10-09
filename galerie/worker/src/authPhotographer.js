@@ -8,7 +8,7 @@
 import { json, fail } from "./http.js";
 import { TERMS_VERSION } from "./privacy.js";
 import { feeRuleForAdmin } from "./fees.js";
-import { hasFeature, schoolLaunched } from "./subscription.js";
+import { schoolEnabled, schoolLaunched } from "./subscription.js";
 import {
   hashPassword,
   verifyPassword,
@@ -97,9 +97,7 @@ function profileOf(photographer, env) {
     paymentFee: env ? feeRuleForAdmin(env, photographer) : null,
     // Onglet « Écoles & clubs » : formule qui l'inclut, module ouvert à tous
     // (présentation des formules), ou propriétaire (pour le préparer).
-    schoolTab: Boolean(env) && (
-      (Boolean(env.OWNER_EMAIL) && photographer.email === env.OWNER_EMAIL) ||
-      hasFeature(env, photographer, "school") || schoolLaunched(env)),
+    schoolTab: Boolean(env) && (schoolEnabled(env, photographer) || schoolLaunched(env)),
   };
 }
 

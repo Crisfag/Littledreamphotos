@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Holypixx — Galeries clients protégées pour photographes</title>
-  <meta name="description" content="Galeries clients protégées pour photographes : photos impossibles à télécharger, empreinte invisible traçable, alerte de capture, sélection et annotations du client, suppléments payés en ligne, boutique de tirages, livraison HD et portfolio à votre nom." />
+  <meta name="description" content="Galeries clients protégées pour photographes : photos impossibles à télécharger, empreinte invisible traçable, alerte de capture, sélection et annotations du client, suppléments payés en ligne, boutique de tirages, livraison HD, portfolio à votre nom et photo scolaire." />
   <link rel="canonical" href="https://www.holypixx.com/" />
   <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
   <meta name="author" content="Holypixx" />
@@ -103,14 +103,18 @@
           "Boutique de tirages livrés par le laboratoire",
           "Campagnes de vente et tableau de bord des ventes",
           "Livraison des fichiers HD",
-          "Portfolio et adresse à votre nom"
+          "Portfolio et adresse à votre nom",
+          "Photo scolaire : établissements, fiches parents avec QR code, espace famille, commande groupée et envoi au laboratoire"
         ],
         "offers": [
           { "@type": "Offer", "name": "Découverte", "price": "0", "priceCurrency": "EUR", "description": "Gratuit, 3 galeries actives, 5 Go." },
           { "@type": "Offer", "name": "Essentiel", "price": "15", "priceCurrency": "EUR", "description": "25 galeries actives, 200 Go, boutique de tirages et suppléments en ligne. Ou 150 € par an.",
             "priceSpecification": { "@type": "UnitPriceSpecification", "price": "15", "priceCurrency": "EUR", "unitText": "mois", "billingDuration": "P1M" } },
           { "@type": "Offer", "name": "Pro", "price": "29", "priceCurrency": "EUR", "description": "Galeries illimitées, 1 To, adresse à votre nom. Ou 290 € par an.",
-            "priceSpecification": { "@type": "UnitPriceSpecification", "price": "29", "priceCurrency": "EUR", "unitText": "mois", "billingDuration": "P1M" } }
+            "priceSpecification": { "@type": "UnitPriceSpecification", "price": "29", "priceCurrency": "EUR", "unitText": "mois", "billingDuration": "P1M" } },
+          { "@type": "Offer", "name": "Scolaire", "price": "0", "priceCurrency": "EUR", "description": "Photo scolaire sans abonnement : 5 % des ventes scolaires, frais bancaires compris." },
+          { "@type": "Offer", "name": "Studio", "price": "490", "priceCurrency": "EUR", "description": "Tout Pro et la photo scolaire sans commission, paiement annuel.",
+            "priceSpecification": { "@type": "UnitPriceSpecification", "price": "490", "priceCurrency": "EUR", "unitText": "an", "billingDuration": "P1Y" } }
         ]
       }
     ]
@@ -130,11 +134,11 @@
       { "@type": "Question", "name": "Comment fonctionne la boutique de tirages ?",
         "acceptedAnswer": { "@type": "Answer", "text": "Vous choisissez vos formats et fixez votre marge. Le client commande depuis sa galerie et paie en ligne sur votre compte Stripe ; le laboratoire Prodigi imprime et livre directement chez lui, avec suivi." } },
       { "@type": "Question", "name": "Prenez-vous une commission sur mes ventes ?",
-        "acceptedAnswer": { "@type": "Answer", "text": "Non. Sur chaque paiement en ligne (suppléments, tirages), seuls les frais de paiement sont retenus : 2 % + 0,30 €, ce que coûtent la carte bancaire et le virement vers votre compte." } },
+        "acceptedAnswer": { "@type": "Answer", "text": "Pas sur vos séances : sur chaque paiement en ligne (suppléments, tirages), seuls les frais de paiement sont retenus, 2 % + 0,30 €. Sur les ventes scolaires, 5 % frais bancaires compris, sauf avec la formule Studio." } },
       { "@type": "Question", "name": "Puis-je avoir une adresse à mon nom ?",
         "acceptedAnswer": { "@type": "Answer", "text": "Oui, avec la formule Pro : vos galeries et votre portfolio s'ouvrent sur votre-studio.holypixx.com, avec le nom de votre studio." } },
       { "@type": "Question", "name": "Et la photo scolaire ?",
-        "acceptedAnswer": { "@type": "Answer", "text": "Un module complet arrive bientôt : classes, fiches parents avec QR code, espace famille, pochettes avec aperçu de la photo de l'enfant, commande groupée et envoi au laboratoire." } },
+        "acceptedAnswer": { "@type": "Answer", "text": "C'est inclus : établissements et classes, fiches parents avec QR code, espace famille, pochettes avec aperçu de la photo de l'enfant, commande groupée et envoi au laboratoire. Avec Essentiel, Pro ou la formule Scolaire (sans abonnement), 5 % des ventes scolaires ; avec Studio (490 € par an), sans commission." } },
       { "@type": "Question", "name": "Où sont hébergées les photos ?",
         "acceptedAnswer": { "@type": "Answer", "text": "Sur l'infrastructure Cloudflare (stockage R2 et base D1). Les mots de passe ne sont jamais stockés en clair et chaque compte est strictement cloisonné." } }
     ]
@@ -445,7 +449,8 @@
       <div class="wrap">
         <div class="chapter-head">
           <h2>La photo scolaire, de la classe à la pochette.</h2>
-          <p class="chapter-lede"><span class="soon"><span class="soon-dot" aria-hidden="true"></span>Bientôt disponible</span> Écoles, crèches et clubs : un module complet arrive dans Holypixx, jusqu'à l'envoi des commandes au laboratoire.</p>
+          <p class="chapter-lede"><span class="soon"><span class="soon-dot" aria-hidden="true"></span>Nouveau</span> Écoles, crèches et clubs : de la séance à l'envoi des commandes au laboratoire, tout le scolaire dans Holypixx. Inclus dans Essentiel et Pro, ou avec les formules Scolaire et Studio.</p>
+          <a class="chapter-cta school-cta" href="#tarifs-scolaire">Voir les formules scolaires<svg class="ico"><use href="#i-arrow"/></svg></a>
         </div>
 
         <div class="school-grid">
@@ -530,10 +535,11 @@
               <li>Boutique de tirages intégrée</li>
               <li>Suppléments payés en ligne, factures</li>
               <li>Campagnes et tableau des ventes</li>
+              <li>Écoles, crèches et clubs : 5&nbsp;% des ventes scolaires</li>
             </ul>
           </article>
           <article class="plan plan-pro">
-            <p class="plan-flag">Le plus complet</p>
+            <p class="plan-flag">Recommandé</p>
             <h3>Pro</h3>
             <p class="plan-for">Pour un studio à votre nom, sans limite.</p>
             <p class="plan-price" data-plan="pro"><span class="plan-amount">29 €</span><span class="plan-per">/ mois</span></p>
@@ -544,10 +550,48 @@
               <li>Tout Essentiel</li>
               <li>Adresse à votre nom : <span class="nowrap">votre-studio.holypixx.com</span></li>
               <li>Portfolio sur votre adresse</li>
+              <li>Écoles, crèches et clubs : 5&nbsp;% des ventes scolaires</li>
             </ul>
           </article>
         </div>
-        <p class="plans-note">Prix TTC, sans engagement, résiliable à tout moment depuis votre compte. Aucune commission sur vos ventes : seuls les frais de paiement (2&nbsp;% + 0,30&nbsp;€ par vente) sont retenus. Formules dédiées à la photo scolaire annoncées au lancement du module.</p>
+
+        <div class="plans-school" id="tarifs-scolaire">
+          <div class="plans-school-head">
+            <h3>Photo scolaire</h3>
+            <p>Écoles, crèches et clubs : classes, fiches parents avec QR code, espace famille, paiement en ligne et envoi au laboratoire.</p>
+          </div>
+          <div class="plans plans-2">
+            <article class="plan">
+              <h3>Scolaire</h3>
+              <p class="plan-for">Vous ne faites que du scolaire : vous payez à la vente.</p>
+              <p class="plan-price"><span class="plan-amount">0 €</span><span class="plan-per">/ mois</span></p>
+              <p class="plan-alt">5&nbsp;% des ventes scolaires, frais bancaires compris</p>
+              <a class="btn btn-outline" data-signup href="https://holypixx-admin.onrender.com/#/inscription" rel="nofollow">Créer mon compte</a>
+              <ul class="ticks">
+                <li>Module scolaire complet, sans abonnement</li>
+                <li>Établissements, classes, fiches parents avec QR</li>
+                <li>Espace famille, frères et sœurs réunis</li>
+                <li>Commande groupée et envoi au labo par lots</li>
+                <li>Galeries classiques comme Découverte, 500 Go</li>
+              </ul>
+            </article>
+            <article class="plan plan-studio">
+              <p class="plan-flag">Sans commission</p>
+              <h3>Studio</h3>
+              <p class="plan-for">Séances et scolaire, pour un volume important.</p>
+              <p class="plan-price"><span class="plan-amount" data-studio-amount>490 €</span><span class="plan-per">/ an</span></p>
+              <p class="plan-alt" data-studio-alt>soit 41 € par mois, paiement annuel</p>
+              <a class="btn btn-primary" data-signup href="https://holypixx-admin.onrender.com/#/inscription" rel="nofollow">Essayer 10 jours gratuitement</a>
+              <ul class="ticks">
+                <li>Tout Pro : galeries illimitées, adresse à votre nom</li>
+                <li>Ventes scolaires sans commission (frais de paiement 2&nbsp;% + 0,30&nbsp;€)</li>
+                <li>2 To de stockage</li>
+                <li>Plus avantageux que 5&nbsp;% dès environ 25&nbsp;000&nbsp;€ de ventes scolaires par an</li>
+              </ul>
+            </article>
+          </div>
+        </div>
+        <p class="plans-note">Prix TTC, sans engagement, résiliable à tout moment depuis votre compte (Studio : à l'échéance annuelle). Aucune commission sur vos ventes de séances : seuls les frais de paiement (2&nbsp;% + 0,30&nbsp;€ par vente) sont retenus. Ventes scolaires : 5&nbsp;%, frais bancaires compris, ou sans commission avec Studio.</p>
       </div>
     </section>
 
@@ -560,9 +604,9 @@
           <details><summary>Peut-on empêcher une capture d'écran ?</summary><p>Aucun site au monde ne le peut. Holypixx rend une capture inutile (basse définition, filigrane dense), vous prévient par e-mail quand une capture est tentée, et retrouve la galerie d'origine d'une image grâce à son empreinte invisible.</p></details>
           <details><summary>Mon client doit-il créer un compte ?</summary><p>Non. Il reçoit un lien et un mot de passe, rien d'autre.</p></details>
           <details><summary>Comment fonctionne la boutique de tirages ?</summary><p>Vous choisissez vos formats et fixez votre marge. Le client commande depuis sa galerie et paie en ligne sur votre compte Stripe ; le laboratoire Prodigi imprime et livre directement chez lui, avec suivi.</p></details>
-          <details><summary>Prenez-vous une commission sur mes ventes ?</summary><p>Non. Sur chaque paiement en ligne (suppléments, tirages), seuls les frais de paiement sont retenus : 2&nbsp;% + 0,30&nbsp;€, ce que coûtent la carte bancaire et le virement vers votre compte.</p></details>
+          <details><summary>Prenez-vous une commission sur mes ventes ?</summary><p>Pas sur vos séances : sur chaque paiement en ligne (suppléments, tirages), seuls les frais de paiement sont retenus, 2&nbsp;% + 0,30&nbsp;€, ce que coûtent la carte bancaire et le virement vers votre compte. Sur les ventes scolaires, 5&nbsp;% frais bancaires compris, sauf avec la formule Studio.</p></details>
           <details><summary>Puis-je avoir une adresse à mon nom ?</summary><p>Oui, avec la formule Pro : vos galeries et votre portfolio s'ouvrent sur <span class="nowrap">votre-studio.holypixx.com</span>, avec le nom de votre studio.</p></details>
-          <details><summary>Et la photo scolaire ?</summary><p>Un module complet arrive bientôt : classes, fiches parents avec QR code, espace famille, pochettes avec aperçu de la photo de l'enfant, commande groupée et envoi au laboratoire.</p></details>
+          <details><summary>Et la photo scolaire ?</summary><p>C'est inclus : établissements et classes, fiches parents avec QR code, espace famille, pochettes avec aperçu de la photo de l'enfant, commande groupée et envoi au laboratoire. Avec Essentiel, Pro ou la formule Scolaire (sans abonnement), 5&nbsp;% des ventes scolaires ; avec Studio (490&nbsp;€ par an), sans commission.</p></details>
           <details><summary>Où sont hébergées les photos ?</summary><p>Sur l'infrastructure Cloudflare (stockage R2 et base D1). Les mots de passe ne sont jamais stockés en clair et chaque compte est strictement cloisonné.</p></details>
         </div>
       </div>

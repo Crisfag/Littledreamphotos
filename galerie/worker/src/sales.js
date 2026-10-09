@@ -1,10 +1,13 @@
 // Tableau de bord des ventes du photographe : chiffre d'affaires des douze
-// derniers mois (suppléments et tirages), panier moyen, marge estimée sur
-// les tirages, formats et galeries qui vendent le mieux.
+// derniers mois (suppléments, tirages et photos scolaires), panier moyen,
+// marge estimée sur les tirages, formats, galeries et établissements qui
+// vendent le mieux.
 //
 // Tout part des paiements réglés (`payments.status = 'paid'`), la même
 // source que les factures : le tableau de bord ne peut jamais afficher un
-// montant différent de ce que le photographe a facturé. Les mois sont ceux
+// montant différent de ce que le photographe a facturé. Les ventes
+// scolaires viennent des commandes familles réglées
+// (`school_orders.status = 'paid'`, port compris). Les mois sont ceux
 // du calendrier belge (Europe/Brussels), pas de l'UTC : un paiement reçu le
 // 31 à 23 h 30 compte bien dans le mois du 31.
 //
@@ -66,13 +69,16 @@ export function windowStart(nowSeconds, count = SALES_MONTHS, timeZone = SALES_T
 //   payments  : [{ id, gallery_id, kind, amount_cents, fee_cents, paid_at }]   (réglés)
 //   orders    : [{ payment_id, items }]                             (tirages)
 //   products  : [{ id, cost_cents }]                                (catalogue actuel)
-//   galleries : [{ id, slug, title, created_at }]
-export function summarizeSales({ payments, orders, products, galleries, nowSeconds, timeZone = SALES_TIME_ZONE, months = SALES_MONTHS }) {
+//   galleries : [{ id, slug, title, created_at }]                  (hors galeries de classe)
+//   schoolOrders : [{ id, amount_cents, fee_cents, paid_at, school_id, school_name, year_id, year_label }]
+//   schoolLines  : [{ order_id, name, quantity, price_cents }]      (prix unitaire)
+export function summarizeSales({ payments, orders, products, galleries, schoolOrders = [], schoolLines = [], nowSeconds, timeZone = SALES_TIME_ZONE, months = SALES_MONTHS }) {
   const monthList = lastMonths(nowSeconds, months, timeZone).map((m) => ({
     key: m.key,
     label: m.label,
     supplementCents: 0,
     printCents: 0,
+    schoolCents: 0,
     orders: 0,
   }));
   const byKey = new Map(monthList.map((m) => [m.key, m]));
@@ -89,13 +95,24 @@ export function summarizeSales({ payments, orders, products, galleries, nowSecon
     month.orders += 1;
   }
 
-  // Frais de paiement retenus sur ces ventes (voir fees.js).
-  const feeCents = inWindow.reduce((sum, p) => sum + (p.fee_cents || 0), 0);
+  const schoolInWindow = [];
+  for (const o of schoolOrders) {
+    if (!o.paid_at) continue;
+    const month = byKey.get(monthKey(calendarMonth(o.paid_at, timeZone)));
+    if (!month) continue;
+    schoolInWindow.push(o);
+    month.schoolCents += o.amount_cents || 0;
+    month.orders += 1;
+  }
+
+  // Frais de paiement (ou commission scolaire) retenus sur ces ventes (voir fees.js).
+  const feeCents = [...inWindow, ...schoolInWindow].reduce((sum, p) => sum + (p.fee_cents || 0), 0);
   const printFeeCents = inWindow.filter((p) => p.kind === "print").reduce((sum, p) => sum + (p.fee_cents || 0), 0);
   const supplementCents = monthList.reduce((s, m) => s + m.supplementCents, 0);
   const printCents = monthList.reduce((s, m) => s + m.printCents, 0);
-  const revenueCents = supplementCents + printCents;
-  const orderCount = inWindow.length;
+  const schoolCents = monthList.reduce((s, m) => s + m.schoolCents, 0);
+  const revenueCents = supplementCents + printCents + schoolCents;
+  const orderCount = inWindow.length + schoolInWindow.length;
 
   // Lignes de tirage des commandes réglées dans la fenêtre.
   const paidIds = new Set(inWindow.filter((p) => p.kind === "print").map((p) => p.id));
@@ -139,6 +156,33 @@ export function summarizeSales({ payments, orders, products, galleries, nowSecon
     .sort((a, b) => b.revenueCents - a.revenueCents || b.copies - a.copies || a.label.localeCompare(b.label))
     .slice(0, TOP_LIMIT);
 
+  // Établissements (une ligne par année scolaire) et articles scolaires.
+  const schoolTotals = new Map();
+  for (const o of schoolInWindow) {
+    const entry = schoolTotals.get(o.year_id) || {
+      schoolId: o.school_id, yearId: o.year_id, name: o.school_name || "Établissement supprimé", yearLabel: o.year_label || "", revenueCents: 0, orders: 0,
+    };
+    entry.revenueCents += o.amount_cents || 0;
+    entry.orders += 1;
+    schoolTotals.set(o.year_id, entry);
+  }
+  const topSchools = [...schoolTotals.values()]
+    .sort((a, b) => b.revenueCents - a.revenueCents || a.name.localeCompare(b.name))
+    .slice(0, TOP_LIMIT);
+  const schoolPaidIds = new Set(schoolInWindow.map((o) => o.id));
+  const schoolProductTotals = new Map();
+  for (const line of schoolLines) {
+    if (!schoolPaidIds.has(line.order_id)) continue;
+    const quantity = Number(line.quantity) || 0;
+    const entry = schoolProductTotals.get(line.name) || { label: line.name || "Article", copies: 0, revenueCents: 0 };
+    entry.copies += quantity;
+    entry.revenueCents += (Number(line.price_cents) || 0) * quantity;
+    schoolProductTotals.set(line.name, entry);
+  }
+  const topSchoolProducts = [...schoolProductTotals.values()]
+    .sort((a, b) => b.revenueCents - a.revenueCents || b.copies - a.copies || a.label.localeCompare(b.label))
+    .slice(0, TOP_LIMIT);
+
   // Conversion : parmi les galeries créées dans la fenêtre, celles qui ont
   // vendu au moins une fois (supplément ou tirage, à n'importe quelle date).
   const start = windowStart(nowSeconds, months, timeZone);
@@ -154,6 +198,7 @@ export function summarizeSales({ payments, orders, products, galleries, nowSecon
       revenueCents,
       supplementCents,
       printCents,
+      schoolCents,
       orders: orderCount,
       averageOrderCents: orderCount ? Math.round(revenueCents / orderCount) : 0,
       feeCents,
@@ -170,13 +215,15 @@ export function summarizeSales({ payments, orders, products, galleries, nowSecon
     conversion: { galleries: recent.length, withSales, rate: recent.length ? withSales / recent.length : 0 },
     topProducts,
     topGalleries,
+    topSchools,
+    topSchoolProducts,
   };
 }
 
 // GET /api/admin/sales
 export async function salesForAdmin(env, photographerId, nowSeconds = Math.floor(Date.now() / 1000)) {
   const since = windowStart(nowSeconds);
-  const [payments, orders, products, galleries] = await Promise.all([
+  const [payments, orders, products, galleries, schoolOrders, schoolLines, schoolCount] = await Promise.all([
     env.DB.prepare(
       `SELECT p.id, p.gallery_id, p.kind, p.amount_cents, p.fee_cents, p.paid_at
          FROM payments p JOIN galleries g ON g.id = p.gallery_id
@@ -186,15 +233,33 @@ export async function salesForAdmin(env, photographerId, nowSeconds = Math.floor
       "SELECT payment_id, items FROM print_orders WHERE photographer_id = ? AND paid_at >= ?"
     ).bind(photographerId, since).all(),
     env.DB.prepare("SELECT id, cost_cents FROM print_products WHERE photographer_id = ?").bind(photographerId).all(),
-    env.DB.prepare("SELECT id, slug, title, created_at FROM galleries WHERE photographer_id = ?").bind(photographerId).all(),
+    // Les galeries de classe vendent par l'espace famille, pas par paiement
+    // de galerie : elles n'entrent pas dans la conversion des galeries.
+    env.DB.prepare("SELECT id, slug, title, created_at FROM galleries WHERE photographer_id = ? AND kind != 'school'").bind(photographerId).all(),
+    env.DB.prepare(
+      `SELECT o.id, o.amount_cents, o.fee_cents, o.paid_at, y.id AS year_id, y.label AS year_label, s.id AS school_id, s.name AS school_name
+         FROM school_orders o JOIN school_years y ON y.id = o.year_id JOIN schools s ON s.id = y.school_id
+        WHERE s.photographer_id = ? AND o.status = 'paid' AND o.paid_at >= ?`
+    ).bind(photographerId, since).all(),
+    env.DB.prepare(
+      `SELECT l.order_id, l.name, l.quantity, l.price_cents
+         FROM school_order_lines l JOIN school_orders o ON o.id = l.order_id
+         JOIN school_years y ON y.id = o.year_id JOIN schools s ON s.id = y.school_id
+        WHERE s.photographer_id = ? AND o.status = 'paid' AND o.paid_at >= ?`
+    ).bind(photographerId, since).all(),
+    env.DB.prepare("SELECT COUNT(*) AS n FROM schools WHERE photographer_id = ?").bind(photographerId).first(),
   ]);
-  return json(
-    summarizeSales({
+  return json({
+    ...summarizeSales({
       payments: payments.results || [],
       orders: orders.results || [],
       products: products.results || [],
       galleries: galleries.results || [],
+      schoolOrders: schoolOrders.results || [],
+      schoolLines: schoolLines.results || [],
       nowSeconds,
-    })
-  );
+    }),
+    // Établissements créés : l'admin affiche alors la série scolaire, même vide.
+    hasSchools: (schoolCount?.n || 0) > 0,
+  });
 }

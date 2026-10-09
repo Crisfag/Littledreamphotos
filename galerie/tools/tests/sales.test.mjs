@@ -134,11 +134,67 @@ check("sur téléphone, le graphique tient dans la largeur",
         document.querySelector(".ad-chart-svg").getBoundingClientRect().right <= window.innerWidth));
 if (SCREENSHOT) await page.screenshot({ path: SCREENSHOT.replace(/\.png$/, "-mobile.png"), fullPage: true });
 
+/* ---------- Photographe scolaire : commandes des familles ---------- */
+
+const schoolAccount = await createTestAccount(API, "ventes-ecole");
+const schoolClient = new WorkerClient({ api: API, ...schoolAccount });
+const schoolMe = await schoolClient.request("GET", "/api/auth/me");
+const schoolPhotographerId = schoolMe.photographer?.id || schoolMe.id;
+const sch = `sch_v_${stamp}`, scy = `scy_v_${stamp}`;
+const schoolOrder = (id, cents, fee, paidAt, status = "paid") =>
+  `INSERT INTO school_orders (id, year_id, family_id, email, delivery, amount_cents, fee_cents, status, created_at, paid_at) ` +
+  `VALUES ('${id}_${stamp}', '${scy}', 'fam_${stamp}', 'famille@test.invalid', 'school', ${cents}, ${fee}, '${status}', ${paidAt}, ${status === "paid" ? paidAt : "NULL"});`;
+const schoolLine = (id, order, name, price, qty) =>
+  `INSERT INTO school_order_lines (id, order_id, child_id, group_id, product_id, photo_id, kind, name, price_cents, quantity) ` +
+  `VALUES ('${id}_${stamp}', '${order}_${stamp}', 'chd_x', 'grp_x', 'prd_x', 'pho_x', 'pack', '${name}', ${price}, ${qty});`;
+await d1(
+  `INSERT INTO schools (id, photographer_id, kind, name, created_at) VALUES ('${sch}', '${schoolPhotographerId}', 'ecole', 'École des Tilleuls', ${now});` +
+  `INSERT INTO school_years (id, school_id, label, status, created_at) VALUES ('${scy}', '${sch}', '2026-2027', 'open', ${now});` +
+  schoolOrder("sco1", 3200, 144, daysAgo(3)) +
+  schoolOrder("sco2", 1800, 81, daysAgo(2)) +
+  schoolOrder("sco3", 5000, 0, now, "pending") +
+  schoolLine("sol1", "sco1", "Pochette Classique", 2500, 1) +
+  schoolLine("sol2", "sco1", "Photo de classe 20 × 30", 700, 1) +
+  schoolLine("sol3", "sco2", "Photo de classe 20 × 30", 900, 2)
+);
+const schoolSales = await schoolClient.request("GET", "/api/admin/sales");
+check("ventes scolaires : seules les commandes réglées comptent, dans le chiffre d'affaires et les frais",
+      schoolSales.totals.schoolCents === 5000 && schoolSales.totals.revenueCents === 5000 && schoolSales.totals.orders === 2 &&
+      schoolSales.totals.feeCents === 225 && schoolSales.hasSchools === true, `${schoolSales.totals.schoolCents}`);
+check("classements scolaires : l'établissement et ses articles",
+      schoolSales.topSchools[0]?.name === "École des Tilleuls" && schoolSales.topSchools[0].yearLabel === "2026-2027" && schoolSales.topSchools[0].orders === 2 &&
+      schoolSales.topSchoolProducts.map((p) => `${p.label}:${p.copies}`).join("|") === "Photo de classe 20 × 30:3|Pochette Classique:1",
+      schoolSales.topSchoolProducts.map((p) => `${p.label}:${p.copies}:${p.revenueCents}`).join("|"));
+check("le photographe sans établissement ne voit pas la série scolaire", sales.hasSchools === false && sales.totals.schoolCents === 0);
+
+const schoolPage = await browser.newPage({ viewport: { width: 1200, height: 1000 } });
+schoolPage.on("pageerror", (err) => exceptions.push(String(err)));
+await schoolPage.goto(BASE, { waitUntil: "domcontentloaded" });
+await schoolPage.waitForSelector("#ad-login-form", { timeout: 10000 });
+await schoolPage.fill('#ad-login-form [name="email"]', schoolAccount.email);
+await schoolPage.fill('#ad-login-form [name="password"]', schoolAccount.password);
+await schoolPage.click("#ad-login-submit");
+await schoolPage.waitForSelector("#ad-new-gallery", { timeout: 10000 });
+await schoolPage.goto(`${BASE}/#/ventes`, { waitUntil: "domcontentloaded" });
+await schoolPage.waitForSelector(".ad-chart-svg", { timeout: 10000 });
+const schoolStats = await schoolPage.textContent(".ad-stats");
+const schoolRanks = await schoolPage.textContent(".ad-sales-ranks");
+check("onglet Ventes : série « Photos scolaires » dans la légende, montant scolaire dans les indicateurs",
+      (await schoolPage.locator(".ad-legend li").count()) === 3 && (await schoolPage.textContent(".ad-legend")).includes("Photos scolaires") &&
+      schoolStats.includes("50,00") && schoolStats.includes("50 € scolaire") && !schoolStats.includes("0 € tirages"), schoolStats.replace(/\s+/g, " "));
+check("onglet Ventes : établissements et articles scolaires classés, lien vers l'année",
+      schoolRanks.includes("École des Tilleuls") && schoolRanks.includes("Pochette Classique") &&
+      (await schoolPage.getAttribute(".ad-rank a[href^='#/scolaire/']", "href")) === `#/scolaire/${sch}/${scy}`);
+await schoolPage.click('[data-sales-mode="table"]');
+check("vue tableau : colonne Scolaire", (await schoolPage.textContent(".ad-sales-table thead")).includes("Scolaire"));
+await schoolPage.close();
+
 check("aucune exception JavaScript", exceptions.length === 0, exceptions.join(" | "));
 
 /* ---------- Nettoyage ---------- */
 
 await browser.close();
+await d1(`DELETE FROM schools WHERE id = '${sch}'`);
 for (const slug of [slugA, slugB, slugC]) await client.deleteGallery(slug).catch(() => {});
 await d1(`DELETE FROM print_products WHERE id = '${product}'`);
 

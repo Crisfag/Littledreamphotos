@@ -65,9 +65,42 @@ check("les galeries sont classées par chiffre d'affaires",
 check("conversion : galeries de la période ayant vendu",
       s.conversion.galleries === 3 && s.conversion.withSales === 2, `${s.conversion.withSales}/${s.conversion.galleries}`);
 
+// Ventes scolaires : commandes familles réglées, par établissement et par article.
+const schoolOrders = [
+  { id: "sco1", amount_cents: 2500, fee_cents: 113, paid_at: at("2026-09-20T09:00:00Z"), school_id: "sch1", school_name: "École du Centre", year_id: "y1", year_label: "2026-2027" },
+  { id: "sco2", amount_cents: 4000, fee_cents: 180, paid_at: at("2026-10-01T09:00:00Z"), school_id: "sch1", school_name: "École du Centre", year_id: "y1", year_label: "2026-2027" },
+  { id: "sco3", amount_cents: 1500, fee_cents: 68, paid_at: at("2026-10-02T09:00:00Z"), school_id: "sch2", school_name: "Crèche Les Lutins", year_id: "y2", year_label: "2026-2027" },
+  { id: "sco_old", amount_cents: 9900, fee_cents: 0, paid_at: at("2024-10-02T09:00:00Z"), school_id: "sch1", school_name: "École du Centre", year_id: "y0", year_label: "2024-2025" },
+];
+const schoolLines = [
+  { order_id: "sco1", name: "Pochette Classique", quantity: 1, price_cents: 2500 },
+  { order_id: "sco2", name: "Pochette Classique", quantity: 1, price_cents: 2500 },
+  { order_id: "sco2", name: "Photo de classe 20 × 30", quantity: 2, price_cents: 750 },
+  { order_id: "sco3", name: "Photo de classe 20 × 30", quantity: 2, price_cents: 750 },
+  { order_id: "sco_old", name: "Ancien article", quantity: 9, price_cents: 1100 },
+];
+const withSchool = summarizeSales({ payments, orders, products, galleries, schoolOrders, schoolLines, nowSeconds: NOW });
+const wk = Object.fromEntries(withSchool.months.map((m) => [m.key, m]));
+check("ventes scolaires : leur propre série, dans le mois du paiement (hors fenêtre ignorées)",
+      wk["2026-09"].schoolCents === 2500 && wk["2026-10"].schoolCents === 5500 && withSchool.totals.schoolCents === 8000,
+      `${withSchool.totals.schoolCents}`);
+check("ventes scolaires comprises dans le chiffre d'affaires, les paiements, les frais et le net",
+      withSchool.totals.revenueCents === 15290 + 8000 && withSchool.totals.orders === 6 &&
+      withSchool.totals.feeCents === 228 + 113 + 180 + 68 && withSchool.totals.netCents === 23290 - 589 &&
+      withSchool.totals.averageOrderCents === Math.round(23290 / 6));
+check("établissements classés par chiffre d'affaires, avec leur année",
+      withSchool.topSchools.map((x) => `${x.name} ${x.yearLabel} ${x.revenueCents} ${x.orders}`).join("|") ===
+      "École du Centre 2026-2027 6500 2|Crèche Les Lutins 2026-2027 1500 1" && withSchool.topSchools[0].yearId === "y1");
+check("articles scolaires classés (quantités × prix unitaire), hors commandes anciennes",
+      withSchool.topSchoolProducts.map((x) => `${x.label} ${x.copies} ${x.revenueCents}`).join("|") ===
+      "Pochette Classique 2 5000|Photo de classe 20 × 30 4 3000");
+check("la marge des tirages et la conversion des galeries ne bougent pas",
+      withSchool.printMargin.marginCents === s.printMargin.marginCents && withSchool.conversion.withSales === s.conversion.withSales);
+
 const empty = summarizeSales({ payments: [], orders: [], products: [], galleries: [], nowSeconds: NOW });
 check("sans vente, tout vaut zéro sans division par zéro",
-      empty.totals.revenueCents === 0 && empty.totals.averageOrderCents === 0 && empty.conversion.rate === 0 && empty.printMargin.coverage === 0 && empty.months.length === 12);
+      empty.totals.revenueCents === 0 && empty.totals.averageOrderCents === 0 && empty.conversion.rate === 0 && empty.printMargin.coverage === 0 && empty.months.length === 12 &&
+      empty.totals.schoolCents === 0 && empty.topSchools.length === 0 && empty.topSchoolProducts.length === 0);
 
 const failed = checks.filter((c) => !c.ok);
 console.log(failed.length ? `\n${failed.length} vérification(s) en échec.` : `\n${checks.length} vérifications, toutes passent.`);

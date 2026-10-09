@@ -4,7 +4,7 @@
 //
 //   node tests/subscription.test.mjs
 
-import { PLANS, planFor, hasFeature, planKeyFromSubscription, handleSubscriptionEvent, TRIAL_DAYS, FOUNDERS_LIMIT, founderCoupon, trialAvailable, founderEligible, publicPlans, syncSubscription, monthlyRevenueCents, STUDIO_FOUNDERS_LIMIT } from "../src/subscription.js";
+import { PLANS, planFor, hasFeature, planKeyFromSubscription, handleSubscriptionEvent, TRIAL_DAYS, FOUNDERS_LIMIT, founderCoupon, trialAvailable, founderEligible, publicPlans, syncSubscription, monthlyRevenueCents, STUDIO_FOUNDERS_LIMIT, schoolEnabled, planOut } from "../src/subscription.js";
 
 const checks = [];
 function check(label, ok, detail) {
@@ -134,13 +134,20 @@ check("la fin d'un ancien abonnement n'écrase pas un abonnement plus récent", 
 {
   const yearCoupon = founderCoupon(PLANS.studio, "year");
   const monthCoupon = founderCoupon(PLANS.studio, "month");
-  check("Studio : 49 €/mois ou 490 €/an ; Fondateurs (30 places) 50 € de moins la 1re année en annuel, 45 €/mois pendant 12 mois en mensuel",
-        PLANS.studio.priceCents === 4900 && PLANS.studio.yearlyCents === 49000 && STUDIO_FOUNDERS_LIMIT === 30 &&
-        yearCoupon.amount_off === 5000 && yearCoupon.duration === "once" && monthCoupon.amount_off === 400 && monthCoupon.duration_in_months === 12);
-  check("Scolaire : sans abonnement, 4,5 % des ventes scolaires ; Studio et Scolaire ouvrent le module, pas Essentiel ni Pro",
-        PLANS.scolaire.noSubscription && PLANS.scolaire.schoolFeePercent === 4.5 &&
-        hasFeature({}, { plan: "scolaire", plan_status: "active" }, "school") && hasFeature({}, { plan: "studio", plan_status: "active" }, "school") &&
-        !hasFeature({}, { plan: "pro", plan_status: "active" }, "school"));
+  check("Studio : 490 €/an, en annuel seulement ; Fondateurs (30 places) 50 € de moins la 1re année",
+        PLANS.studio.yearlyOnly && PLANS.studio.yearlyCents === 49000 && STUDIO_FOUNDERS_LIMIT === 30 &&
+        yearCoupon.amount_off === 5000 && yearCoupon.duration === "once" && monthCoupon.duration_in_months === 12 &&
+        planOut(PLANS.studio).yearlyOnly === true && !planOut(PLANS.pro).yearlyOnly);
+  check("Scolaire : sans abonnement, 5 % des ventes scolaires ; Essentiel et Pro incluent aussi le module à 5 %, Studio sans commission",
+        PLANS.scolaire.noSubscription && PLANS.scolaire.schoolFeePercent === 5 &&
+        PLANS.essentiel.schoolFeePercent === 5 && PLANS.pro.schoolFeePercent === 5 && !PLANS.studio.schoolFeePercent &&
+        hasFeature({}, { plan: "pro", plan_status: "active" }, "school") && !hasFeature({}, { plan: "free" }, "school"));
+  const launched = { SCHOOL_LAUNCHED: "1" };
+  check("module utilisable : Essentiel et Pro seulement une fois ouvert ; Scolaire et Studio toujours ; Découverte jamais",
+        !schoolEnabled({}, { plan: "pro", plan_status: "active" }) && schoolEnabled(launched, { plan: "pro", plan_status: "active" }) &&
+        schoolEnabled(launched, { plan: "essentiel", plan_status: "trialing" }) && schoolEnabled({}, { plan: "studio", plan_status: "active" }) &&
+        schoolEnabled({}, { plan: "scolaire", plan_status: "active" }) && !schoolEnabled(launched, { plan: "free" }) &&
+        !schoolEnabled(launched, { plan: "pro", plan_status: "canceled" }));
   const hidden = publicPlans(0).plans.map((p) => p.key).join(",");
   const shown = publicPlans(0, { withSchool: true, studioTaken: 28 });
   check("formules du module masquées tant qu'il n'est pas ouvert ; ensuite proposées avec les places Fondateurs Studio restantes",

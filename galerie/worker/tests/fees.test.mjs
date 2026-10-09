@@ -35,13 +35,16 @@ check("libellé affiché au photographe",
       feeRuleLabel(rule) === "2 % + 0,30 €" && feeRuleLabel(tuned) === "1,5 % + 0,25 €" &&
       feeRuleLabel({ percent: 0, fixedCents: 0 }) === "aucun" && feeRuleLabel({ percent: 0, fixedCents: 50 }) === "0,50 €");
 
-// Ventes scolaires : la formule Scolaire paie 4,5 % (frais bancaires compris),
-// Studio garde la règle ordinaire, la propriétaire ne paie rien.
+// Ventes scolaires : Scolaire, Essentiel et Pro paient 5 % (frais bancaires
+// compris), Studio garde la règle ordinaire, la propriétaire ne paie rien.
 const scolaire = schoolFeeRule(env, { email: "a@test.invalid", plan: "scolaire", plan_status: "active" });
 const scolaireOff = schoolFeeRule(env, { email: "a@test.invalid", plan: "scolaire", plan_status: "canceled" });
 const studioRule = schoolFeeRule(env, { email: "b@test.invalid", plan: "studio", plan_status: "active" });
-check("ventes scolaires : 4,5 % pour Scolaire, règle ordinaire pour Studio, rien pour la propriétaire",
-      scolaire.percent === 4.5 && scolaire.fixedCents === 0 && feeCentsFor(scolaire, 7100) === 320 &&
+const proRule = schoolFeeRule(env, { email: "c@test.invalid", plan: "pro", plan_status: "active" });
+const essentielTrial = schoolFeeRule(env, { email: "d@test.invalid", plan: "essentiel", plan_status: "trialing" });
+check("ventes scolaires : 5 % pour Scolaire, Essentiel et Pro, règle ordinaire pour Studio, rien pour la propriétaire",
+      scolaire.percent === 5 && scolaire.fixedCents === 0 && feeCentsFor(scolaire, 7100) === 355 &&
+      proRule.percent === 5 && proRule.fixedCents === 0 && essentielTrial.percent === 5 &&
       studioRule.percent === 2 && studioRule.fixedCents === 30 && scolaireOff.percent === 2 &&
       schoolFeeRule(env, { email: "proprietaire@test.invalid", plan: "scolaire", plan_status: "active" }).percent === 0);
 

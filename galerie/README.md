@@ -492,13 +492,19 @@ Le tableau de bord s'organise en trois onglets, chacun avec son propre lien
     responsables de l'année précédente. Statut de l'année (en préparation,
     en vente, ventes closes, archivée), date de la commande groupée (livrée
     à l'établissement) et de la commande à domicile.
-  - *Formules* : **Scolaire** (sans abonnement, 4,5 % des ventes scolaires,
-    frais bancaires compris, galeries classiques comme Découverte ; activée
-    d'un clic) et **Studio** (49 €/mois ou 490 €/an : tout Pro plus le
-    scolaire sans commission ; offre Fondateurs à part, 30 places : 440 € la
-    1re année ou 45 €/mois pendant 12 mois). Elles ne sont proposées qu'avec
-    `SCHOOL_LAUNCHED = "1"` (wrangler.toml) ; d'ici là seule la propriétaire
-    voit le module, pour le préparer.
+  - *Formules* :
+    - **Scolaire** : sans abonnement, 5 % des ventes scolaires, frais
+      bancaires compris ; galeries classiques comme Découverte ; activée d'un
+      clic.
+    - **Essentiel** et **Pro** : le module inclus, à la même commission de
+      5 %.
+    - **Studio** : 490 €/an, en paiement annuel seulement (la photo scolaire
+      est saisonnière) ; tout Pro plus le scolaire sans commission ; offre
+      Fondateurs à part, 30 places : 440 € la 1re année.
+    
+    Le module n'est ouvert qu'avec `SCHOOL_LAUNCHED = "1"` (wrangler.toml).
+    D'ici là, seule la propriétaire le voit, pour le préparer.
+    `schoolEnabled` (subscription.js) décide de l'accès.
   - *Photos d'un groupe* : on glisse les photos (ou le dossier) d'une
     classe ; chaque groupe a sa galerie protégée (`galleries.kind =
     'school'`, jamais listée avec les galeries classiques ni comptée dans
@@ -542,8 +548,9 @@ Le tableau de bord s'organise en trois onglets, chacun avec son propre lien
     l'année suivante. La famille remplit un seul panier pour tous ses
     enfants (navigateur), choisit la photo de chaque article, et paie par
     Stripe : charge de destination vers le photographe, une commande par
-    établissement et par année, retenue `schoolFeeRule` (fees.js : 4,5 %
-    pour la formule Scolaire, frais de paiement ordinaires sinon). Livraison
+    établissement et par année, retenue `schoolFeeRule` (fees.js : 5 %
+    pour Scolaire, Essentiel et Pro, frais de paiement ordinaires pour
+    Studio). Livraison
     groupée à l'établissement, gratuite, jusqu'à la date de commande
     groupée ; ensuite, à domicile (adresse demandée par Stripe) jusqu'à la
     date de commande à domicile. Le serveur revérifie chaque article
