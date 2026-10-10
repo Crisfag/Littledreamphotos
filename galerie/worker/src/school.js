@@ -17,7 +17,7 @@
 
 import { json, fail } from "./http.js";
 import { randomBytes, b64url, hashPassword } from "./auth.js";
-import { hasFeature, isOwner, featureRefusal, schoolLaunched } from "./subscription.js";
+import { isOwner, featureRefusal, schoolLaunched, schoolEnabled } from "./subscription.js";
 import { handleSchoolShopAdmin, copyProducts, eraseShopStatements } from "./schoolshop.js";
 import { handleSchoolLabAdmin } from "./schoollab.js";
 
@@ -71,7 +71,7 @@ function deadline(value) {
 
 export function schoolAccess(env, photographer) {
   const owner = isOwner(env, photographer);
-  return { allowed: owner || hasFeature(env, photographer, "school"), owner, launched: schoolLaunched(env) };
+  return { allowed: schoolEnabled(env, photographer), owner, launched: schoolLaunched(env) };
 }
 
 /* ---------- Lecture ---------- */

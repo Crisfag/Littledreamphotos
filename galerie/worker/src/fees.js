@@ -40,9 +40,10 @@ export function paymentFeeRule(env, photographer) {
   };
 }
 
-// Ventes du module scolaire : la formule Scolaire paie sa commission
-// (frais bancaires compris) à la place des frais de paiement habituels ;
-// Studio et les autres formules gardent la règle ordinaire.
+// Ventes du module scolaire : Scolaire, Essentiel et Pro paient la
+// commission scolaire (5 %, frais bancaires compris) à la place des frais de
+// paiement habituels ; Studio, qui l'inclut dans son abonnement annuel, ne
+// paie que la règle ordinaire (2 % + 0,30 €).
 export function schoolFeeRule(env, photographer) {
   if (photographer && isOwner(env, photographer)) return { percent: 0, fixedCents: 0 };
   const plan = PLANS[photographer?.plan];

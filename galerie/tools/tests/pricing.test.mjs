@@ -50,8 +50,11 @@ await page.waitForSelector("#ad-new-gallery", { timeout: 10000 });
 await page.click("#ad-tab-subscription");
 await page.waitForSelector("#ad-plans", { timeout: 10000 });
 
-const essentiel = page.locator(".ad-plan", { hasText: "Essentiel" });
-const pro = page.locator(".ad-plan", { hasText: "Pro" }).last();
+// Cartes repérées par leur titre exact : « Studio » (tout Pro) et les
+// formules scolaires citent aussi Pro et Essentiel.
+const planCard = (name) => page.locator(".ad-plan").filter({ has: page.locator("h3", { hasText: new RegExp(`^${name}$`) }) });
+const essentiel = planCard("Essentiel");
+const pro = planCard("Pro");
 if (remaining > 0) {
   check("offre Fondateurs annoncée avec les places restantes",
         (await page.textContent(".ad-founders")).includes(`plus que ${remaining} place`), await page.textContent(".ad-founders"));
@@ -120,16 +123,40 @@ await home.route(/workers\.dev\/api\/public\/plans/, async (route) => {
 });
 await home.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
 await home.goto(`http://localhost:${SITE_PORT}/`, { waitUntil: "domcontentloaded" });
+const homePlans = await (await fetch(`${API}/api/public/plans`)).json();
+const studioLeft = homePlans.studioFounders?.remaining || 0;
+if (remaining > 0) await home.waitForSelector("#founders:not([hidden])", { timeout: 5000 });
+else await home.waitForTimeout(800);
 const tarifs = await home.textContent("#tarifs");
-check("page d'accueil : 15 € / 29 € par mois, 150 € / 290 € par an, essai de 10 jours",
-      tarifs.includes("15 €") && tarifs.includes("29 €") && tarifs.includes("150 € / an") && tarifs.includes("290 € / an") &&
-      tarifs.includes("Essayer 10 jours gratuitement") && !tarifs.includes("24 € / mois"));
+check("page d'accueil : 15 € / 29 € par mois (12 € / 24 € la 1re année en Fondateurs), essai de 10 jours",
+      (remaining > 0
+        ? tarifs.includes("12 €") && tarifs.includes("24 €") && tarifs.includes("puis 15 € par mois") && tarifs.includes("puis 29 € par mois")
+        : tarifs.includes("15 €") && tarifs.includes("29 €") && tarifs.includes("ou 150 € par an") && tarifs.includes("ou 290 € par an")) &&
+      tarifs.includes("Essayer 10 jours gratuitement"), tarifs.replace(/\s+/g, " ").slice(0, 400));
 if (remaining > 0) {
-  await home.waitForSelector("#founders:not([hidden])", { timeout: 5000 });
   check("page d'accueil : l'offre Fondateurs s'affiche avec les places restantes",
-        (await home.textContent("#founders")).includes(`plus que ${remaining} place`));
+        new RegExp(`plus que ${remaining} place`, "i").test(await home.textContent("#founders")));
 }
-
+await home.click('.billing-opt[data-billing="year"]');
+const yearly = await home.textContent(".plans");
+check("page d'accueil : en annuel, 150 € / 290 € par an (120 € / 240 € la 1re année en Fondateurs)",
+      remaining > 0
+        ? yearly.includes("120 €") && yearly.includes("240 €") && yearly.includes("puis 150 € par an")
+        : yearly.includes("150 €") && yearly.includes("290 €") && yearly.includes("par mois"),
+      yearly.replace(/\s+/g, " ").slice(0, 300));
+// Espaces insécables (« 5 % ») ramenées à des espaces simples pour comparer.
+const school = (await home.textContent("#tarifs-scolaire")).replace(/\u00a0/g, " ");
+// Tant que le module n'est pas ouvert, la page d'accueil l'annonce « bientôt »
+// avec les prix prévus, sans bouton d'inscription.
+const schoolOpen = homePlans.plans.some((p) => p.key === "scolaire");
+check(schoolOpen
+        ? "page d'accueil : formules scolaires, Scolaire à 5 % sans abonnement, Studio 490 € par an (440 € en Fondateurs)"
+        : "page d'accueil : photo scolaire annoncée « bientôt », prix prévus (5 %, Studio 490 € par an), sans inscription",
+      school.includes("Scolaire") && school.includes("5 % des ventes scolaires") && school.includes("Studio") &&
+      (studioLeft > 0 ? school.includes("440 €") && school.includes("puis 490 € par an") && new RegExp(`plus que ${studioLeft} place`).test(school) : school.includes("490 €")) &&
+      (schoolOpen || (school.includes("Bientôt") && (await home.locator("#tarifs-scolaire a[data-signup]").count()) === 0 &&
+        tarifs.replace(/\u00a0/g, " ").includes("Bientôt : écoles, crèches et clubs, 5 % des ventes scolaires"))),
+      school.replace(/\s+/g, " ").slice(0, 300));
 check("aucune exception JavaScript", exceptions.length === 0, exceptions.join(" | "));
 
 await browser.close();

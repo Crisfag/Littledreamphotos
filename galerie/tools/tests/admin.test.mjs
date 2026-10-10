@@ -110,7 +110,9 @@ check("l'onglet Galeries est actif par défaut, à l'arrivée sur le tableau de 
   const last = await page.locator("#ad-tab-settings").boundingBox();
   check("menu vertical à gauche, une case avec icône par section",
         nav.x === 0 && view.x >= nav.x + nav.width && last.y > first.y && Math.abs(last.x - first.x) < 1 &&
-        await page.locator("#ad-tabs .ad-tab:not([hidden]) .ad-tab-icon svg").count() === 7,
+        // 7 sections, 8 avec « Écoles & clubs » une fois le module ouvert.
+        await page.locator("#ad-tabs .ad-tab:not([hidden]) .ad-tab-icon svg").count() === await page.locator("#ad-tabs .ad-tab:not([hidden])").count() &&
+        [7, 8].includes(await page.locator("#ad-tabs .ad-tab:not([hidden])").count()),
         `menu ${nav.width}px, contenu à ${view.x}px`);
 }
 
@@ -1001,8 +1003,9 @@ check("le compte créé depuis le formulaire d'inscription se reconnecte ensuite
 
 await page.click("#ad-tab-subscription");
 await page.waitForSelector(".ad-plans", { timeout: 10000 });
-check("l'onglet Abonnement présente les 3 formules, la formule actuelle et l'utilisation",
-      (await page.locator(".ad-plan").count()) === 3 && (await page.textContent(".ad-plan-name")) === "Pro" &&
+const planCount = await page.locator(".ad-plan").count();
+check("l'onglet Abonnement présente les formules (3, plus Scolaire et Studio une fois le module ouvert), la formule actuelle et l'utilisation",
+      (planCount === 3 || (planCount === 5 && (await page.locator(".ad-plans-group").count()) === 1)) && (await page.textContent(".ad-plan-name")) === "Pro" &&
       (await page.locator(".ad-plan-current", { hasText: "Pro" }).count()) === 1 &&
       (await page.textContent(".ad-plan-usage")).includes("galerie") &&
       (await page.evaluate(() => location.hash)) === "#/abonnement");

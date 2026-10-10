@@ -63,17 +63,37 @@ check("sans formule qui l'inclut : la vue d'ensemble dit « non autorisé », la
       freeOverview.status === 200 && freeOverview.body.access.allowed === false && freeCreate.status === 402, freeCreate.body.error);
 const meStudio = await studio.call("GET", "/api/auth/me");
 const meFree = await free.call("GET", "/api/auth/me");
-check("l'onglet Écoles & clubs apparaît pour Studio, pas pour un compte gratuit (module pas encore ouvert)",
-      meStudio.body.photographer?.schoolTab === true && meFree.body.photographer?.schoolTab === false);
+// Module ouvert ou non selon SCHOOL_LAUNCHED (wrangler.toml / .dev.vars) :
+// les vérifications suivent l'état du Worker testé.
+const launched = freeOverview.body.access.launched === true;
+check(launched
+        ? "module ouvert : l'onglet Écoles & clubs apparaît pour tous (Studio, et compte gratuit pour voir les formules)"
+        : "l'onglet Écoles & clubs apparaît pour Studio, pas pour un compte gratuit (module pas encore ouvert)",
+      meStudio.body.photographer?.schoolTab === true && meFree.body.photographer?.schoolTab === launched);
 const plans = await (await fetch(`${BASE}/api/public/plans`)).json();
-check("tant que le module n'est pas ouvert, la page d'accueil ne propose ni Scolaire ni Studio",
-      !plans.plans.some((p) => p.key === "studio" || p.key === "scolaire") && !plans.studioFounders);
+check(launched
+        ? "module ouvert : la page d'accueil propose Scolaire et Studio (annuel seulement), avec les places Fondateurs Studio"
+        : "tant que le module n'est pas ouvert, la page d'accueil ne propose ni Scolaire ni Studio",
+      launched
+        ? plans.plans.some((p) => p.key === "scolaire" && p.schoolFeePercent === 5) && plans.plans.some((p) => p.key === "studio" && p.yearlyOnly) && plans.studioFounders?.limit === 30
+        : !plans.plans.some((p) => p.key === "studio" || p.key === "scolaire") && !plans.studioFounders);
 const studioSub = await studio.call("GET", "/api/admin/subscription");
 check("un abonné Studio voit les formules du module et l'offre Fondateurs Studio (30 places)",
-      studioSub.body.plans.some((p) => p.key === "studio" && p.priceCents === 4900 && p.founderYearlyCents === 44000) &&
+      studioSub.body.plans.some((p) => p.key === "studio" && p.yearlyCents === 49000 && p.yearlyOnly && p.founderYearlyCents === 44000) &&
       studioSub.body.studioFounders?.limit === 30);
+const pro = await account("pro");
+await setPlan(pro.email, "pro");
+const proOverview = await pro.call("GET", "/api/admin/school");
+check(launched ? "module ouvert : un abonné Pro y a accès (5 % des ventes scolaires)" : "module fermé : un abonné Pro n'y a pas encore accès",
+      proOverview.body.access.allowed === launched);
 const scolaireOn = await free.call("POST", "/api/admin/subscription/scolaire", { on: true });
-check("la formule Scolaire ne s'active pas tant que le module n'est pas ouvert", scolaireOn.status === 409);
+if (launched) {
+  const scolaireOverview = await free.call("GET", "/api/admin/school");
+  check("module ouvert : la formule Scolaire s'active d'un clic et ouvre le module", scolaireOn.status === 200 && scolaireOverview.body.access.allowed === true);
+  await free.call("POST", "/api/admin/subscription/scolaire", { on: false });
+} else {
+  check("la formule Scolaire ne s'active pas tant que le module n'est pas ouvert", scolaireOn.status === 409);
+}
 
 /* ---------- Établissements ---------- */
 
@@ -184,7 +204,7 @@ check("supprimer l'établissement emporte ses années, ses classes et sa gamme",
       del.status === 200 && overview.schools.length === 0 && JSON.parse(leftovers.slice(leftovers.indexOf("[")))[0].results[0].n === 0);
 
 execFileSync("npx", ["wrangler", "d1", "execute", "galerie-protegee", "--local", "--command",
-  `DELETE FROM photographers WHERE email IN ('${studio.email}', '${free.email}')`], { cwd: WORKER_ROOT, stdio: "pipe" });
+  `DELETE FROM photographers WHERE email IN ('${studio.email}', '${free.email}', '${pro.email}')`], { cwd: WORKER_ROOT, stdio: "pipe" });
 
 const failed = checks.filter((c) => !c.ok);
 console.log(failed.length ? `\n${failed.length} vérification(s) en échec.` : `\n${checks.length} vérifications, toutes passent.`);

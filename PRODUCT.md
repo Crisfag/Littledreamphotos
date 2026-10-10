@@ -8,7 +8,7 @@ web
 
 ## Users
 
-Photographes professionnels indépendants et petits studios (portrait, famille, maternité, naissance, mariage), en Belgique et en France d'abord. Ils livrent des séances à des particuliers et veulent montrer leurs photos sans les voir circuler gratuitement, laisser le client choisir, et vendre suppléments et tirages sans gestion. Deuxième public, à venir : les photographes scolaires (écoles, crèches, clubs sportifs).
+Photographes professionnels indépendants et petits studios (portrait, famille, maternité, naissance, mariage), en Belgique et en France d'abord. Ils livrent des séances à des particuliers et veulent montrer leurs photos sans les voir circuler gratuitement, laisser le client choisir, et vendre suppléments et tirages sans gestion. Deuxième public : les photographes scolaires (écoles, crèches, clubs sportifs).
 
 Visiteurs secondaires : les clients des photographes (galerie privée) et les familles (espace famille du module scolaire) ; ils ne s'abonnent pas.
 
@@ -34,9 +34,13 @@ Protection honnête et traçable plutôt que promesse impossible : photos décou
   - Essentiel : 15 €/mois ou 150 €/an ; 25 galeries, 200 Go ; boutique de tirages, suppléments en ligne.
   - Pro : 29 €/mois ou 290 €/an ; galeries illimitées, 1 To ; adresse à son nom (votre-studio.holypixx.com), tout inclus.
   - Offre Fondateurs (places limitées, compteur via `GET /api/public/plans`) : Essentiel 12 € et Pro 24 € par mois la première année.
-  - À venir avec le module scolaire (pas encore lancé, `SCHOOL_LAUNCHED = "0"`) : Scolaire (sans abonnement, 4,5 % des ventes scolaires) et Studio (49 €/mois, tout Pro + scolaire). Ne pas afficher leurs prix tant que le module n'est pas lancé.
+  - Module scolaire prêt mais fermé (`SCHOOL_LAUNCHED = "0"`) jusqu'au premier envoi réel réussi chez BePhoto. La page d'accueil l'annonce « bientôt » avec les prix prévus. Modèle hybride décidé :
+    - Scolaire : sans abonnement, 5 % des ventes scolaires, frais bancaires compris.
+    - Essentiel et Pro : le module inclus, à 5 % des ventes scolaires.
+    - Studio : 490 €/an, annuel seulement ; tout Pro + scolaire sans commission ; Fondateurs 440 € la 1re année, 30 places.
+    - Raison : la photo scolaire est saisonnière, un mensuel serait pris le temps d'une campagne puis résilié ; Studio devient avantageux pour le photographe au-delà d'environ 25 000 € de ventes scolaires par an.
 - Fonctionnalités en ligne : galeries protégées (tuiles, filigrane, empreinte, alerte de capture), sélection et coups de cœur, codes couleur et repères annotés, validation de la sélection, relances automatiques J-7/J-2, forfait et suppléments payés en ligne avec facture PDF, boutique de tirages (Prodigi), campagnes de vente (promotions, paniers retrouvés, relances), tableau de bord des ventes, livraison des fichiers HD, musique d'ambiance, trois mises en page, mot de passe et expiration, sous-domaine à son nom (Pro), portfolio avec formulaire de contact.
-- Module scolaire (bientôt) : établissements, années et classes ; import et regroupement automatique des photos par enfant ; fiches parents avec QR et code d'accès ; espace famille (frères et sœurs réunis) ; gamme de pochettes et planches avec aperçu de la photo de l'enfant ; panier unique et paiement en ligne ; livraison groupée à l'école puis à domicile ; rappels aux familles ; lots d'envoi au labo BePhoto.
+- Module scolaire : établissements, années et classes ; import et regroupement automatique des photos par enfant ; fiches parents avec QR et code d'accès ; espace famille (frères et sœurs réunis) ; gamme de pochettes et planches avec aperçu de la photo de l'enfant ; panier unique et paiement en ligne ; livraison groupée à l'école puis à domicile ; rappels aux familles ; lots d'envoi au labo BePhoto.
 - Site statique (HTML/CSS/JS sans framework) publié sur Cloudflare Pages depuis `galerie/web` ; polices via Google Fonts.
 
 ## Brand Commitments

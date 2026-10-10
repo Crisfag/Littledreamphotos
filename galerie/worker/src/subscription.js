@@ -33,9 +33,12 @@ export const PLANS = {
     yearlyCents: 15000,
     founderCents: 1200,
     founderYearlyCents: 12000,
+    // Écoles, crèches et clubs inclus dès l'ouverture du module, avec la
+    // même commission que la formule Scolaire.
+    schoolFeePercent: 5,
     maxActiveGalleries: 25,
     storageBytes: 200e9,
-    features: { shop: true, subdomain: false, school: false },
+    features: { shop: true, subdomain: false, school: true },
     pitch: "25 galeries actives et la boutique de tirages.",
   },
   pro: {
@@ -45,13 +48,16 @@ export const PLANS = {
     yearlyCents: 29000,
     founderCents: 2400,
     founderYearlyCents: 24000,
+    schoolFeePercent: 5,
     maxActiveGalleries: null,
     storageBytes: 1000e9,
-    features: { shop: true, subdomain: true, school: false },
+    features: { shop: true, subdomain: true, school: true },
     pitch: "Galeries illimitées, boutique, et vos galeries à votre nom (votre-studio.holypixx.com).",
   },
   // Photo de groupe (écoles, crèches, clubs) : voir school.js. Ces deux
-  // formules ne sont proposées qu'une fois le module ouvert (SCHOOL_LAUNCHED).
+  // formules dédiées (schoolPlan) ne sont proposées qu'une fois le module
+  // ouvert (SCHOOL_LAUNCHED) ; Essentiel et Pro incluent alors aussi le
+  // module, à la même commission que Scolaire.
   //
   // Scolaire : sans abonnement, une commission sur les ventes scolaires
   // (frais bancaires compris), et les galeries classiques de Découverte.
@@ -60,22 +66,28 @@ export const PLANS = {
     label: "Scolaire",
     priceCents: 0,
     noSubscription: true,
-    schoolFeePercent: 4.5,
+    schoolPlan: true,
+    schoolFeePercent: 5,
     maxActiveGalleries: 3,
     storageBytes: 500e9,
     features: { shop: false, subdomain: false, school: true },
     pitch: "Pour les photographes qui ne font que du scolaire : on ne paie que sur ce qu'on vend.",
   },
   // Studio : tout Pro, plus le scolaire sans commission (seulement les frais
-  // de paiement habituels, voir fees.js). Offre Fondateurs à part : 30 places.
+  // de paiement habituels, voir fees.js). Paiement ANNUEL uniquement : la
+  // photo scolaire est saisonnière, un mensuel serait pris le temps d'une
+  // campagne puis résilié. priceCents ne sert qu'à reconnaître un ancien
+  // abonnement mensuel. Offre Fondateurs à part : 30 places.
   studio: {
     key: "studio",
     label: "Studio",
     priceCents: 4900,
     yearlyCents: 49000,
+    yearlyOnly: true,
     founderCents: 4500,
     founderYearlyCents: 44000,
     foundersGroup: "studio",
+    schoolPlan: true,
     maxActiveGalleries: null,
     storageBytes: 2000e9,
     features: { shop: true, subdomain: true, school: true },
@@ -156,6 +168,15 @@ export function hasFeature(env, photographer, feature) {
   return Boolean(planFor(env, photographer).features[feature]);
 }
 
+// Module photo de groupe utilisable : la propriétaire toujours ; sinon une
+// formule qui l'inclut, et le module ouvert (les formules dédiées Scolaire
+// et Studio n'existent de toute façon qu'une fois ouvert).
+export function schoolEnabled(env, photographer) {
+  if (isOwner(env, photographer)) return true;
+  const plan = planFor(env, photographer);
+  return Boolean(plan.features.school) && (schoolLaunched(env) || Boolean(plan.schoolPlan));
+}
+
 // Réponse 402 expliquant quelle formule débloque une fonctionnalité.
 export function featureRefusal(feature) {
   const needed = Object.values(PLANS).find((p) => p.features[feature]);
@@ -182,7 +203,7 @@ export async function galleryQuotaRefusal(env, photographer) {
     `Votre formule ${plan.label} permet ${plan.maxActiveGalleries} galeries actives. Supprimez ou laissez expirer une galerie, ou passez à la formule supérieure (onglet Abonnement).`);
 }
 
-function planOut(plan) {
+export function planOut(plan) {
   return {
     key: plan.key,
     label: plan.label,
@@ -191,6 +212,8 @@ function planOut(plan) {
     founderCents: plan.founderCents ?? 0,
     founderYearlyCents: plan.founderYearlyCents ?? 0,
     noSubscription: Boolean(plan.noSubscription),
+    yearlyOnly: Boolean(plan.yearlyOnly),
+    schoolPlan: Boolean(plan.schoolPlan),
     schoolFeePercent: plan.schoolFeePercent ?? null,
     maxActiveGalleries: plan.maxActiveGalleries,
     storageBytes: plan.storageBytes,
@@ -230,7 +253,8 @@ export function founderEligible(photographer, taken, limit = FOUNDERS_LIMIT) {
 // les formules du module photo de groupe (une fois ouvert).
 export function publicPlans(taken, { studioTaken = 0, withSchool = false } = {}) {
   return {
-    plans: Object.values(PLANS).filter((p) => withSchool || !p.features.school).map(planOut),
+    plans: Object.values(PLANS).filter((p) => withSchool || !p.schoolPlan).map(planOut),
+    schoolOpen: withSchool,
     trialDays: TRIAL_DAYS,
     founders: { limit: FOUNDERS_LIMIT, remaining: Math.max(0, FOUNDERS_LIMIT - taken) },
     ...(withSchool ? { studioFounders: { limit: STUDIO_FOUNDERS_LIMIT, remaining: Math.max(0, STUDIO_FOUNDERS_LIMIT - studioTaken) } } : {}),
@@ -251,7 +275,7 @@ export async function plansForPublic(env) {
 export async function subscriptionForAdmin(env, photographer) {
   const plan = planFor(env, photographer);
   const taken = await foundersTaken(env);
-  const withSchool = schoolLaunched(env) || isOwner(env, photographer) || Boolean(PLANS[photographer.plan]?.features.school);
+  const withSchool = schoolLaunched(env) || isOwner(env, photographer) || Boolean(PLANS[photographer.plan]?.schoolPlan);
   const studioTaken = withSchool ? await foundersTaken(env, "studio") : 0;
   return json({
     ...publicPlans(taken, { withSchool, studioTaken }),
@@ -299,8 +323,8 @@ export async function startSubscriptionCheckout(request, env, photographer) {
   const plan = PLANS[body?.plan];
   if (!plan || plan.key === "free") return fail(400, "Formule inconnue");
   if (plan.noSubscription) return fail(400, "Cette formule s'active sans paiement, depuis l'onglet Abonnement.");
-  if (plan.features.school && !schoolLaunched(env)) return fail(409, "Cette formule n'est pas encore ouverte.");
-  const interval = INTERVALS.includes(body?.interval) ? body.interval : "month";
+  if (plan.schoolPlan && !schoolLaunched(env)) return fail(409, "Cette formule n'est pas encore ouverte.");
+  const interval = plan.yearlyOnly ? "year" : INTERVALS.includes(body?.interval) ? body.interval : "month";
   if (isOwner(env, photographer)) return fail(409, "Le compte propriétaire a déjà toutes les fonctionnalités.");
   if (planFor(env, photographer).key !== "free" && photographer.stripe_customer_id) {
     return fail(409, "Vous avez déjà un abonnement : changez de formule depuis « Gérer mon abonnement ».");

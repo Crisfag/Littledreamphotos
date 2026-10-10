@@ -405,6 +405,15 @@ sup { line-height: 0; }
 .plan-pro .ticks li::before { background-color: rgba(185, 185, 255, .16); background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23b9b9ff' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 12.5 4 4 8-9'/%3E%3C/svg%3E"); }
 .plan-flag { position: absolute; top: 20px; right: 20px; padding: 4px 10px; border-radius: 999px; background: var(--accent); color: #fff; font-size: .76rem; font-weight: 500; }
 .plans-note { max-width: 760px; margin: 28px auto 0; text-align: center; font-size: .9rem; color: var(--muted); }
+.plans-school { margin-top: clamp(48px, 7vw, 80px); }
+.plans-school-head { max-width: 640px; margin: 0 auto 28px; text-align: center; }
+.plans-school-head h3 { font-size: clamp(1.5rem, 2.6vw, 2rem); letter-spacing: -0.03em; }
+.plans-school-head p { margin-top: 10px; color: var(--muted); }
+.plans-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: 860px; margin-inline: auto; }
+.plan-studio { box-shadow: 0 0 0 1.5px var(--accent) inset; }
+.school-cta { margin-top: 20px; }
+.btn-soon, .btn-soon:hover { cursor: default; color: var(--muted); background: var(--mist); box-shadow: none; transform: none; }
+.plans-school-head .soon { margin: 0 0 0 10px; vertical-align: 6px; letter-spacing: 0; }
 
 /* ---------- Questions ---------- */
 

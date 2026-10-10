@@ -835,6 +835,15 @@
       return "Sans abonnement" + '<span class="ad-plan-price-note">' + esc(String(plan.schoolFeePercent).replace(".", ",")) + " % sur les ventes scolaires, frais bancaires compris</span>";
     }
     if (!plan.priceCents) return "Gratuit";
+    // Studio : paiement annuel seulement (la photo scolaire est saisonnière).
+    if (plan.yearlyOnly) {
+      if (founder && plan.founderYearlyCents) {
+        return "<s>" + esc(euros(plan.yearlyCents)) + "</s> " + esc(euros(plan.founderYearlyCents)) + " / an" +
+          '<span class="ad-plan-price-note">la 1re année, puis ' + esc(euros(plan.yearlyCents)) + " / an</span>";
+      }
+      return esc(euros(plan.yearlyCents)) + " / an" +
+        '<span class="ad-plan-price-note">soit ' + esc(euros(Math.round(plan.yearlyCents / 12))) + " / mois, paiement annuel</span>";
+    }
     var yearly = interval === "year";
     var normal = yearly ? plan.yearlyCents : plan.priceCents;
     var unit = yearly ? " / an" : " / mois";
@@ -1076,9 +1085,21 @@
   var SALES_SERIES = [
     { key: "supplementCents", label: "Suppléments photos", color: "#1f7fa8" },
     { key: "printCents", label: "Tirages", color: "#d0603a" },
+    { key: "schoolCents", label: "Photos scolaires", color: "#7d58c0", school: true },
   ];
   var salesData = null;
   var salesMode = "chart";
+
+  // Séries affichées : la série scolaire dès qu'un établissement existe (ou
+  // qu'une vente scolaire tombe dans la période).
+  function salesSeries() {
+    var school = salesData && (salesData.hasSchools || salesData.totals.schoolCents > 0);
+    return SALES_SERIES.filter(function (s) { return !s.school || school; });
+  }
+
+  function monthTotal(m) {
+    return (m.supplementCents || 0) + (m.printCents || 0) + (m.schoolCents || 0);
+  }
 
   function formatEurosShort(cents) {
     return Math.round((cents || 0) / 100).toLocaleString("fr-BE") + " €";
@@ -1107,7 +1128,7 @@
     var height = 260, padTop = 26, padBottom = 30, padLeft = 64, padRight = 8;
     var plotW = Math.max(width - padLeft - padRight, 120);
     var plotH = height - padTop - padBottom;
-    var totals = months.map(function (m) { return m.supplementCents + m.printCents; });
+    var totals = months.map(monthTotal);
     var maxTotal = Math.max.apply(null, totals.concat([0]));
     var step = niceStep(maxTotal || 10000, 4);
     var top = Math.max(step * Math.ceil(maxTotal / step), step);
@@ -1128,7 +1149,7 @@
       var x = cx - barW / 2;
       var shapes = "";
       var base = 0;
-      var stacked = SALES_SERIES.filter(function (s) { return m[s.key] > 0; });
+      var stacked = salesSeries().filter(function (s) { return m[s.key] > 0; });
       stacked.forEach(function (s, j) {
         var yTop = y(base + m[s.key]);
         var yBottom = y(base) - (j > 0 ? 2 : 0); // 2 px de fond entre deux segments
@@ -1159,12 +1180,16 @@
   }
 
   function salesTableHtml(months) {
+    var series = salesSeries();
     var rows = months.slice().reverse().map(function (m) {
-      return "<tr><th scope=\"row\">" + esc(m.label) + "</th><td>" + esc(formatEuros(m.supplementCents)) + "</td><td>" +
-        esc(formatEuros(m.printCents)) + "</td><td><strong>" + esc(formatEuros(m.supplementCents + m.printCents)) + "</strong></td><td>" + m.orders + "</td></tr>";
+      return "<tr><th scope=\"row\">" + esc(m.label) + "</th>" +
+        series.map(function (s) { return "<td>" + esc(formatEuros(m[s.key])) + "</td>"; }).join("") +
+        "<td><strong>" + esc(formatEuros(monthTotal(m))) + "</strong></td><td>" + m.orders + "</td></tr>";
     }).join("");
-    return '<div class="ad-table-wrap"><table class="ad-table ad-sales-table"><thead><tr><th>Mois</th><th>Suppléments</th><th>Tirages</th><th>Total</th><th>Paiements</th></tr></thead><tbody>' +
-      rows + "</tbody></table></div>";
+    var heads = { supplementCents: "Suppléments", printCents: "Tirages", schoolCents: "Scolaire" };
+    return '<div class="ad-table-wrap"><table class="ad-table ad-sales-table"><thead><tr><th>Mois</th>' +
+      series.map(function (s) { return "<th>" + heads[s.key] + "</th>"; }).join("") +
+      "<th>Total</th><th>Paiements</th></tr></thead><tbody>" + rows + "</tbody></table></div>";
   }
 
   function drawSalesChart() {
@@ -1180,10 +1205,10 @@
     function show(col) {
       var m = salesData.months[Number(col.getAttribute("data-index"))];
       tip.innerHTML = "<strong>" + esc(m.label) + "</strong>" +
-        SALES_SERIES.map(function (s) {
+        salesSeries().map(function (s) {
           return '<span class="ad-chart-tip-row"><i style="background:' + s.color + '"></i>' + esc(s.label) + "<b>" + esc(formatEuros(m[s.key])) + "</b></span>";
         }).join("") +
-        '<span class="ad-chart-tip-row ad-chart-tip-total">Total<b>' + esc(formatEuros(m.supplementCents + m.printCents)) + "</b></span>" +
+        '<span class="ad-chart-tip-row ad-chart-tip-total">Total<b>' + esc(formatEuros(monthTotal(m))) + "</b></span>" +
         '<span class="ad-chart-tip-row ad-chart-tip-muted">' + m.orders + " paiement" + (m.orders > 1 ? "s" : "") + "</span>";
       tip.hidden = false;
       // À côté de la colonne (à droite, sinon à gauche) pour ne jamais
@@ -1242,6 +1267,7 @@
     if (location.hash !== "#/ventes") return;
     salesData = data;
     var t = data.totals;
+    var withSchool = salesSeries().length === SALES_SERIES.length;
     var margin = data.printMargin;
     var marginNote = margin.lineRevenueCents
       ? (margin.coverage < 0.999 ? "Sur " + percentText(margin.coverage) + " des tirages (coût connu), " : "") + "frais de paiement déduits, hors port"
@@ -1249,12 +1275,16 @@
 
     el.view.innerHTML =
       '<header class="ad-detail-header"><div><h2>Ventes</h2>' +
-      '<p class="ad-hint">Les 12 derniers mois, paiements encaissés (suppléments photos et commandes de tirages), montants TTC.</p>' +
+      '<p class="ad-hint">Les 12 derniers mois, paiements encaissés (suppléments photos, commandes de tirages' + (withSchool ? ", commandes scolaires des familles" : "") + "), montants TTC.</p>" +
       "</div></header>" +
       '<div class="ad-stats">' +
       salesStatHtml("Chiffre d'affaires", formatEuros(t.revenueCents),
-        formatEurosShort(t.supplementCents) + " suppléments · " + formatEurosShort(t.printCents) + " tirages" +
-        (t.feeCents ? " · " + formatEuros(t.netCents) + " reçus après frais de paiement" : "")) +
+        // Seules les catégories qui ont vendu ; « 0 € tirages » n'apprend rien.
+        [[t.supplementCents, " suppléments"], [t.printCents, " tirages"], [t.schoolCents, " scolaire"]]
+          .filter(function (part) { return part[0] > 0; })
+          .map(function (part) { return formatEurosShort(part[0]) + part[1]; })
+          .concat(t.feeCents ? [formatEuros(t.netCents) + " reçus après frais de paiement"] : [])
+          .join(" · ")) +
       salesStatHtml("Paiements", String(t.orders), t.orders ? "Panier moyen " + formatEuros(t.averageOrderCents) : "") +
       salesStatHtml("Marge estimée sur les tirages", margin.lineRevenueCents ? formatEuros(margin.marginCents) : "—", marginNote) +
       salesStatHtml("Galeries qui vendent", data.conversion.galleries ? percentText(data.conversion.rate) : "—",
@@ -1264,7 +1294,7 @@
       '<div class="ad-seg" role="group" aria-label="Affichage">' +
       '<button type="button" class="ad-seg-btn" data-sales-mode="chart">Graphique</button>' +
       '<button type="button" class="ad-seg-btn" data-sales-mode="table">Tableau</button></div></div>' +
-      '<ul class="ad-legend">' + SALES_SERIES.slice().reverse().map(function (s) {
+      '<ul class="ad-legend">' + salesSeries().slice().reverse().map(function (s) {
         return '<li><i style="background:' + s.color + '"></i>' + esc(s.label) + "</li>";
       }).join("") + "</ul>" +
       (t.revenueCents ? "" : '<p class="ad-hint">Pas encore de vente sur cette période : les montants apparaîtront ici dès le premier paiement.</p>') +
@@ -1277,6 +1307,16 @@
         var name = g.slug ? '<a href="#/g/' + encodeURIComponent(g.slug) + '">' + esc(g.title) + "</a>" : esc(g.title);
         return "<li><span>" + name + '</span><span class="ad-rank-meta">' + g.orders + " paiement" + (g.orders > 1 ? "s" : "") + " · " + esc(formatEuros(g.revenueCents)) + "</span></li>";
       }) +
+      (withSchool
+        ? salesRankHtml("Établissements qui rapportent le plus", data.topSchools || [], "Aucune commande scolaire sur la période.", function (x) {
+            var name = '<a href="#/scolaire/' + encodeURIComponent(x.schoolId) + "/" + encodeURIComponent(x.yearId) + '">' + esc(x.name) + "</a>" +
+              (x.yearLabel ? ' <span class="ad-rank-meta">' + esc(x.yearLabel) + "</span>" : "");
+            return "<li><span>" + name + '</span><span class="ad-rank-meta">' + x.orders + " commande" + (x.orders > 1 ? "s" : "") + " · " + esc(formatEuros(x.revenueCents)) + "</span></li>";
+          }) +
+          salesRankHtml("Articles scolaires les plus vendus", data.topSchoolProducts || [], "Aucun article scolaire vendu sur la période.", function (p) {
+            return "<li><span>" + esc(p.label) + '</span><span class="ad-rank-meta">' + p.copies + " ex. · " + esc(formatEuros(p.revenueCents)) + "</span></li>";
+          })
+        : "") +
       "</div>";
 
     el.view.querySelectorAll("[data-sales-mode]").forEach(function (btn) {
@@ -1317,14 +1357,14 @@
       "</div>";
   }
 
-  function planFeaturesHtml(plan) {
+  function planFeaturesHtml(plan, schoolOpen) {
     var items = [
       plan.maxActiveGalleries === null ? "Galeries actives illimitées" : plan.maxActiveGalleries + " galeries actives",
       plan.storageBytes ? formatStorage(plan.storageBytes) + " de stockage" : "",
       "Protection, sélection, musique et livraison HD",
       (plan.features.shop ? "✓ " : "— ") + "Boutique de tirages",
       (plan.features.subdomain ? "✓ " : "— ") + "Vos galeries à votre nom",
-      plan.features.school ? "✓ Écoles, crèches et clubs" + (plan.schoolFeePercent ? " (" + String(plan.schoolFeePercent).replace(".", ",") + " % des ventes)" : ", sans commission") : "",
+      plan.features.school && schoolOpen ? "✓ Écoles, crèches et clubs" + (plan.schoolFeePercent ? " (" + String(plan.schoolFeePercent).replace(".", ",") + " % des ventes scolaires)" : ", sans commission") : "",
     ];
     return '<ul class="ad-plan-features">' + items.filter(Boolean).map(function (t) { return "<li>" + esc(t) + "</li>"; }).join("") + "</ul>";
   }
@@ -1398,14 +1438,14 @@
           "<h3>" + esc(plan.label) + "</h3>" +
           '<p class="ad-plan-price">' + planPriceHtml(plan, interval, planFounder) + "</p>" +
           '<p class="ad-hint">' + esc(plan.pitch) + "</p>" +
-          planFeaturesHtml(plan) + action + "</article>"
+          planFeaturesHtml(plan, data.schoolOpen) + action + "</article>"
         );
     }
     // Formules galeries, puis (si proposées) celles qui incluent les écoles,
     // crèches et clubs.
     function cardsHtml() {
-      var galleries = data.plans.filter(function (p) { return !p.features.school; });
-      var school = data.plans.filter(function (p) { return p.features.school; });
+      var galleries = data.plans.filter(function (p) { return !p.schoolPlan; });
+      var school = data.plans.filter(function (p) { return p.schoolPlan; });
       return galleries.map(planCardHtml).join("") +
         (school.length ? '<h3 class="ad-plans-group">Avec les écoles, crèches et clubs</h3>' + school.map(planCardHtml).join("") : "");
     }
@@ -1423,7 +1463,7 @@
     if (studioPlan && studioFounder && data.studioFounders && data.studioFounders.remaining > 0) {
       founderBanner += '<p class="ad-banner ad-founders">🎓 <strong>Fondateurs Studio</strong> : plus que ' + data.studioFounders.remaining + " place" +
         (data.studioFounders.remaining > 1 ? "s" : "") + ". " + esc(euros(studioPlan.founderYearlyCents)) + " la première année au lieu de " +
-        esc(euros(studioPlan.yearlyCents)) + " (ou " + esc(euros(studioPlan.founderCents)) + " par mois pendant 12 mois).</p>";
+        esc(euros(studioPlan.yearlyCents)) + ".</p>";
     }
 
     el.view.innerHTML =
@@ -1444,7 +1484,7 @@
       '<p class="ad-hint">Prix TTC. Les fichiers HD livrés et les fichiers d\'impression d\'une galerie expirée depuis ' +
       ((data.usage.storage && data.usage.storage.purgeAfterExpiryDays) || 90) + " jours sont effacés automatiquement, avec un e-mail de rappel 14 jours avant ; les photos de la galerie restent. " +
       'Paiement sécurisé par Stripe ; factures disponibles dans « Gérer mon abonnement ». ' +
-      'Voir les <a href="https://www.holypixx.com/conditions.html" target="_blank" rel="noopener">conditions d\'utilisation</a>.</p>';
+      'Voir les <a href="https://www.holypixx.com/conditions" target="_blank" rel="noopener">conditions d\'utilisation</a>.</p>';
 
     function wireSubscribe() {
       el.view.querySelectorAll("[data-subscribe]").forEach(function (btn) {
@@ -3877,9 +3917,10 @@
       '<header class="ad-detail-header"><div><h2>Écoles, crèches et clubs</h2>' +
       '<p class="ad-hint">Vendez vos photos de groupe : établissements, classes ou équipes, fiches parents avec QR, espace famille et commande groupée.</p></div></header>' +
       '<section class="ad-sc-teaser">' +
-      "<p>Le module est inclus dans deux formules :</p>" +
-      "<ul><li><strong>Scolaire</strong> : sans abonnement, 4,5 % sur les ventes scolaires, frais bancaires compris.</li>" +
-      "<li><strong>Studio</strong> : 49 € par mois, tout Pro plus le scolaire, sans commission.</li></ul>" +
+      "<p>Le module " + (data.access.launched ? "est" : "sera") + " inclus dans ces formules :</p>" +
+      "<ul><li><strong>Scolaire</strong> : sans abonnement, 5 % sur les ventes scolaires, frais bancaires compris.</li>" +
+      "<li><strong>Essentiel et Pro</strong> : votre abonnement, plus 5 % sur les ventes scolaires.</li>" +
+      "<li><strong>Studio</strong> : 490 € par an, tout Pro plus le scolaire, sans commission.</li></ul>" +
       (data.access.launched
         ? '<button type="button" class="ad-btn ad-btn-primary" id="ad-sc-to-plans">Voir les formules</button>'
         : '<p class="ad-hint">Bientôt disponible.</p>') +
@@ -4203,6 +4244,8 @@
       host.innerHTML = '<p class="ad-hint ad-acc-warn">' + esc(err.message) + "</p>";
       return;
     }
+    // On a pu changer de vue pendant le chargement : la section n'existe plus.
+    if (!host.isConnected) return;
     renderSchoolShop(host, year, kind, shop);
   }
 
@@ -4448,6 +4491,7 @@
       host.innerHTML = '<p class="ad-hint ad-acc-warn">' + esc(err.message) + "</p>";
       return;
     }
+    if (!host.isConnected) return;
     renderSchoolLab(host, year, kind, data);
   }
 
