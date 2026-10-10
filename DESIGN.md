@@ -196,7 +196,7 @@ components:
 
 # Design System: Holypixx
 
-> Portée. Ce document décrit le système visuel **marketing** de la marque, tel qu'il est livré sur la page d'accueil publique (`galerie/web/index.html`, `home.css`, `home.js`). L'interface photographe (admin), la galerie client et l'espace famille scolaire ont leur propre style, plus ancien, qui n'a pas été relu pour ce document : aucun jeton ci-dessous ne les décrit. Toute nouvelle page publique (tarifs, fonctionnalités, légal, scolaire) part de ce système.
+> Portée. Ce document décrit le système visuel **marketing** de la marque, tel qu'il est livré sur la page d'accueil publique (`galerie/web/index.html`, `home.css`, `home.js`). L'interface photographe (admin, `galerie/tools/admin/`) applique les mêmes jetons en version outil : menu latéral en brume, contenu sur papier, blocs à filet d'un pixel sans ombre, commandes de 38 px, titres en échelle fixe (1,5 / 1,06 rem), outremer réservé à l'action principale et à l'entrée active ; seuls les objets qui flottent (modales, infobulles, menus, barre d'outils scolaire en nuit) portent l'ombre froide. La galerie client et l'espace famille scolaire gardent leur propre style, plus ancien, qu'aucun jeton ci-dessous ne décrit. Toute nouvelle page publique (tarifs, fonctionnalités, légal, scolaire) part de ce système.
 
 ## Overview
 
