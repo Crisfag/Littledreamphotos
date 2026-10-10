@@ -146,10 +146,17 @@ check("page d'accueil : en annuel, 150 € / 290 € par an (120 € / 240 € l
       yearly.replace(/\s+/g, " ").slice(0, 300));
 // Espaces insécables (« 5 % ») ramenées à des espaces simples pour comparer.
 const school = (await home.textContent("#tarifs-scolaire")).replace(/\u00a0/g, " ");
-check("page d'accueil : formules scolaires, Scolaire à 5 % sans abonnement, Studio 490 € par an (440 € en Fondateurs)",
+// Tant que le module n'est pas ouvert, la page d'accueil l'annonce « bientôt »
+// avec les prix prévus, sans bouton d'inscription.
+const schoolOpen = homePlans.plans.some((p) => p.key === "scolaire");
+check(schoolOpen
+        ? "page d'accueil : formules scolaires, Scolaire à 5 % sans abonnement, Studio 490 € par an (440 € en Fondateurs)"
+        : "page d'accueil : photo scolaire annoncée « bientôt », prix prévus (5 %, Studio 490 € par an), sans inscription",
       school.includes("Scolaire") && school.includes("5 % des ventes scolaires") && school.includes("Studio") &&
       (studioLeft > 0 ? school.includes("440 €") && school.includes("puis 490 € par an") && new RegExp(`plus que ${studioLeft} place`).test(school) : school.includes("490 €")) &&
-      tarifs.replace(/\u00a0/g, " ").includes("Écoles, crèches et clubs : 5 % des ventes scolaires"), school.replace(/\s+/g, " ").slice(0, 300));
+      (schoolOpen || (school.includes("Bientôt") && (await home.locator("#tarifs-scolaire a[data-signup]").count()) === 0 &&
+        tarifs.replace(/\u00a0/g, " ").includes("Bientôt : écoles, crèches et clubs, 5 % des ventes scolaires"))),
+      school.replace(/\s+/g, " ").slice(0, 300));
 check("aucune exception JavaScript", exceptions.length === 0, exceptions.join(" | "));
 
 await browser.close();

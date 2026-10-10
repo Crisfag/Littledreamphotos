@@ -505,6 +505,20 @@ Le tableau de bord s'organise en trois onglets, chacun avec son propre lien
     Le module n'est ouvert qu'avec `SCHOOL_LAUNCHED = "1"` (wrangler.toml).
     D'ici là, seule la propriétaire le voit, pour le préparer.
     `schoolEnabled` (subscription.js) décide de l'accès.
+
+    **Ouvrir le module scolaire**, une fois un premier envoi réel réussi
+    chez BePhoto (compte de test) :
+    1. `SCHOOL_LAUNCHED = "1"` dans `worker/wrangler.toml`, puis
+       `npm run deploy`.
+    2. Page d'accueil (`web/index.html`) :
+       - section scolaire « Nouveau » au lieu de « Bientôt disponible » ;
+       - boutons d'inscription sur les cartes Scolaire et Studio ;
+       - lignes scolaires d'Essentiel et Pro, note des tarifs et FAQ (texte
+         visible et JSON-LD), sans « bientôt » ni « prévu » ;
+       - offres Scolaire et Studio ajoutées au JSON-LD `SoftwareApplication`.
+       Le prix Fondateurs de Studio s'affiche alors tout seul (`home.js` lit
+       `/api/public/plans`).
+    3. `web/llms.txt` et `PRODUCT.md` : retirer « bientôt » et « prévu ».
   - *Photos d'un groupe* : on glisse les photos (ou le dossier) d'une
     classe ; chaque groupe a sa galerie protégée (`galleries.kind =
     'school'`, jamais listée avec les galeries classiques ni comptée dans

@@ -27,8 +27,9 @@ ADMIN_URL = "https://holypixx-admin.onrender.com"
 OWNER_EMAIL = "fagnantchristine@gmail.com"
 # Module écoles, crèches et clubs (school.js) : "1" l'ouvre à tous (formules
 # Scolaire et Studio proposées, module inclus dans Essentiel et Pro) ; sinon
-# seule la propriétaire le voit. Ouvert le 9 octobre 2026.
-SCHOOL_LAUNCHED = "1"
+# seule la propriétaire le voit. Fermé jusqu'au premier envoi réel réussi
+# chez BePhoto (voir README, « Ouvrir le module scolaire »).
+SCHOOL_LAUNCHED = "0"
 # Adresse publique du site qui héberge web/galerie.html : sert à construire
 # le lien « Revoir ma galerie » des e-mails de relance envoyés aux clients.
 PUBLIC_SITE_ORIGIN = "https://www.holypixx.com"

@@ -340,7 +340,7 @@ for (let i = 0; i < zipBody.length - 4;) {
   i += 30 + nameLength + size;
 }
 check("le fichier de production range les tirages par classe puis par enfant (le fichier numérique, rien à imprimer, n'y est pas)",
-      zip.status() === 200 && zipNames.some((n) => /^01_P2\/001_Lea\/2x_Pochette_Classique_\w{6}\.jpg$/.test(n)) &&
+      zip.status() === 200 && zipNames.some((n) => /^01_P2\/001_Lea\/2x_Pochette_Classique_[\w-]{6}\.jpg$/.test(n)) &&
       !zipNames.some((n) => /Fichier_numerique/.test(n)), zipNames.join(", "));
 const recap = (zipFiles.get("recapitulatif.csv") || Buffer.alloc(0)).toString("utf8");
 const distribution = (zipFiles.get("distribution.csv") || Buffer.alloc(0)).toString("utf8");

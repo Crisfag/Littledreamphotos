@@ -412,6 +412,8 @@ sup { line-height: 0; }
 .plans-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: 860px; margin-inline: auto; }
 .plan-studio { box-shadow: 0 0 0 1.5px var(--accent) inset; }
 .school-cta { margin-top: 20px; }
+.btn-soon, .btn-soon:hover { cursor: default; color: var(--muted); background: var(--mist); box-shadow: none; transform: none; }
+.plans-school-head .soon { margin: 0 0 0 10px; vertical-align: 6px; letter-spacing: 0; }
 
 /* ---------- Questions ---------- */
 

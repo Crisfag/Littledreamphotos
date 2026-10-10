@@ -3917,7 +3917,7 @@
       '<header class="ad-detail-header"><div><h2>Écoles, crèches et clubs</h2>' +
       '<p class="ad-hint">Vendez vos photos de groupe : établissements, classes ou équipes, fiches parents avec QR, espace famille et commande groupée.</p></div></header>' +
       '<section class="ad-sc-teaser">' +
-      "<p>Le module est inclus dans ces formules :</p>" +
+      "<p>Le module " + (data.access.launched ? "est" : "sera") + " inclus dans ces formules :</p>" +
       "<ul><li><strong>Scolaire</strong> : sans abonnement, 5 % sur les ventes scolaires, frais bancaires compris.</li>" +
       "<li><strong>Essentiel et Pro</strong> : votre abonnement, plus 5 % sur les ventes scolaires.</li>" +
       "<li><strong>Studio</strong> : 490 € par an, tout Pro plus le scolaire, sans commission.</li></ul>" +
@@ -4244,6 +4244,8 @@
       host.innerHTML = '<p class="ad-hint ad-acc-warn">' + esc(err.message) + "</p>";
       return;
     }
+    // On a pu changer de vue pendant le chargement : la section n'existe plus.
+    if (!host.isConnected) return;
     renderSchoolShop(host, year, kind, shop);
   }
 
@@ -4489,6 +4491,7 @@
       host.innerHTML = '<p class="ad-hint ad-acc-warn">' + esc(err.message) + "</p>";
       return;
     }
+    if (!host.isConnected) return;
     renderSchoolLab(host, year, kind, data);
   }
 

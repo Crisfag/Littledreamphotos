@@ -34,7 +34,7 @@ Protection honnête et traçable plutôt que promesse impossible : photos décou
   - Essentiel : 15 €/mois ou 150 €/an ; 25 galeries, 200 Go ; boutique de tirages, suppléments en ligne.
   - Pro : 29 €/mois ou 290 €/an ; galeries illimitées, 1 To ; adresse à son nom (votre-studio.holypixx.com), tout inclus.
   - Offre Fondateurs (places limitées, compteur via `GET /api/public/plans`) : Essentiel 12 € et Pro 24 € par mois la première année.
-  - Module scolaire lancé le 9 octobre 2026 (`SCHOOL_LAUNCHED = "1"`), modèle hybride :
+  - Module scolaire prêt mais fermé (`SCHOOL_LAUNCHED = "0"`) jusqu'au premier envoi réel réussi chez BePhoto. La page d'accueil l'annonce « bientôt » avec les prix prévus. Modèle hybride décidé :
     - Scolaire : sans abonnement, 5 % des ventes scolaires, frais bancaires compris.
     - Essentiel et Pro : le module inclus, à 5 % des ventes scolaires.
     - Studio : 490 €/an, annuel seulement ; tout Pro + scolaire sans commission ; Fondateurs 440 € la 1re année, 30 places.
