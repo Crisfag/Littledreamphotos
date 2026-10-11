@@ -799,6 +799,32 @@ async function handleApi(req, res, url) {
     }
   }
 
+  // /local/contracts/… — devis et contrats : relais JSON vers
+  // /api/admin/contracts/…, sauf le PDF signé, relayé tel quel.
+  if (parts[0] === "contracts" && parts.length === 3 && parts[2] === "pdf" && req.method === "GET") {
+    try {
+      const upstream = await client.rawGet(`/api/admin/contracts/${encodeURIComponent(parts[1])}/pdf`);
+      if (!upstream.ok) return json(res, upstream.status, { error: "Contrat introuvable" });
+      res.writeHead(200, {
+        "content-type": "application/pdf",
+        "content-disposition": upstream.headers.get("content-disposition") || "attachment",
+        "cache-control": "no-store",
+      });
+      return res.end(Buffer.from(await upstream.arrayBuffer()));
+    } catch (err) {
+      return json(res, 502, { error: "Worker injoignable" });
+    }
+  }
+  if (parts[0] === "contracts" && ["GET", "POST", "DELETE"].includes(req.method)) {
+    const path = "/api/admin/contracts" + (parts.length > 1 ? "/" + parts.slice(1).map(encodeURIComponent).join("/") : "");
+    try {
+      const body = req.method === "POST" ? JSON.parse((await readBody(req)).toString("utf8") || "{}") : undefined;
+      return json(res, 200, await client.request(req.method, path, body));
+    } catch (err) {
+      return relayError(res, err, "Les devis et contrats n'ont pas pu répondre");
+    }
+  }
+
   // /local/booking/… — réservation en ligne (formules, créneaux,
   // réservations) : simple relais JSON vers /api/admin/booking/….
   if (parts[0] === "booking" && ["GET", "POST", "DELETE"].includes(req.method)) {

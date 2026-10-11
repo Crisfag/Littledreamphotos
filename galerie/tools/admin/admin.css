@@ -1277,3 +1277,25 @@ main section > p, .ad-share > p { max-width: 75ch; }
   .ad-bk-offer-main { grid-column: 1 / -1; }
   .ad-bk-slot-fields .ad-field { flex: 1 1 140px; }
 }
+
+/* ---------- Devis et contrats ---------- */
+
+.ad-ct-lines { display: grid; gap: .45rem; }
+.ad-ct-line { display: grid; grid-template-columns: minmax(0, 1fr) 8rem auto; gap: .5rem; align-items: center; }
+.ad-ct-line input {
+  width: 100%; min-height: 40px; font: inherit; font-size: .94rem; color: var(--ink);
+  padding: .5rem .7rem; border: 1px solid var(--line-2); border-radius: 10px; background: var(--paper);
+}
+.ad-ct-line-amount { text-align: right; font-variant-numeric: tabular-nums; }
+.ad-ct-add-line { margin: .55rem 0 0; }
+.ad-ct-total { margin: 0 0 1rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.ad-ct-total strong { color: var(--ink); font-weight: 600; font-size: 1.1rem; margin-left: .25rem; }
+#ad-ct-form textarea[name="terms"] { font-size: .9rem; line-height: 1.55; }
+.ad-ct-table td { vertical-align: top; }
+.ad-ct-table .ad-acc-sub { white-space: normal; }
+.ad-ct-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .35rem; min-width: 12rem; white-space: normal; }
+#ad-ct-terms-box { margin-top: 0; }
+@media (max-width: 720px) {
+  .ad-ct-line { grid-template-columns: minmax(0, 1fr) 6rem auto; }
+  .ad-ct-actions { justify-content: flex-start; }
+}

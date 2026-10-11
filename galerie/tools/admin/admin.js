@@ -77,6 +77,7 @@
       if (tab === "galleries") renderList();
       else if (tab === "sales") renderSales();
       else if (tab === "booking") renderBooking();
+      else if (tab === "contracts") renderContracts();
       else if (tab === "portfolio") renderPortfolio();
       else if (tab === "billing") renderBilling();
       else if (tab === "shop") renderShop();
@@ -1367,6 +1368,7 @@
       (plan.features.shop ? "✓ " : "— ") + "Boutique de tirages",
       (plan.features.subdomain ? "✓ " : "— ") + "Vos galeries à votre nom",
       (plan.features.booking ? "✓ " : "— ") + "Réservation en ligne avec acompte",
+      (plan.features.contracts ? "✓ " : "— ") + "Devis et contrats signés en ligne",
       plan.features.school && schoolOpen ? "✓ Écoles, crèches et clubs" + (plan.schoolFeePercent ? " (" + String(plan.schoolFeePercent).replace(".", ",") + " % des ventes scolaires)" : ", sans commission") : "",
     ];
     return '<ul class="ad-plan-features">' + items.filter(Boolean).map(function (t) { return "<li>" + esc(t) + "</li>"; }).join("") + "</ul>";
@@ -5408,6 +5410,273 @@
     });
   }
 
+  /* ---------- Devis et contrats signés en ligne ---------- */
+
+  var CONTRACT_STATUS = {
+    draft: ["Brouillon", ""],
+    sent: ["Envoyé", "ad-badge-selected"],
+    viewed: ["Lu par le client", "ad-badge-selected"],
+    signed: ["Signé, acompte attendu", "ad-badge-soon"],
+    paid: ["Signé", "ad-badge-validated"],
+    declined: ["Refusé", "ad-badge-expired"],
+    cancelled: ["Annulé", ""],
+  };
+  var contractsState = { data: null, editing: null };
+
+  function contractStatusHtml(c) {
+    var s = CONTRACT_STATUS[c.status] || [c.status, ""];
+    var label = s[0];
+    var cls = s[1];
+    // Signé sans acompte demandé : le contrat est conclu, rien n'est attendu.
+    if (c.status === "signed" && !c.depositCents) { label = "Signé"; cls = "ad-badge-validated"; }
+    if (c.status === "paid") label = c.depositCents ? "Signé, acompte reçu" : "Signé";
+    return '<span class="ad-badge ' + cls + '">' + esc(label) + "</span>";
+  }
+
+  function contractDateInput(ts) {
+    return ts ? new Date(ts * 1000).toLocaleDateString("en-CA", { timeZone: "Europe/Brussels" }) : "";
+  }
+
+  function contractLineRowHtml(line) {
+    return '<div class="ad-ct-line">' +
+      '<input class="ad-ct-line-label" placeholder="ex. Séance famille 1 h en extérieur" maxlength="160" value="' + esc(line.label || "") + '" aria-label="Prestation" />' +
+      '<input class="ad-ct-line-amount" inputmode="decimal" placeholder="0" value="' + esc(line.amountCents ? bookingEurosInput(line.amountCents) : "") + '" aria-label="Montant en euros" />' +
+      '<button type="button" class="ad-btn ad-btn-small ad-btn-icon" data-ct-remove-line aria-label="Retirer cette ligne">×</button></div>';
+  }
+
+  function contractEditorHtml(data, c) {
+    var editing = Boolean(c && c.id);
+    c = c || { clientName: "", clientEmail: "", title: "", sessionDate: "", lines: [{ label: "", amountCents: 0 }], depositCents: 0, terms: data.terms, validUntil: 0 };
+    return '<section id="ad-ct-editor"><div class="ad-section-header"><h3>' + (editing ? "Modifier le devis n° " + esc(c.number) : "Nouveau devis") + "</h3></div>" +
+      (editing && c.status !== "draft" ? '<p class="ad-banner ad-banner-muted">Ce devis a déjà été envoyé : après modification, renvoyez-le pour que votre client signe la nouvelle version.</p>' : "") +
+      '<form id="ad-ct-form" novalidate>' +
+      '<div class="ad-field-row">' +
+      '<label class="ad-field"><span>Client</span><input name="clientName" maxlength="120" required placeholder="ex. Camille Dubois" value="' + esc(c.clientName) + '" /></label>' +
+      '<label class="ad-field"><span>E-mail du client</span><input type="email" name="clientEmail" maxlength="200" required placeholder="camille@exemple.be" value="' + esc(c.clientEmail) + '" /></label>' +
+      "</div>" +
+      '<div class="ad-field-row">' +
+      '<label class="ad-field"><span>Titre</span><input name="title" maxlength="160" required placeholder="ex. Séance nouveau-né" value="' + esc(c.title) + '" /></label>' +
+      '<label class="ad-field"><span>Date prévue <em>(facultatif, en toutes lettres)</em></span><input name="sessionDate" maxlength="120" placeholder="ex. samedi 14 novembre, 10 h" value="' + esc(c.sessionDate) + '" /></label>' +
+      "</div>" +
+      '<div class="ad-field"><span>Prestations <em>(montants TTC, en euros)</em></span><div id="ad-ct-lines" class="ad-ct-lines">' +
+      (c.lines.length ? c.lines : [{ label: "", amountCents: 0 }]).map(contractLineRowHtml).join("") + "</div>" +
+      '<button type="button" class="ad-link-btn ad-ct-add-line" id="ad-ct-add-line">+ Ajouter une prestation</button></div>' +
+      '<p class="ad-ct-total">Total TTC : <strong id="ad-ct-total">—</strong></p>' +
+      '<div class="ad-field-row">' +
+      '<label class="ad-field"><span>Acompte à la signature <em>(€, 0 = aucun)</em></span><input name="deposit" inputmode="decimal" placeholder="0" value="' + esc(bookingEurosInput(c.depositCents)) + '" /></label>' +
+      '<label class="ad-field"><span>Valable jusqu\'au <em>(facultatif)</em></span><input type="date" name="validUntil" value="' + esc(contractDateInput(c.validUntil)) + '" /></label>' +
+      "</div>" +
+      '<label class="ad-field"><span>Conditions du contrat</span><textarea name="terms" rows="12" maxlength="20000">' + esc(c.terms) + "</textarea></label>" +
+      '<div class="ad-sc-actions">' +
+      '<button type="submit" class="ad-btn ad-btn-primary" data-ct-submit="send">' + (editing && c.status !== "draft" ? "Enregistrer et renvoyer" : "Envoyer au client") + "</button>" +
+      '<button type="submit" class="ad-btn" data-ct-submit="draft">Enregistrer le brouillon</button>' +
+      '<button type="button" class="ad-btn" id="ad-ct-cancel">Annuler</button>' +
+      "</div></form></section>";
+  }
+
+  function contractRowHtml(c) {
+    var actions = [];
+    if (["draft", "sent", "viewed"].indexOf(c.status) !== -1) actions.push('<button type="button" class="ad-btn ad-btn-small" data-ct-edit="' + esc(c.id) + '">Modifier</button>');
+    if (c.status === "draft") actions.push('<button type="button" class="ad-btn ad-btn-small ad-btn-primary" data-ct-send="' + esc(c.id) + '">Envoyer</button>');
+    if (c.status === "sent" || c.status === "viewed") actions.push('<button type="button" class="ad-btn ad-btn-small" data-ct-send="' + esc(c.id) + '">Renvoyer</button>');
+    if (c.url) actions.push('<button type="button" class="ad-btn ad-btn-small" data-ct-copy="' + esc(c.url) + '">Copier le lien</button>');
+    if (c.status === "signed" || c.status === "paid") actions.push('<a class="ad-btn ad-btn-small" href="/local/contracts/' + encodeURIComponent(c.id) + '/pdf" download>PDF signé</a>');
+    if (["draft", "sent", "viewed"].indexOf(c.status) !== -1 && c.status !== "draft") actions.push('<button type="button" class="ad-btn ad-btn-small ad-btn-danger" data-ct-cancel="' + esc(c.id) + '">Retirer</button>');
+    if (["draft", "cancelled", "declined"].indexOf(c.status) !== -1) actions.push('<button type="button" class="ad-btn ad-btn-small ad-btn-danger" data-ct-delete="' + esc(c.id) + '">Supprimer</button>');
+    var detail = c.signedAt
+      ? "Signé par " + c.signerName + " le " + formatDateTime(c.signedAt) + (c.paidAt ? " · acompte reçu le " + formatDate(c.paidAt) : "")
+      : c.declinedAt ? "Refusé le " + formatDate(c.declinedAt) + (c.declineReason ? " : « " + c.declineReason + " »" : "")
+      : c.viewedAt ? "Lu le " + formatDateTime(c.viewedAt)
+      : c.sentAt ? "Envoyé le " + formatDateTime(c.sentAt)
+      : "Créé le " + formatDate(c.createdAt);
+    return '<tr data-contract-id="' + esc(c.id) + '">' +
+      '<td class="ad-acc-num">' + esc(c.number) + "</td>" +
+      '<td><span class="ad-acc-name">' + esc(c.title) + '</span><span class="ad-acc-sub">' + esc(c.clientName) + " · " + esc(c.clientEmail) + "</span>" +
+      '<span class="ad-acc-sub">' + esc(detail) + "</span></td>" +
+      '<td class="ad-num">' + formatEuros(c.totalCents) + (c.depositCents ? '<span class="ad-acc-sub">acompte ' + formatEuros(c.depositCents) + "</span>" : "") + "</td>" +
+      "<td>" + contractStatusHtml(c) + "</td>" +
+      '<td class="ad-row-actions"><div class="ad-ct-actions">' + actions.join("") + "</div></td></tr>";
+  }
+
+  async function renderContracts(skipHash) {
+    if (!skipHash && location.hash !== "#/contrats") history.pushState(null, "", "#/contrats");
+    setActiveTab("contracts");
+    if (!contractsState.data) el.view.innerHTML = '<p class="ad-loading">Chargement…</p>';
+    var data;
+    try {
+      data = await api("GET", "/contracts");
+    } catch (err) {
+      el.view.innerHTML = '<div class="ad-error-panel"><h2>Devis et contrats indisponibles</h2><p>' + esc(err.message) + "</p></div>";
+      return;
+    }
+    if (location.hash !== "#/contrats") return;
+    paintContracts(data);
+  }
+
+  function paintContracts(data) {
+    contractsState.data = data;
+    var list = data.contracts;
+    var editing = contractsState.editing;
+    var waiting = list.filter(function (c) { return c.status === "sent" || c.status === "viewed"; }).length;
+    var signedCount = list.filter(function (c) { return c.status === "signed" || c.status === "paid"; }).length;
+    el.view.innerHTML =
+      '<header class="ad-detail-header"><div><h2>Devis et contrats</h2>' +
+      '<p class="ad-hint">Envoyez un devis : votre client le lit, le signe en ligne et règle l\'acompte. Chacun reçoit le contrat signé en PDF.</p></div>' +
+      (data.enabled && !editing ? '<button type="button" class="ad-btn ad-btn-primary" id="ad-ct-new">+ Nouveau devis</button>' : "") +
+      "</header>" +
+      (!data.enabled ? '<p class="ad-banner ad-banner-muted">Les devis et contrats signés en ligne sont inclus à partir de la formule Essentiel. <button type="button" class="ad-link-btn" id="ad-ct-plans">Voir les formules</button></p>' : "") +
+      (data.enabled && !data.stripeReady ? '<p class="ad-banner ad-banner-muted">Sans paiement en ligne actif, vos clients signent mais ne peuvent pas régler l\'acompte en ligne. <button type="button" class="ad-link-btn" id="ad-ct-billing">Onglet Facturation</button></p>' : "") +
+      (editing ? contractEditorHtml(data, editing === "new" ? null : editing) : "") +
+      (data.enabled && list.length && !editing
+        ? '<div class="ad-stats">' + salesStatHtml("En attente de signature", String(waiting), "") + salesStatHtml("Contrats signés", String(signedCount), "") + "</div>"
+        : "") +
+      (!editing
+        ? '<section id="ad-ct-list"><div class="ad-section-header"><h3>Vos devis</h3></div>' +
+          (list.length
+            ? '<div class="ad-table-wrap"><table class="ad-table ad-ct-table"><thead><tr><th>N°</th><th>Devis</th><th class="ad-num">Total</th><th>État</th><th><span class="ad-visually-hidden">Actions</span></th></tr></thead><tbody>' +
+              list.map(contractRowHtml).join("") + "</tbody></table></div>"
+            : '<p class="ad-hint">Aucun devis pour l\'instant. Un devis reprend vos prestations et vos conditions ; votre client le signe depuis le lien reçu par e-mail, sans compte à créer.</p>') +
+          "</section>" +
+          (data.enabled
+            ? '<section><details class="ad-advanced" id="ad-ct-terms-box"><summary>Conditions par défaut de vos contrats</summary>' +
+              '<p class="ad-hint">Reprises dans chaque nouveau devis, où vous pouvez encore les adapter. Le modèle proposé est un point de départ, pas un conseil juridique.</p>' +
+              '<form id="ad-ct-terms-form"><label class="ad-field"><span class="ad-visually-hidden">Conditions</span><textarea name="terms" rows="14" maxlength="20000">' + esc(data.terms) + "</textarea></label>" +
+              '<div class="ad-sc-actions"><button type="submit" class="ad-btn ad-btn-primary">Enregistrer les conditions</button>' +
+              '<button type="button" class="ad-btn" id="ad-ct-terms-reset">Revenir au modèle Holypixx</button></div></form></details></section>'
+            : "")
+        : "");
+    bindContracts(data);
+  }
+
+  function readContractForm(form) {
+    var lines = [];
+    var bad = false;
+    form.querySelectorAll(".ad-ct-line").forEach(function (row) {
+      var label = row.querySelector(".ad-ct-line-label").value.trim();
+      var amount = bookingCents(row.querySelector(".ad-ct-line-amount").value);
+      if (isNaN(amount)) bad = true;
+      if (label || amount) lines.push({ label: label, amountCents: amount });
+    });
+    var deposit = bookingCents(form.elements.deposit.value);
+    if (bad || isNaN(deposit)) return { error: "Montant illisible : écrivez par exemple 180 ou 180,50." };
+    return {
+      body: {
+        clientName: form.elements.clientName.value, clientEmail: form.elements.clientEmail.value, title: form.elements.title.value,
+        sessionDate: form.elements.sessionDate.value, lines: lines, depositCents: deposit, terms: form.elements.terms.value,
+        validUntil: form.elements.validUntil.value || "",
+      },
+    };
+  }
+
+  function refreshContractTotal() {
+    var total = 0;
+    document.querySelectorAll("#ad-ct-lines .ad-ct-line-amount").forEach(function (input) {
+      var cents = bookingCents(input.value);
+      if (!isNaN(cents)) total += cents;
+    });
+    var out = document.getElementById("ad-ct-total");
+    if (out) out.textContent = formatEuros(total);
+  }
+
+  async function contractsCall(method, path, body, message) {
+    try {
+      var data = await api(method, "/contracts" + path, body);
+      if (message) toast(typeof message === "function" ? message(data) : message);
+      return data;
+    } catch (err) {
+      toast(err.message, true);
+      return null;
+    }
+  }
+
+  function bindContracts(data) {
+    var on = function (id, fn) { var node = document.getElementById(id); if (node) node.addEventListener("click", fn); };
+    on("ad-ct-plans", function () { renderSubscription(); });
+    on("ad-ct-billing", function () { renderBilling(); });
+    on("ad-ct-new", function () { contractsState.editing = "new"; paintContracts(data); document.getElementById("ad-ct-form").elements.clientName.focus(); });
+    on("ad-ct-cancel", function () { contractsState.editing = null; paintContracts(data); });
+    on("ad-ct-add-line", function () {
+      document.getElementById("ad-ct-lines").insertAdjacentHTML("beforeend", contractLineRowHtml({}));
+      var rows = document.querySelectorAll("#ad-ct-lines .ad-ct-line-label");
+      rows[rows.length - 1].focus();
+    });
+
+    var form = document.getElementById("ad-ct-form");
+    if (form) {
+      refreshContractTotal();
+      form.addEventListener("input", refreshContractTotal);
+      form.addEventListener("click", function (e) {
+        var remove = e.target.closest("[data-ct-remove-line]");
+        if (!remove) return;
+        var rows = form.querySelectorAll(".ad-ct-line");
+        if (rows.length > 1) remove.closest(".ad-ct-line").remove();
+        else rows[0].querySelectorAll("input").forEach(function (i) { i.value = ""; });
+        refreshContractTotal();
+      });
+      var mode = "send";
+      form.querySelectorAll("[data-ct-submit]").forEach(function (b) {
+        b.addEventListener("click", function () { mode = b.getAttribute("data-ct-submit"); });
+      });
+      form.addEventListener("submit", async function (e) {
+        e.preventDefault();
+        var read = readContractForm(form);
+        if (read.error) { toast(read.error, true); return; }
+        read.body.send = mode === "send";
+        var editing = contractsState.editing;
+        var result = await contractsCall("POST", editing && editing.id ? "/" + encodeURIComponent(editing.id) : "", read.body,
+          read.body.send ? "Devis envoyé à " + read.body.clientEmail + "." : "Brouillon enregistré.");
+        if (result) { contractsState.editing = null; paintContracts(result); }
+      });
+    }
+
+    el.view.querySelectorAll("[data-ct-edit]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        contractsState.editing = data.contracts.filter(function (c) { return c.id === b.getAttribute("data-ct-edit"); })[0];
+        paintContracts(data);
+        window.scrollTo(0, 0);
+      });
+    });
+    el.view.querySelectorAll("[data-ct-send]").forEach(function (b) {
+      b.addEventListener("click", async function () {
+        var result = await contractsCall("POST", "/" + encodeURIComponent(b.getAttribute("data-ct-send")) + "/send", {}, "Devis envoyé au client.");
+        if (result) paintContracts(result);
+      });
+    });
+    el.view.querySelectorAll("[data-ct-copy]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        navigator.clipboard.writeText(b.getAttribute("data-ct-copy")).then(function () {
+          toast("Lien copié : votre client peut l'ouvrir pour lire et signer.");
+        }).catch(function () { toast("Impossible de copier le lien.", true); });
+      });
+    });
+    el.view.querySelectorAll("[data-ct-cancel]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        confirmAction("Retirer ce devis ? Le lien envoyé au client n'en permettra plus la signature.", async function () {
+          var result = await contractsCall("POST", "/" + encodeURIComponent(b.getAttribute("data-ct-cancel")) + "/cancel", {}, "Devis retiré.");
+          if (result) paintContracts(result);
+        });
+      });
+    });
+    el.view.querySelectorAll("[data-ct-delete]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        confirmAction("Supprimer définitivement ce devis ?", async function () {
+          var result = await contractsCall("DELETE", "/" + encodeURIComponent(b.getAttribute("data-ct-delete")), null, "Devis supprimé.");
+          if (result) paintContracts(result);
+        });
+      });
+    });
+
+    var termsForm = document.getElementById("ad-ct-terms-form");
+    if (termsForm) {
+      termsForm.addEventListener("submit", async function (e) {
+        e.preventDefault();
+        var result = await contractsCall("POST", "/terms", { terms: termsForm.elements.terms.value }, "Conditions enregistrées : elles seront reprises dans vos prochains devis.");
+        if (result) { paintContracts(result); document.getElementById("ad-ct-terms-box").open = true; }
+      });
+      on("ad-ct-terms-reset", function () { termsForm.elements.terms.value = data.defaultTerms; });
+    }
+  }
+
   /* ---------- Démarrage et navigation ---------- */
 
   function routeFromHash() {
@@ -5416,6 +5685,7 @@
     else if (location.hash === "#/detect") renderDetect(true);
     else if (location.hash === "#/ventes") renderSales(true);
     else if (location.hash === "#/reservations") renderBooking(true);
+    else if (location.hash === "#/contrats") renderContracts(true);
     else if (location.hash === "#/portfolio") renderPortfolio(true);
     else if (location.hash.indexOf("#/facturation") === 0) renderBilling(true);
     else if (location.hash.indexOf("#/abonnement") === 0) renderSubscription(true);

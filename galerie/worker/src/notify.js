@@ -724,6 +724,94 @@ export function buildBookingConflictEmail(params) {
   return { subject, html: emailShell({ preheader: subject, bodyHtml }), text };
 }
 
+/* ---------- Devis et contrats (contracts.js) ---------- */
+
+function contractSummaryHtml({ title, sessionDate, totalCents, depositCents }) {
+  return [
+    `<strong>${escapeHtml(title)}</strong>`,
+    sessionDate ? `Date prévue : ${escapeHtml(sessionDate)}` : "",
+    `Total : ${escapeHtml(formatEuros(totalCents))}`,
+    depositCents ? `Acompte à la signature : ${escapeHtml(formatEuros(depositCents))}` : "",
+  ].filter(Boolean).join("<br>");
+}
+
+export function buildContractToClientEmail(params) {
+  const { studioName, clientName, number, title, url, validUntil, depositCents } = params;
+  const subject = `${studioName} : votre devis « ${title} »`;
+  const bodyHtml =
+    eyebrow(studioName || "Votre photographe") +
+    heading(`Bonjour ${escapeHtml(clientName)},`) +
+    paragraph(`Voici votre devis n° ${escapeHtml(number)}. Vous pouvez le lire, puis le signer en ligne${depositCents ? " et régler l'acompte" : ""} : tout se fait depuis le lien ci-dessous, sans compte à créer.`) +
+    paragraph(contractSummaryHtml(params)) +
+    emailButton(url, "Consulter et signer") +
+    (validUntil ? paragraph(`Ce devis est valable jusqu'au ${escapeHtml(formatDay(validUntil))}.`, { small: true }) : "") +
+    paragraph("Une question ? Répondez simplement à cet e-mail.", { small: true });
+  const text = [
+    `Bonjour ${clientName},`,
+    "",
+    `Voici votre devis n° ${number} : ${title}.`,
+    `Consulter et signer : ${url}`,
+    validUntil ? `Valable jusqu'au ${formatDay(validUntil)}.` : "",
+  ].join("\n");
+  return { subject, html: emailShell({ preheader: subject, bodyHtml }), text };
+}
+
+export function buildContractSignedEmail(params) {
+  const { studioName, number, title, url, depositDue } = params;
+  const subject = `Contrat signé : ${title}`;
+  const bodyHtml =
+    eyebrow(studioName || "Votre photographe") +
+    heading("Merci, votre contrat est signé") +
+    paragraph(`Vous trouverez en pièce jointe le contrat n° ${escapeHtml(number)} signé, à conserver.`) +
+    paragraph(contractSummaryHtml(params)) +
+    (depositDue ? paragraph("Il reste à régler l'acompte : si le paiement a été interrompu, reprenez-le depuis le lien ci-dessous.") + emailButton(url, "Régler l'acompte") : "");
+  const text = [`Votre contrat n° ${number} (${title}) est signé : il est joint à cet e-mail.`, depositDue ? `Acompte à régler : ${url}` : ""].join("\n");
+  return { subject, html: emailShell({ preheader: subject, bodyHtml }), text };
+}
+
+export function buildContractSignedNoticeEmail(params) {
+  const { clientName, signerName, number, title, adminUrl, depositCents } = params;
+  const subject = `${clientName} a signé le contrat ${number}`;
+  const bodyHtml =
+    eyebrow("Devis et contrats") +
+    heading("Contrat signé") +
+    paragraph(`${escapeHtml(signerName || clientName)} a signé le contrat n° ${escapeHtml(number)} « ${escapeHtml(title)} ». Le PDF signé est joint.`) +
+    paragraph(contractSummaryHtml(params)) +
+    (depositCents ? paragraph("Vous recevrez un autre e-mail dès que l'acompte sera réglé.", { small: true }) : "") +
+    (adminUrl ? emailButton(adminUrl, "Voir mes devis et contrats") : "");
+  const text = `${signerName || clientName} a signé le contrat n° ${number} (${title}). Le PDF signé est joint.`;
+  return { subject, html: emailShell({ preheader: subject, bodyHtml }), text };
+}
+
+export function buildContractDepositPaidEmail(params, forPhotographer) {
+  const { studioName, clientName, number, title, depositCents, adminUrl } = params;
+  const subject = forPhotographer ? `Acompte reçu : ${clientName}, contrat ${number}` : `Acompte reçu, merci : ${title}`;
+  const bodyHtml = forPhotographer
+    ? eyebrow("Devis et contrats") + heading("Acompte reçu") +
+      paragraph(`${escapeHtml(clientName)} a réglé l'acompte de ${escapeHtml(formatEuros(depositCents))} pour le contrat n° ${escapeHtml(number)} « ${escapeHtml(title)} ».`) +
+      (adminUrl ? emailButton(adminUrl, "Voir mes devis et contrats") : "")
+    : eyebrow(studioName || "Votre photographe") + heading("Acompte bien reçu") +
+      paragraph(`Votre acompte de ${escapeHtml(formatEuros(depositCents))} pour « ${escapeHtml(title)} » est réglé : votre réservation est confirmée.`) +
+      paragraph("Une question ? Répondez simplement à cet e-mail.", { small: true });
+  const text = forPhotographer
+    ? `${clientName} a réglé l'acompte de ${formatEuros(depositCents)} (contrat ${number}).`
+    : `Votre acompte de ${formatEuros(depositCents)} pour « ${title} » est réglé.`;
+  return { subject, html: emailShell({ preheader: subject, bodyHtml }), text };
+}
+
+export function buildContractDeclinedEmail(params) {
+  const { clientName, number, title, reason, adminUrl } = params;
+  const subject = `${clientName} a refusé le devis ${number}`;
+  const bodyHtml =
+    eyebrow("Devis et contrats") +
+    heading("Devis refusé") +
+    paragraph(`${escapeHtml(clientName)} a refusé le devis n° ${escapeHtml(number)} « ${escapeHtml(title)} ».`) +
+    (reason ? `<div style="margin:0 0 14px;padding:14px 16px;background:${CREAM};border-radius:10px;font-family:${SANS};font-size:15px;line-height:1.6;color:${CHARCOAL};white-space:pre-wrap;">${escapeHtml(reason)}</div>` : "") +
+    (adminUrl ? emailButton(adminUrl, "Voir mes devis et contrats") : "");
+  const text = `${clientName} a refusé le devis n° ${number} (${title}).${reason ? "\n\n" + reason : ""}`;
+  return { subject, html: emailShell({ preheader: subject, bodyHtml }), text };
+}
+
 function bytesToBase64(bytes) {
   let binary = "";
   const chunkSize = 0x8000;
@@ -872,6 +960,27 @@ export async function sendBookingCancelled(env, params) {
 
 export async function sendBookingConflict(env, params) {
   await sendEmail(env, { to: params.to, ...buildBookingConflictEmail(params) });
+}
+
+export async function sendContractToClient(env, params) {
+  await sendEmail(env, { to: params.to, replyTo: params.replyTo, ...buildContractToClientEmail(params) });
+}
+
+export async function sendContractSigned(env, params) {
+  await sendEmail(env, { to: params.to, replyTo: params.replyTo, ...buildContractSignedEmail(params), ...withAttachment(params) });
+}
+
+export async function sendContractSignedNotice(env, params) {
+  await sendEmail(env, { to: params.to, replyTo: params.replyTo, ...buildContractSignedNoticeEmail(params), ...withAttachment(params) });
+}
+
+export async function sendContractDepositPaid(env, params) {
+  await sendEmail(env, { to: params.to, replyTo: params.replyTo, ...buildContractDepositPaidEmail(params, false) });
+  if (params.photographerTo) await sendEmail(env, { to: params.photographerTo, ...buildContractDepositPaidEmail(params, true) });
+}
+
+export async function sendContractDeclined(env, params) {
+  await sendEmail(env, { to: params.to, ...buildContractDeclinedEmail(params) });
 }
 
 export async function sendStoragePurgeNotice(env, params) {

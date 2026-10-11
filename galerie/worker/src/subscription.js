@@ -23,7 +23,7 @@ export const PLANS = {
     priceCents: 0,
     maxActiveGalleries: 3,
     storageBytes: 5e9,
-    features: { shop: false, subdomain: false, school: false, booking: false },
+    features: { shop: false, subdomain: false, school: false, booking: false, contracts: false },
     pitch: "Pour essayer : 3 galeries actives, protection complète, sélection, livraison HD.",
   },
   essentiel: {
@@ -38,7 +38,7 @@ export const PLANS = {
     schoolFeePercent: 5,
     maxActiveGalleries: 25,
     storageBytes: 200e9,
-    features: { shop: true, subdomain: false, school: true, booking: true },
+    features: { shop: true, subdomain: false, school: true, booking: true, contracts: true },
     pitch: "25 galeries actives et la boutique de tirages.",
   },
   pro: {
@@ -51,7 +51,7 @@ export const PLANS = {
     schoolFeePercent: 5,
     maxActiveGalleries: null,
     storageBytes: 1000e9,
-    features: { shop: true, subdomain: true, school: true, booking: true },
+    features: { shop: true, subdomain: true, school: true, booking: true, contracts: true },
     pitch: "Galeries illimitées, boutique, et vos galeries à votre nom (votre-studio.holypixx.com).",
   },
   // Photo de groupe (écoles, crèches, clubs) : voir school.js. Ces deux
@@ -70,7 +70,7 @@ export const PLANS = {
     schoolFeePercent: 5,
     maxActiveGalleries: 3,
     storageBytes: 500e9,
-    features: { shop: false, subdomain: false, school: true, booking: false },
+    features: { shop: false, subdomain: false, school: true, booking: false, contracts: false },
     pitch: "Pour les photographes qui ne font que du scolaire : on ne paie que sur ce qu'on vend.",
   },
   // Studio : tout Pro, plus le scolaire sans commission (seulement les frais
@@ -90,7 +90,7 @@ export const PLANS = {
     schoolPlan: true,
     maxActiveGalleries: null,
     storageBytes: 2000e9,
-    features: { shop: true, subdomain: true, school: true, booking: true },
+    features: { shop: true, subdomain: true, school: true, booking: true, contracts: true },
     pitch: "Tout Pro, plus les écoles, crèches et clubs, sans commission.",
   },
 };
@@ -128,6 +128,7 @@ export const FEATURE_LABELS = {
   subdomain: "L'adresse à votre nom",
   school: "Le module écoles, crèches et clubs",
   booking: "La réservation en ligne",
+  contracts: "Les devis et contrats signés en ligne",
 };
 // Accord du participe : « La boutique… est incluse », « Le module… est inclus ».
 const FEATURE_MASCULINE = {

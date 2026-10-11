@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Devis et contrat</title>
+  <meta name="robots" content="noindex, nofollow, noarchive" />
+  <meta name="referrer" content="no-referrer" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="contrat.css" />
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <script>
+    /* Adresse du Worker ; le lien secret du document est lu dans « ?t=… ». */
+    window.CONTRACT_CONFIG = {
+      api: "https://galerie-protegee.littledreamphotos-be.workers.dev",
+    };
+  </script>
+</head>
+<body>
+  <main class="ct-shell">
+    <p class="ct-state" id="ct-loading" role="status">Chargement du document…</p>
+    <div class="ct-state" id="ct-missing" hidden>
+      <h1>Document introuvable</h1>
+      <p>Le lien est incomplet, ou le document a été retiré par le photographe. Vérifiez l'adresse reçue par e-mail.</p>
+    </div>
+
+    <div id="ct-page" hidden>
+      <header class="ct-head">
+        <p class="ct-studio" id="ct-studio"></p>
+        <h1 id="ct-title"></h1>
+        <p class="ct-meta" id="ct-meta"></p>
+      </header>
+
+      <div class="ct-banner" id="ct-banner" role="status" hidden></div>
+
+      <article class="ct-doc" aria-label="Devis">
+        <div class="ct-parties">
+          <div><p class="ct-label">Photographe</p><p class="ct-strong" id="ct-seller"></p><p id="ct-seller-email"></p></div>
+          <div><p class="ct-label">Client</p><p class="ct-strong" id="ct-client"></p><p id="ct-client-email"></p></div>
+        </div>
+        <p class="ct-session" id="ct-session" hidden></p>
+        <table class="ct-lines">
+          <thead><tr><th scope="col">Prestation</th><th scope="col" class="ct-num">Montant</th></tr></thead>
+          <tbody id="ct-lines"></tbody>
+          <tfoot>
+            <tr class="ct-total"><th scope="row">Total TTC</th><td class="ct-num" id="ct-total"></td></tr>
+            <tr class="ct-deposit" id="ct-deposit-row" hidden><th scope="row">Acompte à la signature</th><td class="ct-num" id="ct-deposit"></td></tr>
+          </tfoot>
+        </table>
+        <section class="ct-terms" aria-labelledby="ct-terms-title">
+          <h2 id="ct-terms-title">Conditions</h2>
+          <div class="ct-terms-text" id="ct-terms"></div>
+        </section>
+      </article>
+
+      <section class="ct-sign" id="ct-sign" aria-labelledby="ct-sign-title" hidden>
+        <h2 id="ct-sign-title">Signer le contrat</h2>
+        <form id="ct-sign-form" novalidate>
+          <label class="ct-check">
+            <input type="checkbox" name="accept" />
+            <span>J'ai lu le devis et les conditions ci-dessus, et je les accepte.</span>
+          </label>
+          <label class="ct-field">
+            <span>Votre nom complet, en guise de signature</span>
+            <input type="text" name="signerName" autocomplete="name" maxlength="120" required />
+          </label>
+          <p class="ct-fine">Votre signature électronique est enregistrée avec sa date et l'empreinte du document ; vous recevez le contrat signé en PDF par e-mail.</p>
+          <p class="ct-error" id="ct-sign-error" role="alert" hidden></p>
+          <div class="ct-actions">
+            <button type="submit" class="ct-btn ct-btn-primary" id="ct-sign-submit">Signer</button>
+            <button type="button" class="ct-link" id="ct-decline-open">Refuser ce devis</button>
+          </div>
+        </form>
+        <form id="ct-decline-form" class="ct-decline" novalidate hidden>
+          <label class="ct-field">
+            <span>Un mot pour le photographe <em>(facultatif)</em></span>
+            <textarea name="reason" rows="3" maxlength="1000"></textarea>
+          </label>
+          <div class="ct-actions">
+            <button type="submit" class="ct-btn">Confirmer le refus</button>
+            <button type="button" class="ct-link" id="ct-decline-cancel">Revenir au devis</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="ct-done" id="ct-done" hidden>
+        <p id="ct-done-text"></p>
+        <div class="ct-actions">
+          <button type="button" class="ct-btn ct-btn-primary" id="ct-pay" hidden></button>
+          <a class="ct-btn" id="ct-pdf" href="#" download>Télécharger le contrat signé (PDF)</a>
+        </div>
+      </section>
+
+      <footer class="ct-foot">Document établi et signé via <a href="https://www.holypixx.com/" target="_blank" rel="noopener">Holypixx</a></footer>
+    </div>
+  </main>
+  <script src="contrat.js"></script>
+</body>
+</html>

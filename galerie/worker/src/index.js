@@ -23,6 +23,7 @@ import { purgeOldAccessLogs } from "./privacy.js";
 import { runSalesReminders } from "./campaigns.js";
 import { handlePortfolioPublic, purgeOldPortfolioMessages } from "./portfolio.js";
 import { handleBookingPublic, runBookingReminders } from "./booking.js";
+import { handleContractPublic } from "./contracts.js";
 import { runStoragePurge } from "./storage.js";
 import { plansForPublic } from "./subscription.js";
 import { shopState } from "./shop.js";
@@ -103,6 +104,9 @@ export default {
       } else if (path.startsWith("/api/booking/")) {
         // Réservation en ligne depuis le mini-site (formules, créneaux, acompte).
         response = await handleBookingPublic(request, env, path);
+      } else if (path.startsWith("/api/contract/")) {
+        // Devis et contrat à signer (lien secret envoyé au client).
+        response = await handleContractPublic(request, env, path);
       } else if (path.startsWith("/api/music-library/") && request.method === "GET") {
         // Écoute d'un morceau libre de droits de la bibliothèque commune.
         response = await handleLibraryAudio(request, env, decodeURIComponent(path.split("/")[3] || ""));
