@@ -178,9 +178,10 @@
     el.toast.className = "ad-toast ad-toast-visible" + (isError ? " ad-toast-error" : "");
     el.toast.hidden = false;
     clearTimeout(toast._t);
+    // Un message long (mode d'emploi) reste affiché le temps d'être lu.
     toast._t = setTimeout(function () {
       el.toast.hidden = true;
-    }, 4200);
+    }, Math.max(4200, message.length * 60));
   }
 
   // Échappement générique : sûr aussi bien dans un nœud texte que dans la
@@ -3082,6 +3083,18 @@
     openModal("ad-photo-modal");
   }
 
+  // Noms de fichiers sans extension : Lightroom retrouve ainsi aussi bien le
+  // JPEG envoyé que le RAW du même nom. Un nom par photo, sans doublon.
+  function lightroomNames(photos) {
+    var seen = {};
+    var names = [];
+    photos.forEach(function (p) {
+      var name = String(p.source_name || "").replace(/\.[A-Za-z0-9]{2,5}$/, "").trim();
+      if (name && !seen[name]) { seen[name] = true; names.push(name); }
+    });
+    return names;
+  }
+
   function photoThumb(photo) {
     var cols = state.config.previewCols || 2;
     var rows = state.config.previewRows || 2;
@@ -3096,7 +3109,7 @@
     var markCount = marksOf(photo).length;
     return (
       '<div class="ad-photo' + (selected ? " ad-photo-selected" : "") + '" data-photo-id="' + esc(photo.id) + '">' +
-      '<div class="ad-photo-frame" title="Voir en grand" style="aspect-ratio:' + photo.width + "/" + photo.height +
+      '<div class="ad-photo-frame" title="' + esc(photo.source_name ? photo.source_name + " — voir en grand" : "Voir en grand") + '" style="aspect-ratio:' + photo.width + "/" + photo.height +
       ";grid-template-columns:repeat(" + cols + ",1fr);grid-template-rows:repeat(" + rows + ',1fr)">' +
       cells +
       '<span class="ad-photo-dims">n° ' + (photo.position + 1) + " · " + photo.width + "×" + photo.height + "</span>" +
@@ -3341,6 +3354,9 @@
         ? '<label class="ad-photos-filter"><input type="checkbox" id="ad-filter-selected" />' +
           '<span>Afficher uniquement la sélection du client (' + data.photos.filter(isSelected).length + ")</span></label>"
         : "") +
+      (data.photos.some(isSelected)
+        ? '<button type="button" class="ad-btn" id="ad-copy-lightroom" title="Noms de fichiers de la sélection, à coller dans le filtre de bibliothèque de Lightroom">Copier pour Lightroom</button>'
+        : "") +
       (data.photos.some(hasClientNotes)
         ? '<button type="button" class="ad-btn" id="ad-copy-notes">Copier les notes du client</button>'
         : "") +
@@ -3369,13 +3385,32 @@
         document.getElementById("ad-photos").classList.toggle("ad-photos-filtered", filterSelected.checked);
       });
     }
+    var copyLightroomBtn = document.getElementById("ad-copy-lightroom");
+    if (copyLightroomBtn) {
+      copyLightroomBtn.addEventListener("click", function () {
+        var chosen = data.photos.filter(isSelected);
+        var names = lightroomNames(chosen);
+        var missing = chosen.length - names.length;
+        if (!names.length) {
+          toast("Ces photos ont été envoyées avant que Holypixx garde le nom des fichiers : renvoyez-les pour pouvoir copier leurs noms.", true);
+          return;
+        }
+        navigator.clipboard.writeText(names.join(", ")).then(function () {
+          toast(names.length + " nom" + (names.length > 1 ? "s" : "") + " copié" + (names.length > 1 ? "s" : "") +
+            " : dans Lightroom, Bibliothèque › Texte › Nom de fichier › Contient, puis collez." +
+            (missing ? " (" + missing + " photo" + (missing > 1 ? "s" : "") + " sans nom de fichier, envoyée" + (missing > 1 ? "s" : "") + " plus tôt.)" : ""));
+        }).catch(function () {
+          toast("Impossible de copier les noms de fichiers.", true);
+        });
+      });
+    }
     var copyNotesBtn = document.getElementById("ad-copy-notes");
     if (copyNotesBtn) {
       copyNotesBtn.addEventListener("click", function () {
         var selectedCount = data.photos.filter(isSelected).length;
         var noted = data.photos.filter(hasClientNotes);
         var lines = noted.map(function (p) {
-          var line = "Photo n° " + (p.position + 1) + (isSelected(p) ? " (sélectionnée)" : "");
+          var line = "Photo n° " + (p.position + 1) + (p.source_name ? " · " + p.source_name : "") + (isSelected(p) ? " (sélectionnée)" : "");
           if (p.tag && TAG_LABELS[p.tag]) line += " [" + TAG_LABELS[p.tag] + "]";
           if (hasComment(p)) line += " — « " + p.comment.trim() + " »";
           marksOf(p).forEach(function (m, i) {

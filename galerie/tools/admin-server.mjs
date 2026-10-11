@@ -1409,7 +1409,9 @@ async function handleApi(req, res, url) {
         })
       );
 
-      await client.addPhoto(slug, photo);
+      // Nom du fichier d'origine : sert à retrouver la sélection du client
+      // dans Lightroom (« Copier pour Lightroom » dans l'admin).
+      await client.addPhoto(slug, { ...photo, sourceName: String(file.name || "").slice(0, 200) });
       for (const tile of tiles) {
         await client.putTile(photo.id, tile.level, tile.col, tile.row, tile.buffer);
       }

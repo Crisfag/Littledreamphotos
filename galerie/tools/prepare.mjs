@@ -153,7 +153,7 @@ async function main() {
     });
 
     if (client) {
-      await client.addPhoto(options.slug, photo);
+      await client.addPhoto(options.slug, { ...photo, sourceName: label.slice(0, 200) });
       for (const tile of tiles) {
         await client.putTile(photo.id, tile.level, tile.col, tile.row, tile.buffer);
       }
