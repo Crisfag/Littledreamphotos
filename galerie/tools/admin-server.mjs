@@ -799,6 +799,18 @@ async function handleApi(req, res, url) {
     }
   }
 
+  // /local/booking/… — réservation en ligne (formules, créneaux,
+  // réservations) : simple relais JSON vers /api/admin/booking/….
+  if (parts[0] === "booking" && ["GET", "POST", "DELETE"].includes(req.method)) {
+    const path = "/api/admin/booking" + (parts.length > 1 ? "/" + parts.slice(1).map(encodeURIComponent).join("/") : "");
+    try {
+      const body = req.method === "POST" ? JSON.parse((await readBody(req)).toString("utf8") || "{}") : undefined;
+      return json(res, 200, await client.request(req.method, path, body));
+    } catch (err) {
+      return relayError(res, err, "Les réservations n'ont pas pu répondre");
+    }
+  }
+
   if (parts[0] === "portfolio") {
     const base = "/api/admin/portfolio";
     try {
@@ -1409,7 +1421,9 @@ async function handleApi(req, res, url) {
         })
       );
 
-      await client.addPhoto(slug, photo);
+      // Nom du fichier d'origine : sert à retrouver la sélection du client
+      // dans Lightroom (« Copier pour Lightroom » dans l'admin).
+      await client.addPhoto(slug, { ...photo, sourceName: String(file.name || "").slice(0, 200) });
       for (const tile of tiles) {
         await client.putTile(photo.id, tile.level, tile.col, tile.row, tile.buffer);
       }

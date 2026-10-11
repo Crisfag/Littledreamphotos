@@ -148,7 +148,7 @@ export async function handleStudioHost(request, env, url, subdomain, path) {
 
   // Une galerie (ou un portfolio) d'un autre studio n'existe pas sous cette adresse.
   const parts = path.split("/").filter(Boolean); // api, gallery, slug, …
-  if (parts[1] === "portfolio" && parts[2]) {
+  if ((parts[1] === "portfolio" || parts[1] === "booking") && parts[2]) {
     const own = await env.DB.prepare("SELECT photographer_id FROM portfolios WHERE handle = ?").bind(decodeURIComponent(parts[2])).first();
     if (!own || own.photographer_id !== studio.id) return fail(404, "Portfolio introuvable");
   }

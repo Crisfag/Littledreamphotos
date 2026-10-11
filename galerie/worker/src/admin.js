@@ -15,6 +15,7 @@ import { sendDeliveryReady } from "./notify.js";
 import { exportAccount, deleteAccount } from "./privacy.js";
 import { galleryQuotaRefusal, subscriptionForAdmin, startSubscriptionCheckout, openBillingPortal, syncSubscription, setScolairePlan } from "./subscription.js";
 import { handleSchoolAdmin } from "./school.js";
+import { handleBookingAdmin } from "./booking.js";
 import { setPromo, sendPromoToClient, promoForAdmin } from "./campaigns.js";
 import { galleryUrlFor } from "./reminders.js";
 import { salesForAdmin } from "./sales.js";
@@ -203,7 +204,7 @@ async function getGallery(env, photographerId, slug) {
 
   const { results: photos } = await env.DB.prepare(
     `SELECT id, position, width, height, cols, rows, preview_width, preview_height,
-            forensic_id, selected, selected_at, comment, comment_at, tag, marks, has_original, created_at
+            forensic_id, selected, selected_at, comment, comment_at, tag, marks, has_original, source_name, created_at
      FROM photos WHERE gallery_id = ? ORDER BY position ASC, created_at ASC`
   )
     .bind(gallery.id)
@@ -511,7 +512,8 @@ async function addPhoto(request, env, photographerId, slug) {
   if (storageFull) return storageFull;
 
   // Heure de prise de vue (ms) et nom du fichier : servent au regroupement
-  // des photos scolaires par enfant (school.js) ; facultatifs ailleurs.
+  // des photos scolaires par enfant (school.js) ; le nom sert aussi à
+  // retrouver la sélection du client dans Lightroom. Facultatifs.
   const takenAt = Number.isSafeInteger(body.takenAt) && body.takenAt > 0 ? body.takenAt : null;
   const sourceName = String(body.sourceName || "").slice(0, 200);
 
@@ -850,6 +852,13 @@ export async function handleAdmin(request, env, ctx, path) {
     return updateStudioName(request, env, photographerId);
   }
   // Module photo de groupe : établissements, années, groupes (school.js).
+  // Réservation en ligne : formules, créneaux, réservations (booking.js).
+  if (section === "booking") {
+    const photographer = await env.DB.prepare("SELECT * FROM photographers WHERE id = ?").bind(photographerId).first();
+    if (!photographer) return fail(401, "Session invalide");
+    return handleBookingAdmin(request, env, photographer, parts.slice(3));
+  }
+
   if (section === "school") {
     const photographer = await env.DB.prepare("SELECT * FROM photographers WHERE id = ?").bind(photographerId).first();
     if (!photographer) return fail(401, "Session invalide");

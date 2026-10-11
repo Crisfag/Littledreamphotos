@@ -110,9 +110,9 @@ check("l'onglet Galeries est actif par défaut, à l'arrivée sur le tableau de 
   const last = await page.locator("#ad-tab-settings").boundingBox();
   check("menu vertical à gauche, une case avec icône par section",
         nav.x === 0 && view.x >= nav.x + nav.width && last.y > first.y && Math.abs(last.x - first.x) < 1 &&
-        // 7 sections, 8 avec « Écoles & clubs » une fois le module ouvert.
+        // 8 sections, 9 avec « Écoles & clubs » une fois le module ouvert.
         await page.locator("#ad-tabs .ad-tab:not([hidden]) .ad-tab-icon svg").count() === await page.locator("#ad-tabs .ad-tab:not([hidden])").count() &&
-        [7, 8].includes(await page.locator("#ad-tabs .ad-tab:not([hidden])").count()),
+        [8, 9].includes(await page.locator("#ad-tabs .ad-tab:not([hidden])").count()),
         `menu ${nav.width}px, contenu à ${view.x}px`);
 }
 
@@ -512,6 +512,23 @@ const visiblePhotosWhileFiltered = await page.locator("#ad-photos .ad-photo").ev
 check("filtrer sur la sélection ne laisse apparaître que la photo choisie",
       visiblePhotosWhileFiltered === 1, `${visiblePhotosWhileFiltered} vignette(s) visible(s)`);
 await page.click("#ad-filter-selected"); // on désactive : la suite du test veut voir toutes les photos
+
+/* ---------- Export de la sélection vers Lightroom ---------- */
+// Le presse-papiers est remplacé par un enregistreur : on vérifie le texte
+// exact (nom du fichier envoyé, sans extension) sans dépendre des
+// permissions du navigateur.
+
+await page.evaluate(() => {
+  window.__copied = null;
+  navigator.clipboard.writeText = (text) => { window.__copied = text; return Promise.resolve(); };
+});
+await page.click("#ad-copy-lightroom");
+await page.waitForFunction(() => window.__copied !== null, null, { timeout: 5000 });
+const lightroomText = await page.evaluate(() => window.__copied);
+const firstPhotoTitle = await page.getAttribute(`.ad-photo[data-photo-id="${firstPhotoId}"] .ad-photo-frame`, "title");
+check("« Copier pour Lightroom » copie le nom du fichier choisi, sans extension",
+      /^(famille-01|famille-02|maternite-01)$/.test(lightroomText) && firstPhotoTitle.startsWith(lightroomText + ".jpeg"),
+      `${lightroomText} / ${firstPhotoTitle}`);
 
 /* ---------- Codes couleur et repères annotés ---------- */
 // Le client pose un code couleur et un repère via l'API (comme le ferait sa

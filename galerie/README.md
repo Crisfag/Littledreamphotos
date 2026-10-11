@@ -975,6 +975,43 @@ npx wrangler secret put RESEND_FROM      # adresse d'expédition vérifiée sur 
 `ADMIN_URL` (dans `wrangler.toml`, pas un secret) est l'adresse de
 l'interface d'administration, insérée en lien dans l'e-mail.
 
+### Réservation en ligne (séances et mini-séances)
+
+Onglet **Réservations** du tableau de bord (formules Essentiel, Pro et
+Studio) :
+
+1. **Formules de séance** : nom, durée, prix, acompte payé en ligne (0 =
+   sans acompte), lieu, description. Une formule se retire du mini-site
+   sans être supprimée (case « Proposée »).
+2. **Créneaux** : des horaires précis (« 10:00, 14:30 ») ou une série pour
+   les mini-séances (« de 10 h à 16 h toutes les 20 min »), à l'heure de
+   Bruxelles. Un créneau réservé ne peut pas être supprimé.
+3. Le client réserve depuis la section **Réserver** du portfolio publié
+   (qui devient l'appel principal de la couverture). Avec acompte, il paie
+   par Stripe sur le compte du photographe (frais de paiement habituels) ;
+   le créneau est bloqué 32 minutes le temps du paiement, puis confirmé par
+   le webhook `checkout.session.completed` (ou au retour du client). Un
+   même créneau ne peut jamais être réservé deux fois (index unique).
+4. E-mails : confirmation au client et au photographe, chacun avec
+   l'invitation `.ics` pour son agenda ; rappel au client la veille
+   (déclencheur planifié) ; e-mail d'annulation si le photographe annule.
+   L'acompte d'une séance annulée se rembourse depuis Stripe.
+
+Une formule avec acompte n'apparaît sur le mini-site qu'une fois le
+paiement en ligne actif (onglet Facturation). Sans portfolio publié, rien
+n'est proposé.
+
+**Mise en service sur une base existante** : les trois tables
+(`booking_offers`, `booking_slots`, `bookings`) sont à la fin de
+`worker/schema.sql`, et seules dans une migration à part (sans effet si
+elle a déjà été appliquée) :
+
+```bash
+cd worker
+npx wrangler d1 execute galerie-protegee --remote --file=migrations/2026-10-reservations.sql
+npm run deploy
+```
+
 ### Passer Stripe en mode réel
 
 Le Worker ne connaît que des secrets : passer du mode test au mode réel

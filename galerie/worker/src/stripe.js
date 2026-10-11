@@ -113,7 +113,11 @@ export function retrieveAccount(env, accountId) {
 // `applicationFeeCents` : frais de paiement retenus sur la vente pour couvrir
 // les frais Stripe que paie la plateforme (voir fees.js). Le reste du
 // montant part au photographe.
-export function createCheckoutSession(env, connectedAccountId, { label, unitAmountCents, quantity, successUrl, cancelUrl, metadata, applicationFeeCents = 0 }) {
+//
+// `expiresAt` (facultatif, epoch secondes, 30 min à 24 h) : la session ne
+// peut plus être payée après — sert aux réservations, dont le créneau
+// n'est bloqué qu'un temps. `customerEmail` pré-remplit l'e-mail du payeur.
+export function createCheckoutSession(env, connectedAccountId, { label, unitAmountCents, quantity, successUrl, cancelUrl, metadata, applicationFeeCents = 0, expiresAt, customerEmail }) {
   return stripeRequest(env, "POST", "/checkout/sessions", {
     mode: "payment",
     line_items: [{
@@ -136,6 +140,8 @@ export function createCheckoutSession(env, connectedAccountId, { label, unitAmou
     success_url: successUrl,
     cancel_url: cancelUrl,
     metadata,
+    ...(expiresAt ? { expires_at: expiresAt } : {}),
+    ...(customerEmail ? { customer_email: customerEmail } : {}),
   });
 }
 

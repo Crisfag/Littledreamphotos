@@ -22,6 +22,7 @@ import { runReminders } from "./reminders.js";
 import { purgeOldAccessLogs } from "./privacy.js";
 import { runSalesReminders } from "./campaigns.js";
 import { handlePortfolioPublic, purgeOldPortfolioMessages } from "./portfolio.js";
+import { handleBookingPublic, runBookingReminders } from "./booking.js";
 import { runStoragePurge } from "./storage.js";
 import { plansForPublic } from "./subscription.js";
 import { shopState } from "./shop.js";
@@ -99,6 +100,9 @@ export default {
       } else if (path.startsWith("/api/portfolio/")) {
         // Mini-site public du photographe (lecture, photos, formulaire de contact).
         response = await handlePortfolioPublic(request, env, path);
+      } else if (path.startsWith("/api/booking/")) {
+        // Réservation en ligne depuis le mini-site (formules, créneaux, acompte).
+        response = await handleBookingPublic(request, env, path);
       } else if (path.startsWith("/api/music-library/") && request.method === "GET") {
         // Écoute d'un morceau libre de droits de la bibliothèque commune.
         response = await handleLibraryAudio(request, env, decodeURIComponent(path.split("/")[3] || ""));
@@ -165,6 +169,12 @@ export default {
     ctx.waitUntil(
       runStoragePurge(env).catch((err) => {
         console.error("Purge du stockage : échec :", err && err.stack ? err.stack : err);
+      })
+    );
+    // Réservations : rappel au client la veille de sa séance.
+    ctx.waitUntil(
+      runBookingReminders(env).catch((err) => {
+        console.error("Rappels de séance : échec :", err && err.stack ? err.stack : err);
       })
     );
     // Messages du formulaire de contact des portfolios : conservés un an.

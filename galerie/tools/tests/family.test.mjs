@@ -152,7 +152,10 @@ const otherSchool = await otherClient.request("POST", "/api/admin/school/schools
 const { ids: [otherGroup] } = await otherClient.request("POST", `/api/admin/school/years/${otherSchool.yearId}/groups`, { names: ["X"] });
 const strangerTile = await fetch(`${API}/api/family/tile/${photoOfB.id}/0/0/0`, { headers: { authorization: "Bearer " + token } });
 check("la famille charge les photos de ses deux enfants…", strangerTile.status === 200);
-await page.locator(".ec-kid").nth(1).click();
+// On attend que l'onglet du second enfant soit affiché avant de le retirer :
+// sinon le clic peut tomber sur le bouton « Retirer » de l'enfant précédent.
+await page.locator(`.ec-kid[data-child="${kidB.id}"]`).click();
+await page.waitForSelector(`.ec-kid[data-child="${kidB.id}"][aria-pressed="true"]`);
 await page.locator("#ec-remove").click();
 await page.locator("#ec-remove").click();
 await page.waitForFunction(() => !document.querySelector(".ec-kids"));
