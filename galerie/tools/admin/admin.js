@@ -5104,12 +5104,12 @@
     return Math.floor(minutes / 60) + " h" + (m ? " " + String(m).padStart(2, "0") : "");
   }
   // « 30 », « 30,5 », « 30.50 € » → centimes ; NaN si illisible.
-  function centsFromEuros(value) {
+  function bookingCents(value) {
     var clean = String(value || "").replace(/[€\s]/g, "").replace(",", ".");
     if (!clean) return 0;
     return /^\d+(\.\d{1,2})?$/.test(clean) ? Math.round(Number(clean) * 100) : NaN;
   }
-  function eurosInput(cents) {
+  function bookingEurosInput(cents) {
     return cents ? (cents / 100).toFixed(2).replace(".", ",").replace(",00", "") : "";
   }
 
@@ -5131,8 +5131,8 @@
       '<label class="ad-field"><span>Durée <em>(minutes)</em></span><input name="durationMin" type="number" min="5" max="720" step="5" required value="' + esc(o.durationMin) + '" /></label>' +
       "</div>" +
       '<div class="ad-field-row">' +
-      '<label class="ad-field"><span>Prix de la séance <em>(€, facultatif)</em></span><input name="price" inputmode="decimal" placeholder="ex. 90" value="' + esc(eurosInput(o.priceCents)) + '" /></label>' +
-      '<label class="ad-field"><span>Acompte payé en ligne <em>(€, 0 = sans acompte)</em></span><input name="deposit" inputmode="decimal" placeholder="ex. 30" value="' + esc(eurosInput(o.depositCents)) + '" /></label>' +
+      '<label class="ad-field"><span>Prix de la séance <em>(€, facultatif)</em></span><input name="price" inputmode="decimal" placeholder="ex. 90" value="' + esc(bookingEurosInput(o.priceCents)) + '" /></label>' +
+      '<label class="ad-field"><span>Acompte payé en ligne <em>(€, 0 = sans acompte)</em></span><input name="deposit" inputmode="decimal" placeholder="ex. 30" value="' + esc(bookingEurosInput(o.depositCents)) + '" /></label>' +
       "</div>" +
       '<label class="ad-field"><span>Lieu <em>(facultatif)</em></span><input name="location" maxlength="160" placeholder="ex. Studio, rue de la Station 12, Liège" value="' + esc(o.location) + '" /></label>' +
       '<label class="ad-field"><span>Description <em>(facultatif, visible par vos clients)</em></span><textarea name="description" rows="3" maxlength="1000" placeholder="Ce qui est inclus, le nombre de photos, la tenue conseillée…">' + esc(o.description) + "</textarea></label>" +
@@ -5328,8 +5328,8 @@
       offerForm.addEventListener("submit", async function (e) {
         e.preventDefault();
         var f = offerForm.elements;
-        var priceCents = centsFromEuros(f.price.value);
-        var depositCents = centsFromEuros(f.deposit.value);
+        var priceCents = bookingCents(f.price.value);
+        var depositCents = bookingCents(f.deposit.value);
         if (isNaN(priceCents) || isNaN(depositCents)) { toast("Montant illisible : écrivez par exemple 30 ou 30,50.", true); return; }
         var body = {
           title: f.title.value, durationMin: Number(f.durationMin.value), priceCents: priceCents, depositCents: depositCents,
