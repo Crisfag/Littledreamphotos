@@ -10,6 +10,7 @@ import { createConnectAccount, createAccountLink, retrieveAccount, verifyStripeS
 import { createInvoiceForPayment } from "./invoices.js";
 import { markSchoolOrderPaid } from "./schoolshop.js";
 import { markBookingPaid } from "./booking.js";
+import { markContractPaid } from "./contracts.js";
 import { sendInvoiceEmail } from "./notify.js";
 
 // Message montré au photographe : la raison donnée par Stripe (jamais une
@@ -164,6 +165,11 @@ export async function handleStripeWebhook(request, env) {
     // Acompte d'une réservation de séance (booking.js).
     if (session?.metadata?.kind === "booking") {
       await markBookingPaid(env, session);
+      return json({ received: true });
+    }
+    // Acompte d'un contrat signé en ligne (contracts.js).
+    if (session?.metadata?.kind === "contract") {
+      await markContractPaid(env, session);
       return json({ received: true });
     }
     // "paid" est le seul statut qui compte comme réglé : certains moyens de

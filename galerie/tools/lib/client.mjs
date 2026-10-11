@@ -265,6 +265,17 @@ export class WorkerClient {
     return response;
   }
 
+  // Réponse brute (PDF…) d'une route authentifiée du Worker.
+  async rawGet(path) {
+    if (!this.token) await this.login();
+    let response = await fetch(`${this.base}${path}`, { headers: { authorization: `Bearer ${this.token}` } });
+    if (response.status === 401 && this.canRelogin) {
+      await this.login();
+      response = await fetch(`${this.base}${path}`, { headers: { authorization: `Bearer ${this.token}` } });
+    }
+    return response;
+  }
+
   async getInvoiceResponse(invoiceId) {
     if (!this.token) await this.login();
     let response = await fetch(`${this.base}/api/admin/invoices/${invoiceId}`, {

@@ -1012,6 +1012,40 @@ npx wrangler d1 execute galerie-protegee --remote --file=migrations/2026-10-rese
 npm run deploy
 ```
 
+### Devis et contrats signés en ligne
+
+Onglet **Devis & contrats** (formules Essentiel, Pro et Studio) :
+
+1. **Nouveau devis** : client, e-mail, titre, date prévue, prestations
+   (montants TTC, total calculé), acompte à la signature, date de
+   validité, conditions. Les conditions par défaut du studio pré-remplissent
+   chaque devis (modèle Holypixx modifiable, à adapter : ce n'est pas un
+   conseil juridique).
+2. **Envoi** : le client reçoit un lien secret (`contrat.html?t=…`) ; il
+   lit le devis, coche l'acceptation et tape son nom : c'est une signature
+   électronique simple, enregistrée avec la date, l'empreinte SHA-256 du
+   document signé, une trace chiffrée de connexion et le navigateur.
+   Il peut aussi refuser, avec un mot pour le photographe.
+3. **Acompte** : s'il y en a un et que le paiement en ligne est actif, le
+   client est envoyé vers Stripe (compte du photographe, frais de paiement
+   habituels). La signature est acquise même si le paiement échoue : le
+   client règle l'acompte plus tard depuis le même lien. Confirmation par
+   le webhook `checkout.session.completed` (`metadata.kind = "contract"`)
+   ou au retour du client.
+4. **PDF signé** envoyé aux deux parties et rangé dans R2
+   (`contracts/{id}.pdf`), téléchargeable depuis l'admin et par le client.
+
+Un devis envoyé puis modifié repasse en brouillon : il faut le renvoyer.
+Un contrat signé ne se modifie plus.
+
+**Mise en service sur une base existante** :
+
+```bash
+cd worker
+npx wrangler d1 execute galerie-protegee --remote --file=migrations/2026-10-contrats.sql
+npm run deploy
+```
+
 ### Passer Stripe en mode réel
 
 Le Worker ne connaît que des secrets : passer du mode test au mode réel

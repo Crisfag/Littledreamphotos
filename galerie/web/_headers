@@ -29,3 +29,7 @@
   X-Robots-Tag: noindex, nofollow, noarchive, noimageindex
 /ecole.html
   X-Robots-Tag: noindex, nofollow, noarchive, noimageindex
+/contrat
+  X-Robots-Tag: noindex, nofollow, noarchive
+/contrat.html
+  X-Robots-Tag: noindex, nofollow, noarchive
