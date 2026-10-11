@@ -76,6 +76,7 @@
       var tab = btn.getAttribute("data-tab");
       if (tab === "galleries") renderList();
       else if (tab === "sales") renderSales();
+      else if (tab === "booking") renderBooking();
       else if (tab === "portfolio") renderPortfolio();
       else if (tab === "billing") renderBilling();
       else if (tab === "shop") renderShop();
@@ -1365,6 +1366,7 @@
       "Protection, sélection, musique et livraison HD",
       (plan.features.shop ? "✓ " : "— ") + "Boutique de tirages",
       (plan.features.subdomain ? "✓ " : "— ") + "Vos galeries à votre nom",
+      (plan.features.booking ? "✓ " : "— ") + "Réservation en ligne avec acompte",
       plan.features.school && schoolOpen ? "✓ Écoles, crèches et clubs" + (plan.schoolFeePercent ? " (" + String(plan.schoolFeePercent).replace(".", ",") + " % des ventes scolaires)" : ", sans commission") : "",
     ];
     return '<ul class="ad-plan-features">' + items.filter(Boolean).map(function (t) { return "<li>" + esc(t) + "</li>"; }).join("") + "</ul>";
@@ -5079,6 +5081,333 @@
     });
   }
 
+  /* ---------- Réservations (formules, créneaux, séances réservées) ---------- */
+
+  var BOOKING_ZONE = "Europe/Brussels";
+  var BOOKING_STATUS = {
+    confirmed: ["Confirmée", "ad-badge-validated"],
+    pending: ["Paiement en cours", "ad-badge-soon"],
+    cancelled: ["Annulée", "ad-badge-expired"],
+    conflict: ["Acompte à rembourser", "ad-badge-due"],
+  };
+  var bookingState = { data: null, editingOfferId: "", slotMode: "times" };
+
+  function bookingDay(ts) {
+    return new Date(ts * 1000).toLocaleDateString("fr-BE", { weekday: "long", day: "numeric", month: "long", timeZone: BOOKING_ZONE });
+  }
+  function bookingTime(ts) {
+    return new Date(ts * 1000).toLocaleTimeString("fr-BE", { hour: "2-digit", minute: "2-digit", timeZone: BOOKING_ZONE }).replace(":", " h ");
+  }
+  function durationText(minutes) {
+    if (minutes < 60) return minutes + " min";
+    var m = minutes % 60;
+    return Math.floor(minutes / 60) + " h" + (m ? " " + String(m).padStart(2, "0") : "");
+  }
+  // « 30 », « 30,5 », « 30.50 € » → centimes ; NaN si illisible.
+  function centsFromEuros(value) {
+    var clean = String(value || "").replace(/[€\s]/g, "").replace(",", ".");
+    if (!clean) return 0;
+    return /^\d+(\.\d{1,2})?$/.test(clean) ? Math.round(Number(clean) * 100) : NaN;
+  }
+  function eurosInput(cents) {
+    return cents ? (cents / 100).toFixed(2).replace(".", ",").replace(",00", "") : "";
+  }
+
+  function offerMetaText(o) {
+    return [
+      durationText(o.durationMin),
+      o.priceCents ? formatEuros(o.priceCents) : "",
+      o.depositCents ? "acompte " + formatEuros(o.depositCents) : "sans acompte",
+      o.location,
+    ].filter(Boolean).join(" · ");
+  }
+
+  function offerFormHtml(o) {
+    o = o || { title: "", durationMin: 60, priceCents: 0, depositCents: 0, location: "", description: "" };
+    var editing = Boolean(o.id);
+    return '<form id="ad-bk-offer-form" class="ad-bk-offer-form" novalidate>' +
+      '<div class="ad-field-row">' +
+      '<label class="ad-field"><span>Nom de la formule</span><input name="title" maxlength="80" required placeholder="ex. Mini-séance de Noël" value="' + esc(o.title) + '" /></label>' +
+      '<label class="ad-field"><span>Durée <em>(minutes)</em></span><input name="durationMin" type="number" min="5" max="720" step="5" required value="' + esc(o.durationMin) + '" /></label>' +
+      "</div>" +
+      '<div class="ad-field-row">' +
+      '<label class="ad-field"><span>Prix de la séance <em>(€, facultatif)</em></span><input name="price" inputmode="decimal" placeholder="ex. 90" value="' + esc(eurosInput(o.priceCents)) + '" /></label>' +
+      '<label class="ad-field"><span>Acompte payé en ligne <em>(€, 0 = sans acompte)</em></span><input name="deposit" inputmode="decimal" placeholder="ex. 30" value="' + esc(eurosInput(o.depositCents)) + '" /></label>' +
+      "</div>" +
+      '<label class="ad-field"><span>Lieu <em>(facultatif)</em></span><input name="location" maxlength="160" placeholder="ex. Studio, rue de la Station 12, Liège" value="' + esc(o.location) + '" /></label>' +
+      '<label class="ad-field"><span>Description <em>(facultatif, visible par vos clients)</em></span><textarea name="description" rows="3" maxlength="1000" placeholder="Ce qui est inclus, le nombre de photos, la tenue conseillée…">' + esc(o.description) + "</textarea></label>" +
+      '<div class="ad-sc-actions">' +
+      '<button type="submit" class="ad-btn ad-btn-primary">' + (editing ? "Enregistrer la formule" : "Ajouter la formule") + "</button>" +
+      (editing ? '<button type="button" class="ad-btn" id="ad-bk-offer-cancel">Annuler</button>' : "") +
+      "</div></form>";
+  }
+
+  function offersSectionHtml(data) {
+    var rows = data.offers.map(function (o) {
+      var slotsLeft = data.slots.filter(function (s) { return s.offerId === o.id && !s.bookingId && s.startsAt > Date.now() / 1000; }).length;
+      return '<li class="ad-bk-offer' + (o.active ? "" : " ad-bk-offer-off") + '" data-offer-id="' + esc(o.id) + '">' +
+        '<div class="ad-bk-offer-main"><strong>' + esc(o.title) + "</strong>" +
+        '<span class="ad-hint">' + esc(offerMetaText(o)) + "</span>" +
+        '<span class="ad-hint">' + slotsLeft + " créneau" + (slotsLeft > 1 ? "x" : "") + " libre" + (slotsLeft > 1 ? "s" : "") +
+        (o.depositCents && !data.stripeReady ? " · en attente du paiement en ligne" : "") + "</span></div>" +
+        '<label class="ad-sc-toggle"><input type="checkbox" data-bk-active ' + (o.active ? "checked" : "") + " /> Proposée</label>" +
+        '<button type="button" class="ad-btn ad-btn-small" data-bk-edit>Modifier</button>' +
+        '<button type="button" class="ad-btn ad-btn-small ad-btn-danger" data-bk-delete>Supprimer</button>' +
+        "</li>";
+    }).join("");
+    var editing = bookingState.editingOfferId && data.offers.filter(function (o) { return o.id === bookingState.editingOfferId; })[0];
+    return '<section id="ad-bk-offers"><div class="ad-section-header"><h3>Formules de séance</h3></div>' +
+      (rows ? '<ul class="ad-bk-offers">' + rows + "</ul>" : '<p class="ad-hint">Une formule décrit ce que vos clients réservent : séance famille d\'1 h, mini-séance de Noël de 20 min… Commencez par en créer une.</p>') +
+      (editing
+        ? '<h4 class="ad-sc-subhead">Modifier « ' + esc(editing.title) + " »</h4>" + offerFormHtml(editing)
+        : (rows ? '<details class="ad-advanced"' + (data.offers.length ? "" : " open") + '><summary>Ajouter une formule</summary>' + offerFormHtml() + "</details>" : offerFormHtml())) +
+      "</section>";
+  }
+
+  function slotsSectionHtml(data) {
+    if (!data.offers.length) return "";
+    var today = new Date().toLocaleDateString("en-CA", { timeZone: BOOKING_ZONE });
+    var bookingsById = {};
+    data.bookings.forEach(function (b) { bookingsById[b.id] = b; });
+    var offersById = {};
+    data.offers.forEach(function (o) { offersById[o.id] = o; });
+    var future = data.slots.filter(function (s) { return s.startsAt > Date.now() / 1000; });
+    var days = [];
+    var byDay = {};
+    future.forEach(function (s) {
+      var key = bookingDay(s.startsAt);
+      if (!byDay[key]) { byDay[key] = []; days.push(key); }
+      byDay[key].push(s);
+    });
+    var series = bookingState.slotMode === "series";
+    return '<section id="ad-bk-slots"><div class="ad-section-header"><h3>Créneaux</h3></div>' +
+      '<p class="ad-hint">Ouvrez des horaires précis, ou une série pour vos mini-séances (par exemple de 10 h à 16 h, toutes les 20 minutes). Heure de Bruxelles.</p>' +
+      '<form id="ad-bk-slot-form" class="ad-bk-slot-form" novalidate>' +
+      '<div class="ad-seg" role="group" aria-label="Type de créneaux">' +
+      '<button type="button" class="ad-seg-btn" data-bk-mode="times" aria-pressed="' + !series + '">Horaires précis</button>' +
+      '<button type="button" class="ad-seg-btn" data-bk-mode="series" aria-pressed="' + series + '">Série (mini-séances)</button></div>' +
+      '<div class="ad-bk-slot-fields">' +
+      '<label class="ad-field"><span>Formule</span><select name="offerId">' + data.offers.map(function (o) {
+        return '<option value="' + esc(o.id) + '">' + esc(o.title) + " (" + esc(durationText(o.durationMin)) + ")</option>";
+      }).join("") + "</select></label>" +
+      '<label class="ad-field"><span>Date</span><input type="date" name="date" min="' + today + '" required /></label>' +
+      (series
+        ? '<label class="ad-field"><span>De</span><input type="time" name="from" value="10:00" required /></label>' +
+          '<label class="ad-field"><span>À</span><input type="time" name="to" value="16:00" required /></label>' +
+          '<label class="ad-field"><span>Toutes les <em>(min)</em></span><input type="number" name="every" min="5" max="720" step="5" placeholder="durée" /></label>'
+        : '<label class="ad-field ad-bk-times"><span>Heure(s) <em>(séparées par des virgules)</em></span><input name="times" placeholder="ex. 10:00, 14:30" required /></label>') +
+      '<button type="submit" class="ad-btn ad-btn-primary">Ouvrir ' + (series ? "la série" : "les créneaux") + "</button>" +
+      "</div></form>" +
+      (days.length
+        ? '<div class="ad-bk-days">' + days.map(function (day) {
+            // Le nom de la formule n'est utile que si plusieurs se partagent la journée.
+            var mixed = byDay[day].some(function (s) { return s.offerId !== byDay[day][0].offerId; });
+            var single = !mixed && offersById[byDay[day][0].offerId];
+            return '<div class="ad-bk-day"><h4>' + esc(day) + (single && data.offers.length > 1 ? ' <span class="ad-hint">· ' + esc(single.title) + "</span>" : "") +
+              '</h4><ul class="ad-bk-chips">' + byDay[day].map(function (s) {
+              var b = s.bookingId ? bookingsById[s.bookingId] : null;
+              var o = offersById[s.offerId];
+              var label = bookingTime(s.startsAt) + (mixed && o ? " · " + o.title : "");
+              return b
+                ? '<li class="ad-bk-chip ad-bk-chip-booked" title="' + esc(o ? o.title : "") + '">' + esc(label) + " · " + esc(b.clientName) + "</li>"
+                : '<li class="ad-bk-chip" title="' + esc(o ? o.title : "") + '">' + esc(label) +
+                  '<button type="button" data-bk-slot-delete="' + esc(s.id) + '" aria-label="Supprimer le créneau de ' + esc(label) + '">×</button></li>';
+            }).join("") + "</ul></div>";
+          }).join("") + "</div>"
+        : '<p class="ad-hint">Aucun créneau ouvert pour l\'instant.</p>') +
+      "</section>";
+  }
+
+  function bookingRowHtml(b, actionable) {
+    var status = BOOKING_STATUS[b.status] || [b.status, ""];
+    return "<tr>" +
+      '<td><strong>' + esc(bookingDay(b.startsAt)) + "</strong><br>" + esc(bookingTime(b.startsAt)) + " · " + esc(durationText(b.durationMin)) + "</td>" +
+      "<td>" + esc(b.offerTitle) + (b.location ? '<br><span class="ad-hint">' + esc(b.location) + "</span>" : "") + "</td>" +
+      '<td><span class="ad-acc-name">' + esc(b.clientName) + "</span>" +
+      '<a class="ad-acc-sub" href="mailto:' + esc(b.clientEmail) + '">' + esc(b.clientEmail) + "</a>" +
+      (b.clientPhone ? '<span class="ad-acc-sub">' + esc(b.clientPhone) + "</span>" : "") +
+      (b.message ? '<span class="ad-bk-message">« ' + esc(b.message) + " »</span>" : "") + "</td>" +
+      '<td class="ad-num">' + (b.depositCents ? formatEuros(b.depositCents) : "—") + "</td>" +
+      '<td><span class="ad-badge ' + status[1] + '">' + esc(status[0]) + "</span></td>" +
+      '<td class="ad-row-actions">' + (actionable && b.status !== "cancelled"
+        ? '<button type="button" class="ad-btn ad-btn-small ad-btn-danger" data-bk-cancel="' + esc(b.id) + '">Annuler</button>'
+        : "") + "</td></tr>";
+  }
+
+  function bookingsTableHtml(list, actionable) {
+    return '<div class="ad-table-wrap"><table class="ad-table ad-bk-table"><thead><tr><th>Quand</th><th>Séance</th><th>Client</th><th class="ad-num">Acompte</th><th>État</th><th><span class="ad-visually-hidden">Actions</span></th></tr></thead><tbody>' +
+      list.map(function (b) { return bookingRowHtml(b, actionable); }).join("") + "</tbody></table></div>";
+  }
+
+  async function renderBooking(skipHash) {
+    if (!skipHash && location.hash !== "#/reservations") history.pushState(null, "", "#/reservations");
+    setActiveTab("booking");
+    if (!bookingState.data) el.view.innerHTML = '<p class="ad-loading">Chargement…</p>';
+    var data;
+    try {
+      data = await api("GET", "/booking");
+    } catch (err) {
+      el.view.innerHTML = '<div class="ad-error-panel"><h2>Réservations indisponibles</h2><p>' + esc(err.message) + "</p></div>";
+      return;
+    }
+    if (location.hash !== "#/reservations") return;
+    paintBooking(data);
+  }
+
+  function paintBooking(data) {
+    bookingState.data = data;
+    var nowTs = Date.now() / 1000;
+    var upcoming = data.bookings.filter(function (b) { return b.startsAt >= nowTs - 3600 && b.status !== "cancelled"; });
+    var past = data.bookings.filter(function (b) { return b.startsAt < nowTs - 3600 || b.status === "cancelled"; }).reverse();
+    var freeSlots = data.slots.filter(function (s) { return !s.bookingId && s.startsAt > nowTs; }).length;
+    var depositsAhead = upcoming.filter(function (b) { return b.status === "confirmed"; })
+      .reduce(function (sum, b) { return sum + b.depositCents; }, 0);
+
+    var notices = "";
+    if (!data.enabled) {
+      notices += '<p class="ad-banner ad-banner-muted">La réservation en ligne est incluse à partir de la formule Essentiel. ' +
+        '<button type="button" class="ad-link-btn" data-bk-goto="subscription">Voir les formules</button></p>';
+    } else {
+      if (!data.portfolio.published) {
+        notices += '<p class="ad-banner ad-banner-muted">Vos clients réservent depuis votre mini-site : publiez-le pour ouvrir les réservations. ' +
+          '<button type="button" class="ad-link-btn" data-bk-goto="portfolio">Onglet Portfolio</button></p>';
+      }
+      if (!data.stripeReady && data.offers.some(function (o) { return o.depositCents > 0; })) {
+        notices += '<p class="ad-banner ad-banner-muted">Les formules avec acompte seront proposées dès que le paiement en ligne sera activé. Celles sans acompte sont déjà réservables. ' +
+          '<button type="button" class="ad-link-btn" data-bk-goto="billing">Onglet Facturation</button></p>';
+      }
+    }
+
+    el.view.innerHTML =
+      '<header class="ad-detail-header"><div><h2>Réservations</h2>' +
+      '<p class="ad-hint">Vos clients choisissent un créneau sur votre mini-site et règlent l\'acompte en ligne ; vous recevez la réservation par e-mail, avec l\'invitation pour votre agenda.</p></div>' +
+      (data.portfolio.published && data.portfolio.url ? '<a class="ad-btn" href="' + esc(data.portfolio.url) + '" target="_blank" rel="noopener">Voir la page de réservation</a>' : "") +
+      "</header>" +
+      notices +
+      (data.enabled
+        ? '<div class="ad-stats">' +
+          salesStatHtml("Séances à venir", String(upcoming.filter(function (b) { return b.status === "confirmed"; }).length), "") +
+          salesStatHtml("Créneaux libres", String(freeSlots), "") +
+          salesStatHtml("Acomptes encaissés", depositsAhead ? formatEuros(depositsAhead) : "—", "Séances à venir") +
+          "</div>" +
+          '<section id="ad-bk-upcoming"><div class="ad-section-header"><h3>Prochaines séances</h3></div>' +
+          (upcoming.length ? bookingsTableHtml(upcoming, true) : '<p class="ad-hint">Aucune séance réservée pour l\'instant. Ouvrez des créneaux ci-dessous : ils apparaissent aussitôt sur votre mini-site.</p>') +
+          (past.length ? '<details class="ad-advanced"><summary>Séances passées et annulées (' + past.length + ")</summary>" + bookingsTableHtml(past, false) + "</details>" : "") +
+          "</section>" +
+          offersSectionHtml(data) +
+          slotsSectionHtml(data)
+        : "");
+
+    bindBooking(data);
+  }
+
+  async function bookingCall(method, path, body, okMessage) {
+    try {
+      var data = await api(method, "/booking" + path, body);
+      if (okMessage) toast(typeof okMessage === "function" ? okMessage(data) : okMessage);
+      paintBooking(data);
+      return true;
+    } catch (err) {
+      toast(err.message, true);
+      return false;
+    }
+  }
+
+  function bindBooking(data) {
+    el.view.querySelectorAll("[data-bk-goto]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var target = btn.getAttribute("data-bk-goto");
+        if (target === "subscription") renderSubscription();
+        else if (target === "portfolio") renderPortfolio();
+        else renderBilling();
+      });
+    });
+
+    var offerForm = document.getElementById("ad-bk-offer-form");
+    if (offerForm) {
+      offerForm.addEventListener("submit", async function (e) {
+        e.preventDefault();
+        var f = offerForm.elements;
+        var priceCents = centsFromEuros(f.price.value);
+        var depositCents = centsFromEuros(f.deposit.value);
+        if (isNaN(priceCents) || isNaN(depositCents)) { toast("Montant illisible : écrivez par exemple 30 ou 30,50.", true); return; }
+        var body = {
+          title: f.title.value, durationMin: Number(f.durationMin.value), priceCents: priceCents, depositCents: depositCents,
+          location: f.location.value, description: f.description.value,
+        };
+        var editing = bookingState.editingOfferId;
+        var ok = await bookingCall("POST", editing ? "/offers/" + encodeURIComponent(editing) : "/offers", body, editing ? "Formule enregistrée." : "Formule ajoutée.");
+        if (ok && editing) { bookingState.editingOfferId = ""; paintBooking(bookingState.data); }
+      });
+    }
+    var cancelEdit = document.getElementById("ad-bk-offer-cancel");
+    if (cancelEdit) cancelEdit.addEventListener("click", function () { bookingState.editingOfferId = ""; paintBooking(data); });
+
+    el.view.querySelectorAll(".ad-bk-offer").forEach(function (row) {
+      var id = row.getAttribute("data-offer-id");
+      row.querySelector("[data-bk-active]").addEventListener("change", function (e) {
+        bookingCall("POST", "/offers/" + encodeURIComponent(id), { active: e.target.checked },
+          e.target.checked ? "Formule proposée sur votre mini-site." : "Formule retirée de votre mini-site.");
+      });
+      row.querySelector("[data-bk-edit]").addEventListener("click", function () {
+        bookingState.editingOfferId = id;
+        paintBooking(data);
+        var form = document.getElementById("ad-bk-offer-form");
+        if (form) { form.scrollIntoView({ block: "center" }); form.elements.title.focus(); }
+      });
+      row.querySelector("[data-bk-delete]").addEventListener("click", function () {
+        var offer = data.offers.filter(function (o) { return o.id === id; })[0];
+        confirmAction("Supprimer la formule « " + offer.title + " » et ses créneaux libres ?", function () {
+          bookingCall("DELETE", "/offers/" + encodeURIComponent(id), null, "Formule supprimée.");
+        });
+      });
+    });
+
+    el.view.querySelectorAll("[data-bk-mode]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        bookingState.slotMode = btn.getAttribute("data-bk-mode");
+        paintBooking(data);
+        document.getElementById("ad-bk-slots").scrollIntoView({ block: "start" });
+      });
+    });
+    var slotForm = document.getElementById("ad-bk-slot-form");
+    if (slotForm) {
+      slotForm.addEventListener("submit", function (e) {
+        e.preventDefault();
+        var f = slotForm.elements;
+        var body = { offerId: f.offerId.value, date: f.date.value };
+        if (!body.date) { toast("Choisissez une date.", true); return; }
+        if (bookingState.slotMode === "series") {
+          body.from = f.from.value;
+          body.to = f.to.value;
+          if (f.every.value) body.every = Number(f.every.value);
+        } else {
+          body.times = String(f.times.value).split(/[,;\s]+/).map(function (t) { return t.replace(/h/i, ":").replace(/:$/, ":00"); }).filter(Boolean);
+        }
+        bookingCall("POST", "/slots", body, function (res) {
+          return res.created
+            ? res.created + " créneau" + (res.created > 1 ? "x ouverts" : " ouvert") + (res.skipped ? " (" + res.skipped + " déjà ouvert" + (res.skipped > 1 ? "s" : "") + ")" : "") + "."
+            : "Ces créneaux étaient déjà ouverts.";
+        });
+      });
+    }
+    el.view.querySelectorAll("[data-bk-slot-delete]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        bookingCall("DELETE", "/slots/" + encodeURIComponent(btn.getAttribute("data-bk-slot-delete")), null, "Créneau supprimé.");
+      });
+    });
+    el.view.querySelectorAll("[data-bk-cancel]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var id = btn.getAttribute("data-bk-cancel");
+        var b = data.bookings.filter(function (x) { return x.id === id; })[0];
+        confirmAction("Annuler la séance de " + b.clientName + " (" + bookingDay(b.startsAt) + ", " + bookingTime(b.startsAt) + ") ? Le client est prévenu par e-mail" +
+          (b.depositCents ? " ; remboursez l'acompte depuis votre tableau de bord Stripe." : "."), function () {
+          bookingCall("POST", "/bookings/" + encodeURIComponent(id) + "/cancel", {}, "Séance annulée, le client est prévenu.");
+        });
+      });
+    });
+  }
+
   /* ---------- Démarrage et navigation ---------- */
 
   function routeFromHash() {
@@ -5086,6 +5415,7 @@
     if (match) renderDetail(decodeURIComponent(match[1]), true);
     else if (location.hash === "#/detect") renderDetect(true);
     else if (location.hash === "#/ventes") renderSales(true);
+    else if (location.hash === "#/reservations") renderBooking(true);
     else if (location.hash === "#/portfolio") renderPortfolio(true);
     else if (location.hash.indexOf("#/facturation") === 0) renderBilling(true);
     else if (location.hash.indexOf("#/abonnement") === 0) renderSubscription(true);

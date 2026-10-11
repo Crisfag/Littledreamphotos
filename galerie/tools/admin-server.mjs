@@ -799,6 +799,18 @@ async function handleApi(req, res, url) {
     }
   }
 
+  // /local/booking/… — réservation en ligne (formules, créneaux,
+  // réservations) : simple relais JSON vers /api/admin/booking/….
+  if (parts[0] === "booking" && ["GET", "POST", "DELETE"].includes(req.method)) {
+    const path = "/api/admin/booking" + (parts.length > 1 ? "/" + parts.slice(1).map(encodeURIComponent).join("/") : "");
+    try {
+      const body = req.method === "POST" ? JSON.parse((await readBody(req)).toString("utf8") || "{}") : undefined;
+      return json(res, 200, await client.request(req.method, path, body));
+    } catch (err) {
+      return relayError(res, err, "Les réservations n'ont pas pu répondre");
+    }
+  }
+
   if (parts[0] === "portfolio") {
     const base = "/api/admin/portfolio";
     try {

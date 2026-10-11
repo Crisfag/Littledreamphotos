@@ -385,6 +385,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
 .ad-link-btn:hover { color: var(--accent); text-decoration-color: currentColor; }
 
 .ad-detail-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+.ad-detail-header > div:first-child { flex: 1 1 360px; min-width: 0; }
 
 .ad-section-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: .9rem; }
 .ad-section-header h3 { margin-bottom: 0; }
@@ -1229,3 +1230,50 @@ main section > p, .ad-share > p { max-width: 75ch; }
   .ad-vsel-pop { min-width: 0; }
 }
 .ad-sc-reminders { margin-top: .8rem; font-size: .88rem; color: var(--charcoal); white-space: normal; }
+
+/* ---------- Réservations ---------- */
+
+.ad-bk-offers { list-style: none; margin: 0 0 1rem; padding: 0; display: grid; gap: .45rem; }
+.ad-bk-offer {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; gap: .7rem; align-items: center;
+  padding: .7rem .85rem; border: 1px solid var(--line); border-radius: 10px; background: var(--paper);
+}
+.ad-bk-offer-main { display: grid; gap: .1rem; min-width: 0; }
+.ad-bk-offer-main strong { font-weight: 600; color: var(--ink); }
+.ad-bk-offer-main .ad-hint { font-size: .84rem; }
+.ad-bk-offer-off { background: var(--mist); }
+.ad-bk-offer-off .ad-bk-offer-main { opacity: .6; }
+.ad-bk-offer-form { margin-top: .9rem; max-width: 720px; }
+.ad-bk-slot-form { display: grid; gap: .8rem; margin: .4rem 0 1.2rem; }
+.ad-bk-slot-form .ad-seg { justify-self: start; }
+.ad-bk-slot-fields { display: flex; flex-wrap: wrap; gap: .2rem .8rem; align-items: flex-end; }
+.ad-bk-slot-fields .ad-field { margin-bottom: 0; flex: 0 1 auto; }
+.ad-bk-slot-fields .ad-field:first-child { flex: 1 1 220px; }
+.ad-bk-slot-fields .ad-bk-times { flex: 1 1 220px; }
+.ad-bk-slot-fields .ad-field input[type="number"] { width: 6.5rem; }
+.ad-bk-days { display: grid; gap: 1rem; padding-top: 1rem; border-top: 1px solid var(--line); }
+.ad-bk-day h4 { font-size: .9rem; font-weight: 600; margin-bottom: .45rem; }
+.ad-bk-day h4 .ad-hint { font-weight: 400; font-size: .86rem; }
+.ad-bk-day h4::first-letter { text-transform: uppercase; }
+.ad-bk-chips { list-style: none; display: flex; flex-wrap: wrap; gap: .4rem; }
+.ad-bk-chip {
+  display: inline-flex; align-items: center; gap: .25rem; min-height: 32px; padding: 0 .35rem 0 .75rem;
+  border: 1px solid var(--line-2); border-radius: 999px; background: var(--paper);
+  font-size: .84rem; font-weight: 500; color: var(--ink-2); font-variant-numeric: tabular-nums;
+}
+.ad-bk-chip button {
+  display: grid; place-items: center; width: 24px; height: 24px; border: 0; border-radius: 999px;
+  background: transparent; color: var(--muted); font-size: 1rem; line-height: 1; cursor: pointer;
+  transition: background-color .15s var(--ease), color .15s var(--ease);
+}
+.ad-bk-chip button:hover { background: var(--alert-bg); color: var(--alert-ink); }
+.ad-bk-chip-booked { padding-right: .75rem; background: var(--accent-soft); border-color: rgba(59, 59, 246, .25); color: var(--accent-deep); }
+.ad-bk-table td { vertical-align: top; }
+.ad-bk-table a.ad-acc-sub { color: var(--muted); text-decoration: none; }
+.ad-bk-table a.ad-acc-sub:hover { color: var(--accent-deep); text-decoration: underline; }
+.ad-bk-message { display: block; max-width: 34ch; margin-top: .3rem; font-size: .8rem; color: var(--muted); }
+@media (max-width: 720px) {
+  .ad-bk-offer { grid-template-columns: repeat(3, auto); justify-content: start; }
+  .ad-bk-offer-main { grid-column: 1 / -1; }
+  .ad-bk-slot-fields .ad-field { flex: 1 1 140px; }
+}

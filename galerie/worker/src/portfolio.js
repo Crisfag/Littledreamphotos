@@ -55,11 +55,11 @@ export function photoKey(photographerId, photoId) {
 
 /* ---------- Validation des champs ---------- */
 
-function cleanText(value, max) {
+export function cleanText(value, max) {
   return String(value ?? "").replace(/\r\n?/g, "\n").trim().slice(0, max);
 }
 
-function cleanLine(value, max) {
+export function cleanLine(value, max) {
   return String(value ?? "").replace(/\s+/g, " ").trim().slice(0, max);
 }
 
@@ -167,7 +167,7 @@ export async function publishedPortfolioForStudio(env, photographerId) {
   return row?.handle || "";
 }
 
-function displayName(row) {
+export function displayName(row) {
   return row.studio_name || [row.first_name, row.last_name].filter(Boolean).join(" ") || "Photographe";
 }
 

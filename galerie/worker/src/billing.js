@@ -9,6 +9,7 @@ import { handlePrintPaymentConfirmed } from "./shop.js";
 import { createConnectAccount, createAccountLink, retrieveAccount, verifyStripeSignature } from "./stripe.js";
 import { createInvoiceForPayment } from "./invoices.js";
 import { markSchoolOrderPaid } from "./schoolshop.js";
+import { markBookingPaid } from "./booking.js";
 import { sendInvoiceEmail } from "./notify.js";
 
 // Message montré au photographe : la raison donnée par Stripe (jamais une
@@ -158,6 +159,11 @@ export async function handleStripeWebhook(request, env) {
     // Commande d'une famille (module scolaire, schoolshop.js).
     if (session?.metadata?.kind === "school") {
       await markSchoolOrderPaid(env, session);
+      return json({ received: true });
+    }
+    // Acompte d'une réservation de séance (booking.js).
+    if (session?.metadata?.kind === "booking") {
+      await markBookingPaid(env, session);
       return json({ received: true });
     }
     // "paid" est le seul statut qui compte comme réglé : certains moyens de

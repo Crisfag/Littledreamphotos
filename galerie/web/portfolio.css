@@ -183,3 +183,39 @@ h3 { font-size: 1.4rem; margin-bottom: .8rem; }
   .pf-tile img, .pf-btn { transition: none; }
   .pf-spinner { animation-duration: 3s; }
 }
+
+/* ---------- Réservation en ligne ---------- */
+
+.pf-booking { padding-bottom: clamp(32px, 5vw, 56px); }
+.pf-bk-step { font-family: var(--sans); font-size: .9rem; font-weight: 500; color: var(--ink); margin: 1.6rem 0 .8rem; }
+.pf-bk-step:first-child { margin-top: 0; }
+.pf-bk-offers { display: grid; gap: .8rem; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.pf-bk-offer {
+  display: grid; gap: .35rem; text-align: left; font: inherit; color: inherit; cursor: pointer;
+  padding: 1.1rem 1.2rem; background: #fff; border: 1px solid var(--line); border-radius: 14px;
+  transition: border-color .2s, box-shadow .2s;
+}
+.pf-bk-offer:hover { border-color: var(--rose); }
+.pf-bk-offer[aria-pressed="true"] { border-color: var(--rose-deep); box-shadow: 0 0 0 1px var(--rose-deep); }
+.pf-bk-offer strong { font-family: var(--serif); font-size: 1.35rem; font-weight: 500; color: var(--ink); line-height: 1.2; }
+.pf-bk-meta { font-size: .88rem; color: var(--muted); }
+.pf-bk-desc { font-size: .92rem; white-space: pre-line; }
+.pf-bk-days { display: grid; gap: 1rem; }
+.pf-bk-day h3 { font-family: var(--sans); font-size: .95rem; font-weight: 500; margin-bottom: .5rem; }
+.pf-bk-day h3::first-letter { text-transform: uppercase; }
+.pf-bk-times { display: flex; flex-wrap: wrap; gap: .5rem; }
+.pf-bk-time {
+  min-width: 5.2rem; min-height: 44px; padding: 0 1rem; font: inherit; font-size: .95rem; font-variant-numeric: tabular-nums;
+  color: var(--ink); background: #fff; border: 1px solid var(--line); border-radius: 999px; cursor: pointer;
+  transition: border-color .2s, background-color .2s, color .2s;
+}
+.pf-bk-time:hover { border-color: var(--rose); }
+.pf-bk-time[aria-pressed="true"] { background: var(--rose-deep); border-color: var(--rose-deep); color: #fff; }
+.pf-bk-form { max-width: 640px; }
+.pf-bk-summary { padding: .9rem 1.1rem; background: var(--sand); border-radius: 12px; color: var(--ink); }
+.pf-bk-result { max-width: 640px; padding: 1.6rem 1.8rem; background: #fff; border: 1px solid var(--line); border-radius: 14px; }
+.pf-bk-result h3 { margin-bottom: .5rem; }
+.pf-bk-result p { color: var(--text); }
+.pf-bk-result .pf-btn { margin-top: 1rem; }
+#pf-bk-when, .pf-bk-form { margin-top: 2.4rem; }
+.pf-bk-form .pf-bk-step { margin-bottom: 0; }

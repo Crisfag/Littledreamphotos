@@ -281,6 +281,246 @@
     }
   });
 
+
+  /* ---------- Réservation en ligne ---------- */
+
+  var BOOKING_ZONE = "Europe/Brussels";
+  var booking = { offers: [], offer: null, slot: null };
+
+  function euros(cents) {
+    return (cents / 100).toLocaleString("fr-BE", { minimumFractionDigits: cents % 100 ? 2 : 0, maximumFractionDigits: 2 }) + " €";
+  }
+  function duration(minutes) {
+    if (minutes < 60) return minutes + " min";
+    var m = minutes % 60;
+    return Math.floor(minutes / 60) + " h" + (m ? " " + String(m).padStart(2, "0") : "");
+  }
+  function slotDay(ts) {
+    return new Date(ts * 1000).toLocaleDateString("fr-BE", { weekday: "long", day: "numeric", month: "long", timeZone: BOOKING_ZONE });
+  }
+  function slotTime(ts) {
+    return new Date(ts * 1000).toLocaleTimeString("fr-BE", { hour: "2-digit", minute: "2-digit", timeZone: BOOKING_ZONE }).replace(":", " h ");
+  }
+  function bookingApi(path) {
+    return API + "/api/booking/" + encodeURIComponent(handle) + path;
+  }
+  function el(tag, className, text) {
+    var node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  }
+
+  function pressOnly(container, selector, active) {
+    container.querySelectorAll(selector).forEach(function (n) { n.setAttribute("aria-pressed", String(n === active)); });
+  }
+
+  function chooseOffer(offer, button) {
+    booking.offer = offer;
+    booking.slot = null;
+    pressOnly($("pf-bk-offers"), ".pf-bk-offer", button);
+    $("pf-bk-form").hidden = true;
+    var days = $("pf-bk-days");
+    days.textContent = "";
+    var byDay = [];
+    var index = {};
+    offer.slots.forEach(function (s) {
+      var key = slotDay(s.startsAt);
+      if (!(key in index)) { index[key] = byDay.length; byDay.push({ label: key, slots: [] }); }
+      byDay[index[key]].slots.push(s);
+    });
+    byDay.forEach(function (day) {
+      var wrap = el("div", "pf-bk-day");
+      wrap.appendChild(el("h3", "", day.label));
+      var times = el("div", "pf-bk-times");
+      day.slots.forEach(function (s) {
+        var b = el("button", "pf-bk-time", slotTime(s.startsAt));
+        b.type = "button";
+        b.setAttribute("aria-pressed", "false");
+        b.setAttribute("aria-label", day.label + " à " + slotTime(s.startsAt));
+        b.addEventListener("click", function () { chooseSlot(s, b); });
+        times.appendChild(b);
+      });
+      wrap.appendChild(times);
+      days.appendChild(wrap);
+    });
+    $("pf-bk-when").hidden = false;
+    $("pf-bk-when").scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
+  function chooseSlot(slot, button) {
+    booking.slot = slot;
+    pressOnly($("pf-bk-days"), ".pf-bk-time", button);
+    var o = booking.offer;
+    $("pf-bk-summary").textContent = o.title + " · " + slotDay(slot.startsAt) + " à " + slotTime(slot.startsAt) + " · " + duration(o.durationMin) +
+      (o.location ? " · " + o.location : "");
+    $("pf-bk-submit").textContent = o.depositCents ? "Réserver et payer l'acompte (" + euros(o.depositCents) + ")" : "Confirmer la réservation";
+    $("pf-bk-error").hidden = true;
+    $("pf-bk-form").hidden = false;
+    $("pf-bk-form").scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
+  function showBookingResult(title, lines, retry) {
+    var box = $("pf-bk-result");
+    box.textContent = "";
+    box.appendChild(el("h3", "", title));
+    lines.filter(Boolean).forEach(function (line) { box.appendChild(el("p", "", line)); });
+    if (retry === true) {
+      var again = el("button", "pf-btn pf-btn-ghost", "Choisir un autre créneau");
+      again.type = "button";
+      again.addEventListener("click", function () { box.hidden = true; $("pf-bk-flow").hidden = false; loadBooking(); });
+      box.appendChild(again);
+    }
+    box.hidden = false;
+    // Après un échec, le parcours reste affiché sous le message ; après une
+    // réservation réussie, seul le message reste.
+    $("pf-bk-flow").hidden = retry !== true;
+    $("reserver").hidden = false;
+  }
+
+  function confirmedLines(r) {
+    var rest = r.priceCents > r.depositCents ? r.priceCents - r.depositCents : 0;
+    return [
+      r.offerTitle + ", " + slotDay(r.startsAt) + " à " + slotTime(r.startsAt) + " (" + duration(r.durationMin) + ")" + (r.location ? ", " + r.location : "") + ".",
+      r.depositCents ? "Acompte réglé : " + euros(r.depositCents) + (rest ? " ; reste à régler : " + euros(rest) + "." : ".") : "",
+      "Un e-mail de confirmation vient de partir, avec l'invitation pour votre agenda.",
+    ];
+  }
+
+  function renderOffers(offers) {
+    booking.offers = offers;
+    var list = $("pf-bk-offers");
+    list.textContent = "";
+    offers.forEach(function (o) {
+      var b = el("button", "pf-bk-offer");
+      b.type = "button";
+      b.setAttribute("aria-pressed", "false");
+      b.appendChild(el("strong", "", o.title));
+      b.appendChild(el("span", "pf-bk-meta", [
+        duration(o.durationMin),
+        o.priceCents ? euros(o.priceCents) : "",
+        o.depositCents ? "acompte de " + euros(o.depositCents) + " à la réservation" : "",
+        o.location,
+      ].filter(Boolean).join(" · ")));
+      if (o.description) b.appendChild(el("span", "pf-bk-desc", o.description));
+      b.addEventListener("click", function () { chooseOffer(o, b); });
+      list.appendChild(b);
+    });
+    $("pf-bk-when").hidden = true;
+    $("pf-bk-form").hidden = true;
+    if (offers.length === 1) chooseOffer(offers[0], list.firstChild);
+  }
+
+  function loadBooking() {
+    return fetch(bookingApi(""))
+      .then(function (res) { return res.ok ? res.json() : { offers: [] }; })
+      .then(function (json) {
+        var offers = json.offers || [];
+        if (!offers.length) return false;
+        renderOffers(offers);
+        $("reserver").hidden = false;
+        $("pf-nav-booking").hidden = false;
+        // Réserver devient l'appel principal de la couverture.
+        $("pf-hero-cta").textContent = "Réserver une séance";
+        $("pf-hero-cta").setAttribute("href", "#reserver");
+        return true;
+      })
+      .catch(function () { return false; });
+  }
+
+  // Retour de Stripe (paiement de l'acompte réussi ou abandonné).
+  function handleBookingReturn() {
+    var params = new URLSearchParams(location.search);
+    var id = params.get("reservation");
+    if (!id) return;
+    var cleanUrl = location.pathname + (handle && !CONFIG.handle ? "?s=" + encodeURIComponent(handle) : "") + "#reserver";
+    history.replaceState(null, "", cleanUrl);
+    if (params.get("annule")) {
+      fetch(bookingApi("/release/" + encodeURIComponent(id)), { method: "POST" }).finally(function () {
+        loadBooking().then(function () {
+          showBookingResult("Paiement interrompu", ["Votre créneau n'a pas été réservé. Vous pouvez en choisir un autre, ou le même s'il est toujours libre."], true);
+          $("reserver").scrollIntoView();
+        });
+      });
+      return;
+    }
+    var session = params.get("session_id") || "";
+    var attempts = 0;
+    (function poll() {
+      fetch(bookingApi("/reservation/" + encodeURIComponent(id) + (session ? "?session_id=" + encodeURIComponent(session) : "")))
+        .then(function (res) { return res.json(); })
+        .then(function (json) {
+          var r = json.reservation;
+          if (!r) throw new Error();
+          if (r.status === "confirmed") {
+            showBookingResult("Votre séance est réservée", confirmedLines(r), "hide");
+          } else if (r.status === "pending" && attempts++ < 5) {
+            showBookingResult("Confirmation du paiement…", ["Un instant, nous attendons la confirmation de votre banque."], "hide");
+            setTimeout(poll, 2000);
+            return;
+          } else if (r.status === "pending") {
+            showBookingResult("Paiement en cours de confirmation", ["Vous recevrez un e-mail dès que votre banque l'aura confirmé."], "hide");
+          } else {
+            showBookingResult("Réservation non aboutie", ["Le délai de paiement est dépassé ou le créneau n'est plus disponible. Choisissez-en un autre."], true);
+            loadBooking();
+          }
+          $("reserver").scrollIntoView();
+        })
+        .catch(function () {
+          showBookingResult("Réservation introuvable", ["Contactez directement le studio si vous avez réglé un acompte."], "hide");
+        });
+    })();
+  }
+
+  $("pf-bk-form").addEventListener("submit", async function (e) {
+    e.preventDefault();
+    var form = e.currentTarget;
+    var error = $("pf-bk-error");
+    var fields = {
+      slotId: booking.slot && booking.slot.id,
+      name: form.elements.name.value.trim(),
+      email: form.elements.email.value.trim(),
+      phone: form.elements.phone.value.trim(),
+      message: form.elements.message.value.trim(),
+      website: form.elements.website.value,
+      returnUrl: location.origin + location.pathname + (handle && !CONFIG.handle ? "?s=" + encodeURIComponent(handle) : ""),
+    };
+    var problem = !fields.slotId ? "Choisissez un créneau."
+      : !fields.name ? "Indiquez votre nom."
+      : !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fields.email) ? "Indiquez une adresse e-mail valide."
+      : "";
+    if (problem) { error.textContent = problem; error.hidden = false; return; }
+    error.hidden = true;
+    var submit = $("pf-bk-submit");
+    var label = submit.textContent;
+    submit.disabled = true;
+    submit.textContent = "Un instant…";
+    try {
+      var res = await fetch(bookingApi("/book"), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(fields),
+      });
+      var body = await res.json().catch(function () { return {}; });
+      if (!res.ok) {
+        if (res.status === 409) loadBooking();
+        throw new Error(body.error || "La réservation n'a pas pu aboutir.");
+      }
+      if (body.url) { location.href = body.url; return; }
+      var o = booking.offer;
+      showBookingResult("Votre séance est réservée", confirmedLines({
+        offerTitle: o.title, startsAt: booking.slot.startsAt, durationMin: o.durationMin, location: o.location, depositCents: 0, priceCents: o.priceCents,
+      }), "hide");
+      $("reserver").scrollIntoView();
+    } catch (err) {
+      error.textContent = err.message || "La réservation n'a pas pu aboutir. Réessayez dans un instant.";
+      error.hidden = false;
+    } finally {
+      submit.disabled = false;
+      submit.textContent = label;
+    }
+  });
+
   /* ---------- Démarrage ---------- */
 
   if (!handle || !API) {
@@ -296,6 +536,9 @@
       data = json;
       if (!data.photos || !data.photos.length) throw new Error("vide");
       render();
+      document.querySelectorAll(".pf-bk-studio").forEach(function (n) { n.textContent = data.studioName; });
+      if (new URLSearchParams(location.search).get("reservation")) handleBookingReturn();
+      else loadBooking();
     })
     .catch(showMissing);
 })();

@@ -594,6 +594,136 @@ export function buildPortfolioContactEmail({ studioName, name, email, phone, eve
   return { subject, html: emailShell({ preheader: subject, bodyHtml }), text };
 }
 
+/* ---------- Réservations (booking.js) ---------- */
+
+function durationLabel(minutes) {
+  if (minutes < 60) return `${minutes} min`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m ? `${h} h ${String(m).padStart(2, "0")}` : `${h} h`;
+}
+
+function bookingDetailsHtml({ offerTitle, when, durationMin, location, depositCents, priceCents }) {
+  const rest = priceCents > depositCents ? priceCents - depositCents : 0;
+  return [
+    `<strong>Séance :</strong> ${escapeHtml(offerTitle)} (${escapeHtml(durationLabel(durationMin))})`,
+    `<strong>Quand :</strong> ${escapeHtml(when)}`,
+    location ? `<strong>Où :</strong> ${escapeHtml(location)}` : "",
+    depositCents ? `<strong>Acompte réglé :</strong> ${escapeHtml(formatEuros(depositCents))}` : "",
+    rest && depositCents ? `<strong>Reste à régler :</strong> ${escapeHtml(formatEuros(rest))}` : "",
+    priceCents && !depositCents ? `<strong>Prix :</strong> ${escapeHtml(formatEuros(priceCents))}` : "",
+  ].filter(Boolean).join("<br>");
+}
+
+function bookingDetailsText({ offerTitle, when, durationMin, location, depositCents, priceCents }) {
+  const rest = priceCents > depositCents ? priceCents - depositCents : 0;
+  return [
+    `Séance : ${offerTitle} (${durationLabel(durationMin)})`,
+    `Quand : ${when}`,
+    location ? `Où : ${location}` : "",
+    depositCents ? `Acompte réglé : ${formatEuros(depositCents)}` : "",
+    rest && depositCents ? `Reste à régler : ${formatEuros(rest)}` : "",
+    priceCents && !depositCents ? `Prix : ${formatEuros(priceCents)}` : "",
+  ].filter(Boolean).join("\n");
+}
+
+function studioContactLine({ studioName, studioEmail, studioPhone }) {
+  return [studioEmail, studioPhone].filter(Boolean).length
+    ? `Une question ? Répondez simplement à cet e-mail${studioPhone ? ` ou appelez ${escapeHtml(studioName)} au ${escapeHtml(studioPhone)}` : ""}.`
+    : "";
+}
+
+export function buildBookingConfirmationEmail(params) {
+  const { studioName, clientName, offerTitle } = params;
+  const subject = `Votre séance « ${offerTitle} » est réservée`;
+  const bodyHtml =
+    eyebrow(studioName || "Votre photographe") +
+    heading(`C'est noté${clientName ? `, ${escapeHtml(clientName)}` : ""} !`) +
+    paragraph(bookingDetailsHtml(params)) +
+    paragraph("L'invitation jointe ajoute la séance à votre agenda. Vous recevrez un petit rappel la veille.") +
+    (studioContactLine(params) ? paragraph(studioContactLine(params), { small: true }) : "");
+  const text = [
+    `Votre séance avec ${studioName} est réservée.`,
+    "",
+    bookingDetailsText(params),
+    "",
+    "L'invitation jointe ajoute la séance à votre agenda. Vous recevrez un rappel la veille.",
+  ].join("\n");
+  return { subject, html: emailShell({ preheader: subject, bodyHtml }), text };
+}
+
+export function buildBookingPhotographerEmail(params) {
+  const { clientName, clientEmail, clientPhone, message, when, adminUrl } = params;
+  const subject = `Nouvelle réservation : ${clientName}, ${when}`;
+  const contact = [
+    `<strong>Client :</strong> ${escapeHtml(clientName)}`,
+    `<strong>E-mail :</strong> <a href="mailto:${escapeHtml(clientEmail)}" style="color:${ROSE_DEEP};">${escapeHtml(clientEmail)}</a>`,
+    clientPhone ? `<strong>Téléphone :</strong> ${escapeHtml(clientPhone)}` : "",
+  ].filter(Boolean).join("<br>");
+  const bodyHtml =
+    eyebrow("Réservation en ligne") +
+    heading("Une séance vient d'être réservée") +
+    paragraph(bookingDetailsHtml(params)) +
+    paragraph(contact) +
+    (message ? `<div style="margin:0 0 14px;padding:14px 16px;background:${CREAM};border-radius:10px;font-family:${SANS};font-size:15px;line-height:1.6;color:${CHARCOAL};white-space:pre-wrap;">${escapeHtml(message)}</div>` : "") +
+    (adminUrl ? emailButton(adminUrl, "Voir mes réservations") : "") +
+    paragraph("L'invitation jointe ajoute la séance à votre agenda. Répondez à cet e-mail pour écrire au client.", { small: true });
+  const text = [
+    "Une séance vient d'être réservée.",
+    "",
+    bookingDetailsText(params),
+    "",
+    `Client : ${clientName} — ${clientEmail}${clientPhone ? " — " + clientPhone : ""}`,
+    message ? `\n${message}` : "",
+    adminUrl ? `\nVos réservations : ${adminUrl}` : "",
+  ].join("\n");
+  return { subject, html: emailShell({ preheader: subject, bodyHtml }), text };
+}
+
+export function buildBookingReminderEmail(params) {
+  const { studioName, offerTitle, when } = params;
+  const subject = `Rappel : votre séance ${when}`;
+  const bodyHtml =
+    eyebrow(studioName || "Votre photographe") +
+    heading("À très vite !") +
+    paragraph(`Petit rappel de votre séance « ${escapeHtml(offerTitle)} ».`) +
+    paragraph(bookingDetailsHtml(params)) +
+    (studioContactLine(params) ? paragraph(studioContactLine(params), { small: true }) : "");
+  const text = [`Rappel de votre séance avec ${studioName}.`, "", bookingDetailsText(params)].join("\n");
+  return { subject, html: emailShell({ preheader: subject, bodyHtml }), text };
+}
+
+export function buildBookingCancelledEmail(params) {
+  const { studioName, offerTitle, when, depositCents, note } = params;
+  const subject = `Séance annulée : ${offerTitle}, ${when}`;
+  const bodyHtml =
+    eyebrow(studioName || "Votre photographe") +
+    heading("Votre séance est annulée") +
+    paragraph(`${escapeHtml(studioName)} a annulé la séance « ${escapeHtml(offerTitle)} » prévue ${escapeHtml(when)}.`) +
+    (note ? `<div style="margin:0 0 14px;padding:14px 16px;background:${CREAM};border-radius:10px;font-family:${SANS};font-size:15px;line-height:1.6;color:${CHARCOAL};white-space:pre-wrap;">${escapeHtml(note)}</div>` : "") +
+    (depositCents ? paragraph(`L'acompte de ${escapeHtml(formatEuros(depositCents))} vous sera remboursé par le studio.`) : "") +
+    (studioContactLine(params) ? paragraph(studioContactLine(params), { small: true }) : "");
+  const text = [
+    `${studioName} a annulé la séance « ${offerTitle} » prévue ${when}.`,
+    note ? `\n${note}` : "",
+    depositCents ? `\nL'acompte de ${formatEuros(depositCents)} vous sera remboursé par le studio.` : "",
+  ].join("\n");
+  return { subject, html: emailShell({ preheader: subject, bodyHtml }), text };
+}
+
+export function buildBookingConflictEmail(params) {
+  const { clientName, clientEmail, when, offerTitle, depositCents, adminUrl } = params;
+  const subject = `À rembourser : acompte de ${clientName} (créneau déjà repris)`;
+  const bodyHtml =
+    eyebrow("Réservation en ligne") +
+    heading("Un acompte est arrivé trop tard") +
+    paragraph(`${escapeHtml(clientName)} (${escapeHtml(clientEmail)}) a payé l'acompte de ${escapeHtml(formatEuros(depositCents))} pour « ${escapeHtml(offerTitle)} », ${escapeHtml(when)}, après l'expiration du délai de paiement : le créneau avait été repris entre-temps.`) +
+    paragraph("Proposez-lui un autre horaire, ou remboursez l'acompte depuis votre tableau de bord Stripe (Paiements).") +
+    (adminUrl ? emailButton(adminUrl, "Voir mes réservations") : "");
+  const text = `${clientName} (${clientEmail}) a payé l'acompte de ${formatEuros(depositCents)} pour « ${offerTitle} », ${when}, mais le créneau avait été repris. Proposez un autre horaire ou remboursez l'acompte depuis Stripe.`;
+  return { subject, html: emailShell({ preheader: subject, bodyHtml }), text };
+}
+
 function bytesToBase64(bytes) {
   let binary = "";
   const chunkSize = 0x8000;
@@ -718,6 +848,30 @@ export async function sendFavoritesPrint(env, params) {
 
 export async function sendPortfolioContact(env, params) {
   await sendEmail(env, { to: params.to, replyTo: params.replyTo, ...buildPortfolioContactEmail(params) });
+}
+
+function withAttachment(params) {
+  return params.attachment ? { attachments: [params.attachment] } : {};
+}
+
+export async function sendBookingConfirmation(env, params) {
+  await sendEmail(env, { to: params.to, replyTo: params.replyTo, ...buildBookingConfirmationEmail(params), ...withAttachment(params) });
+}
+
+export async function sendBookingPhotographerNotice(env, params) {
+  await sendEmail(env, { to: params.to, replyTo: params.replyTo, ...buildBookingPhotographerEmail(params), ...withAttachment(params) });
+}
+
+export async function sendBookingReminder(env, params) {
+  await sendEmail(env, { to: params.to, replyTo: params.replyTo, ...buildBookingReminderEmail(params) });
+}
+
+export async function sendBookingCancelled(env, params) {
+  await sendEmail(env, { to: params.to, replyTo: params.replyTo, ...buildBookingCancelledEmail(params), ...withAttachment(params) });
+}
+
+export async function sendBookingConflict(env, params) {
+  await sendEmail(env, { to: params.to, ...buildBookingConflictEmail(params) });
 }
 
 export async function sendStoragePurgeNotice(env, params) {

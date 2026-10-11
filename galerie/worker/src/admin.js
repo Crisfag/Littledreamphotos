@@ -15,6 +15,7 @@ import { sendDeliveryReady } from "./notify.js";
 import { exportAccount, deleteAccount } from "./privacy.js";
 import { galleryQuotaRefusal, subscriptionForAdmin, startSubscriptionCheckout, openBillingPortal, syncSubscription, setScolairePlan } from "./subscription.js";
 import { handleSchoolAdmin } from "./school.js";
+import { handleBookingAdmin } from "./booking.js";
 import { setPromo, sendPromoToClient, promoForAdmin } from "./campaigns.js";
 import { galleryUrlFor } from "./reminders.js";
 import { salesForAdmin } from "./sales.js";
@@ -851,6 +852,13 @@ export async function handleAdmin(request, env, ctx, path) {
     return updateStudioName(request, env, photographerId);
   }
   // Module photo de groupe : établissements, années, groupes (school.js).
+  // Réservation en ligne : formules, créneaux, réservations (booking.js).
+  if (section === "booking") {
+    const photographer = await env.DB.prepare("SELECT * FROM photographers WHERE id = ?").bind(photographerId).first();
+    if (!photographer) return fail(401, "Session invalide");
+    return handleBookingAdmin(request, env, photographer, parts.slice(3));
+  }
+
   if (section === "school") {
     const photographer = await env.DB.prepare("SELECT * FROM photographers WHERE id = ?").bind(photographerId).first();
     if (!photographer) return fail(401, "Session invalide");

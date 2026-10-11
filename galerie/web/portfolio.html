@@ -44,6 +44,7 @@
         <nav class="pf-nav" aria-label="Sections">
           <a href="#travaux">Travaux</a>
           <a href="#apropos" id="pf-nav-about">À propos</a>
+          <a href="#reserver" id="pf-nav-booking" hidden>Réserver</a>
           <a href="#contact" class="pf-nav-cta" id="pf-nav-contact">Me contacter</a>
         </nav>
       </div>
@@ -79,6 +80,44 @@
         </div>
       </section>
 
+      <section class="pf-section pf-wrap pf-booking" id="reserver" aria-labelledby="pf-booking-title" hidden>
+        <h2 id="pf-booking-title">Réserver une séance</h2>
+        <div class="pf-bk-result" id="pf-bk-result" role="status" hidden></div>
+        <div id="pf-bk-flow">
+          <p class="pf-bk-step">1. Choisissez votre séance</p>
+          <div class="pf-bk-offers" id="pf-bk-offers"></div>
+          <div id="pf-bk-when" hidden>
+            <p class="pf-bk-step">2. Choisissez votre créneau</p>
+            <div class="pf-bk-days" id="pf-bk-days"></div>
+          </div>
+          <form class="pf-form pf-bk-form" id="pf-bk-form" novalidate hidden>
+            <p class="pf-bk-step">3. Vos coordonnées</p>
+            <p class="pf-bk-summary" id="pf-bk-summary"></p>
+            <div class="pf-row">
+              <label class="pf-field">
+                <span>Nom</span>
+                <input type="text" name="name" autocomplete="name" maxlength="100" required />
+              </label>
+              <label class="pf-field">
+                <span>E-mail</span>
+                <input type="email" name="email" autocomplete="email" maxlength="200" required />
+              </label>
+            </div>
+            <label class="pf-field">
+              <span>Téléphone <em>(facultatif)</em></span>
+              <input type="tel" name="phone" autocomplete="tel" maxlength="30" />
+            </label>
+            <label class="pf-field">
+              <span>Un mot pour le photographe <em>(facultatif)</em></span>
+              <textarea name="message" rows="3" maxlength="2000" placeholder="Prénoms et âges des enfants, envies, questions…"></textarea>
+            </label>
+            <label class="pf-trap" aria-hidden="true">Site web <input type="text" name="website" tabindex="-1" autocomplete="off" /></label>
+            <p class="pf-privacy">Vos coordonnées sont transmises uniquement à <span class="pf-bk-studio">ce studio</span> pour organiser la séance.</p>
+            <p class="pf-error" id="pf-bk-error" role="alert" hidden></p>
+            <button type="submit" class="pf-btn" id="pf-bk-submit">Réserver</button>
+          </form>
+        </div>
+      </section>
       <section class="pf-section pf-wrap pf-contact" id="contact" aria-labelledby="pf-contact-title" hidden>
         <div class="pf-contact-intro">
           <h2 id="pf-contact-title">Me contacter</h2>
