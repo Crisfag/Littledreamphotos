@@ -1005,16 +1005,22 @@ CREATE TABLE IF NOT EXISTS clients (
   UNIQUE (photographer_id, email)
 );
 
--- kind : birthday (date de naissance) | wedding (date du mariage) | other.
--- notified_year : année de la dernière occurrence déjà rappelée.
+-- kind : birthday (date de naissance) | baby (naissance, étapes 3 mois, 1 an…)
+-- | wedding (date du mariage) | season (séance de Noël… : label = occasion)
+-- | other. client_email vide : temps fort du studio, pour tous les clients.
+-- notified_year : dernière occurrence déjà rappelée (année, ou AAAAMMJJ pour
+-- les étapes d'un bébé).
 CREATE TABLE IF NOT EXISTS client_dates (
   id              TEXT PRIMARY KEY,           -- cld_…
   photographer_id TEXT NOT NULL REFERENCES photographers(id) ON DELETE CASCADE,
-  client_email    TEXT NOT NULL,
+  client_email    TEXT NOT NULL,              -- vide : temps fort du studio
   label           TEXT NOT NULL,
   kind            TEXT NOT NULL DEFAULT 'other',
   date            TEXT NOT NULL,              -- AAAA-MM-JJ
   remind          INTEGER NOT NULL DEFAULT 1,
+  lead_days       INTEGER,                    -- délai du rappel (vide : selon le type)
+  plan            TEXT NOT NULL DEFAULT '',   -- bébé : étapes en mois, « y » chaque anniversaire
+  approx          INTEGER NOT NULL DEFAULT 0, -- naissance estimée d'après l'âge à la séance
   notified_year   INTEGER,
   created_at      INTEGER NOT NULL
 );

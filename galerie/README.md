@@ -1065,9 +1065,24 @@ paiements (les établissements scolaires restent à part).
   mariage, autre), boutons « Nouveau devis » et « Nouvelle galerie »
   préremplis. Les noms de clients des galeries, réservations et contrats
   mènent à leur fiche.
-- **Rappel par e-mail** au photographe trois semaines avant chaque date
-  (tâche planifiée quotidienne, une fois par an et par date, désactivable
-  date par date).
+- **Dates à retenir**, chacune avec son rappel par e-mail au délai choisi
+  (2 semaines à 2 mois avant ; tâche planifiée quotidienne, désactivable
+  date par date) :
+  - **Suivi bébé** : prénom et âge à la séance (« 6 mois, séance du
+    5 octobre ») ou date de naissance ; Holypixx estime la naissance et
+    propose les étapes cochées : 3, 6, 9 mois, 1 an, 18 mois, puis chaque
+    anniversaire. Rappel un mois avant par défaut : aux 11 mois pour le
+    premier anniversaire. Les étapes passées sont grisées.
+  - **Naissance d'un enfant**, **mariage**, **autre date** : chaque année.
+  - **Séance de saison** (Noël, Saint-Valentin, Pâques, fête des mères,
+    fête des pères, rentrée, Halloween) : rappel six semaines avant la
+    date de la séance, chaque année.
+- **Temps forts du studio** : vos séances de Noël, de fête des mères…
+  sans client attaché. À l'approche (six semaines par défaut), elles
+  remontent dans « À relancer » avec « Écrire à tous » (copie cachée,
+  message prêt) et « Copier les adresses », et un e-mail vous le rappelle.
+- Un aperçu en direct montre, avant d'ajouter une date, la prochaine
+  occasion et le jour du rappel.
 
 Effacer ses notes sur un client retire le téléphone, les notes et les
 dates ; l'historique (galeries, réservations, contrats) reste.
@@ -1077,6 +1092,7 @@ dates ; l'historique (galeries, réservations, contrats) reste.
 ```bash
 cd worker
 npx wrangler d1 execute galerie-protegee --remote --file=migrations/2026-10-clients.sql
+npx wrangler d1 execute galerie-protegee --remote --file=migrations/2026-10-clients-etapes.sql
 npm run deploy
 ```
 
