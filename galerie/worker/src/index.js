@@ -24,6 +24,7 @@ import { runSalesReminders } from "./campaigns.js";
 import { handlePortfolioPublic, purgeOldPortfolioMessages } from "./portfolio.js";
 import { handleBookingPublic, runBookingReminders } from "./booking.js";
 import { handleContractPublic } from "./contracts.js";
+import { runClientReminders } from "./clients.js";
 import { runStoragePurge } from "./storage.js";
 import { plansForPublic } from "./subscription.js";
 import { shopState } from "./shop.js";
@@ -179,6 +180,12 @@ export default {
     ctx.waitUntil(
       runBookingReminders(env).catch((err) => {
         console.error("Rappels de séance : échec :", err && err.stack ? err.stack : err);
+      })
+    );
+    // Fiches clients : rappel au photographe trois semaines avant une date à retenir.
+    ctx.waitUntil(
+      runClientReminders(env).catch((err) => {
+        console.error("Rappels des dates clients : échec :", err && err.stack ? err.stack : err);
       })
     );
     // Messages du formulaire de contact des portfolios : conservés un an.

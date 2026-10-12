@@ -17,6 +17,7 @@ import { galleryQuotaRefusal, subscriptionForAdmin, startSubscriptionCheckout, o
 import { handleSchoolAdmin } from "./school.js";
 import { handleBookingAdmin } from "./booking.js";
 import { handleContractsAdmin } from "./contracts.js";
+import { handleClientsAdmin } from "./clients.js";
 import { setPromo, sendPromoToClient, promoForAdmin } from "./campaigns.js";
 import { galleryUrlFor } from "./reminders.js";
 import { salesForAdmin } from "./sales.js";
@@ -858,6 +859,13 @@ export async function handleAdmin(request, env, ctx, path) {
     const photographer = await env.DB.prepare("SELECT * FROM photographers WHERE id = ?").bind(photographerId).first();
     if (!photographer) return fail(401, "Session invalide");
     return handleBookingAdmin(request, env, photographer, parts.slice(3));
+  }
+
+  // Fiches clients et dates à retenir (clients.js).
+  if (section === "clients") {
+    const photographer = await env.DB.prepare("SELECT * FROM photographers WHERE id = ?").bind(photographerId).first();
+    if (!photographer) return fail(401, "Session invalide");
+    return handleClientsAdmin(request, env, photographer, parts.slice(3), new URL(request.url));
   }
 
   // Devis et contrats signés en ligne (contracts.js).

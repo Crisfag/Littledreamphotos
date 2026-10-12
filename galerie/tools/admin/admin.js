@@ -77,6 +77,7 @@
       if (tab === "galleries") renderList();
       else if (tab === "sales") renderSales();
       else if (tab === "booking") renderBooking();
+      else if (tab === "clients") renderClients();
       else if (tab === "contracts") renderContracts();
       else if (tab === "portfolio") renderPortfolio();
       else if (tab === "billing") renderBilling();
@@ -140,7 +141,9 @@
     }
     if (!response.ok) {
       var message = (data && data.error) || ("Erreur HTTP " + response.status);
-      throw new Error(message);
+      var error = new Error(message);
+      error.status = response.status;
+      throw error;
     }
     return data;
   }
@@ -223,6 +226,13 @@
     };
     okBtn.addEventListener("click", handler);
   }
+
+  // Échap ferme la fenêtre ouverte, comme un clic sur le fond.
+  document.addEventListener("keydown", function (event) {
+    if (event.key !== "Escape" || event.defaultPrevented) return;
+    var open = document.querySelectorAll(".ad-modal-backdrop:not([hidden])");
+    if (open.length) open[open.length - 1].hidden = true;
+  });
 
   document.addEventListener("click", function (event) {
     if (event.target.matches("[data-close-modal]")) {
@@ -3287,7 +3297,7 @@
       '<header class="ad-detail-header">' +
       "<div>" +
       "<h2>" + esc(data.gallery.title) + "</h2>" +
-      '<p class="ad-card-sub">' + (data.gallery.client_name ? esc(data.gallery.client_name) + " · " : "") + esc(data.gallery.slug) + "</p>" +
+      '<p class="ad-card-sub">' + (data.gallery.client_name ? clLink(data.gallery.client_name, data.gallery.client_email) + " · " : "") + esc(data.gallery.slug) + "</p>" +
       (data.gallery.selection_done_at
         ? '<p class="ad-validated" id="ad-selection-validated">✓ Sélection validée par le client le ' + formatDateTime(data.gallery.selection_done_at) + "</p>"
         : '<p class="ad-hint" id="ad-selection-pending">Sélection pas encore validée par le client' +
@@ -5225,7 +5235,7 @@
     return "<tr>" +
       '<td><strong>' + esc(bookingDay(b.startsAt)) + "</strong><br>" + esc(bookingTime(b.startsAt)) + " · " + esc(durationText(b.durationMin)) + "</td>" +
       "<td>" + esc(b.offerTitle) + (b.location ? '<br><span class="ad-hint">' + esc(b.location) + "</span>" : "") + "</td>" +
-      '<td><span class="ad-acc-name">' + esc(b.clientName) + "</span>" +
+      '<td><span class="ad-acc-name">' + clLink(b.clientName, b.clientEmail) + "</span>" +
       '<a class="ad-acc-sub" href="mailto:' + esc(b.clientEmail) + '">' + esc(b.clientEmail) + "</a>" +
       (b.clientPhone ? '<span class="ad-acc-sub">' + esc(b.clientPhone) + "</span>" : "") +
       (b.message ? '<span class="ad-bk-message">« ' + esc(b.message) + " »</span>" : "") + "</td>" +
@@ -5446,7 +5456,9 @@
 
   function contractEditorHtml(data, c) {
     var editing = Boolean(c && c.id);
-    c = c || { clientName: "", clientEmail: "", title: "", sessionDate: "", lines: [{ label: "", amountCents: 0 }], depositCents: 0, terms: data.terms, validUntil: 0 };
+    // Nouveau devis, éventuellement ouvert depuis la fiche d'un client.
+    c = c || Object.assign({ clientName: "", clientEmail: "", title: "", sessionDate: "", lines: [{ label: "", amountCents: 0 }], depositCents: 0, terms: data.terms, validUntil: 0 }, contractsState.prefill || {});
+    contractsState.prefill = null;
     return '<section id="ad-ct-editor"><div class="ad-section-header"><h3>' + (editing ? "Modifier le devis n° " + esc(c.number) : "Nouveau devis") + "</h3></div>" +
       (editing && c.status !== "draft" ? '<p class="ad-banner ad-banner-muted">Ce devis a déjà été envoyé : après modification, renvoyez-le pour que votre client signe la nouvelle version.</p>' : "") +
       '<form id="ad-ct-form" novalidate>' +
@@ -5491,7 +5503,7 @@
       : "Créé le " + formatDate(c.createdAt);
     return '<tr data-contract-id="' + esc(c.id) + '">' +
       '<td class="ad-acc-num">' + esc(c.number) + "</td>" +
-      '<td><span class="ad-acc-name">' + esc(c.title) + '</span><span class="ad-acc-sub">' + esc(c.clientName) + " · " + esc(c.clientEmail) + "</span>" +
+      '<td><span class="ad-acc-name">' + esc(c.title) + '</span><span class="ad-acc-sub">' + clLink(c.clientName, c.clientEmail) + " · " + esc(c.clientEmail) + "</span>" +
       '<span class="ad-acc-sub">' + esc(detail) + "</span></td>" +
       '<td class="ad-num">' + formatEuros(c.totalCents) + (c.depositCents ? '<span class="ad-acc-sub">acompte ' + formatEuros(c.depositCents) + "</span>" : "") + "</td>" +
       "<td>" + contractStatusHtml(c) + "</td>" +
@@ -5677,6 +5689,443 @@
     }
   }
 
+  /* ---------- Clients : fiches, dates à retenir, relances ---------- */
+
+  var clientsState = { data: null, query: "", filter: "all", creating: false };
+  var CL_DATE_KINDS = [
+    ["birthday", "Naissance d'un enfant", "Prénom"],
+    ["wedding", "Mariage", "Prénoms du couple"],
+    ["other", "Autre date", "Nom de la date"],
+  ];
+
+  function clHref(email) { return "#/clients/" + encodeURIComponent(email); }
+  // Lien discret vers la fiche d'un client, depuis les autres écrans.
+  function clLink(name, email) {
+    return email ? '<a class="ad-cl-link" href="' + clHref(email) + '">' + esc(name || email) + "</a>" : esc(name || "");
+  }
+
+  function clInitials(name) {
+    var words = String(name || "?").replace(/[^\p{L}\s-]/gu, " ").trim().split(/[\s-]+/).filter(Boolean);
+    return ((words[0] || "?").charAt(0) + (words.length > 1 ? words[words.length - 1].charAt(0) : "")).toUpperCase();
+  }
+  function clAvatar(name, big) {
+    return '<span class="ad-cl-avatar' + (big ? " ad-cl-avatar-lg" : "") + '" aria-hidden="true">' + esc(clInitials(name)) + "</span>";
+  }
+
+  // « aujourd'hui », « hier », « il y a 3 jours », « il y a 2 mois »…
+  function clAgo(ts) {
+    if (!ts) return "—";
+    var days = Math.floor((Date.now() / 1000 - ts) / 86400);
+    if (days < 0) return clIn(-days);
+    if (days === 0) return "aujourd'hui";
+    if (days === 1) return "hier";
+    if (days < 30) return "il y a " + days + " jours";
+    var months = Math.round(days / 30.4);
+    if (months < 12) return "il y a " + months + " mois";
+    var years = Math.floor(days / 365);
+    var rest = Math.round((days - years * 365) / 30.4);
+    return "il y a " + years + " an" + (years > 1 ? "s" : "") + (rest >= 2 ? " et " + rest + " mois" : "");
+  }
+  function clIn(days) {
+    return days === 0 ? "aujourd'hui" : days === 1 ? "demain" : "dans " + days + " jours";
+  }
+  function clDay(isoDate, withWeekday) {
+    return new Date(isoDate + "T12:00:00Z").toLocaleDateString("fr-BE", { weekday: withWeekday ? "long" : undefined, day: "numeric", month: "long", timeZone: "Europe/Brussels" });
+  }
+  function clWhenChip(next) {
+    var soon = next.daysUntil <= 21;
+    return '<span class="ad-cl-when' + (soon ? " ad-cl-when-soon" : "") + '">' + esc(clIn(next.daysUntil)) + "</span>";
+  }
+
+  function clRemindRowHtml(item) {
+    return '<li class="ad-cl-remind">' + clAvatar(item.name) +
+      '<div class="ad-cl-remind-main"><strong>' + esc(item.next.title) + "</strong>" +
+      '<span class="ad-hint">' + clLink(item.name, item.email) + " · " + esc(clDay(item.next.date, true)) + "</span></div>" +
+      clWhenChip(item.next) +
+      '<a class="ad-btn ad-btn-small ad-btn-primary" href="' + esc(item.mailto) + '">Proposer une séance</a></li>';
+  }
+  function clDormantRowHtml(item) {
+    return '<li class="ad-cl-remind">' + clAvatar(item.name) +
+      '<div class="ad-cl-remind-main"><strong>' + clLink(item.name, item.email) + "</strong>" +
+      '<span class="ad-hint">Dernière séance ' + esc(clAgo(item.lastSessionAt)) + "</span></div>" +
+      '<span class="ad-cl-when">À recontacter</span>' +
+      '<a class="ad-btn ad-btn-small" href="' + esc(item.mailto) + '">Écrire</a></li>';
+  }
+
+  function clMatches(c, query) {
+    if (!query) return true;
+    var q = query.toLowerCase();
+    if ((c.name || "").toLowerCase().indexOf(q) !== -1 || c.email.indexOf(q) !== -1) return true;
+    // Numéro tapé à la belge (0470…) ou à l'international (+32 470…) : on
+    // compare les chiffres, sans le 0 initial ni l'indicatif.
+    var digits = q.replace(/\D/g, "").replace(/^0+/, "");
+    var phone = (c.phone || "").replace(/\D/g, "");
+    return digits.length >= 3 && /^[\d\s+().\/-]+$/.test(q) && phone.indexOf(digits) !== -1;
+  }
+
+  function clRowsHtml(list) {
+    if (!list.length) return '<tr><td colspan="5" class="ad-cl-none">Aucun client ne correspond à cette recherche.</td></tr>';
+    return list.map(function (c) {
+      return '<tr class="ad-cl-row" tabindex="0" data-cl-email="' + esc(c.email) + '">' +
+        '<td><div class="ad-cl-who">' + clAvatar(c.name) + '<div><span class="ad-acc-name">' + esc(c.name) + '</span><span class="ad-acc-sub">' + esc(c.email) + "</span></div></div></td>" +
+        '<td class="ad-num">' + (c.sessions || "—") + "</td>" +
+        '<td class="ad-num">' + (c.paidCents ? formatEuros(c.paidCents) : "—") + "</td>" +
+        "<td>" + esc(c.upcomingSessionAt ? "Séance " + clAgo(c.upcomingSessionAt).replace("dans", "dans") : clAgo(c.lastAt)) + "</td>" +
+        "<td>" + (c.nextDate ? '<span class="ad-cl-date">' + esc(c.nextDate.next.title) + "</span> " + clWhenChip(c.nextDate.next) : '<span class="ad-hint">—</span>') + "</td></tr>";
+    }).join("");
+  }
+
+  async function renderClients(skipHash) {
+    if (!skipHash && location.hash !== "#/clients") history.pushState(null, "", "#/clients");
+    setActiveTab("clients");
+    if (!clientsState.data) el.view.innerHTML = '<p class="ad-loading">Chargement…</p>';
+    var data;
+    try {
+      data = await api("GET", "/clients");
+    } catch (err) {
+      el.view.innerHTML = '<div class="ad-error-panel"><h2>Clients indisponibles</h2><p>' + esc(err.message) + "</p></div>";
+      return;
+    }
+    if (location.hash !== "#/clients") return;
+    clientsState.data = data;
+    updateClientsBadge(data);
+    paintClients();
+  }
+
+  // Pastille du menu : le nombre de clients à relancer dans les trois semaines.
+  function updateClientsBadge(data) {
+    var tab = document.getElementById("ad-tab-clients");
+    if (!tab) return;
+    var due = (data.upcoming || []).filter(function (u) { return u.next.daysUntil <= 21; }).length;
+    var badge = tab.querySelector(".ad-tab-count");
+    if (!due) { if (badge) badge.remove(); return; }
+    if (!badge) {
+      badge = document.createElement("span");
+      badge.className = "ad-tab-count";
+      tab.appendChild(badge);
+    }
+    badge.textContent = String(due);
+    badge.setAttribute("aria-label", due + " client" + (due > 1 ? "s" : "") + " à relancer");
+  }
+
+  function paintClients() {
+    var data = clientsState.data;
+    var list = data.clients.filter(function (c) {
+      if (clientsState.filter === "upcoming" && !c.upcomingSessionAt) return false;
+      if (clientsState.filter === "dates" && !c.nextDate) return false;
+      return clMatches(c, clientsState.query);
+    });
+    var remindCount = data.upcoming.length + data.dormant.length;
+    el.view.innerHTML =
+      '<header class="ad-detail-header"><div><h2>Clients</h2>' +
+      '<p class="ad-hint">Tous ceux qui vous ont confié une séance, réunis par adresse e-mail : galeries, réservations, contrats et paiements. Ajoutez vos notes et les dates à retenir, Holypixx vous prévient au bon moment.</p></div>' +
+      '<button type="button" class="ad-btn ad-btn-primary" id="ad-cl-new">+ Nouveau client</button></header>' +
+      (clientsState.creating
+        ? '<section id="ad-cl-create"><div class="ad-section-header"><h3>Nouveau client</h3></div>' +
+          '<form id="ad-cl-create-form" class="ad-cl-create" novalidate>' +
+          '<label class="ad-field"><span>Nom</span><input name="name" maxlength="120" required placeholder="ex. Camille Dubois" autocomplete="off" /></label>' +
+          '<label class="ad-field"><span>E-mail</span><input type="email" name="email" maxlength="200" required placeholder="camille@exemple.be" autocomplete="off" /></label>' +
+          '<label class="ad-field"><span>Téléphone <em>(facultatif)</em></span><input type="tel" name="phone" maxlength="30" autocomplete="off" /></label>' +
+          '<div class="ad-sc-actions"><button type="submit" class="ad-btn ad-btn-primary">Créer la fiche</button><button type="button" class="ad-btn" id="ad-cl-create-cancel">Annuler</button></div>' +
+          "</form></section>"
+        : "") +
+      (remindCount
+        ? '<section id="ad-cl-reminders"><div class="ad-section-header"><h3>À relancer</h3><span class="ad-hint">' + remindCount + " suggestion" + (remindCount > 1 ? "s" : "") + "</span></div>" +
+          '<ul class="ad-cl-reminds">' + data.upcoming.map(clRemindRowHtml).join("") + data.dormant.map(clDormantRowHtml).join("") + "</ul>" +
+          '<p class="ad-hint ad-cl-reminds-note">« Proposer une séance » ouvre votre messagerie avec un message déjà rédigé' + (data.bookingUrl ? ", lien de réservation compris" : "") + ". Vous recevez aussi un e-mail trois semaines avant chaque date.</p></section>"
+        : "") +
+      '<section id="ad-cl-list">' +
+      (data.clients.length
+        ? '<div class="ad-cl-toolbar">' +
+          '<label class="ad-cl-search"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>' +
+          '<input type="search" id="ad-cl-search" placeholder="Rechercher un nom, un e-mail, un numéro" value="' + esc(clientsState.query) + '" aria-label="Rechercher un client" /><kbd>/</kbd></label>' +
+          '<div class="ad-seg" role="group" aria-label="Filtrer">' +
+          [["all", "Tous (" + data.clients.length + ")"], ["upcoming", "Séance prévue"], ["dates", "Avec date à retenir"]].map(function (f) {
+            return '<button type="button" class="ad-seg-btn" data-cl-filter="' + f[0] + '" aria-pressed="' + (clientsState.filter === f[0]) + '">' + esc(f[1]) + "</button>";
+          }).join("") + "</div></div>" +
+          '<div class="ad-table-wrap"><table class="ad-table ad-cl-table"><thead><tr><th>Client</th><th class="ad-num">Séances</th><th class="ad-num">Encaissé</th><th>Activité</th><th>Prochaine date</th></tr></thead>' +
+          '<tbody id="ad-cl-rows">' + clRowsHtml(list) + "</tbody></table></div>"
+        : '<div class="ad-cl-empty">' + clAvatar("?") + "<h3>Vos clients arrivent ici tout seuls</h3>" +
+          "<p>Dès votre première galerie, réservation ou devis, chaque client a sa fiche : historique, montants encaissés, notes et dates à retenir. Vous pouvez aussi en créer une à la main.</p></div>") +
+      "</section>";
+    bindClients();
+  }
+
+  function bindClients() {
+    var data = clientsState.data;
+    document.getElementById("ad-cl-new").addEventListener("click", function () {
+      clientsState.creating = true;
+      paintClients();
+      document.querySelector('#ad-cl-create-form [name="name"]').focus();
+    });
+    var createForm = document.getElementById("ad-cl-create-form");
+    if (createForm) {
+      document.getElementById("ad-cl-create-cancel").addEventListener("click", function () { clientsState.creating = false; paintClients(); });
+      createForm.addEventListener("submit", async function (e) {
+        e.preventDefault();
+        var f = createForm.elements;
+        try {
+          var detail = await api("POST", "/clients", { create: true, name: f.name.value, email: f.email.value, phone: f.phone.value });
+          clientsState.creating = false;
+          toast("Fiche créée pour " + detail.client.name + ".");
+          location.hash = clHref(detail.client.email);
+        } catch (err) {
+          if (err.status === 409 && /déjà une fiche/.test(err.message)) {
+            clientsState.creating = false;
+            toast("Ce client a déjà une fiche : la voici.");
+            location.hash = clHref(f.email.value.trim().toLowerCase());
+            return;
+          }
+          toast(err.message, true);
+        }
+      });
+    }
+    var search = document.getElementById("ad-cl-search");
+    if (search) {
+      search.addEventListener("input", function () {
+        clientsState.query = search.value.trim();
+        var list = data.clients.filter(function (c) {
+          if (clientsState.filter === "upcoming" && !c.upcomingSessionAt) return false;
+          if (clientsState.filter === "dates" && !c.nextDate) return false;
+          return clMatches(c, clientsState.query);
+        });
+        document.getElementById("ad-cl-rows").innerHTML = clRowsHtml(list);
+      });
+      // Échap vide la recherche, puis rend la main au clavier.
+      search.addEventListener("keydown", function (e) {
+        if (e.key !== "Escape") return;
+        e.preventDefault();
+        if (search.value) { search.value = ""; search.dispatchEvent(new Event("input")); }
+        else search.blur();
+      });
+    }
+    el.view.querySelectorAll("[data-cl-filter]").forEach(function (b) {
+      b.addEventListener("click", function () { clientsState.filter = b.getAttribute("data-cl-filter"); paintClients(); });
+    });
+    var rows = document.getElementById("ad-cl-rows");
+    if (rows) {
+      var open = function (e) {
+        var row = e.target.closest("tr[data-cl-email]");
+        if (!row || e.target.closest("a")) return;
+        location.hash = clHref(row.getAttribute("data-cl-email"));
+      };
+      rows.addEventListener("click", open);
+      rows.addEventListener("keydown", function (e) { if (e.key === "Enter") open(e); });
+    }
+  }
+
+  // « / » place le curseur dans la recherche, comme dans la plupart des outils.
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "/" || e.metaKey || e.ctrlKey || e.altKey) return;
+    var target = e.target;
+    if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT" || target.isContentEditable)) return;
+    var search = document.getElementById("ad-cl-search");
+    if (search) { e.preventDefault(); search.focus(); search.select(); }
+  });
+
+  /* Fiche d'un client */
+
+  var CL_HISTORY = {
+    gallery: ["Galerie", '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/></svg>'],
+    booking: ["Séance réservée", '<svg viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="16.5" rx="2"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/></svg>'],
+    contract: ["Contrat", '<svg viewBox="0 0 24 24"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h3"/></svg>'],
+    payment: ["Paiement", '<svg viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h4"/></svg>'],
+  };
+
+  function clHistoryHtml(items) {
+    if (!items.length) return '<p class="ad-hint">Rien encore : l\'historique se remplit à chaque galerie, réservation, contrat ou paiement.</p>';
+    return '<ol class="ad-cl-history">' + items.map(function (h) {
+      var kind = CL_HISTORY[h.type];
+      var title = h.type === "gallery" ? '<a href="#/g/' + encodeURIComponent(h.slug) + '">' + esc(h.title) + "</a>"
+        : h.type === "contract" ? '<a href="#/contrats">' + esc(h.title) + "</a> <span class=\"ad-hint\">n° " + esc(h.number) + "</span>"
+        : h.type === "payment" ? esc(h.kind === "print" ? "Tirages" : "Suppléments") + " · " + (h.slug ? '<a href="#/g/' + encodeURIComponent(h.slug) + '">' + esc(h.title) + "</a>" : esc(h.title || ""))
+        : esc(h.title);
+      var status = h.type === "booking" && h.status === "cancelled" ? ' <span class="ad-badge ad-badge-expired">Annulée</span>'
+        : h.type === "contract" ? " " + contractStatusHtml({ status: h.status, depositCents: h.status === "paid" ? 1 : 0 })
+        : "";
+      return '<li class="ad-cl-event ad-cl-event-' + h.type + '"><span class="ad-cl-event-ico" aria-hidden="true">' + kind[1] + "</span>" +
+        '<div class="ad-cl-event-main"><span class="ad-cl-event-kind">' + esc(kind[0]) + " · " + esc(formatDate(h.at)) + "</span>" +
+        '<span class="ad-cl-event-title">' + title + status + "</span></div>" +
+        (h.amountCents ? '<span class="ad-cl-event-amount">' + formatEuros(h.amountCents) + "</span>" : "") + "</li>";
+    }).join("") + "</ol>";
+  }
+
+  function clDatesHtml(dates) {
+    var kindLabel = {};
+    CL_DATE_KINDS.forEach(function (k) { kindLabel[k[0]] = k[1]; });
+    return (dates.length
+      ? '<ul class="ad-cl-dates">' + dates.map(function (d) {
+          return '<li class="ad-cl-dateitem" data-cld="' + esc(d.id) + '">' +
+            '<div class="ad-cl-dateitem-main"><strong>' + esc(d.next ? d.next.title : d.label) + "</strong>" +
+            '<span class="ad-hint">' + esc(kindLabel[d.kind] || "") + " · " + esc(new Date(d.date + "T12:00:00Z").toLocaleDateString("fr-BE", { day: "numeric", month: "long", year: "numeric" })) +
+            (d.next ? " · prochaine fois le " + esc(clDay(d.next.date, true)) : "") + "</span></div>" +
+            (d.next ? clWhenChip(d.next) : "") +
+            '<label class="ad-sc-toggle" title="Recevoir un e-mail trois semaines avant"><input type="checkbox" data-cld-remind ' + (d.remind ? "checked" : "") + " /> Me prévenir</label>" +
+            (d.mailto ? '<a class="ad-btn ad-btn-small" href="' + esc(d.mailto) + '">Proposer une séance</a>' : "") +
+            '<button type="button" class="ad-btn ad-btn-small ad-btn-icon" data-cld-remove aria-label="Retirer cette date">×</button></li>';
+        }).join("") + "</ul>"
+      : '<p class="ad-hint">Une naissance, un anniversaire de mariage… Notez-le ici : Holypixx vous prévient trois semaines avant, avec un message prêt à envoyer.</p>') +
+      '<form id="ad-cl-date-form" class="ad-cl-date-form" novalidate>' +
+      '<label class="ad-field"><span>Type</span><select name="kind">' + CL_DATE_KINDS.map(function (k) { return '<option value="' + k[0] + '">' + esc(k[1]) + "</option>"; }).join("") + "</select></label>" +
+      '<label class="ad-field"><span id="ad-cl-label-name">' + esc(CL_DATE_KINDS[0][2]) + '</span><input name="label" maxlength="80" required autocomplete="off" /></label>' +
+      '<label class="ad-field"><span>Date</span><input type="date" name="date" required /></label>' +
+      '<button type="submit" class="ad-btn">Ajouter</button></form>';
+  }
+
+  async function renderClientDetail(email, skipHash) {
+    var hash = clHref(email);
+    if (!skipHash && location.hash !== hash) history.pushState(null, "", hash);
+    setActiveTab("clients");
+    el.view.innerHTML = '<p class="ad-loading">Chargement…</p>';
+    var data;
+    try {
+      data = await api("GET", "/clients/detail?email=" + encodeURIComponent(email));
+    } catch (err) {
+      el.view.innerHTML = '<button type="button" class="ad-back" id="ad-cl-back">&larr; Tous les clients</button><div class="ad-error-panel"><h2>Fiche introuvable</h2><p>' + esc(err.message) + "</p></div>";
+      document.getElementById("ad-cl-back").addEventListener("click", function () { renderClients(); });
+      return;
+    }
+    paintClientDetail(data);
+  }
+
+  function paintClientDetail(data) {
+    var c = data.client;
+    el.view.innerHTML =
+      '<button type="button" class="ad-back" id="ad-cl-back">&larr; Tous les clients</button>' +
+      '<header class="ad-cl-head">' + clAvatar(c.name, true) +
+      '<div class="ad-cl-head-main"><h2>' + esc(c.name) + "</h2>" +
+      '<p class="ad-cl-contact"><span>' + esc(c.email) + '</span><button type="button" class="ad-link-btn" id="ad-cl-copy">Copier</button>' +
+      (c.phone ? '<span aria-hidden="true">·</span><a href="tel:' + esc(c.phone.replace(/\s/g, "")) + '">' + esc(c.phone) + "</a>" : "") + "</p></div>" +
+      '<div class="ad-cl-head-actions">' +
+      '<a class="ad-btn" href="' + esc(data.contactMailto) + '">Écrire</a>' +
+      '<button type="button" class="ad-btn" id="ad-cl-gallery">Nouvelle galerie</button>' +
+      '<button type="button" class="ad-btn ad-btn-primary" id="ad-cl-quote">Nouveau devis</button></div></header>' +
+      '<div class="ad-stats">' +
+      salesStatHtml("Client depuis", c.firstAt ? new Date(c.firstAt * 1000).toLocaleDateString("fr-BE", { month: "long", year: "numeric" }) : "—", c.firstAt ? clAgo(c.firstAt) : "") +
+      salesStatHtml("Séances", String(c.sessions), c.galleries ? c.galleries + " galerie" + (c.galleries > 1 ? "s" : "") : "") +
+      salesStatHtml("Encaissé", c.paidCents ? formatEuros(c.paidCents) : "—", "Suppléments, tirages et acomptes") +
+      salesStatHtml("Prochaine séance", c.upcomingSessionAt ? new Date(c.upcomingSessionAt * 1000).toLocaleDateString("fr-BE", { day: "numeric", month: "short", timeZone: "Europe/Brussels" }) : "—",
+        c.upcomingSessionAt ? clAgo(c.upcomingSessionAt) : (c.lastSessionAt ? "Dernière " + clAgo(c.lastSessionAt) : "")) +
+      "</div>" +
+      '<div class="ad-cl-grid">' +
+      '<div class="ad-cl-col">' +
+      '<section><div class="ad-section-header"><h3>Dates à retenir</h3></div>' + clDatesHtml(data.dates) + "</section>" +
+      '<section><div class="ad-section-header"><h3>Historique</h3></div>' + clHistoryHtml(data.history) + "</section>" +
+      "</div>" +
+      '<div class="ad-cl-col">' +
+      '<section><div class="ad-section-header"><h3>Notes</h3><span class="ad-cl-saved" id="ad-cl-saved" aria-live="polite"></span></div>' +
+      '<textarea class="ad-cl-notes" id="ad-cl-notes" rows="9" maxlength="10000" placeholder="Prénoms et âges des enfants, préférences, allergies, le chien qui s\'appelle Pixel…">' + esc(c.notes || "") + "</textarea>" +
+      '<p class="ad-hint">Enregistrées automatiquement, visibles par vous seul.</p></section>' +
+      '<section><div class="ad-section-header"><h3>Coordonnées</h3></div><form id="ad-cl-info" novalidate>' +
+      '<label class="ad-field"><span>Nom</span><input name="name" maxlength="120" value="' + esc(c.name) + '" /></label>' +
+      '<label class="ad-field"><span>Téléphone</span><input type="tel" name="phone" maxlength="30" value="' + esc(c.phone || "") + '" /></label>' +
+      '<button type="submit" class="ad-btn">Enregistrer</button></form>' +
+      (c.recordId ? '<details class="ad-danger-zone"><summary>Effacer mes notes sur ce client</summary><p class="ad-hint">Retire le téléphone, les notes et les dates à retenir. Ses galeries, réservations et contrats restent.</p>' +
+        '<button type="button" class="ad-btn ad-btn-danger ad-btn-small" id="ad-cl-erase">Effacer</button></details>' : "") +
+      "</section></div></div>";
+    bindClientDetail(data);
+  }
+
+  function bindClientDetail(data) {
+    var c = data.client;
+    var refresh = function (fresh) { paintClientDetail(fresh); };
+    document.getElementById("ad-cl-back").addEventListener("click", function () { renderClients(); });
+    document.getElementById("ad-cl-copy").addEventListener("click", function () {
+      navigator.clipboard.writeText(c.email).then(function () { toast("Adresse copiée."); }).catch(function () { toast("Impossible de copier l'adresse.", true); });
+    });
+    document.getElementById("ad-cl-quote").addEventListener("click", function () {
+      contractsState.editing = "new";
+      contractsState.prefill = { clientName: c.name, clientEmail: c.email };
+      renderContracts();
+    });
+    document.getElementById("ad-cl-gallery").addEventListener("click", function () {
+      openCreateModal();
+      var form = document.getElementById("ad-create-form");
+      if (form.elements.clientName) form.elements.clientName.value = c.name;
+      if (form.elements.clientEmail) form.elements.clientEmail.value = c.email;
+      if (form.elements.title) form.elements.title.focus();
+    });
+
+    // Notes : enregistrement automatique, une seconde après la dernière frappe.
+    var notes = document.getElementById("ad-cl-notes");
+    var saved = document.getElementById("ad-cl-saved");
+    var timer = null;
+    var lastSaved = notes.value;
+    var saveNotes = async function () {
+      clearTimeout(timer);
+      if (notes.value === lastSaved) return;
+      var value = notes.value;
+      saved.textContent = "Enregistrement…";
+      saved.className = "ad-cl-saved";
+      try {
+        await api("POST", "/clients", { email: c.email, notes: value });
+        lastSaved = value;
+        saved.textContent = "Enregistré à " + new Date().toLocaleTimeString("fr-BE", { hour: "2-digit", minute: "2-digit" });
+        saved.className = "ad-cl-saved ad-cl-saved-ok";
+      } catch (err) {
+        saved.textContent = "Non enregistré : " + err.message;
+        saved.className = "ad-cl-saved ad-cl-saved-error";
+      }
+    };
+    notes.addEventListener("input", function () { clearTimeout(timer); saved.textContent = ""; timer = setTimeout(saveNotes, 1000); });
+    notes.addEventListener("blur", saveNotes);
+
+    document.getElementById("ad-cl-info").addEventListener("submit", async function (e) {
+      e.preventDefault();
+      var f = e.currentTarget.elements;
+      try {
+        refresh(await api("POST", "/clients", { email: c.email, name: f.name.value, phone: f.phone.value }));
+        toast("Coordonnées enregistrées.");
+      } catch (err) {
+        toast(err.message, true);
+      }
+    });
+
+    var dateForm = document.getElementById("ad-cl-date-form");
+    dateForm.elements.kind.addEventListener("change", function () {
+      var kind = CL_DATE_KINDS.filter(function (k) { return k[0] === dateForm.elements.kind.value; })[0];
+      document.getElementById("ad-cl-label-name").textContent = kind[2];
+    });
+    dateForm.addEventListener("submit", async function (e) {
+      e.preventDefault();
+      var f = dateForm.elements;
+      try {
+        var fresh = await api("POST", "/clients/dates", { email: c.email, kind: f.kind.value, label: f.label.value, date: f.date.value });
+        refresh(fresh);
+        toast("Date ajoutée : vous serez prévenu trois semaines avant.");
+      } catch (err) {
+        toast(err.message, true);
+      }
+    });
+    el.view.querySelectorAll("[data-cld]").forEach(function (row) {
+      var id = row.getAttribute("data-cld");
+      row.querySelector("[data-cld-remind]").addEventListener("change", async function (e) {
+        try {
+          refresh(await api("POST", "/clients/dates/" + encodeURIComponent(id), { remind: e.target.checked }));
+          toast(e.target.checked ? "Rappel activé." : "Rappel désactivé.");
+        } catch (err) { toast(err.message, true); }
+      });
+      row.querySelector("[data-cld-remove]").addEventListener("click", async function () {
+        try {
+          refresh(await api("DELETE", "/clients/dates/" + encodeURIComponent(id)));
+          toast("Date retirée.");
+        } catch (err) { toast(err.message, true); }
+      });
+    });
+    var erase = document.getElementById("ad-cl-erase");
+    if (erase) {
+      erase.addEventListener("click", function () {
+        confirmAction("Effacer le téléphone, les notes et les dates à retenir de " + c.name + " ?", async function () {
+          try {
+            await api("DELETE", "/clients?email=" + encodeURIComponent(c.email));
+            toast("Notes effacées.");
+            renderClientDetail(c.email, true);
+          } catch (err) { toast(err.message, true); }
+        });
+      });
+    }
+  }
+
   /* ---------- Démarrage et navigation ---------- */
 
   function routeFromHash() {
@@ -5685,6 +6134,8 @@
     else if (location.hash === "#/detect") renderDetect(true);
     else if (location.hash === "#/ventes") renderSales(true);
     else if (location.hash === "#/reservations") renderBooking(true);
+    else if (location.hash === "#/clients") renderClients(true);
+    else if (/^#\/clients\/.+/.test(location.hash)) renderClientDetail(decodeURIComponent(location.hash.slice(10)), true);
     else if (location.hash === "#/contrats") renderContracts(true);
     else if (location.hash === "#/portfolio") renderPortfolio(true);
     else if (location.hash.indexOf("#/facturation") === 0) renderBilling(true);
@@ -5703,7 +6154,11 @@
       state.config = cfg;
     }).catch(function () {
       /* la vue liste ne dépend pas de la configuration ; on continue avec les valeurs par défaut */
-    }).then(routeFromHash);
+    }).then(function () {
+      routeFromHash();
+      // La pastille « à relancer » s'affiche dès l'ouverture, sans attendre l'onglet.
+      if (location.hash.indexOf("#/clients") !== 0) api("GET", "/clients").then(updateClientsBadge).catch(function () {});
+    });
   }
 
   // Confirmation d'un changement d'adresse e-mail (voir renderSettings) :
