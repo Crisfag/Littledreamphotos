@@ -837,6 +837,18 @@ async function handleApi(req, res, url) {
     }
   }
 
+  // /local/clients… — fiches clients et dates à relancer : relais JSON vers
+  // /api/admin/clients…, en gardant la requête (?email=…).
+  if (parts[0] === "clients" && ["GET", "POST", "DELETE"].includes(req.method)) {
+    const path = "/api/admin/clients" + (parts.length > 1 ? "/" + parts.slice(1).map(encodeURIComponent).join("/") : "") + url.search;
+    try {
+      const body = req.method === "POST" ? JSON.parse((await readBody(req)).toString("utf8") || "{}") : undefined;
+      return json(res, 200, await client.request(req.method, path, body));
+    } catch (err) {
+      return relayError(res, err, "Les fiches clients n'ont pas pu répondre");
+    }
+  }
+
   if (parts[0] === "portfolio") {
     const base = "/api/admin/portfolio";
     try {
@@ -1533,7 +1545,7 @@ const server = createServer(async (req, res) => {
   const url = new URL(req.url, `http://${HOST}`);
   try {
     if (url.pathname.startsWith("/local/")) {
-      await handleApi(req, res, { pathname: url.pathname.slice("/local".length) || "/" });
+      await handleApi(req, res, { pathname: url.pathname.slice("/local".length) || "/", search: url.search });
     } else {
       await serveStatic(req, res, url.pathname);
     }

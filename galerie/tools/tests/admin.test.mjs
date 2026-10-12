@@ -110,9 +110,9 @@ check("l'onglet Galeries est actif par défaut, à l'arrivée sur le tableau de 
   const last = await page.locator("#ad-tab-settings").boundingBox();
   check("menu vertical à gauche, une case avec icône par section",
         nav.x === 0 && view.x >= nav.x + nav.width && last.y > first.y && Math.abs(last.x - first.x) < 1 &&
-        // 9 sections, 10 avec « Écoles & clubs » une fois le module ouvert.
+        // 10 sections, 11 avec « Écoles & clubs » une fois le module ouvert.
         await page.locator("#ad-tabs .ad-tab:not([hidden]) .ad-tab-icon svg").count() === await page.locator("#ad-tabs .ad-tab:not([hidden])").count() &&
-        [9, 10].includes(await page.locator("#ad-tabs .ad-tab:not([hidden])").count()),
+        [10, 11].includes(await page.locator("#ad-tabs .ad-tab:not([hidden])").count()),
         `menu ${nav.width}px, contenu à ${view.x}px`);
 }
 

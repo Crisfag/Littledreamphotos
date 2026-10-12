@@ -1046,6 +1046,40 @@ npx wrangler d1 execute galerie-protegee --remote --file=migrations/2026-10-cont
 npm run deploy
 ```
 
+### Fiches clients et relances
+
+Onglet **Clients** (toutes les formules) : une fiche par adresse e-mail,
+construite toute seule à partir des galeries, réservations, contrats et
+paiements (les établissements scolaires restent à part).
+
+- **Liste** : séances, montants encaissés, dernière activité, prochaine
+  date à retenir ; recherche par nom, e-mail ou téléphone (touche `/`,
+  `Échap` pour vider), filtres « Séance prévue » et « Avec date à retenir ».
+- **À relancer**, en tête de liste : les dates des trois prochaines
+  semaines (« Léa aura 1 an », « 10 ans de mariage : Julie & Thomas ») et
+  les clients sans séance depuis plus de onze mois. « Proposer une
+  séance » ouvre la messagerie avec un message déjà rédigé, lien de
+  réservation compris. La pastille du menu compte les relances proches.
+- **Fiche** (`#/clients/<e-mail>`) : historique, téléphone, notes
+  enregistrées automatiquement, dates à retenir (naissance d'un enfant,
+  mariage, autre), boutons « Nouveau devis » et « Nouvelle galerie »
+  préremplis. Les noms de clients des galeries, réservations et contrats
+  mènent à leur fiche.
+- **Rappel par e-mail** au photographe trois semaines avant chaque date
+  (tâche planifiée quotidienne, une fois par an et par date, désactivable
+  date par date).
+
+Effacer ses notes sur un client retire le téléphone, les notes et les
+dates ; l'historique (galeries, réservations, contrats) reste.
+
+**Mise en service sur une base existante** :
+
+```bash
+cd worker
+npx wrangler d1 execute galerie-protegee --remote --file=migrations/2026-10-clients.sql
+npm run deploy
+```
+
 ### Passer Stripe en mode réel
 
 Le Worker ne connaît que des secrets : passer du mode test au mode réel
