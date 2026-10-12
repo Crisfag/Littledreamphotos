@@ -603,10 +603,18 @@ function durationLabel(minutes) {
   return m ? `${h} h ${String(m).padStart(2, "0")}` : `${h} h`;
 }
 
-function bookingDetailsHtml({ offerTitle, when, durationMin, location, depositCents, priceCents }) {
+// « 10 photos retouchées (Complète) » pour une formule à plusieurs tarifs.
+function bookingTierLabel({ photos, tierLabel }) {
+  if (!photos) return "";
+  return `${photos} photo${photos > 1 ? "s" : ""} retouchée${photos > 1 ? "s" : ""}${tierLabel ? ` (${tierLabel})` : ""}`;
+}
+
+function bookingDetailsHtml({ offerTitle, when, durationMin, location, depositCents, priceCents, photos, tierLabel }) {
   const rest = priceCents > depositCents ? priceCents - depositCents : 0;
+  const tier = bookingTierLabel({ photos, tierLabel });
   return [
     `<strong>Séance :</strong> ${escapeHtml(offerTitle)} (${escapeHtml(durationLabel(durationMin))})`,
+    tier ? `<strong>Formule :</strong> ${escapeHtml(tier)}, ${escapeHtml(formatEuros(priceCents))}` : "",
     `<strong>Quand :</strong> ${escapeHtml(when)}`,
     location ? `<strong>Où :</strong> ${escapeHtml(location)}` : "",
     depositCents ? `<strong>Acompte réglé :</strong> ${escapeHtml(formatEuros(depositCents))}` : "",
@@ -615,10 +623,12 @@ function bookingDetailsHtml({ offerTitle, when, durationMin, location, depositCe
   ].filter(Boolean).join("<br>");
 }
 
-function bookingDetailsText({ offerTitle, when, durationMin, location, depositCents, priceCents }) {
+function bookingDetailsText({ offerTitle, when, durationMin, location, depositCents, priceCents, photos, tierLabel }) {
   const rest = priceCents > depositCents ? priceCents - depositCents : 0;
+  const tier = bookingTierLabel({ photos, tierLabel });
   return [
     `Séance : ${offerTitle} (${durationLabel(durationMin)})`,
+    tier ? `Formule : ${tier}, ${formatEuros(priceCents)}` : "",
     `Quand : ${when}`,
     location ? `Où : ${location}` : "",
     depositCents ? `Acompte réglé : ${formatEuros(depositCents)}` : "",

@@ -1530,3 +1530,26 @@ main section > p, .ad-share > p { max-width: 75ch; }
 @media (prefers-reduced-motion: reduce) {
   .ad-cl-remind, .ad-cl-link, .ad-cl-search input, .ad-cl-notes { transition: none; }
 }
+
+/* Formule : prix unique ou plusieurs tarifs selon le nombre de photos. */
+.ad-bk-pricing { display: grid; gap: .85rem; margin-bottom: 1rem; }
+.ad-bk-pricing .ad-seg { justify-self: start; flex-wrap: wrap; }
+.ad-bk-pricing .ad-field, .ad-bk-pricing .ad-field-row { margin: 0; }
+.ad-bk-tiers-box { display: grid; gap: .55rem; padding: .85rem; border-radius: 10px; background: var(--mist); }
+.ad-bk-tiers { display: grid; gap: .45rem; }
+.ad-bk-tier { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr) auto; gap: .45rem; align-items: center; }
+.ad-bk-tier input {
+  width: 100%; min-height: 38px; padding: 0 .65rem; font: inherit; font-size: .9rem; color: var(--ink);
+  background: var(--paper); border: 1px solid var(--line-2); border-radius: 8px;
+}
+.ad-bk-tier input:focus { outline: none; border-color: var(--accent); box-shadow: var(--ring); }
+.ad-bk-tier-num { position: relative; display: block; }
+.ad-bk-tier-num input { padding-right: 3.6rem; text-align: right; font-variant-numeric: tabular-nums; }
+.ad-bk-tier-num span { position: absolute; right: .65rem; top: 50%; transform: translateY(-50%); font-size: .82rem; color: var(--muted); pointer-events: none; }
+.ad-bk-tier-num input[data-tier="price"] { padding-right: 1.8rem; }
+.ad-bk-tiers-box .ad-link-btn { justify-self: start; }
+.ad-bk-tiers-box .ad-hint { margin: 0; font-size: .82rem; }
+@media (max-width: 640px) {
+  .ad-bk-tier { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; }
+  .ad-bk-tier > input[data-tier="label"] { grid-column: 1 / -1; }
+}

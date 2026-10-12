@@ -4,7 +4,7 @@
 //
 //   node tests/booking.test.mjs
 
-import { localToEpoch, seriesTimes, formatSlot, buildIcs } from "../src/booking.js";
+import { localToEpoch, seriesTimes, formatSlot, buildIcs, readTiers, parseTiers, MAX_TIERS } from "../src/booking.js";
 import { PLANS } from "../src/subscription.js";
 import {
   buildBookingConfirmationEmail,
@@ -58,6 +58,21 @@ check("e-mails d'annulation et de rappel", buildBookingCancelledEmail(params).ht
 
 check("réservation en ligne : Essentiel, Pro et Studio, pas Découverte ni Scolaire",
       PLANS.essentiel.features.booking && PLANS.pro.features.booking && PLANS.studio.features.booking && !PLANS.free.features.booking && !PLANS.scolaire.features.booking);
+
+/* ---------- Plusieurs tarifs selon le nombre de photos ---------- */
+
+let tiers = readTiers([{ photos: 15, priceCents: 15000 }, { label: "Complète", photos: 10, priceCents: 12000 }, { photos: 5, priceCents: 9000 }]);
+check("tarifs triés du moins cher au plus cher, nom facultatif gardé",
+      tiers.tiers.map((t) => t.photos).join(",") === "5,10,15" && tiers.tiers[1].label === "Complète" && tiers.tiers[0].label === "", JSON.stringify(tiers));
+check("pas de tarif = prix unique", readTiers(undefined).tiers.length === 0 && readTiers([]).tiers.length === 0);
+check("tarif sans photos ou sans prix refusé",
+      /photos/.test(readTiers([{ photos: 0, priceCents: 9000 }]).error) && /prix/.test(readTiers([{ photos: 5, priceCents: 50 }]).error));
+check("deux tarifs identiques refusés", /identiques/.test(readTiers([{ photos: 5, priceCents: 9000 }, { photos: 5, priceCents: 9500 }]).error || ""));
+check(`${MAX_TIERS} tarifs au maximum`, Boolean(readTiers(Array.from({ length: MAX_TIERS + 1 }, (_, i) => ({ photos: i + 1, priceCents: 1000 + i }))).error));
+check("tarifs illisibles en base : liste vide plutôt qu'une erreur", parseTiers("{oups").length === 0 && parseTiers("").length === 0);
+const tierMail = buildBookingConfirmationEmail({ ...params, photos: 10, tierLabel: "Complète", priceCents: 12000 });
+check("e-mail de confirmation : la formule choisie, son prix", tierMail.html.includes("10 photos retouchées (Complète), 120,00") && tierMail.text.includes("Formule : 10 photos retouchées (Complète)"),
+      tierMail.text.split("\n").find((l) => l.startsWith("Formule")));
 
 const failed = checks.filter((c) => !c.ok).length;
 console.log(`\n${checks.length - failed}/${checks.length} vérifications réussies`);

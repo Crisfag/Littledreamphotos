@@ -230,6 +230,82 @@ try {
   check("supprimer une formule supprime aussi ses créneaux libres",
         admin.offers.length === 1 && !admin.slots.some((s) => s.offerId === familyOffer.id));
 
+  /* ---------- Plusieurs tarifs selon le nombre de photos ---------- */
+
+  await page.click("#ad-tab-galleries");
+  await page.click("#ad-tab-booking");
+  await page.waitForSelector("#ad-bk-offers", { timeout: 10000 });
+  await page.click("#ad-bk-offers details.ad-advanced summary");
+  await page.fill('#ad-bk-offer-form [name="title"]', "Mini-séance au choix");
+  await page.fill('#ad-bk-offer-form [name="durationMin"]', "20");
+  await page.click('#ad-bk-offer-form [data-bk-pricing="tiers"]');
+  check("« Plusieurs tarifs » remplace le prix unique par des lignes de tarifs",
+        await page.isHidden('#ad-bk-offer-form [name="price"]') && (await page.locator("#ad-bk-offer-form .ad-bk-tier").count()) === 2);
+  const tierRow = (i) => page.locator("#ad-bk-offer-form .ad-bk-tier").nth(i);
+  await tierRow(0).locator('[data-tier="photos"]').fill("5");
+  await tierRow(0).locator('[data-tier="price"]').fill("90");
+  await tierRow(1).locator('[data-tier="label"]').fill("Complète");
+  await tierRow(1).locator('[data-tier="photos"]').fill("10");
+  await tierRow(1).locator('[data-tier="price"]').fill("120");
+  await page.click("#ad-bk-tier-add");
+  await tierRow(2).locator('[data-tier="photos"]').fill("15");
+  await tierRow(2).locator('[data-tier="price"]').fill("150");
+  await page.fill('#ad-bk-offer-form [name="deposit"]', "0");
+  await page.click('#ad-bk-offer-form button[type="submit"]');
+  await page.waitForFunction(() => document.querySelectorAll(".ad-bk-offer").length === 2, null, { timeout: 10000 });
+  const tierMeta = (await page.locator(".ad-bk-offer", { hasText: "Mini-séance au choix" }).innerText()).replace(/ /g, " ");
+  check("la formule affiche ses trois tarifs", tierMeta.includes("5 photos 90,00 € / Complète : 10 photos 120,00 € / 15 photos 150,00 €"), tierMeta);
+  admin = await client.request("GET", "/api/admin/booking");
+  const tiered = admin.offers.find((o) => o.title === "Mini-séance au choix");
+  check("côté serveur : tarifs triés, prix de la formule = le moins cher",
+        tiered.tiers.length === 3 && tiered.priceCents === 9000 && tiered.tiers[1].label === "Complète", JSON.stringify(tiered.tiers));
+  const tooHigh = await client.request("POST", `/api/admin/booking/offers/${tiered.id}`, { depositCents: 10000 }).catch((err) => err);
+  check("l'acompte ne peut pas dépasser le tarif le moins cher", tooHigh.status === 400 && /moins cher/.test(tooHigh.message || ""), tooHigh.message);
+  await client.request("POST", `/api/admin/booking/offers/${tiered.id}`, { active: false });
+  await client.request("POST", `/api/admin/booking/offers/${tiered.id}`, { active: true });
+  admin = await client.request("GET", "/api/admin/booking");
+  check("désactiver puis réactiver la formule garde ses tarifs", admin.offers.find((o) => o.id === tiered.id).tiers.length === 3);
+  await client.request("POST", "/api/admin/booking/slots", { offerId: tiered.id, date: DAY_A, times: ["17:00", "17:30"] });
+
+  await visitor.goto(`http://localhost:${SITE_PORT}/portfolio.html?s=${HANDLE}`, { waitUntil: "domcontentloaded" });
+  await visitor.waitForSelector(".pf-bk-offer", { timeout: 15000 });
+  const tierCard = visitor.locator(".pf-bk-offer", { hasText: "Mini-séance au choix" });
+  check("sur le mini-site : « 5 à 15 photos, à partir de 90 € »", (await tierCard.innerText()).replace(/ /g, " ").includes("5 à 15 photos, à partir de 90 €"), await tierCard.innerText());
+  await tierCard.click();
+  await visitor.locator(".pf-bk-time").first().click();
+  check("après le créneau, le client choisit son nombre de photos (le moins cher présélectionné)",
+        await visitor.isVisible("#pf-bk-tier-step") && (await visitor.locator(".pf-bk-tier").count()) === 3 &&
+        (await visitor.getAttribute(".pf-bk-tier >> nth=0", "aria-pressed")) === "true" &&
+        (await visitor.textContent("#pf-bk-step-contact")) === "4. Vos coordonnées");
+  await visitor.locator(".pf-bk-tier").nth(1).click();
+  check("le récapitulatif suit le tarif choisi", (await visitor.textContent("#pf-bk-summary")).replace(/ /g, " ").includes("10 photos, 120 €"),
+        await visitor.textContent("#pf-bk-summary"));
+  await visitor.fill('#pf-bk-form [name="name"]', "Inès Tarif");
+  await visitor.fill('#pf-bk-form [name="email"]', "ines.tarif@example.com");
+  await visitor.click("#pf-bk-submit");
+  await visitor.waitForSelector("#pf-bk-result:not([hidden])", { timeout: 10000 });
+  check("la confirmation reprend la formule choisie",
+        (await visitor.textContent("#pf-bk-result")).replace(/ /g, " ").includes("Votre formule : 10 photos retouchées (Complète), 120 €"), await visitor.textContent("#pf-bk-result"));
+  admin = await client.request("GET", "/api/admin/booking");
+  const tierBooking = admin.bookings.find((b) => b.clientEmail === "ines.tarif@example.com");
+  check("la réservation enregistre le nombre de photos, le nom et le prix du tarif",
+        tierBooking && tierBooking.photos === 10 && tierBooking.tierLabel === "Complète" && tierBooking.priceCents === 12000, JSON.stringify(tierBooking));
+  const freeSlot = (await publicOffers()).find((o) => o.id === tiered.id).slots[0];
+  const badTier = await fetch(`${API}/api/booking/${HANDLE}/book`, {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ slotId: freeSlot.id, tier: 7, name: "X", email: "x@example.com", returnUrl: `http://localhost:${SITE_PORT}/` }),
+  });
+  check("un tarif qui n'existe pas est refusé", badTier.status === 400);
+  await page.click("#ad-tab-galleries");
+  await page.click("#ad-tab-booking");
+  await page.waitForSelector("#ad-bk-upcoming .ad-bk-table", { timeout: 10000 });
+  const tierRowText = (await page.locator("#ad-bk-upcoming tbody tr", { hasText: "Inès Tarif" }).innerText()).replace(/ /g, " ");
+  check("dans « Prochaines séances » : 10 photos (Complète) · 120,00 €", tierRowText.includes("10 photos (Complète) · 120,00 €"), tierRowText);
+  await client.request("POST", `/api/admin/booking/offers/${tiered.id}`, { tiers: [], priceCents: 10000 });
+  admin = await client.request("GET", "/api/admin/booking");
+  const single = admin.offers.find((o) => o.id === tiered.id);
+  check("repasser au prix unique efface les tarifs", single.tiers.length === 0 && single.priceCents === 10000);
+
   check("aucune erreur JavaScript", exceptions.length === 0, exceptions.join(" | "));
 } finally {
   await browser.close();

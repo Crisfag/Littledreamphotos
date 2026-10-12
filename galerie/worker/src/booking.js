@@ -148,6 +148,39 @@ async function expireHolds(env, photographerId) {
     .run();
 }
 
+// Tarifs d'une formule selon le nombre de photos (« 5 photos : 90 € ») :
+// JSON en base, liste vide pour une formule à prix unique.
+export const MAX_TIERS = 6;
+export function parseTiers(raw) {
+  if (!raw) return [];
+  try {
+    const list = typeof raw === "string" ? JSON.parse(raw) : raw;
+    return Array.isArray(list) ? list.filter((t) => t && Number.isInteger(t.photos) && Number.isInteger(t.priceCents)) : [];
+  } catch {
+    return [];
+  }
+}
+
+// Valide les tarifs saisis par le photographe ; triés du moins cher au
+// plus cher (puis par nombre de photos).
+export function readTiers(value) {
+  if (value === undefined || value === null || value === "") return { tiers: [] };
+  if (!Array.isArray(value)) return { error: "Tarifs illisibles" };
+  if (value.length > MAX_TIERS) return { error: `${MAX_TIERS} tarifs au maximum par formule` };
+  const tiers = [];
+  for (const raw of value) {
+    const photos = Math.round(Number(raw && raw.photos));
+    const priceCents = Math.round(Number(raw && raw.priceCents));
+    const label = cleanLine(raw && raw.label, 40);
+    if (!(photos >= 1 && photos <= 999)) return { error: "Indiquez le nombre de photos de chaque tarif (1 à 999)" };
+    if (!(priceCents >= 100 && priceCents <= 1000000)) return { error: "Indiquez le prix de chaque tarif (au moins 1 €)" };
+    if (tiers.some((t) => t.photos === photos && t.label === label)) return { error: `Deux tarifs identiques pour ${photos} photos` };
+    tiers.push({ label, photos, priceCents });
+  }
+  tiers.sort((a, b) => a.priceCents - b.priceCents || a.photos - b.photos);
+  return { tiers };
+}
+
 function offerOut(o) {
   return {
     id: o.id,
@@ -156,6 +189,7 @@ function offerOut(o) {
     durationMin: o.duration_min,
     priceCents: o.price_cents,
     depositCents: o.deposit_cents,
+    tiers: parseTiers(o.tiers),
     location: o.location,
     active: Boolean(o.active),
   };
@@ -254,13 +288,28 @@ async function book(request, env, row, photographer) {
   if ((recent?.n || 0) >= BOOKINGS_PER_VISITOR_PER_HOUR) return fail(429, "Trop de réservations tentées. Réessayez un peu plus tard.");
 
   const slot = await env.DB.prepare(
-    `SELECT s.*, o.title, o.duration_min, o.price_cents, o.deposit_cents, o.location, o.active
+    `SELECT s.*, o.title, o.duration_min, o.price_cents, o.deposit_cents, o.tiers, o.location, o.active
        FROM booking_slots s JOIN booking_offers o ON o.id = s.offer_id
       WHERE s.id = ? AND s.photographer_id = ?`
   ).bind(String(body.slotId || ""), photographer.id).first();
   if (!slot || !slot.active) return fail(404, "Ce créneau n'existe plus");
   if (slot.starts_at <= ts + MIN_NOTICE_SECONDS) return fail(409, "Ce créneau est trop proche pour être réservé en ligne. Contactez directement le studio.");
   if (slot.deposit_cents > 0 && !stripeReady(photographer)) return fail(409, "Le paiement en ligne de ce studio n'est pas disponible pour le moment.");
+
+  // Formule à plusieurs tarifs : le client choisit le sien (une page plus
+  // ancienne qui n'envoie pas de choix réserve le premier, le moins cher).
+  const tiers = parseTiers(slot.tiers);
+  let priceCents = slot.price_cents;
+  let photos = null;
+  let tierLabel = "";
+  if (tiers.length) {
+    const index = body.tier === undefined || body.tier === null || body.tier === "" ? 0 : Number(body.tier);
+    const tier = Number.isInteger(index) ? tiers[index] : null;
+    if (!tier) return fail(400, "Choisissez votre formule");
+    priceCents = tier.priceCents;
+    photos = tier.photos;
+    tierLabel = tier.label || "";
+  }
 
   await expireHolds(env, photographer.id);
   const id = newId("bkg");
@@ -269,12 +318,12 @@ async function book(request, env, row, photographer) {
   try {
     await env.DB.prepare(
       `INSERT INTO bookings (id, photographer_id, slot_id, offer_id, offer_title, location, starts_at, duration_min,
-         price_cents, deposit_cents, fee_cents, client_name, client_email, client_phone, message, status, hold_until,
+         price_cents, deposit_cents, fee_cents, photos, tier_label, client_name, client_email, client_phone, message, status, hold_until,
          ip_hash, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).bind(
       id, photographer.id, slot.id, slot.offer_id, slot.title, slot.location, slot.starts_at, slot.duration_min,
-      slot.price_cents, slot.deposit_cents, feeCents, name, email, phone.phone, message,
+      priceCents, slot.deposit_cents, feeCents, photos, tierLabel, name, email, phone.phone, message,
       withDeposit ? "pending" : "confirmed", withDeposit ? ts + HOLD_SECONDS : null, ipHash, ts
     ).run();
   } catch (err) {
@@ -292,7 +341,7 @@ async function book(request, env, row, photographer) {
   let session;
   try {
     session = await createCheckoutSession(env, photographer.stripe_account_id, {
-      label: `Acompte — ${slot.title} — ${formatSlot(slot.starts_at)}`,
+      label: `Acompte — ${slot.title}${photos ? ` (${photos} photos)` : ""} — ${formatSlot(slot.starts_at)}`,
       unitAmountCents: slot.deposit_cents,
       quantity: 1,
       successUrl: returnUrl(base, { reservation: id, session_id: "{CHECKOUT_SESSION_ID}" }),
@@ -322,6 +371,8 @@ function reservationOut(b) {
     location: b.location,
     depositCents: b.deposit_cents,
     priceCents: b.price_cents,
+    photos: b.photos ?? null,
+    tierLabel: b.tier_label || "",
   };
 }
 
@@ -392,6 +443,8 @@ function emailParams(env, portfolio, photographer, booking) {
     location: booking.location,
     depositCents: booking.deposit_cents,
     priceCents: booking.price_cents,
+    photos: booking.photos ?? null,
+    tierLabel: booking.tier_label || "",
     adminUrl: env.ADMIN_URL ? `${String(env.ADMIN_URL).replace(/\/$/, "")}/#/reservations` : "",
   };
 }
@@ -443,14 +496,20 @@ export async function runBookingReminders(env) {
 function readOffer(body) {
   const title = cleanLine(body.title, 80);
   const durationMin = Math.round(Number(body.durationMin));
-  const priceCents = Math.round(Number(body.priceCents) || 0);
+  let priceCents = Math.round(Number(body.priceCents) || 0);
   const depositCents = Math.round(Number(body.depositCents) || 0);
+  const { tiers, error: tierError } = readTiers(body.tiers);
   if (!title) return { error: "Donnez un nom à la formule" };
   if (!(durationMin >= 5 && durationMin <= 720)) return { error: "Durée invalide (5 minutes à 12 heures)" };
+  if (tierError) return { error: tierError };
+  // Plusieurs tarifs : le prix de la formule est le plus bas (« à partir de »).
+  if (tiers.length) priceCents = tiers[0].priceCents;
   if (priceCents < 0 || priceCents > 1000000) return { error: "Prix invalide" };
   if (depositCents < 0 || depositCents > 1000000) return { error: "Acompte invalide" };
   if (depositCents > 0 && depositCents < 100) return { error: "L'acompte en ligne est d'au moins 1 €" };
-  if (priceCents && depositCents > priceCents) return { error: "L'acompte ne peut pas dépasser le prix de la séance" };
+  if (priceCents && depositCents > priceCents) {
+    return { error: tiers.length ? "L'acompte ne peut pas dépasser le tarif le moins cher" : "L'acompte ne peut pas dépasser le prix de la séance" };
+  }
   return {
     offer: {
       title,
@@ -458,6 +517,7 @@ function readOffer(body) {
       durationMin,
       priceCents,
       depositCents,
+      tiers: tiers.length ? JSON.stringify(tiers) : "",
       location: cleanLine(body.location, 160),
       active: body.active === undefined ? 1 : (body.active ? 1 : 0),
     },
@@ -527,9 +587,9 @@ export async function handleBookingAdmin(request, env, photographer, parts) {
     if ((count?.n || 0) >= 30) return fail(409, "30 formules au maximum");
     const id = newId("bko");
     await env.DB.prepare(
-      `INSERT INTO booking_offers (id, photographer_id, title, description, duration_min, price_cents, deposit_cents, location, active, position, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).bind(id, photographer.id, offer.title, offer.description, offer.durationMin, offer.priceCents, offer.depositCents, offer.location, offer.active, count?.n || 0, ts).run();
+      `INSERT INTO booking_offers (id, photographer_id, title, description, duration_min, price_cents, deposit_cents, tiers, location, active, position, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(id, photographer.id, offer.title, offer.description, offer.durationMin, offer.priceCents, offer.depositCents, offer.tiers, offer.location, offer.active, count?.n || 0, ts).run();
     return json({ ...(await bookingForAdmin(env, photographer)), createdOfferId: id }, { status: 201 });
   }
   if (parts[0] === "offers" && parts[1] && parts.length === 2) {
@@ -540,9 +600,9 @@ export async function handleBookingAdmin(request, env, photographer, parts) {
       const { offer, error } = readOffer({ ...offerOut(existing), ...body });
       if (error) return fail(400, error);
       await env.DB.prepare(
-        `UPDATE booking_offers SET title = ?, description = ?, duration_min = ?, price_cents = ?, deposit_cents = ?, location = ?, active = ?
+        `UPDATE booking_offers SET title = ?, description = ?, duration_min = ?, price_cents = ?, deposit_cents = ?, tiers = ?, location = ?, active = ?
           WHERE id = ?`
-      ).bind(offer.title, offer.description, offer.durationMin, offer.priceCents, offer.depositCents, offer.location, offer.active, id).run();
+      ).bind(offer.title, offer.description, offer.durationMin, offer.priceCents, offer.depositCents, offer.tiers, offer.location, offer.active, id).run();
       return json(await bookingForAdmin(env, photographer));
     }
     if (method === "DELETE") {

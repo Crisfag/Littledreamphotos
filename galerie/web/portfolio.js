@@ -285,7 +285,7 @@
   /* ---------- Réservation en ligne ---------- */
 
   var BOOKING_ZONE = "Europe/Brussels";
-  var booking = { offers: [], offer: null, slot: null };
+  var booking = { offers: [], offer: null, slot: null, tier: 0 };
 
   function euros(cents) {
     return (cents / 100).toLocaleString("fr-BE", { minimumFractionDigits: cents % 100 ? 2 : 0, maximumFractionDigits: 2 }) + " €";
@@ -318,6 +318,7 @@
   function chooseOffer(offer, button) {
     booking.offer = offer;
     booking.slot = null;
+    booking.tier = 0;
     pressOnly($("pf-bk-offers"), ".pf-bk-offer", button);
     $("pf-bk-form").hidden = true;
     var days = $("pf-bk-days");
@@ -348,12 +349,49 @@
     $("pf-bk-when").scrollIntoView({ behavior: "smooth", block: "nearest" });
   }
 
+  function photosText(n) {
+    return n + " photo" + (n > 1 ? "s" : "");
+  }
+
+  // Formule à plusieurs tarifs : « 10 photos · 120 € », au choix du client.
+  function renderTiers(o) {
+    var tiers = o.tiers || [];
+    var box = $("pf-bk-tiers");
+    box.textContent = "";
+    $("pf-bk-tier-step").hidden = !tiers.length;
+    $("pf-bk-step-contact").textContent = (tiers.length ? "4" : "3") + ". Vos coordonnées";
+    if (booking.tier >= tiers.length) booking.tier = 0;
+    tiers.forEach(function (t, i) {
+      var b = el("button", "pf-bk-tier");
+      b.type = "button";
+      b.setAttribute("aria-pressed", String(i === booking.tier));
+      b.appendChild(el("strong", "", photosText(t.photos)));
+      b.appendChild(el("span", "pf-bk-tier-price", euros(t.priceCents)));
+      if (t.label) b.appendChild(el("span", "pf-bk-tier-label", t.label));
+      b.addEventListener("click", function () {
+        booking.tier = i;
+        pressOnly(box, ".pf-bk-tier", b);
+        updateSummary();
+      });
+      box.appendChild(b);
+    });
+  }
+
+  function updateSummary() {
+    var o = booking.offer;
+    var slot = booking.slot;
+    var tier = o.tiers && o.tiers.length ? o.tiers[booking.tier] : null;
+    $("pf-bk-summary").textContent = o.title + " · " + slotDay(slot.startsAt) + " à " + slotTime(slot.startsAt) + " · " + duration(o.durationMin) +
+      (tier ? " · " + photosText(tier.photos) + ", " + euros(tier.priceCents) : "") +
+      (o.location ? " · " + o.location : "");
+  }
+
   function chooseSlot(slot, button) {
     booking.slot = slot;
     pressOnly($("pf-bk-days"), ".pf-bk-time", button);
     var o = booking.offer;
-    $("pf-bk-summary").textContent = o.title + " · " + slotDay(slot.startsAt) + " à " + slotTime(slot.startsAt) + " · " + duration(o.durationMin) +
-      (o.location ? " · " + o.location : "");
+    renderTiers(o);
+    updateSummary();
     $("pf-bk-submit").textContent = o.depositCents ? "Réserver et payer l'acompte (" + euros(o.depositCents) + ")" : "Confirmer la réservation";
     $("pf-bk-error").hidden = true;
     $("pf-bk-form").hidden = false;
@@ -382,6 +420,7 @@
     var rest = r.priceCents > r.depositCents ? r.priceCents - r.depositCents : 0;
     return [
       r.offerTitle + ", " + slotDay(r.startsAt) + " à " + slotTime(r.startsAt) + " (" + duration(r.durationMin) + ")" + (r.location ? ", " + r.location : "") + ".",
+      r.photos ? "Votre formule : " + photosText(r.photos) + " retouchée" + (r.photos > 1 ? "s" : "") + (r.tierLabel ? " (" + r.tierLabel + ")" : "") + ", " + euros(r.priceCents) + "." : "",
       r.depositCents ? "Acompte réglé : " + euros(r.depositCents) + (rest ? " ; reste à régler : " + euros(rest) + "." : ".") : "",
       "Un e-mail de confirmation vient de partir, avec l'invitation pour votre agenda.",
     ];
@@ -396,9 +435,12 @@
       b.type = "button";
       b.setAttribute("aria-pressed", "false");
       b.appendChild(el("strong", "", o.title));
+      var tiers = o.tiers || [];
+      var fewest = tiers.length ? Math.min.apply(null, tiers.map(function (t) { return t.photos; })) : 0;
+      var most = tiers.length ? Math.max.apply(null, tiers.map(function (t) { return t.photos; })) : 0;
       b.appendChild(el("span", "pf-bk-meta", [
         duration(o.durationMin),
-        o.priceCents ? euros(o.priceCents) : "",
+        tiers.length ? (fewest === most ? photosText(fewest) : fewest + " à " + most + " photos") + ", à partir de " + euros(o.priceCents) : (o.priceCents ? euros(o.priceCents) : ""),
         o.depositCents ? "acompte de " + euros(o.depositCents) + " à la réservation" : "",
         o.location,
       ].filter(Boolean).join(" · ")));
@@ -478,6 +520,7 @@
     var error = $("pf-bk-error");
     var fields = {
       slotId: booking.slot && booking.slot.id,
+      tier: booking.offer && booking.offer.tiers && booking.offer.tiers.length ? booking.tier : undefined,
       name: form.elements.name.value.trim(),
       email: form.elements.email.value.trim(),
       phone: form.elements.phone.value.trim(),
@@ -508,8 +551,10 @@
       }
       if (body.url) { location.href = body.url; return; }
       var o = booking.offer;
+      var chosen = o.tiers && o.tiers.length ? o.tiers[booking.tier] : null;
       showBookingResult("Votre séance est réservée", confirmedLines({
-        offerTitle: o.title, startsAt: booking.slot.startsAt, durationMin: o.durationMin, location: o.location, depositCents: 0, priceCents: o.priceCents,
+        offerTitle: o.title, startsAt: booking.slot.startsAt, durationMin: o.durationMin, location: o.location, depositCents: 0,
+        priceCents: chosen ? chosen.priceCents : o.priceCents, photos: chosen ? chosen.photos : null, tierLabel: chosen ? chosen.label : "",
       }), "hide");
       $("reserver").scrollIntoView();
     } catch (err) {
