@@ -1462,6 +1462,49 @@ main section > p, .ad-share > p { max-width: 75ch; }
 #ad-cl-info .ad-field { width: 100%; margin: 0; }
 .ad-cl-col .ad-danger-zone { margin-top: 1.25rem; }
 
+/* Étapes, saisons, délai du rappel */
+.ad-cl-avatar-season { color: var(--ink); background: var(--paper); box-shadow: 0 0 0 1px var(--line-2); }
+.ad-cl-remind-season { background: linear-gradient(90deg, var(--mist) 0, var(--paper) 60%); }
+.ad-cl-remind-actions { display: flex; flex-wrap: wrap; gap: .4rem; justify-content: flex-end; }
+.ad-cl-remind-ctl { display: inline-flex; align-items: center; gap: .45rem; }
+.ad-cl-remind-ctl select {
+  font: inherit; font-size: .8rem; color: var(--ink-2); min-height: 32px; padding: 0 1.6rem 0 .55rem;
+  border: 1px solid var(--line-2); border-radius: 8px; background-color: var(--paper);
+}
+.ad-cl-remind-ctl select:disabled { opacity: .5; }
+.ad-cl-remind-ctl select:focus-visible { outline: none; border-color: var(--accent); box-shadow: var(--ring); }
+.ad-cl-dateitem-next { margin-top: .2rem; font-size: .8rem; font-weight: 500; color: var(--ink-2); }
+.ad-cl-dateitem > .ad-cl-avatar { width: 2rem; height: 2rem; }
+
+.ad-cl-date-form-full { grid-template-columns: minmax(0, 1fr); gap: .75rem; }
+.ad-cl-date-kind select { font-weight: 500; }
+.ad-cl-date-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: .6rem; }
+.ad-cl-date-fields .ad-field { margin: 0; }
+.ad-cl-steps { border: 0; display: flex; flex-wrap: wrap; gap: .4rem; }
+.ad-cl-steps legend { width: 100%; margin-bottom: .4rem; font-size: .84rem; font-weight: 500; color: var(--ink-2); }
+.ad-cl-step { position: relative; cursor: pointer; }
+.ad-cl-step input { position: absolute; opacity: 0; pointer-events: none; }
+.ad-cl-step span {
+  display: inline-flex; align-items: center; gap: .35rem; min-height: 34px; padding: 0 .8rem;
+  font-size: .84rem; font-weight: 500; color: var(--ink-2);
+  background: var(--paper); border: 1px solid var(--line-2); border-radius: 999px;
+  transition: background-color .15s var(--ease), border-color .15s var(--ease), color .15s var(--ease);
+}
+.ad-cl-step span::before { content: ""; width: .5rem; height: .5rem; border-radius: 50%; border: 1.5px solid var(--line-2); transition: background-color .15s var(--ease), border-color .15s var(--ease); }
+.ad-cl-step:hover span { border-color: var(--ink-soft); }
+.ad-cl-step input:checked + span { color: var(--ink); border-color: var(--ink); }
+.ad-cl-step input:checked + span::before { background: var(--ink); border-color: var(--ink); }
+.ad-cl-step input:focus-visible + span { box-shadow: var(--ring); }
+.ad-cl-step-past { cursor: not-allowed; }
+.ad-cl-step-past span { color: var(--ink-soft); text-decoration: line-through; background: transparent; border-style: dashed; }
+.ad-cl-date-foot { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: .6rem 1rem; align-items: end; }
+.ad-cl-lead { margin: 0; }
+.ad-cl-preview { align-self: center; margin: 0; font-size: .82rem; line-height: 1.45; color: var(--ink-2); }
+.ad-cl-preview:empty { display: none; }
+.ad-cl-season-form { margin-top: .75rem; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr) auto; }
+.ad-cl-seasons-intro { margin-bottom: .25rem; max-width: 70ch; }
+.ad-cl-seasons .ad-cl-dateitem-main { flex-basis: 260px; }
+
 @media (max-width: 640px) {
   .ad-cl-remind { grid-template-columns: auto minmax(0, 1fr) auto; padding: .75rem .85rem; }
   .ad-cl-remind .ad-btn { grid-column: 2 / -1; justify-self: start; }
@@ -1470,6 +1513,10 @@ main section > p, .ad-share > p { max-width: 75ch; }
   .ad-cl-create { grid-template-columns: minmax(0, 1fr); }
   .ad-cl-date-form { grid-template-columns: minmax(0, 1fr); }
   .ad-cl-date-form .ad-btn { grid-column: 1 / -1; }
+  .ad-cl-date-foot { grid-template-columns: minmax(0, 1fr); }
+  .ad-cl-season-form { grid-template-columns: minmax(0, 1fr); }
+  .ad-cl-seasons .ad-cl-avatar { display: none; }
+  .ad-cl-remind-actions { grid-column: 2 / -1; justify-content: flex-start; }
   .ad-cl-head-actions { width: 100%; }
   .ad-cl-head-actions .ad-btn { flex: 1 1 auto; }
   .ad-cl-remind-main strong, .ad-cl-remind-main .ad-hint { white-space: normal; }

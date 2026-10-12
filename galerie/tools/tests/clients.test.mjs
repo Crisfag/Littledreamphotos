@@ -23,6 +23,13 @@ function check(label, ok, detail) {
   console.log(`${ok ? "✓" : "✗"} ${label}${detail !== undefined ? "  — " + detail : ""}`);
 }
 const nbsp = (t) => String(t || "").replace(/[  ]/g, " ");
+const isoIn = (days) => new Date(Date.now() + days * 86400000).toISOString().slice(0, 10);
+function addMonths(iso, n) {
+  const [y, m, d] = iso.split("-").map(Number);
+  const total = y * 12 + (m - 1) + n;
+  const yy = Math.floor(total / 12), mm = total - yy * 12;
+  return new Date(Date.UTC(yy, mm, Math.min(d, new Date(Date.UTC(yy, mm + 1, 0)).getUTCDate()))).toISOString().slice(0, 10);
+}
 
 const account = await createTestAccount(API, "clients");
 const client = new WorkerClient({ api: API, ...account });
@@ -151,6 +158,47 @@ try {
   detail = await client.request("GET", "/api/admin/clients/detail?email=camille%40example.com");
   check("… et se rallume", detail.dates[0].remind === true);
 
+  /* ---------- Suivi bébé : âge à la séance → étapes à proposer ---------- */
+
+  await page.selectOption('#ad-cl-date-form [name="kind"]', "baby");
+  check("suivi bébé : prénom, âge à la séance (6 mois), date de la dernière séance, rappel un mois avant",
+        (await page.textContent("#ad-cl-label-name")) === "Prénom" && (await page.inputValue('#ad-cl-date-form [name="ageMonths"]')) === "6" &&
+        (await page.inputValue('#ad-cl-date-form [name="date"]')) !== "" && (await page.inputValue('#ad-cl-date-form [name="lead"]')) === "30");
+  const sessionDay = isoIn(-7);
+  await page.fill('#ad-cl-date-form [name="label"]', "Alexandre");
+  await page.fill('#ad-cl-date-form [name="date"]', sessionDay);
+  check("les étapes déjà passées (3 et 6 mois) sont grisées",
+        await page.isDisabled('#ad-cl-date-form [name="plan"][value="3"]') && await page.isDisabled('#ad-cl-date-form [name="plan"][value="6"]') &&
+        await page.isChecked('#ad-cl-date-form [name="plan"][value="9"]') && await page.isChecked('#ad-cl-date-form [name="plan"][value="y"]'));
+  const preview = nbsp(await page.textContent("#ad-cl-date-preview"));
+  check("aperçu : naissance estimée, prochaine étape, jour du rappel", /^Naissance vers \S+ \d{4} · Prochaine : 9 mois le .+ · e-mail de rappel le /.test(preview), preview);
+  await page.selectOption('#ad-cl-date-form [name="ageMonths"]', "birth");
+  check("« Je connais sa date de naissance » vide le champ et le renomme",
+        (await page.inputValue('#ad-cl-date-form [name="date"]')) === "" && (await page.textContent("#ad-cl-date-label")) === "Date de naissance");
+  await page.selectOption('#ad-cl-date-form [name="ageMonths"]', "6");
+  await page.fill('#ad-cl-date-form [name="date"]', sessionDay);
+  await page.click('#ad-cl-date-form button[type="submit"]');
+  const alex = page.locator(".ad-cl-dateitem", { hasText: "Alexandre aura 9 mois" });
+  await alex.waitFor({ timeout: 5000 });
+  const alexText = nbsp(await alex.innerText());
+  check("la fiche annonce « Alexandre aura 9 mois », naissance estimée et étapes",
+        /Naissance vers .+ \(estimée\)/.test(alexText) && /Étapes : 9 mois · 1 an · 18 mois · chaque anniversaire/.test(alexText) && /e-mail de rappel le/.test(alexText), alexText.replace(/\s+/g, " "));
+  detail = await client.request("GET", "/api/admin/clients/detail?email=camille%40example.com");
+  let alexDate = detail.dates.find((d) => d.label === "Alexandre");
+  check("côté Worker : naissance calculée, étapes, délai",
+        alexDate.date === addMonths(sessionDay, -6) && alexDate.approx && alexDate.plan.join(",") === "9,12,18,y" && alexDate.lead === 30 && alexDate.next.months === 9, JSON.stringify(alexDate));
+  await alex.locator("[data-cld-lead]").selectOption("60");
+  await page.waitForTimeout(500);
+  detail = await client.request("GET", "/api/admin/clients/detail?email=camille%40example.com");
+  alexDate = detail.dates.find((d) => d.label === "Alexandre");
+  check("le délai du rappel se règle date par date (2 mois)", alexDate.lead === 60 && alexDate.next.remindOn === new Date(Date.parse(alexDate.next.date) - 60 * 86400000).toISOString().slice(0, 10));
+  const noBabyStep = await client.request("POST", "/api/admin/clients/dates", { email: "camille@example.com", kind: "baby", label: "Zoé", ageMonths: 12, sessionDate: isoIn(-30), plan: ["3", "6"] }).catch((err) => err);
+  check("étapes toutes passées : refusé avec une explication", noBabyStep.status === 400 && /chaque anniversaire/.test(noBabyStep.message || ""), noBabyStep.message);
+  const xmas = await client.request("POST", "/api/admin/clients/dates", { email: "leroy@example.com", kind: "season", label: "noel", date: isoIn(-300) });
+  const xmasDate = xmas.dates.find((d) => d.kind === "season");
+  check("séance de saison d'un client : « Séance de Noël », rappel six semaines avant", xmasDate.next.title === "Séance de Noël" && xmasDate.lead === 42);
+  await client.request("DELETE", `/api/admin/clients/dates/${xmasDate.id}`);
+
   /* ---------- Les relances dans la liste et le menu ---------- */
 
   await page.click("#ad-cl-back");
@@ -165,10 +213,31 @@ try {
   check("filtre « Avec date à retenir »", (await rows.count()) === 1);
   await page.click('[data-cl-filter="all"]');
 
+  /* ---------- Temps forts du studio : Noël pour tous les clients ---------- */
+
+  check("sans temps fort : une phrase explique à quoi ça sert", /Séances de Noël, fête des mères/.test(await page.textContent("#ad-cl-seasons")));
+  await page.fill('#ad-cl-season-form [name="date"]', isoIn(30));
+  check("Noël proposé d'abord, rappel six semaines avant",
+        (await page.inputValue('#ad-cl-season-form [name="label"]')) === "noel" && (await page.inputValue('#ad-cl-season-form [name="lead"]')) === "42");
+  await page.click('#ad-cl-season-form button[type="submit"]');
+  await page.waitForSelector(".ad-cl-remind-season");
+  const season = nbsp(await page.locator(".ad-cl-remind-season").innerText());
+  check("« Séances de Noël » en tête des relances, pour tous les clients", /Séances de Noël le/.test(season) && /à proposer à vos 2 clients/.test(season), season.replace(/\s+/g, " "));
+  const bcc = decodeURIComponent(await page.locator(".ad-cl-remind-season a.ad-btn-primary").getAttribute("href"));
+  check("« Écrire à tous » : copie cachée et message prêt",
+        bcc.startsWith("mailto:?bcc=") && bcc.includes("camille@example.com") && bcc.includes("leroy@example.com") && /Les séances de Noël sont ouvertes/.test(bcc));
+  await page.click(".ad-cl-remind-season [data-cl-copy-emails]");
+  await page.waitForTimeout(300);
+  const copied = await page.evaluate(() => navigator.clipboard.readText());
+  check("« Copier les adresses » : toutes, séparées par des virgules", copied.split(", ").sort().join(",") === "camille@example.com,leroy@example.com", copied);
+  check("le temps fort figure dans sa section, avec son délai", (await page.locator("#ad-cl-seasons [data-cls]").count()) === 1 &&
+        (await page.inputValue("#ad-cl-seasons [data-cls] [data-cld-lead]")) === "42");
+  check("la pastille compte aussi le temps fort", (await page.textContent("#ad-tab-clients .ad-tab-count")) === "2");
+
   // La pastille apparaît dès l'ouverture du tableau de bord.
   await page.goto(BASE + "/#/", { waitUntil: "domcontentloaded" });
   await page.waitForSelector("#ad-tab-clients .ad-tab-count", { timeout: 10000 });
-  check("pastille visible sans ouvrir l'onglet", (await page.textContent("#ad-tab-clients .ad-tab-count")) === "1");
+  check("pastille visible sans ouvrir l'onglet", (await page.textContent("#ad-tab-clients .ad-tab-count")) === "2");
 
   /* ---------- Les autres écrans mènent à la fiche ---------- */
 

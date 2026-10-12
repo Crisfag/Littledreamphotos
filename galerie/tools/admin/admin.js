@@ -5693,10 +5693,65 @@
 
   var clientsState = { data: null, query: "", filter: "all", creating: false };
   var CL_DATE_KINDS = [
+    ["baby", "Suivi bébé (3 mois, 1 an…)", "Prénom"],
     ["birthday", "Naissance d'un enfant", "Prénom"],
+    ["season", "Séance de saison (Noël…)", "Occasion"],
     ["wedding", "Mariage", "Prénoms du couple"],
     ["other", "Autre date", "Nom de la date"],
   ];
+  // Mêmes listes que le Worker (clients.js).
+  var CL_SEASONS = [["noel", "Noël"], ["valentin", "Saint-Valentin"], ["paques", "Pâques"], ["meres", "Fête des mères"], ["peres", "Fête des pères"], ["rentree", "Rentrée"], ["halloween", "Halloween"]];
+  var CL_STEPS = [["3", "3 mois"], ["6", "6 mois"], ["9", "9 mois"], ["12", "1 an"], ["18", "18 mois"], ["y", "Chaque anniversaire"]];
+  var CL_LEADS = [[14, "2 semaines avant"], [21, "3 semaines avant"], [30, "1 mois avant"], [42, "6 semaines avant"], [60, "2 mois avant"]];
+  var CL_LEAD_DEFAULT = { baby: 30, birthday: 30, season: 42, wedding: 30, other: 21 };
+
+  function clToday() { return new Date().toLocaleDateString("en-CA", { timeZone: "Europe/Brussels" }); }
+  function clIsoOf(ts) { return new Date(ts * 1000).toLocaleDateString("en-CA", { timeZone: "Europe/Brussels" }); }
+  function clAddMonths(iso, n) {
+    var p = iso.split("-").map(Number);
+    var total = p[0] * 12 + (p[1] - 1) + n;
+    var y = Math.floor(total / 12), m = total - y * 12;
+    var last = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+    return new Date(Date.UTC(y, m, Math.min(p[2], last))).toISOString().slice(0, 10);
+  }
+  function clAddDays(iso, n) {
+    var p = iso.split("-").map(Number);
+    return new Date(Date.UTC(p[0], p[1] - 1, p[2] + n)).toISOString().slice(0, 10);
+  }
+  function clDaysUntil(iso) {
+    var a = clToday().split("-").map(Number), b = iso.split("-").map(Number);
+    return Math.round((Date.UTC(b[0], b[1] - 1, b[2]) - Date.UTC(a[0], a[1] - 1, a[2])) / 86400000);
+  }
+  function clFullDay(iso, withWeekday) {
+    var sameYear = iso.slice(0, 4) === clToday().slice(0, 4);
+    return new Date(iso + "T12:00:00Z").toLocaleDateString("fr-BE", { weekday: withWeekday ? "long" : undefined, day: "numeric", month: "long", year: sameYear ? undefined : "numeric", timeZone: "Europe/Brussels" });
+  }
+  function clMonthYear(iso) {
+    return new Date(iso + "T12:00:00Z").toLocaleDateString("fr-BE", { month: "long", year: "numeric", timeZone: "Europe/Brussels" });
+  }
+  // Étapes d'un bébé encore à venir (même calcul que le Worker).
+  function clBabySteps(birth, plan, today) {
+    var out = [];
+    CL_STEPS.forEach(function (st) {
+      if (st[0] === "y" || plan.indexOf(st[0]) === -1) return;
+      var date = clAddMonths(birth, Number(st[0]));
+      if (date >= today) out.push({ date: date, label: st[1], key: st[0] });
+    });
+    if (plan.indexOf("y") !== -1) {
+      for (var y = 2; y <= 18; y++) {
+        var date = clAddMonths(birth, 12 * y);
+        if (date >= today) out.push({ date: date, label: y + " ans", key: "y" });
+      }
+    }
+    return out.sort(function (a, b) { return a.date < b.date ? -1 : 1; });
+  }
+  function clLeadOptions(selected) {
+    return CL_LEADS.map(function (l) { return '<option value="' + l[0] + '"' + (l[0] === selected ? " selected" : "") + ">" + esc(l[1]) + "</option>"; }).join("");
+  }
+  function clSeasonName(key) {
+    var found = CL_SEASONS.filter(function (x) { return x[0] === key; })[0];
+    return found ? found[1] : key;
+  }
 
   function clHref(email) { return "#/clients/" + encodeURIComponent(email); }
   // Lien discret vers la fiche d'un client, depuis les autres écrans.
@@ -5732,8 +5787,8 @@
   function clDay(isoDate, withWeekday) {
     return new Date(isoDate + "T12:00:00Z").toLocaleDateString("fr-BE", { weekday: withWeekday ? "long" : undefined, day: "numeric", month: "long", timeZone: "Europe/Brussels" });
   }
-  function clWhenChip(next) {
-    var soon = next.daysUntil <= 21;
+  function clWhenChip(next, lead) {
+    var soon = next.daysUntil <= (lead || 21);
     return '<span class="ad-cl-when' + (soon ? " ad-cl-when-soon" : "") + '">' + esc(clIn(next.daysUntil)) + "</span>";
   }
 
@@ -5741,8 +5796,20 @@
     return '<li class="ad-cl-remind">' + clAvatar(item.name) +
       '<div class="ad-cl-remind-main"><strong>' + esc(item.next.title) + "</strong>" +
       '<span class="ad-hint">' + clLink(item.name, item.email) + " · " + esc(clDay(item.next.date, true)) + "</span></div>" +
-      clWhenChip(item.next) +
+      clWhenChip(item.next, item.lead) +
       '<a class="ad-btn ad-btn-small ad-btn-primary" href="' + esc(item.mailto) + '">Proposer une séance</a></li>';
+  }
+  // Temps fort du studio arrivé dans sa période de rappel : à proposer à tous.
+  var CL_SPARK = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6.3 6.3l2.5 2.5M15.2 15.2l2.5 2.5M6.3 17.7l2.5-2.5M15.2 8.8l2.5-2.5"/></svg>';
+  function clSeasonRemindHtml(item) {
+    var n = item.recipients;
+    return '<li class="ad-cl-remind ad-cl-remind-season" data-cl-season="' + esc(item.id) + '"><span class="ad-cl-avatar ad-cl-avatar-season" aria-hidden="true">' + CL_SPARK + "</span>" +
+      '<div class="ad-cl-remind-main"><strong>' + esc(item.next.title) + " le " + esc(clFullDay(item.next.date, true)) + "</strong>" +
+      '<span class="ad-hint">Temps fort du studio · à proposer à ' + (n === 1 ? "votre client" : "vos " + n + " clients") + "</span></div>" +
+      clWhenChip(item.next, item.lead) +
+      '<div class="ad-cl-remind-actions">' +
+      (n && n <= 60 ? '<a class="ad-btn ad-btn-small ad-btn-primary" href="' + esc(item.mailto) + '">Écrire à tous</a>' : "") +
+      '<button type="button" class="ad-btn ad-btn-small" data-cl-copy-emails>Copier les ' + n + " adresse" + (n > 1 ? "s" : "") + "</button></div></li>";
   }
   function clDormantRowHtml(item) {
     return '<li class="ad-cl-remind">' + clAvatar(item.name) +
@@ -5792,11 +5859,12 @@
     paintClients();
   }
 
-  // Pastille du menu : le nombre de clients à relancer dans les trois semaines.
+  // Pastille du menu : le nombre de relances arrivées dans leur période de rappel.
   function updateClientsBadge(data) {
     var tab = document.getElementById("ad-tab-clients");
     if (!tab) return;
-    var due = (data.upcoming || []).filter(function (u) { return u.next.daysUntil <= 21; }).length;
+    var due = (data.upcoming || []).filter(function (u) { return u.next.daysUntil <= (u.lead || 21); }).length +
+      (data.seasons || []).filter(function (u) { return u.remind && u.next && u.next.daysUntil <= u.lead && data.emails.length; }).length;
     var badge = tab.querySelector(".ad-tab-count");
     if (!due) { if (badge) badge.remove(); return; }
     if (!badge) {
@@ -5815,7 +5883,8 @@
       if (clientsState.filter === "dates" && !c.nextDate) return false;
       return clMatches(c, clientsState.query);
     });
-    var remindCount = data.upcoming.length + data.dormant.length;
+    var seasonsDue = (data.seasons || []).filter(function (x) { return x.remind && x.next && x.next.daysUntil <= Math.max(45, x.lead) && data.emails.length; });
+    var remindCount = seasonsDue.length + data.upcoming.length + data.dormant.length;
     el.view.innerHTML =
       '<header class="ad-detail-header"><div><h2>Clients</h2>' +
       '<p class="ad-hint">Tous ceux qui vous ont confié une séance, réunis par adresse e-mail : galeries, réservations, contrats et paiements. Ajoutez vos notes et les dates à retenir, Holypixx vous prévient au bon moment.</p></div>' +
@@ -5831,9 +5900,10 @@
         : "") +
       (remindCount
         ? '<section id="ad-cl-reminders"><div class="ad-section-header"><h3>À relancer</h3><span class="ad-hint">' + remindCount + " suggestion" + (remindCount > 1 ? "s" : "") + "</span></div>" +
-          '<ul class="ad-cl-reminds">' + data.upcoming.map(clRemindRowHtml).join("") + data.dormant.map(clDormantRowHtml).join("") + "</ul>" +
-          '<p class="ad-hint ad-cl-reminds-note">« Proposer une séance » ouvre votre messagerie avec un message déjà rédigé' + (data.bookingUrl ? ", lien de réservation compris" : "") + ". Vous recevez aussi un e-mail trois semaines avant chaque date.</p></section>"
+          '<ul class="ad-cl-reminds">' + seasonsDue.map(clSeasonRemindHtml).join("") + data.upcoming.map(clRemindRowHtml).join("") + data.dormant.map(clDormantRowHtml).join("") + "</ul>" +
+          '<p class="ad-hint ad-cl-reminds-note">Chaque bouton ouvre votre messagerie avec un message déjà rédigé' + (data.bookingUrl ? ", lien de réservation compris" : "") + ". Vous recevez aussi un e-mail au moment choisi pour chaque date.</p></section>"
         : "") +
+      clSeasonsHtml(data) +
       '<section id="ad-cl-list">' +
       (data.clients.length
         ? '<div class="ad-cl-toolbar">' +
@@ -5851,8 +5921,81 @@
     bindClients();
   }
 
+  // Temps forts du studio : séances de saison proposées à tous les clients.
+  function clSeasonsHtml(data) {
+    var seasons = data.seasons || [];
+    return '<section id="ad-cl-seasons"><div class="ad-section-header"><h3>Temps forts du studio</h3>' +
+      '<span class="ad-hint">Proposés à tous vos clients</span></div>' +
+      (seasons.length
+        ? '<ul class="ad-cl-dates ad-cl-seasons">' + seasons.map(function (x) {
+            return '<li class="ad-cl-dateitem" data-cls="' + esc(x.id) + '">' +
+              '<span class="ad-cl-avatar ad-cl-avatar-season" aria-hidden="true">' + CL_SPARK + "</span>" +
+              '<div class="ad-cl-dateitem-main"><strong>' + esc(x.next ? x.next.title : "Séances de " + clSeasonName(x.label)) + "</strong>" +
+              '<span class="ad-hint">' + (x.next ? "Le " + esc(clFullDay(x.next.date, true)) + (x.remind ? " · e-mail de rappel le " + esc(clFullDay(x.next.remindOn)) : "") : "") + "</span></div>" +
+              (x.next ? clWhenChip(x.next, x.lead) : "") +
+              clRemindControlsHtml(x) +
+              '<button type="button" class="ad-btn ad-btn-small ad-btn-icon" data-cld-remove aria-label="Retirer ce temps fort">×</button></li>';
+          }).join("") + "</ul>"
+        : '<p class="ad-hint ad-cl-seasons-intro">Séances de Noël, fête des mères, rentrée… Indiquez quand elles ont lieu : Holypixx vous prévient à l\'avance, avec un message prêt à envoyer à tous vos clients.</p>') +
+      '<form id="ad-cl-season-form" class="ad-cl-date-form ad-cl-season-form" novalidate>' +
+      '<label class="ad-field"><span>Occasion</span><select name="label">' + CL_SEASONS.map(function (x) { return '<option value="' + x[0] + '">' + esc(x[1]) + "</option>"; }).join("") + "</select></label>" +
+      '<label class="ad-field"><span>Date des séances</span><input type="date" name="date" required /></label>' +
+      '<label class="ad-field"><span>Me prévenir</span><select name="lead">' + clLeadOptions(42) + "</select></label>" +
+      '<button type="submit" class="ad-btn">Ajouter</button></form></section>';
+  }
+
+  // Case « Me prévenir » et délai du rappel, communs aux dates et temps forts.
+  function clRemindControlsHtml(d) {
+    return '<div class="ad-cl-remind-ctl"><label class="ad-sc-toggle" title="Recevoir un e-mail avant la date"><input type="checkbox" data-cld-remind ' + (d.remind ? "checked" : "") + " /> Me prévenir</label>" +
+      '<select data-cld-lead aria-label="Délai du rappel"' + (d.remind ? "" : " disabled") + ">" + clLeadOptions(d.lead) + "</select></div>";
+  }
+
+  // Branche la case, le délai et la croix d'une ligne de date ; « refresh »
+  // repeint l'écran avec la réponse du Worker.
+  function clBindDateRow(row, id, refresh, removedText) {
+    row.querySelector("[data-cld-remind]").addEventListener("change", async function (e) {
+      try {
+        refresh(await api("POST", "/clients/dates/" + encodeURIComponent(id), { remind: e.target.checked }));
+        toast(e.target.checked ? "Rappel activé." : "Rappel désactivé.");
+      } catch (err) { toast(err.message, true); }
+    });
+    row.querySelector("[data-cld-lead]").addEventListener("change", async function (e) {
+      try {
+        refresh(await api("POST", "/clients/dates/" + encodeURIComponent(id), { lead: Number(e.target.value) }));
+        toast("Rappel " + e.target.options[e.target.selectedIndex].text + ".");
+      } catch (err) { toast(err.message, true); }
+    });
+    row.querySelector("[data-cld-remove]").addEventListener("click", async function () {
+      try {
+        refresh(await api("DELETE", "/clients/dates/" + encodeURIComponent(id)));
+        toast(removedText);
+      } catch (err) { toast(err.message, true); }
+    });
+  }
+
   function bindClients() {
     var data = clientsState.data;
+    var repaint = function (fresh) { clientsState.data = fresh; updateClientsBadge(fresh); paintClients(); };
+    el.view.querySelectorAll("[data-cls]").forEach(function (row) {
+      clBindDateRow(row, row.getAttribute("data-cls"), repaint, "Temps fort retiré.");
+    });
+    var seasonForm = document.getElementById("ad-cl-season-form");
+    seasonForm.addEventListener("submit", async function (e) {
+      e.preventDefault();
+      var f = seasonForm.elements;
+      if (!f.date.value) { toast("Indiquez la date de vos séances.", true); f.date.focus(); return; }
+      try {
+        repaint(await api("POST", "/clients/dates", { studio: true, kind: "season", label: f.label.value, date: f.date.value, lead: Number(f.lead.value) }));
+        toast("Temps fort ajouté : rappel " + f.lead.options[f.lead.selectedIndex].text + ".");
+      } catch (err) { toast(err.message, true); }
+    });
+    el.view.querySelectorAll("[data-cl-copy-emails]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        navigator.clipboard.writeText(data.emails.join(", ")).then(function () {
+          toast(data.emails.length + " adresse" + (data.emails.length > 1 ? "s" : "") + " copiée" + (data.emails.length > 1 ? "s" : "") + " : collez-les en copie cachée.");
+        }).catch(function () { toast("Impossible de copier les adresses.", true); });
+      });
+    });
     document.getElementById("ad-cl-new").addEventListener("click", function () {
       clientsState.creating = true;
       paintClients();
@@ -5950,26 +6093,129 @@
     }).join("") + "</ol>";
   }
 
-  function clDatesHtml(dates) {
-    var kindLabel = {};
-    CL_DATE_KINDS.forEach(function (k) { kindLabel[k[0]] = k[1]; });
+  // « Naissance vers avril 2026 (estimée) », « Mariage le 3 juin 2016 »…
+  function clDateDesc(d) {
+    var full = new Date(d.date + "T12:00:00Z").toLocaleDateString("fr-BE", { day: "numeric", month: "long", year: "numeric" });
+    if (d.kind === "baby") return d.approx ? "Naissance vers " + clMonthYear(d.date) + " (estimée)" : "Naissance le " + full;
+    if (d.kind === "birthday") return "Naissance le " + full;
+    if (d.kind === "wedding") return "Mariage le " + full;
+    if (d.kind === "season") return "Séance du " + full + ", chaque année";
+    return "Le " + full + ", chaque année";
+  }
+
+  function clDatesHtml(dates, client) {
     return (dates.length
       ? '<ul class="ad-cl-dates">' + dates.map(function (d) {
+          var steps = d.kind === "baby" ? CL_STEPS.filter(function (st) { return d.plan.indexOf(st[0]) !== -1; }).map(function (st) { return st[1].toLowerCase(); }) : [];
           return '<li class="ad-cl-dateitem" data-cld="' + esc(d.id) + '">' +
             '<div class="ad-cl-dateitem-main"><strong>' + esc(d.next ? d.next.title : d.label) + "</strong>" +
-            '<span class="ad-hint">' + esc(kindLabel[d.kind] || "") + " · " + esc(new Date(d.date + "T12:00:00Z").toLocaleDateString("fr-BE", { day: "numeric", month: "long", year: "numeric" })) +
-            (d.next ? " · prochaine fois le " + esc(clDay(d.next.date, true)) : "") + "</span></div>" +
-            (d.next ? clWhenChip(d.next) : "") +
-            '<label class="ad-sc-toggle" title="Recevoir un e-mail trois semaines avant"><input type="checkbox" data-cld-remind ' + (d.remind ? "checked" : "") + " /> Me prévenir</label>" +
+            '<span class="ad-hint">' + esc(clDateDesc(d)) + "</span>" +
+            (steps.length ? '<span class="ad-hint">Étapes : ' + esc(steps.join(" · ")) + "</span>" : "") +
+            (d.next
+              ? '<span class="ad-cl-dateitem-next">Le ' + esc(clFullDay(d.next.date, true)) +
+                (d.remind ? " · " + (d.next.remindOn > clToday() ? "e-mail de rappel le " + esc(clFullDay(d.next.remindOn)) : "à relancer dès maintenant") : "") + "</span>"
+              : '<span class="ad-hint">Plus d\'étape à venir.</span>') +
+            "</div>" +
+            (d.next ? clWhenChip(d.next, d.lead) : "") +
+            clRemindControlsHtml(d) +
             (d.mailto ? '<a class="ad-btn ad-btn-small" href="' + esc(d.mailto) + '">Proposer une séance</a>' : "") +
             '<button type="button" class="ad-btn ad-btn-small ad-btn-icon" data-cld-remove aria-label="Retirer cette date">×</button></li>';
         }).join("") + "</ul>"
-      : '<p class="ad-hint">Une naissance, un anniversaire de mariage… Notez-le ici : Holypixx vous prévient trois semaines avant, avec un message prêt à envoyer.</p>') +
-      '<form id="ad-cl-date-form" class="ad-cl-date-form" novalidate>' +
-      '<label class="ad-field"><span>Type</span><select name="kind">' + CL_DATE_KINDS.map(function (k) { return '<option value="' + k[0] + '">' + esc(k[1]) + "</option>"; }).join("") + "</select></label>" +
-      '<label class="ad-field"><span id="ad-cl-label-name">' + esc(CL_DATE_KINDS[0][2]) + '</span><input name="label" maxlength="80" required autocomplete="off" /></label>' +
-      '<label class="ad-field"><span>Date</span><input type="date" name="date" required /></label>' +
-      '<button type="submit" class="ad-btn">Ajouter</button></form>';
+      : '<p class="ad-hint">Une séance bébé, une naissance, Noël, un anniversaire de mariage… Notez-le ici : Holypixx calcule les prochaines séances à proposer et vous prévient à l\'avance, avec un message prêt à envoyer.</p>') +
+      '<form id="ad-cl-date-form" class="ad-cl-date-form ad-cl-date-form-full" novalidate>' +
+      '<label class="ad-field ad-cl-date-kind"><span>Type</span><select name="kind">' + CL_DATE_KINDS.map(function (k) { return '<option value="' + k[0] + '">' + esc(k[1]) + "</option>"; }).join("") + "</select></label>" +
+      '<div class="ad-cl-date-fields" id="ad-cl-date-fields"></div>' +
+      '<fieldset class="ad-cl-steps" id="ad-cl-steps"><legend>Séances à proposer</legend>' +
+      CL_STEPS.map(function (st) { return '<label class="ad-cl-step"><input type="checkbox" name="plan" value="' + st[0] + '" checked /><span>' + esc(st[1]) + "</span></label>"; }).join("") + "</fieldset>" +
+      '<div class="ad-cl-date-foot"><label class="ad-field ad-cl-lead"><span>Me prévenir</span><select name="lead">' + clLeadOptions(30) + "</select></label>" +
+      '<p class="ad-cl-preview" id="ad-cl-date-preview" aria-live="polite"></p>' +
+      '<button type="submit" class="ad-btn ad-btn-primary">Ajouter</button></div></form>';
+  }
+
+  // Champs du formulaire selon le type de date.
+  function clDateFieldsHtml(kind, sessionIso) {
+    var label = CL_DATE_KINDS.filter(function (k) { return k[0] === kind; })[0][2];
+    var name = kind === "season"
+      ? '<label class="ad-field"><span id="ad-cl-label-name">Occasion</span><select name="label">' + CL_SEASONS.map(function (x) { return '<option value="' + x[0] + '">' + esc(x[1]) + "</option>"; }).join("") + "</select></label>"
+      : '<label class="ad-field"><span id="ad-cl-label-name">' + esc(label) + '</span><input name="label" maxlength="80" required autocomplete="off" /></label>';
+    if (kind === "baby") {
+      var ages = '<option value="birth">Je connais sa date de naissance</option><option value="0">Nouveau-né</option>';
+      for (var m = 1; m <= 12; m++) ages += '<option value="' + m + '"' + (m === 6 ? " selected" : "") + ">" + (m === 12 ? "1 an" : m + " mois") + "</option>";
+      ages += '<option value="15">15 mois</option><option value="18">18 mois</option><option value="24">2 ans</option>';
+      return name +
+        '<label class="ad-field"><span>Âge à la séance</span><select name="ageMonths">' + ages + "</select></label>" +
+        '<label class="ad-field"><span id="ad-cl-date-label">Date de la séance</span><input type="date" name="date" required value="' + esc(sessionIso) + '" /></label>';
+    }
+    var dateLabel = { birthday: "Date de naissance", season: "Date de la séance", wedding: "Date du mariage", other: "Date" }[kind];
+    return name + '<label class="ad-field"><span id="ad-cl-date-label">' + dateLabel + '</span><input type="date" name="date" required value="' + (kind === "season" ? esc(sessionIso) : "") + '" /></label>';
+  }
+
+  // Lit le formulaire : la date de naissance (estimée ou non), la prochaine
+  // occasion et le jour du rappel, pour l'aperçu et l'envoi.
+  function clReadDateForm(form) {
+    var f = form.elements;
+    var kind = f.kind.value;
+    var today = clToday();
+    var date = f.date.value;
+    var out = { kind: kind, label: f.label.value.trim(), date: date, lead: Number(f.lead.value), plan: [], ageMonths: "", sessionDate: "" };
+    if (!date) return out;
+    if (kind === "baby") {
+      var age = f.ageMonths.value;
+      if (age !== "birth") {
+        out.ageMonths = Number(age);
+        out.sessionDate = date;
+        out.birth = Number(age) > 0 ? clAddMonths(date, -Number(age)) : clAddDays(date, -10);
+        out.approx = true;
+      } else {
+        out.birth = date;
+      }
+      form.querySelectorAll('[name="plan"]').forEach(function (cb) { if (cb.checked && !cb.disabled) out.plan.push(cb.value); });
+      var next = clBabySteps(out.birth, out.plan, today)[0];
+      if (next) out.next = { date: next.date, title: next.label };
+      return out;
+    }
+    // Date annuelle : prochaine occurrence, aujourd'hui compris.
+    var md = date.slice(5);
+    var year = Number(today.slice(0, 4));
+    var candidate = year + "-" + md;
+    if (md === "02-29" && !(year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0))) candidate = year + "-02-28";
+    if (candidate < today) candidate = (year + 1) + "-" + (md === "02-29" ? "02-28" : md);
+    out.next = { date: candidate };
+    return out;
+  }
+
+  function clUpdateDateForm(form) {
+    var f = form.elements;
+    var kind = f.kind.value;
+    var steps = document.getElementById("ad-cl-steps");
+    steps.hidden = kind !== "baby";
+    var info = clReadDateForm(form);
+    var today = clToday();
+    if (kind === "baby") {
+      // Étapes déjà passées : grisées et décochées.
+      form.querySelectorAll('[name="plan"]').forEach(function (cb) {
+        if (cb.value === "y") return;
+        var past = !info.birth || clAddMonths(info.birth, Number(cb.value)) < today;
+        if (past && !cb.disabled) { cb.checked = false; cb.disabled = true; }
+        else if (!past && cb.disabled) { cb.disabled = false; cb.checked = true; }
+        cb.closest(".ad-cl-step").classList.toggle("ad-cl-step-past", past);
+      });
+      var dateLabel = document.getElementById("ad-cl-date-label");
+      if (dateLabel) dateLabel.textContent = f.ageMonths.value === "birth" ? "Date de naissance" : "Date de la séance";
+      info = clReadDateForm(form);
+    }
+    var preview = document.getElementById("ad-cl-date-preview");
+    if (!info.date) { preview.textContent = ""; return; }
+    var parts = [];
+    if (kind === "baby" && info.approx) parts.push("Naissance vers " + clMonthYear(info.birth));
+    if (info.next) {
+      var remindOn = clAddDays(info.next.date, -info.lead);
+      parts.push((kind === "baby" ? "Prochaine : " + info.next.title + " le " : "Prochaine fois le ") + clFullDay(info.next.date, true));
+      parts.push(remindOn > today ? "e-mail de rappel le " + clFullDay(remindOn) : "à relancer dès maintenant");
+    } else if (kind === "baby") {
+      parts.push("Aucune étape à venir : cochez « Chaque anniversaire »");
+    }
+    preview.textContent = parts.join(" · ");
   }
 
   async function renderClientDetail(email, skipHash) {
@@ -6009,7 +6255,7 @@
       "</div>" +
       '<div class="ad-cl-grid">' +
       '<div class="ad-cl-col">' +
-      '<section><div class="ad-section-header"><h3>Dates à retenir</h3></div>' + clDatesHtml(data.dates) + "</section>" +
+      '<section><div class="ad-section-header"><h3>Dates à retenir</h3></div>' + clDatesHtml(data.dates, c) + "</section>" +
       '<section><div class="ad-section-header"><h3>Historique</h3></div>' + clHistoryHtml(data.history) + "</section>" +
       "</div>" +
       '<div class="ad-cl-col">' +
@@ -6082,35 +6328,46 @@
     });
 
     var dateForm = document.getElementById("ad-cl-date-form");
-    dateForm.elements.kind.addEventListener("change", function () {
-      var kind = CL_DATE_KINDS.filter(function (k) { return k[0] === dateForm.elements.kind.value; })[0];
-      document.getElementById("ad-cl-label-name").textContent = kind[2];
+    var sessionIso = c.lastSessionAt ? clIsoOf(c.lastSessionAt) : clToday();
+    var setKind = function (kind) {
+      document.getElementById("ad-cl-date-fields").innerHTML = clDateFieldsHtml(kind, sessionIso);
+      dateForm.elements.lead.value = String(CL_LEAD_DEFAULT[kind]);
+      clUpdateDateForm(dateForm);
+    };
+    setKind(dateForm.elements.kind.value);
+    dateForm.elements.kind.addEventListener("change", function () { setKind(dateForm.elements.kind.value); });
+    dateForm.addEventListener("input", function (e) { if (e.target.name !== "kind") clUpdateDateForm(dateForm); });
+    dateForm.addEventListener("change", function (e) {
+      if (e.target.name === "kind") return;
+      // Date de naissance connue : le champ se vide ; âge à la séance : il
+      // reprend la date de la dernière séance.
+      if (e.target.name === "ageMonths") {
+        var wasBirth = dateForm.dataset.birth === "1";
+        var isBirth = e.target.value === "birth";
+        if (isBirth !== wasBirth) dateForm.elements.date.value = isBirth ? "" : sessionIso;
+        dateForm.dataset.birth = isBirth ? "1" : "";
+      }
+      clUpdateDateForm(dateForm);
     });
     dateForm.addEventListener("submit", async function (e) {
       e.preventDefault();
-      var f = dateForm.elements;
+      var info = clReadDateForm(dateForm);
+      if (!info.label) { toast(info.kind === "baby" || info.kind === "birthday" ? "Indiquez le prénom." : "Donnez un nom à cette date.", true); dateForm.elements.label.focus(); return; }
+      if (!info.date) { toast("Indiquez la date.", true); dateForm.elements.date.focus(); return; }
+      var body = { email: c.email, kind: info.kind, label: info.label, date: info.kind === "baby" && info.ageMonths !== "" ? "" : info.date, lead: info.lead };
+      if (info.kind === "baby") {
+        body.plan = info.plan;
+        if (info.ageMonths !== "") { body.ageMonths = info.ageMonths; body.sessionDate = info.sessionDate; }
+      }
       try {
-        var fresh = await api("POST", "/clients/dates", { email: c.email, kind: f.kind.value, label: f.label.value, date: f.date.value });
-        refresh(fresh);
-        toast("Date ajoutée : vous serez prévenu trois semaines avant.");
+        refresh(await api("POST", "/clients/dates", body));
+        toast("C'est noté : rappel " + dateForm.elements.lead.options[dateForm.elements.lead.selectedIndex].text + ".");
       } catch (err) {
         toast(err.message, true);
       }
     });
     el.view.querySelectorAll("[data-cld]").forEach(function (row) {
-      var id = row.getAttribute("data-cld");
-      row.querySelector("[data-cld-remind]").addEventListener("change", async function (e) {
-        try {
-          refresh(await api("POST", "/clients/dates/" + encodeURIComponent(id), { remind: e.target.checked }));
-          toast(e.target.checked ? "Rappel activé." : "Rappel désactivé.");
-        } catch (err) { toast(err.message, true); }
-      });
-      row.querySelector("[data-cld-remove]").addEventListener("click", async function () {
-        try {
-          refresh(await api("DELETE", "/clients/dates/" + encodeURIComponent(id)));
-          toast("Date retirée.");
-        } catch (err) { toast(err.message, true); }
-      });
+      clBindDateRow(row, row.getAttribute("data-cld"), refresh, "Date retirée.");
     });
     var erase = document.getElementById("ad-cl-erase");
     if (erase) {

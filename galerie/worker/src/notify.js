@@ -830,6 +830,25 @@ export function buildClientDateReminderEmail({ clientName, clientEmail, title, d
   return { subject, html: emailShell({ preheader: subject, bodyHtml }), text };
 }
 
+// Temps fort du studio (séances de Noël…) : rappel au photographe, avec un
+// message à envoyer à tous ses clients en copie cachée.
+export function buildStudioSeasonReminderEmail({ title, date, daysUntil, recipients, message, mailto, adminUrl }) {
+  const when = daysUntil === 0 ? "aujourd'hui" : daysUntil === 1 ? "demain" : `dans ${daysUntil} jours`;
+  const day = new Date(`${date}T12:00:00Z`).toLocaleDateString("fr-BE", { weekday: "long", day: "numeric", month: "long", timeZone: "Europe/Brussels" });
+  const who = recipients === 1 ? "votre client" : `vos ${recipients} clients`;
+  const subject = `${title} ${when} : proposez-les à ${who}`;
+  const bodyHtml =
+    eyebrow("Temps forts du studio") +
+    heading(`${escapeHtml(title)}, ${escapeHtml(when)}`) +
+    paragraph(`Vos séances commencent le ${escapeHtml(day)} : c'est le bon moment pour les proposer à ${escapeHtml(who)}, avant que les agendas se remplissent.`) +
+    paragraph("Un message est prêt, à envoyer tel quel ou à retoucher :", { small: true }) +
+    `<div style="margin:0 0 14px;padding:14px 16px;background:${CREAM};border-radius:10px;font-family:${SANS};font-size:15px;line-height:1.6;color:${CHARCOAL};white-space:pre-wrap;"><strong>${escapeHtml(message.subject)}</strong>\n\n${escapeHtml(message.body)}</div>` +
+    emailButton(mailto, "Écrire à tous, en copie cachée") +
+    (adminUrl ? paragraph(`<a href="${escapeHtml(adminUrl)}" style="color:${ROSE_DEEP};">Copier les adresses depuis l'onglet Clients</a>`, { small: true }) : "");
+  const text = [`${title}, ${when} (${day}).`, `Proposez-les à ${who}.`, "", message.subject, "", message.body, adminUrl ? `\nOnglet Clients : ${adminUrl}` : ""].join("\n");
+  return { subject, html: emailShell({ preheader: subject, bodyHtml }), text };
+}
+
 function firstWord(name) {
   return String(name || "").trim().split(/\s+/)[0] || "votre client";
 }
@@ -1007,6 +1026,10 @@ export async function sendContractDeclined(env, params) {
 
 export async function sendClientDateReminder(env, params) {
   await sendEmail(env, { to: params.to, ...buildClientDateReminderEmail(params) });
+}
+
+export async function sendStudioSeasonReminder(env, params) {
+  await sendEmail(env, { to: params.to, ...buildStudioSeasonReminderEmail(params) });
 }
 
 export async function sendStoragePurgeNotice(env, params) {
