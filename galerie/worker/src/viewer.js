@@ -12,6 +12,7 @@ import { paymentFeeCents } from "./fees.js";
 import { musicForClient, audioKeyFor, serveAudio, getTrack } from "./music.js";
 import { deliveryForClient, createDownloadLink, downloadFile, downloadZip } from "./delivery.js";
 import { saveCart } from "./campaigns.js";
+import { presentationForClient } from "./presentation.js";
 
 const SESSION_TTL_SECONDS = 2 * 60 * 60; // 2 h
 const MAX_FAILED_LOGINS = 10;
@@ -162,6 +163,7 @@ async function handleLogin(request, env, slug) {
       watermark: gallery.watermark_text,
       expiresAt: gallery.expires_at,
       layout: gallery.layout || "grille",
+      ...presentationForClient(gallery, new Set(photos.map((p) => p.id))),
       delivery: await deliveryForClient(env, gallery),
       hasMusic: music?.kind === "audio",
       music,
@@ -650,7 +652,9 @@ async function handleBackground(env, slug) {
   if (!gallery || isExpired(gallery)) {
     return json({ type: "color", color: "" });
   }
-  return json({ type: gallery.login_background_type, color: gallery.login_background_color });
+  // Le style et les polices habillent aussi l'écran de mot de passe.
+  const { theme, titleFont, bodyFont } = presentationForClient(gallery, new Set());
+  return json({ type: gallery.login_background_type, color: gallery.login_background_color, theme, titleFont, bodyFont });
 }
 
 // Non trouvée dans les mêmes conditions que ci-dessus (galerie inconnue,

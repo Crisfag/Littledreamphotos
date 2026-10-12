@@ -16,6 +16,7 @@ import { exportAccount, deleteAccount } from "./privacy.js";
 import { galleryQuotaRefusal, subscriptionForAdmin, startSubscriptionCheckout, openBillingPortal, syncSubscription, setScolairePlan } from "./subscription.js";
 import { handleSchoolAdmin } from "./school.js";
 import { handleBookingAdmin, deleteBookingFiles } from "./booking.js";
+import { THEMES, themeOf, readPresentation, linkOfEmbed } from "./presentation.js";
 import { handleContractsAdmin } from "./contracts.js";
 import { handleClientsAdmin } from "./clients.js";
 import { setPromo, sendPromoToClient, promoForAdmin } from "./campaigns.js";
@@ -143,15 +144,17 @@ async function createGallery(request, env, photographerId) {
   // Mise en page de départ : celle choisie par défaut dans les paramètres du
   // compte (voir account.js), jamais imposée — modifiable au cas par cas
   // ensuite comme n'importe quelle galerie déjà créée.
-  const photographer = await env.DB.prepare("SELECT default_layout FROM photographers WHERE id = ?")
+  const photographer = await env.DB.prepare("SELECT default_layout, default_theme FROM photographers WHERE id = ?")
     .bind(photographerId)
     .first();
+  // Style : celui choisi dans le formulaire de création, sinon celui du compte.
+  const theme = THEMES.includes(body.theme) ? body.theme : (THEMES.includes(photographer?.default_theme) ? photographer.default_theme : "");
 
   await env.DB.prepare(
     `INSERT INTO galleries
        (id, photographer_id, slug, title, client_name, client_email, password_hash, password_salt, watermark_text, expires_at,
-        included_photos, extra_photo_price_cents, layout, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        included_photos, extra_photo_price_cents, layout, theme, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   )
     .bind(
       id,
@@ -167,6 +170,7 @@ async function createGallery(request, env, photographerId) {
       includedPhotos,
       extraPhotoPriceCents,
       photographer?.default_layout || "grille",
+      theme,
       now()
     )
     .run();
@@ -246,6 +250,14 @@ async function getGallery(env, photographerId, slug) {
       login_background_type: gallery.login_background_type,
       login_background_color: gallery.login_background_color,
       layout: gallery.layout,
+      presentation: {
+        theme: themeOf(gallery.theme),
+        titleFont: gallery.title_font || "",
+        bodyFont: gallery.body_font || "",
+        intro: gallery.intro || "",
+        coverPhotoId: gallery.cover_photo_id || "",
+        headerVideo: linkOfEmbed(gallery.header_video),
+      },
       music_name: gallery.music_name || "",
       music: await musicForAdmin(env, gallery),
       delivery: await deliveryForAdmin(env, gallery),
@@ -293,7 +305,7 @@ async function regeneratePassword(request, env, photographerId, slug) {
 }
 
 const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
-const ALLOWED_LAYOUTS = new Set(["grille", "mosaique", "defilement"]);
+const ALLOWED_LAYOUTS = new Set(["grille", "mosaique", "defilement", "recit"]);
 
 // Couleur unie (ou remise à la couleur par défaut si `color` est vide).
 // N'affecte jamais une éventuelle image déjà stockée dans R2 — juste le
@@ -413,6 +425,25 @@ async function setLayout(request, env, photographerId, slug) {
     .run();
 
   return json({ ok: true });
+}
+
+// Style, polices, texte d'accompagnement, en-tête : seuls les champs envoyés
+// changent (voir presentation.js).
+async function setPresentation(request, env, photographerId, slug) {
+  const gallery = await ownedGallery(env, photographerId, slug);
+  if (!gallery) return fail(404, "Galerie introuvable");
+  const body = await request.json().catch(() => null);
+  if (!body || typeof body !== "object") return fail(400, "Requête invalide");
+  const { results } = await env.DB.prepare("SELECT id FROM photos WHERE gallery_id = ?").bind(gallery.id).all();
+  const { fields, error } = readPresentation(body, new Set((results || []).map((p) => p.id)));
+  if (error) return fail(400, error);
+  const keys = Object.keys(fields);
+  if (keys.length) {
+    await env.DB.prepare(`UPDATE galleries SET ${keys.map((k) => `${k} = ?`).join(", ")} WHERE id = ?`)
+      .bind(...keys.map((k) => fields[k]), gallery.id)
+      .run();
+  }
+  return json({ ok: true, headerVideo: fields.header_video !== undefined ? linkOfEmbed(fields.header_video) : undefined });
 }
 
 // Forfait et prix du supplément — modifiables après coup : le photographe ne
@@ -752,6 +783,9 @@ export async function handleAdmin(request, env, ctx, path) {
     }
     if (parts.length === 5 && parts[4] === "layout" && request.method === "POST") {
       return setLayout(request, env, photographerId, slug);
+    }
+    if (parts.length === 5 && parts[4] === "presentation" && request.method === "POST") {
+      return setPresentation(request, env, photographerId, slug);
     }
     if (parts.length === 5 && parts[4] === "music" && request.method === "PUT") {
       return setMusic(request, env, photographerId, slug);

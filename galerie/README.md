@@ -389,8 +389,28 @@ Le tableau de bord s'organise en trois onglets, chacun avec son propre lien
   photos), *Mosaïque* (colonnes façon presse, chaque photo garde son propre
   format — pratique quand portraits et paysages se mélangent) ou
   *Défilement* (une photo à la fois, en grand — rendu éditorial, pour
-  raconter une séance plutôt que la survoler). Purement visuel : les trois
-  rendus s'appuient sur les mêmes tuiles, protégées de la même façon.
+  raconter une séance plutôt que la survoler) ou *Récit* (un livre photo :
+  paysages en pleine largeur, portraits par deux à la même hauteur, une
+  respiration toutes les six photos environ). Purement visuel : tous les
+  rendus s'appuient sur les mêmes tuiles, protégées de la même façon ; en
+  Récit et en Défilement, les grandes vignettes passent au niveau de tuiles
+  plein écran quand elles approchent de l'écran.
+- **Style de la galerie** (`worker/src/presentation.js`) : neuf styles —
+  Classique, Doux, Architectural, Moderne, Nuit (mode sombre), Éditorial,
+  Romantique, Bohème, Galerie d'art — qui changent palette, typographie,
+  en-tête et forme des vignettes (`gallery.css`, `body[data-theme]`).
+  Survoler une carte de style ouvre un aperçu de la galerie avec ses vraies
+  photos ; cliquer l'applique. Polices des titres et du texte au choix
+  (Google Fonts, une feuille par police ; une police manuscrite ne sert
+  qu'au grand titre), texte d'accompagnement sous le titre, et en-tête :
+  photo de couverture (étoile ★ sur une photo, peinte en pleine définition
+  dans un canvas) ou vidéo YouTube/Vimeo (lecteur sans cookies / sans suivi,
+  chargé seulement quand le client clique « Voir le film », la couverture
+  servant d'affiche) — pensé pour les mariages. Le style se choisit aussi à
+  la création de la galerie, et un style par défaut se règle dans les
+  paramètres. L'écran de mot de passe prend déjà le style et les polices.
+  Sur une base existante : `npx wrangler d1 execute galerie-protegee --remote
+  --file=migrations/2026-10-galeries-styles.sql` (depuis `worker/`).
 - **Musique d'ambiance** : trois sources au choix sur la fiche galerie,
   une seule à la fois.
   - **Bibliothèque** commune de morceaux libres de droits, classés par
@@ -809,9 +829,9 @@ Tout ce qui concerne le compte plutôt qu'une galerie en particulier :
   contrairement au nom de studio — facultative, sert uniquement à vous
   identifier sur l'onglet Admin (voir plus bas) si vous êtes la propriétaire
   de la plateforme.
-- **Présentation par défaut** : la mise en page (*Grille*, *Mosaïque* ou
-  *Défilement* — voir plus haut) proposée à la création d'une nouvelle
-  galerie. Une simple valeur de départ, jamais imposée : chaque galerie reste
+- **Présentation par défaut** : la mise en page (*Grille*, *Mosaïque*,
+  *Défilement* ou *Récit* — voir plus haut) et le style proposés à la
+  création d'une nouvelle galerie. Une simple valeur de départ, jamais imposée : chaque galerie reste
   modifiable au cas par cas depuis sa propre fiche, comme avant.
 - **Coordonnées fiscales** : raison sociale, adresse et n° de TVA à faire
   figurer sur les factures émises pour vos clients (voir l'onglet

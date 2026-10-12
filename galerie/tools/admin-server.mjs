@@ -1109,7 +1109,11 @@ async function handleApi(req, res, url) {
   if (parts.length === 2 && parts[0] === "account" && parts[1] === "defaults" && req.method === "POST") {
     const body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
     try {
-      await client.setDefaults(String(body.defaultLayout || "grille"));
+      // Mise en page et style : seuls ceux envoyés changent.
+      const defaults = {};
+      if (body.defaultLayout !== undefined) defaults.defaultLayout = String(body.defaultLayout || "grille");
+      if (body.defaultTheme !== undefined) defaults.defaultTheme = String(body.defaultTheme || "");
+      await client.request("POST", "/api/admin/account/defaults", defaults);
       return json(res, 200, { ok: true });
     } catch (err) {
       return relayError(res, err, "Impossible d'enregistrer la présentation par défaut");
@@ -1247,6 +1251,7 @@ async function handleApi(req, res, url) {
           slug, title, clientName: body.clientName || "", clientEmail: body.clientEmail || "",
           password, watermarkText, expiresAt,
           includedPhotos: body.includedPhotos, extraPhotoPrice: body.extraPhotoPrice,
+          theme: body.theme ? String(body.theme) : undefined,
         });
         return json(res, 201, { id: created.id, slug, password, link: await linkFor(client, slug) });
       } catch (err) {
@@ -1455,6 +1460,20 @@ async function handleApi(req, res, url) {
       return json(res, 200, { ok: true });
     } catch (err) {
       return relayError(res, err, "Impossible d'enregistrer la mise en page");
+    }
+  }
+
+  // POST /local/galleries/:slug/presentation — style, polices, texte
+  // d'accompagnement, photo de couverture, vidéo d'en-tête.
+  if (parts.length === 3 && parts[2] === "presentation" && req.method === "POST") {
+    const body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
+    const allowed = ["theme", "titleFont", "bodyFont", "intro", "coverPhotoId", "headerVideo"];
+    const fields = {};
+    for (const key of allowed) if (body[key] !== undefined) fields[key] = body[key];
+    try {
+      return json(res, 200, await client.request("POST", `/api/admin/galleries/${encodeURIComponent(slug)}/presentation`, fields));
+    } catch (err) {
+      return relayError(res, err, "Impossible d'enregistrer la présentation");
     }
   }
 

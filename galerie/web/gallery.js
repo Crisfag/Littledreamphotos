@@ -27,7 +27,47 @@
   var PREVIEW_COLS = 2;
   var PREVIEW_ROWS = 2;
   var PARALLEL_TILES = 6;
-  var LAYOUTS = { grille: 1, mosaique: 1, defilement: 1 };
+  var LAYOUTS = { grille: 1, mosaique: 1, defilement: 1, recit: 1 };
+
+  /* ---------- Styles et polices (voir presentation.js) ---------- */
+
+  // [famille, paramètres Google Fonts, repli, manuscrite ?]
+  var FONTS = {
+    cormorant: ["Cormorant Garamond", "Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500", "Georgia, serif"],
+    playfair: ["Playfair Display", "Playfair+Display:ital,wght@0,400;0,500;0,600;1,400", "Georgia, serif"],
+    bodoni: ["Bodoni Moda", "Bodoni+Moda:ital,wght@0,400;0,500;0,600;1,400", "Didot, Georgia, serif"],
+    fraunces: ["Fraunces", "Fraunces:ital,wght@0,400;0,500;0,600;1,400", "Georgia, serif"],
+    dmserif: ["DM Serif Display", "DM+Serif+Display:ital@0;1", "Georgia, serif"],
+    marcellus: ["Marcellus", "Marcellus", "Georgia, serif"],
+    italiana: ["Italiana", "Italiana", "Georgia, serif"],
+    josefin: ["Josefin Sans", "Josefin+Sans:ital,wght@0,300;0,400;0,600;1,400", "sans-serif"],
+    manrope: ["Manrope", "Manrope:wght@300;400;500;600;700", "sans-serif"],
+    montserrat: ["Montserrat", "Montserrat:ital,wght@0,300;0,400;0,500;0,600;1,400", "sans-serif"],
+    syne: ["Syne", "Syne:wght@400;500;600;700", "sans-serif"],
+    greatvibes: ["Great Vibes", "Great+Vibes", "cursive", true],
+    parisienne: ["Parisienne", "Parisienne", "cursive", true],
+    jost: ["Jost", "Jost:ital,wght@0,300;0,400;0,500;1,300;1,400", "sans-serif"],
+    nunito: ["Nunito Sans", "Nunito+Sans:ital,wght@0,300;0,400;0,600;1,400", "sans-serif"],
+    worksans: ["Work Sans", "Work+Sans:ital,wght@0,300;0,400;0,500;1,400", "sans-serif"],
+    karla: ["Karla", "Karla:ital,wght@0,300;0,400;0,500;1,400", "sans-serif"],
+    lato: ["Lato", "Lato:ital,wght@0,300;0,400;0,700;1,400", "sans-serif"],
+    inter: ["Inter", "Inter:wght@300;400;500;600", "sans-serif"],
+    lora: ["Lora", "Lora:ital,wght@0,400;0,500;0,600;1,400", "Georgia, serif"],
+    ebgaramond: ["EB Garamond", "EB+Garamond:ital,wght@0,400;0,500;0,600;1,400", "Georgia, serif"],
+  };
+  // Polices de chaque style : [titres, texte].
+  var THEME_FONTS = {
+    classique: ["cormorant", "jost"],
+    doux: ["cormorant", "nunito"],
+    architectural: ["josefin", "worksans"],
+    moderne: ["manrope", "manrope"],
+    nuit: ["cormorant", "jost"],
+    editorial: ["bodoni", "karla"],
+    romantique: ["greatvibes", "lora"],
+    boheme: ["fraunces", "karla"],
+    galerie: ["marcellus", "worksans"],
+  };
+  var loadedFonts = { cormorant: true, jost: true }; // déjà dans la page
 
   var state = {
     slug: null,
@@ -1484,6 +1524,156 @@
     });
   }
 
+  /* ---------- Style, polices, en-tête ---------- */
+
+  function fontStack(key) {
+    var f = FONTS[key];
+    return '"' + f[0] + '", ' + f[2];
+  }
+  function loadFont(key) {
+    if (loadedFonts[key] || !FONTS[key]) return;
+    loadedFonts[key] = true;
+    var link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = "https://fonts.googleapis.com/css2?family=" + FONTS[key][1] + "&display=swap";
+    document.head.appendChild(link);
+  }
+
+  // Style de la galerie et polices : celles choisies par le photographe,
+  // sinon celles du style. Une police manuscrite ne sert qu'au grand titre.
+  function applyStyle(theme, titleFont, bodyFont) {
+    var key = THEME_FONTS[theme] ? theme : "classique";
+    var title = FONTS[titleFont] ? titleFont : THEME_FONTS[key][0];
+    var body = FONTS[bodyFont] ? bodyFont : THEME_FONTS[key][1];
+    loadFont(title);
+    loadFont(body);
+    var root = document.documentElement.style;
+    root.setProperty("--title", fontStack(title));
+    root.setProperty("--serif", FONTS[title][3] ? fontStack(body) : fontStack(title));
+    root.setProperty("--sans", fontStack(body));
+    document.body.setAttribute("data-theme", key);
+    if (FONTS[title][3]) document.body.setAttribute("data-title-script", "");
+    else document.body.removeAttribute("data-title-script");
+  }
+
+  function coverCanvas(photo, label) {
+    var canvas = document.createElement("canvas");
+    canvas.className = "gp-canvas";
+    canvas.setAttribute("role", "img");
+    canvas.setAttribute("aria-label", label);
+    paint(canvas, photo, LEVEL_FULL);
+    return canvas;
+  }
+
+  // En-tête : le film (YouTube, Vimeo) ou la photo de couverture, peinte en
+  // pleine définition comme dans la visionneuse (tuiles, canvas). Le lecteur
+  // vidéo n'est chargé qu'au clic : rien ne part chez YouTube ou Vimeo tant
+  // que le client ne lance pas le film (la couverture lui sert d'affiche).
+  function setupHero() {
+    var g = state.gallery;
+    el.hero.textContent = "";
+    var cover = null;
+    for (var i = 0; i < state.photos.length; i++) if (state.photos[i].id === g.coverPhotoId) cover = state.photos[i];
+    if (g.headerVideo) {
+      var frame = document.createElement("div");
+      frame.className = "gp-hero-video" + (cover ? " gp-hero-video-poster" : "");
+      if (cover) frame.appendChild(coverCanvas(cover, "Affiche du film"));
+      var play = document.createElement("button");
+      play.type = "button";
+      play.className = "gp-hero-play";
+      play.innerHTML = '<span class="gp-hero-play-icon" aria-hidden="true"></span><span>Voir le film</span>';
+      play.addEventListener("click", function () {
+        var iframe = document.createElement("iframe");
+        iframe.src = g.headerVideo + (g.headerVideo.indexOf("?") === -1 ? "?" : "&") + "autoplay=1";
+        iframe.title = "Film de la séance";
+        iframe.allow = "autoplay; fullscreen; picture-in-picture; encrypted-media";
+        iframe.setAttribute("allowfullscreen", "");
+        iframe.referrerPolicy = "strict-origin-when-cross-origin";
+        frame.textContent = "";
+        frame.classList.add("gp-hero-video-playing");
+        frame.appendChild(iframe);
+        iframe.focus();
+      });
+      frame.appendChild(play);
+      el.hero.appendChild(frame);
+    } else if (cover) {
+      var box = document.createElement("div");
+      box.className = "gp-hero-cover";
+      box.appendChild(coverCanvas(cover, "Photo de couverture"));
+      el.hero.appendChild(box);
+    }
+    el.hero.hidden = !el.hero.firstChild;
+    el.gallery.classList.toggle("gp-has-hero", !el.hero.hidden);
+    el.intro.textContent = g.intro || "";
+    el.intro.hidden = !g.intro;
+  }
+
+  // Mise en page « récit » : paysages en pleine largeur, portraits par deux
+  // (ou seul, au centre), et une respiration toutes les six photos environ.
+  // Deux portraits côte à côte prennent la même hauteur (la plus basse des
+  // deux, la plus haute est très légèrement recadrée) : plan[i + "r"].
+  function recitPlan(photos) {
+    var plan = [];
+    var i = 0;
+    var sinceBreak = 0;
+    var wide = function (p) { return p.width / p.height >= 1.15; };
+    while (i < photos.length) {
+      var startsChapter = sinceBreak >= 6;
+      if (startsChapter) sinceBreak = 0;
+      var extra = startsChapter ? " gp-recit-break" : "";
+      if (wide(photos[i])) {
+        plan[i] = "gp-recit-wide" + extra;
+        i += 1;
+        sinceBreak += 1;
+      } else if (photos[i + 1] && !wide(photos[i + 1])) {
+        plan[i] = "gp-recit-pair" + extra;
+        plan[i + 1] = "gp-recit-pair" + extra;
+        var shared = Math.min(photos[i].height / photos[i].width, photos[i + 1].height / photos[i + 1].width) * 100;
+        plan[i + "r"] = shared;
+        plan[(i + 1) + "r"] = shared;
+        i += 2;
+        sinceBreak += 2;
+      } else {
+        plan[i] = "gp-recit-solo" + extra;
+        i += 1;
+        sinceBreak += 1;
+      }
+    }
+    return plan;
+  }
+
+  // Les grandes vignettes (récit, défilement) passent en pleine définition
+  // quand elles approchent de l'écran : peintes à part, puis recopiées, pour
+  // ne jamais repasser par un cadre vide.
+  var sharpenObserver = null;
+  function sharpenLarge() {
+    if (sharpenObserver) sharpenObserver.disconnect();
+    sharpenObserver = null;
+    var layout = el.grid.getAttribute("data-layout");
+    if ((layout !== "recit" && layout !== "defilement") || !window.IntersectionObserver) return;
+    var byId = {};
+    state.photos.forEach(function (p) { byId[p.id] = p; });
+    sharpenObserver = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (!entry.isIntersecting) return;
+        sharpenObserver.unobserve(entry.target);
+        var photo = byId[entry.target.getAttribute("data-photo")];
+        var canvas = photo && gridCanvases[photo.id];
+        if (!canvas) return;
+        var needed = entry.target.offsetWidth * (window.devicePixelRatio || 1);
+        if (needed <= (photo.previewWidth || 500) * 1.15) return;
+        var sharp = document.createElement("canvas");
+        paint(sharp, photo, LEVEL_FULL).then(function (ok) {
+          if (!ok || gridCanvases[photo.id] !== canvas) return;
+          canvas.width = sharp.width;
+          canvas.height = sharp.height;
+          canvas.getContext("2d").drawImage(sharp, 0, 0);
+        });
+      });
+    }, { rootMargin: "300px 0px" });
+    el.grid.querySelectorAll(".gp-item").forEach(function (figure) { sharpenObserver.observe(figure); });
+  }
+
   /* ---------- Grille ---------- */
 
   function buildGrid() {
@@ -1493,13 +1683,15 @@
     commentBadges = {};
     tagDots = {};
     markBadges = {};
+    var plan = el.grid.getAttribute("data-layout") === "recit" ? recitPlan(state.photos) : [];
     // La grille contient toujours toutes les photos ; le filtre « ma
     // sélection » les masque par CSS (.gp-grid-filtered), pour ne jamais
     // retélécharger de tuile au seul geste de cocher un cœur.
     state.photos.forEach(function (photo, index) {
       var figure = document.createElement("figure");
-      figure.className = "gp-item" + (photo.selected ? " gp-item-selected" : "");
-      var ratio = (photo.height / photo.width) * 100;
+      figure.className = "gp-item" + (photo.selected ? " gp-item-selected" : "") + (plan[index] ? " " + plan[index] : "");
+      figure.setAttribute("data-photo", photo.id);
+      var ratio = plan[index + "r"] || (photo.height / photo.width) * 100;
       figure.style.setProperty("--ratio", ratio.toFixed(3) + "%");
 
       var canvas = document.createElement("canvas");
@@ -1556,6 +1748,7 @@
       paint(canvas, photo, LEVEL_PREVIEW);
     });
     updateSelectionUI();
+    sharpenLarge();
   }
 
   /* ---------- Visionneuse ---------- */
@@ -1833,6 +2026,8 @@
           ? "Galerie de " + state.gallery.clientName
           : "";
         el.grid.setAttribute("data-layout", LAYOUTS[state.gallery.layout] ? state.gallery.layout : "grille");
+        applyStyle(state.gallery.theme, state.gallery.titleFont, state.gallery.bodyFont);
+        setupHero();
         if (state.gallery.expiresAt) {
           var date = new Date(state.gallery.expiresAt * 1000);
           el.expiry.textContent =
@@ -1886,6 +2081,7 @@
       })
       .then(function (data) {
         if (!data || !el.login) return;
+        if (data.theme) applyStyle(data.theme, data.titleFont, data.bodyFont);
         if (data.type === "image") {
           el.login.style.backgroundImage =
             "linear-gradient(rgba(20, 16, 14, .4), rgba(20, 16, 14, .4)), url(" + apiUrl("/background-image") + ")";
@@ -1910,6 +2106,8 @@
       error: $("gp-error"),
       title: $("gp-title"),
       subtitle: $("gp-subtitle"),
+      intro: $("gp-intro"),
+      hero: $("gp-hero"),
       expiry: $("gp-expiry"),
       grid: $("gp-grid"),
       empty: $("gp-empty"),

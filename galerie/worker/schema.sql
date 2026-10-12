@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS photographers (
   -- nom de studio ci-dessus (voir admin-server.mjs, brandFor) : pas besoin
   -- d'un réglage séparé qui ferait doublon.
   default_layout          TEXT NOT NULL DEFAULT 'grille',
+  default_theme           TEXT NOT NULL DEFAULT '',   -- style de départ des nouvelles galeries (presentation.js)
   -- Relances automatiques (client à J-7 et J-2 de l'expiration, photographe
   -- à J-2) tant que la sélection n'est pas validée. 1 = actives (défaut).
   reminders_enabled INTEGER NOT NULL DEFAULT 1,
@@ -108,9 +109,20 @@ CREATE TABLE IF NOT EXISTS galleries (
   login_background_color TEXT NOT NULL DEFAULT '',
   -- Mise en page proposée au client : 'grille' (vignettes régulières, défaut),
   -- 'mosaique' (colonnes façon presse, chaque photo garde son format) ou
-  -- 'defilement' (une photo à la fois, en grand). Purement visuel — ne change
-  -- rien au niveau de tuile chargé ni à la protection des images.
+  -- 'defilement' (une photo à la fois, en grand) ou 'recit' (paysages en
+  -- pleine largeur, portraits par deux, respirations). Purement visuel — ne
+  -- change rien à la protection des images (les grandes vignettes chargent
+  -- simplement le niveau de tuiles plein écran).
   layout                 TEXT NOT NULL DEFAULT 'grille',
+  -- Présentation (presentation.js) : style ('' = classique), polices
+  -- choisies ('' = celles du style), texte d'accompagnement, en-tête (photo
+  -- de couverture prise dans la galerie, ou vidéo YouTube/Vimeo).
+  theme                  TEXT NOT NULL DEFAULT '',
+  title_font             TEXT NOT NULL DEFAULT '',
+  body_font              TEXT NOT NULL DEFAULT '',
+  intro                  TEXT NOT NULL DEFAULT '',
+  cover_photo_id         TEXT NOT NULL DEFAULT '',
+  header_video           TEXT NOT NULL DEFAULT '',
   -- Forfait : nombre de photos incluses dans ce que le client a déjà payé.
   -- NULL = pas de forfait défini (comportement d'avant cette fonctionnalité :
   -- aucun supplément calculé, quel que soit le nombre de coups de cœur).
