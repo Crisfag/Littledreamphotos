@@ -342,6 +342,9 @@ Carte blanche à coins 14 px et ombre flottante, pastille d'icône 36 px à coin
 ### Labo de protection (signature)
 Sur fond nuit : une photo 4:5 à coins 16 px et, à côté, des commandes empilées (fond `night-2`, contour `night-line`, coins 14 px) qui activent chacune une couche : tuiles (grille blanche, léger flou), filigrane, empreinte (trame pervenche en `screen` et code mono). L'état actif passe en contour indigo et pastille pervenche « Visible ». La capture simulée déclenche un flash blanc de 0,5 s, floute la photo, puis fait monter deux cartes blanches (e-mail au photographe, origine retrouvée).
 
+### Bureau de la séance (signature)
+Chapitre « Réservé, signé, payé », juste après l'ouverture : un plateau brume à coins 24 px, contour intérieur `line`, sur lequel se posent les trois objets d'une même réservation. La page de créneaux (fenêtre produit : titre de formule, jours, pastilles d'horaire de 40 px, prises barrées en gris, celle de la cliente en outremer avec coche, bouton noir) ; le contrat (papier blanc à coins 6 px, incliné de -2°, ombre de fenêtre, chevauchant la fenêtre de 28 px : studio en outremer, numéro en mono, lignes et montants mono à filets, signature manuscrite tracée à l'encre outremer profond, tampon vert « Signé » incliné de -6°, preuve SHA-256 en mono) ; deux notifications (acompte reçu, ajout à l'agenda). Moment joué une fois à l'entrée dans l'écran : le créneau se prend, la signature se trace (1,3 s), le tampon se pose, les notifications montent ; sans script ou en mouvement réduit, l'état final s'affiche directement. Sous le plateau, trois faits à filet supérieur.
+
 ### Ticket de prix (signature)
 Carte blanche de 300 px à coins 14 px et ombre flottante, posée sur la bande photo pleine largeur : titre du tirage, lignes coût / marge (en vert) / prix client en mono tabulaire, total au-dessus d'un filet, note « Exemple de prix ». Sous 640 px, il passe sous la photo en pleine largeur, remonté de 56 px sur son bord.
 

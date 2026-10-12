@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Holypixx — Galeries clients protégées pour photographes</title>
-  <meta name="description" content="Galeries clients protégées pour photographes : photos impossibles à télécharger, empreinte invisible traçable, alerte de capture, sélection et annotations du client, suppléments payés en ligne, boutique de tirages, livraison HD et portfolio à votre nom." />
+  <meta name="description" content="Galeries clients protégées pour photographes : photos impossibles à télécharger, empreinte invisible traçable, alerte de capture, sélection et annotations du client, réservation et contrats signés en ligne, suppléments payés en ligne, boutique de tirages, livraison HD et portfolio à votre nom." />
   <link rel="canonical" href="https://www.holypixx.com/" />
   <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
   <meta name="author" content="Holypixx" />
@@ -174,6 +174,9 @@
     <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3.5 19.5 6v5.5c0 4.5-3.2 7.9-7.5 9-4.3-1.1-7.5-4.5-7.5-9V6L12 3.5Z"/><path d="m9 12 2.2 2.2L15.5 10"/></symbol>
     <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13.5 6.5 19 12l-5.5 5.5"/></symbol>
     <symbol id="i-camera" viewBox="0 0 24 24"><path d="M4.5 8.5h3l1.5-2h6l1.5 2h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-15a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1Z"/><circle cx="12" cy="13.5" r="3.5"/></symbol>
+    <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/><path d="m9.5 15 2 2 3.5-3.5"/></symbol>
+    <symbol id="i-sign" viewBox="0 0 24 24"><path d="M14.5 4.5 19.5 9.5 9 20H4v-5L14.5 4.5Z"/><path d="M12.5 6.5l5 5"/></symbol>
+    <symbol id="i-filter" viewBox="0 0 24 24"><path d="M4 5.5h16l-6 7.2v5.3l-4 2v-7.3L4 5.5Z"/></symbol>
     <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
     <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
   </svg>
@@ -186,6 +189,7 @@
         <span class="brand-name">Holypixx</span>
       </a>
       <nav class="nav-links" id="nav-links" aria-label="Sections">
+        <a href="#seance">Réservation</a>
         <a href="#protection">Protection</a>
         <a href="#selection">Sélection</a>
         <a href="#vente">Vente</a>
@@ -262,6 +266,10 @@
             <span class="note-ico ok"><svg class="ico"><use href="#i-check"/></svg></span>
             <span><strong>Sélection validée</strong><em>14 photos · 2 suppléments payés</em></span>
           </div>
+          <div class="note note-4" aria-hidden="true">
+            <span class="note-ico"><svg class="ico"><use href="#i-calendar"/></svg></span>
+            <span><strong>Séance réservée</strong><em>Mini-séance de Noël · acompte réglé</em></span>
+          </div>
           <div class="note note-3" aria-hidden="true">
             <span class="note-ico"><svg class="ico"><use href="#i-cart"/></svg></span>
             <span><strong>Nouvelle commande</strong><em>Tirage 30 × 45 · livré par le labo</em></span>
@@ -271,12 +279,93 @@
 
       <div class="wrap">
         <ul class="caps" aria-label="En bref">
+          <li><svg class="ico"><use href="#i-calendar"/></svg>Réservation en ligne</li>
+          <li><svg class="ico"><use href="#i-sign"/></svg>Contrats signés</li>
           <li><svg class="ico"><use href="#i-shield"/></svg>Galeries protégées</li>
           <li><svg class="ico"><use href="#i-pin"/></svg>Sélection annotée</li>
           <li><svg class="ico"><use href="#i-receipt"/></svg>Suppléments en ligne</li>
           <li><svg class="ico"><use href="#i-cart"/></svg>Boutique de tirages</li>
           <li><svg class="ico"><use href="#i-download"/></svg>Livraison HD</li>
           <li><svg class="ico"><use href="#i-globe"/></svg>Portfolio à votre nom</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============ Avant la séance : réservation, contrat, acompte ============ -->
+    <section class="chapter prep" id="seance">
+      <div class="wrap">
+        <div class="chapter-head">
+          <h2>Réservé, signé, payé&nbsp;: avant même le premier déclic.</h2>
+          <p class="chapter-lede">Votre client choisit son créneau sur votre portfolio, signe votre contrat en ligne et règle l'acompte. Vous recevez la séance dans votre agenda, sans un seul PDF à imprimer ni un message à relancer.</p>
+        </div>
+
+        <div class="prep-desk" id="prep-desk">
+          <!-- La page de réservation, telle que la voit le client -->
+          <figure class="window bk" aria-label="Page de réservation d'un studio : créneaux d'une mini-séance">
+            <div class="window-bar">
+              <span class="window-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+              <span class="window-url"><svg class="ico ico-xs"><use href="#i-lock"/></svg>votre-studio.holypixx.com<span class="window-path">/#reserver</span></span>
+            </div>
+            <div class="bk-body">
+              <p class="bk-title">Mini-séance de Noël</p>
+              <p class="bk-meta">20 min · 90 € · acompte 30 € · au studio</p>
+              <p class="bk-day">Samedi 5 décembre</p>
+              <ul class="bk-slots" aria-label="Créneaux du samedi">
+                <li class="bk-slot taken"><span>10 h 00</span></li>
+                <li class="bk-slot target"><span>10 h 20</span><svg class="ico ico-xs" aria-hidden="true"><use href="#i-check"/></svg></li>
+                <li class="bk-slot"><span>10 h 40</span></li>
+                <li class="bk-slot taken"><span>11 h 00</span></li>
+                <li class="bk-slot"><span>11 h 20</span></li>
+                <li class="bk-slot taken"><span>11 h 40</span></li>
+              </ul>
+              <p class="bk-day">Dimanche 6 décembre</p>
+              <ul class="bk-slots" aria-label="Créneaux du dimanche">
+                <li class="bk-slot"><span>10 h 00</span></li>
+                <li class="bk-slot taken"><span>10 h 20</span></li>
+                <li class="bk-slot"><span>10 h 40</span></li>
+              </ul>
+              <span class="bk-btn">Réserver et payer l'acompte</span>
+            </div>
+          </figure>
+
+          <!-- Le contrat, signé en ligne -->
+          <figure class="paper" aria-label="Contrat signé électroniquement par la cliente">
+            <div class="paper-head">
+              <span class="paper-studio">Votre studio</span>
+              <span class="paper-no num">Contrat n° 2026-014</span>
+            </div>
+            <p class="paper-title">Mini-séance de Noël</p>
+            <p class="paper-client">Camille Dubois · samedi 5 décembre, 10 h 20</p>
+            <dl class="paper-lines">
+              <div><dt>Mini-séance au studio, 20 min</dt><dd class="num">90,00 €</dd></div>
+              <div><dt>5 photos retouchées</dt><dd>incluses</dd></div>
+              <div class="paper-total"><dt>Total</dt><dd class="num">90,00 €</dd></div>
+              <div class="paper-deposit"><dt>Acompte à la signature</dt><dd class="num">30,00 €</dd></div>
+            </dl>
+            <div class="paper-sign">
+              <svg class="sig" viewBox="0 0 220 64" aria-hidden="true"><path pathLength="1" d="M8 44c6-18 18-30 24-24 6 6-8 30-14 26-5-4 6-20 16-22 8-2 6 14 12 14 7 0 10-18 16-18 5 0 2 16 8 16 7 0 9-14 15-14 5 0 3 12 9 12 8 0 12-16 20-12 6 3-2 14 6 14 10 0 20-12 34-14 12-2 22 2 34-2"/><path pathLength="1" class="sig-tail" d="M40 54c40-6 92-8 150-12"/></svg>
+              <span class="paper-stamp"><svg class="ico ico-xs" aria-hidden="true"><use href="#i-check"/></svg>Signé</span>
+            </div>
+            <p class="paper-proof">Signé électroniquement par Camille Dubois<br /><span class="num">SHA-256 · 3F5A 21C9 8B07 E4D2…</span></p>
+          </figure>
+
+          <!-- Ce que reçoit le photographe -->
+          <div class="prep-notes">
+            <div class="prep-note">
+              <span class="note-ico ok"><svg class="ico"><use href="#i-check"/></svg></span>
+              <span><strong>Acompte reçu</strong><em><span class="num">30,00 €</span> · Camille Dubois</em></span>
+            </div>
+            <div class="prep-note">
+              <span class="note-ico"><svg class="ico"><use href="#i-calendar"/></svg></span>
+              <span><strong>Ajoutée à votre agenda</strong><em>Sam. 5 déc. · 10 h 20 · rappel la veille</em></span>
+            </div>
+          </div>
+        </div>
+
+        <ul class="prep-facts">
+          <li><h3>Réservation en ligne</h3><p>Formules, créneaux et séries de mini-séances ouverts en deux clics. Vos clients réservent depuis votre portfolio et paient l'acompte&nbsp;; un créneau ne se réserve jamais deux fois.</p></li>
+          <li><h3>Devis et contrats signés</h3><p>Vos prestations et vos conditions, signées en ligne sans imprimante. Chacun reçoit le contrat signé en PDF, avec la date et l'empreinte du document.</p></li>
+          <li><h3>Agenda et rappels</h3><p>Chaque séance arrive avec son invitation pour votre agenda, et votre client reçoit un rappel la veille. Moins d'oublis, moins de messages.</p></li>
         </ul>
       </div>
     </section>
@@ -366,6 +455,7 @@
             <li><svg class="ico"><use href="#i-pin"/></svg><div><h3>Repères annotés</h3><p>Un repère posé à l'endroit précis, avec sa remarque. Fini les captures entourées au feutre.</p></div></li>
             <li><svg class="ico"><use href="#i-clock"/></svg><div><h3>Relances automatiques</h3><p>Rappel au client 7 et 2 jours avant l'expiration, à vous 2 jours avant. Chaque relance ne part qu'une fois.</p></div></li>
             <li><svg class="ico"><use href="#i-layout"/></svg><div><h3>Trois mises en page, votre musique</h3><p>Grille, mosaïque ou défilement éditorial, avec une bibliothèque libre de droits ou votre playlist.</p></div></li>
+            <li><svg class="ico"><use href="#i-filter"/></svg><div><h3>Sélection exportée vers Lightroom</h3><p>Les noms des photos choisies se collent dans le filtre de Lightroom&nbsp;: JPEG et RAW retrouvés d'un coup, prêts pour la retouche.</p></div></li>
             <li><svg class="ico"><use href="#i-lock"/></svg><div><h3>Accès sous contrôle</h3><p>Mot de passe régénérable d'un clic, expiration automatique, écran d'accueil à vos couleurs.</p></div></li>
           </ul>
         </div>
@@ -604,6 +694,8 @@
           <details><summary>Un client peut-il télécharger les photos ?</summary><p>Pas pendant la sélection : les photos sont découpées en tuiles et recomposées à l'écran, aucun fichier n'est téléchargeable. Quand la séance est terminée, vous déposez les fichiers définitifs : il les télécharge alors en haute définition, en ZIP ou une par une.</p></details>
           <details><summary>Peut-on empêcher une capture d'écran ?</summary><p>Aucun site au monde ne le peut. Holypixx rend une capture inutile (basse définition, filigrane dense), vous prévient par e-mail quand une capture est tentée, et retrouve la galerie d'origine d'une image grâce à son empreinte invisible.</p></details>
           <details><summary>Mon client doit-il créer un compte ?</summary><p>Non. Il reçoit un lien et un mot de passe, rien d'autre.</p></details>
+          <details><summary>Mes clients peuvent-ils réserver et signer en ligne ?</summary><p>Oui, avec les formules Essentiel, Pro et Studio. Vous ouvrez vos créneaux (ou une série de mini-séances), vos clients réservent depuis votre portfolio et paient l'acompte sur votre compte Stripe. Pour une séance sur mesure, vous leur envoyez un devis qu'ils signent en ligne&nbsp;; chacun reçoit le contrat signé en PDF.</p></details>
+          <details><summary>Un contrat signé en ligne est-il valable ?</summary><p>C'est une signature électronique simple au sens du règlement européen eIDAS&nbsp;: elle ne peut pas être écartée au seul motif qu'elle est électronique. Holypixx conserve sa preuve&nbsp;: le nom saisi, la date, l'empreinte du document signé. Les conditions proposées sont un modèle à adapter, pas un conseil juridique.</p></details>
           <details><summary>Comment fonctionne la boutique de tirages ?</summary><p>Vous choisissez vos formats et fixez votre marge. Le client commande depuis sa galerie et paie en ligne sur votre compte Stripe ; le laboratoire Prodigi imprime et livre directement chez lui, avec suivi.</p></details>
           <details><summary>Prenez-vous une commission sur mes ventes ?</summary><p>Pas sur vos séances : sur chaque paiement en ligne (suppléments, tirages), seuls les frais de paiement sont retenus, 2&nbsp;% + 0,30&nbsp;€, ce que coûtent la carte bancaire et le virement vers votre compte. Pour la photo scolaire, à son ouverture : 5&nbsp;% des ventes scolaires frais bancaires compris, sauf avec la formule Studio.</p></details>
           <details><summary>Puis-je avoir une adresse à mon nom ?</summary><p>Oui, avec la formule Pro : vos galeries et votre portfolio s'ouvrent sur <span class="nowrap">votre-studio.holypixx.com</span>, avec le nom de votre studio.</p></details>
@@ -630,6 +722,7 @@
         <span class="brand-name">Holypixx</span>
       </a>
       <nav class="footer-links" aria-label="Pied de page">
+        <a href="#seance">Réservation</a>
         <a href="#protection">Protection</a>
         <a href="#selection">Sélection</a>
         <a href="#vente">Vente</a>
