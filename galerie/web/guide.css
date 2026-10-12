@@ -245,6 +245,28 @@
 .r-mock-slots .r-mock-taken { color: #a3a3b2; text-decoration: line-through; box-shadow: none; background: var(--mist); }
 .r-mock-slots .r-mock-pick { color: #fff; background: var(--accent); box-shadow: none; }
 
+/* ---------- Calendrier de fidélité ---------- */
+
+.g-field-label { font-size: .86rem; font-weight: 500; color: var(--ink-2); }
+.f-seasons { display: grid; gap: 10px; }
+.g-row:has(> [hidden]) { grid-template-columns: minmax(0, 1fr); }
+.f-list { list-style: none; display: grid; gap: 6px; }
+.f-item {
+  display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 14px; align-items: baseline;
+  width: 100%; padding: 12px 14px; text-align: left; border-radius: 12px;
+  background: var(--paper); box-shadow: 0 0 0 1px var(--line) inset;
+  transition: background-color .2s var(--ease), box-shadow .2s var(--ease);
+}
+.f-item:hover { background: #fafafc; }
+.f-item[aria-pressed="true"] { background: var(--accent-soft); box-shadow: 0 0 0 1.5px var(--accent) inset; }
+.f-item:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.f-when { font-family: var(--mono); font-size: .8rem; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.f-when.f-now { color: var(--accent); font-weight: 600; }
+.f-what strong { display: block; font-size: .96rem; font-weight: 600; letter-spacing: -0.01em; color: var(--ink); }
+.f-what em { display: block; margin-top: 2px; font-style: normal; font-size: .86rem; color: var(--muted); }
+.f-item-season .f-what strong { font-weight: 500; color: var(--ink-2); }
+.f-mock-msg { margin-top: 16px; padding: 14px 16px; border-radius: 12px; background: var(--mist); font-size: .9rem; line-height: 1.55; color: var(--ink-2); }
+
 /* ---------- Écrans plus étroits ---------- */
 
 @media (max-width: 1000px) {
@@ -261,9 +283,10 @@
   .g-row { grid-template-columns: 1fr; }
   .g-hero-actions .btn { flex: 1 1 100%; justify-content: center; }
   .g-signed-stamp { right: 8px; }
+  .f-item { grid-template-columns: minmax(0, 1fr); gap: 4px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .g-fill, .g-field input, .g-field select, .g-seg span, .p-photo img, .p-switch, .p-switch::after, .p-meter span { transition: none; }
+  .g-fill, .g-field input, .g-field select, .g-seg span, .p-photo img, .p-switch, .p-switch::after, .p-meter span, .f-item { transition: none; }
   .p-alert { animation: none; }
 }
 

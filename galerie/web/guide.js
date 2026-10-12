@@ -149,7 +149,7 @@
     else p("Les personnes photographiées ont donné leur accord au client pour les usages prévus à l'article 6.");
 
     h("8. Données personnelles");
-    p("Les coordonnées du client servent uniquement à l'organisation de la séance, à la facturation et à la livraison des photos. Elles sont conservées le temps nécessaire à ces fins et aux obligations comptables. Le client peut les consulter, les faire corriger ou effacer en écrivant à ", F(d.email, "[e-mail]"), ".");
+    p("Les coordonnées du client servent à l'organisation de la séance, à la facturation et à la livraison des photos. Le photographe peut aussi lui proposer par e-mail des séances semblables (étapes de l'enfant, anniversaires, séances de saison) ; le client peut s'y opposer à tout moment, gratuitement, en répondant simplement à l'un de ces messages. Les coordonnées sont conservées le temps nécessaire à ces fins et aux obligations comptables. Le client peut les consulter, les faire corriger ou effacer en écrivant à ", F(d.email, "[e-mail]"), ".");
 
     h("9. Litiges");
     p("Le présent contrat est soumis au droit " + c.law + ". En cas de désaccord, les parties recherchent d'abord une solution amiable.");

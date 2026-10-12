@@ -54,7 +54,7 @@ Le photographe reste titulaire des droits d'auteur. Le client peut utiliser les 
 Le photographe ne publie aucune photo du client (site, réseaux sociaux, portfolio) sans son accord écrit préalable.
 
 7. Données personnelles
-Les coordonnées du client servent uniquement à l'organisation de la séance et à la livraison des photos.`;
+Les coordonnées du client servent à l'organisation de la séance et à la livraison des photos. Le photographe peut aussi lui proposer par e-mail des séances semblables (étapes de l'enfant, anniversaires, séances de saison) ; le client peut s'y opposer à tout moment en répondant simplement à l'un de ces messages.`;
 
 function now() {
   return Math.floor(Date.now() / 1000);
