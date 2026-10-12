@@ -982,7 +982,12 @@ Studio) :
 
 1. **Formules de séance** : nom, durée, prix, acompte payé en ligne (0 =
    sans acompte), lieu, description. Une formule se retire du mini-site
-   sans être supprimée (case « Proposée »).
+   sans être supprimée (case « Proposée »). Au lieu d'un prix unique, une
+   formule peut proposer **plusieurs tarifs selon le nombre de photos**
+   (jusqu'à 6 : « 5 photos 90 € · 10 photos 120 € », nom facultatif) : le
+   client choisit le sien en réservant, la réservation garde le nombre de
+   photos et le prix, repris dans les e-mails et le tableau de bord.
+   L'acompte vaut pour tous les tarifs et ne dépasse pas le moins cher.
 2. **Créneaux** : des horaires précis (« 10:00, 14:30 ») ou une série pour
    les mini-séances (« de 10 h à 16 h toutes les 20 min »), à l'heure de
    Bruxelles. Un créneau réservé ne peut pas être supprimé.
@@ -1009,6 +1014,7 @@ elle a déjà été appliquée) :
 ```bash
 cd worker
 npx wrangler d1 execute galerie-protegee --remote --file=migrations/2026-10-reservations.sql
+npx wrangler d1 execute galerie-protegee --remote --file=migrations/2026-10-reservations-tarifs.sql
 npm run deploy
 ```
 

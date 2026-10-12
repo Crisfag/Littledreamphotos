@@ -5125,25 +5125,56 @@
     return cents ? (cents / 100).toFixed(2).replace(".", ",").replace(",00", "") : "";
   }
 
+  // « 5 photos 90 € / 10 photos 120 € » pour une formule à plusieurs tarifs.
+  function bookingTiersText(tiers) {
+    return (tiers || []).map(function (t) {
+      return (t.label ? t.label + " : " : "") + t.photos + " photo" + (t.photos > 1 ? "s" : "") + " " + formatEuros(t.priceCents);
+    }).join(" / ");
+  }
+
   function offerMetaText(o) {
+    var tiered = o.tiers && o.tiers.length;
     return [
       durationText(o.durationMin),
-      o.priceCents ? formatEuros(o.priceCents) : "",
+      tiered ? bookingTiersText(o.tiers) : (o.priceCents ? formatEuros(o.priceCents) : ""),
       o.depositCents ? "acompte " + formatEuros(o.depositCents) : "sans acompte",
       o.location,
     ].filter(Boolean).join(" · ");
   }
 
+  function bookingTierRowHtml(t) {
+    t = t || { label: "", photos: "", priceCents: 0 };
+    return '<div class="ad-bk-tier">' +
+      '<input data-tier="label" maxlength="40" placeholder="Nom (facultatif)" value="' + esc(t.label || "") + '" aria-label="Nom du tarif (facultatif)" />' +
+      '<label class="ad-bk-tier-num"><input data-tier="photos" inputmode="numeric" maxlength="3" placeholder="10" value="' + esc(t.photos || "") + '" aria-label="Nombre de photos" /><span>photos</span></label>' +
+      '<label class="ad-bk-tier-num"><input data-tier="price" inputmode="decimal" placeholder="120" value="' + esc(bookingEurosInput(t.priceCents)) + '" aria-label="Prix en euros" /><span>€</span></label>' +
+      '<button type="button" class="ad-btn ad-btn-small ad-btn-icon" data-tier-remove aria-label="Retirer ce tarif">×</button>' +
+      "</div>";
+  }
+
   function offerFormHtml(o) {
-    o = o || { title: "", durationMin: 60, priceCents: 0, depositCents: 0, location: "", description: "" };
+    o = o || { title: "", durationMin: 60, priceCents: 0, depositCents: 0, tiers: [], location: "", description: "" };
     var editing = Boolean(o.id);
+    var tiered = Boolean(o.tiers && o.tiers.length);
+    var tierRows = tiered ? o.tiers : [null, null];
     return '<form id="ad-bk-offer-form" class="ad-bk-offer-form" novalidate>' +
       '<div class="ad-field-row">' +
       '<label class="ad-field"><span>Nom de la formule</span><input name="title" maxlength="80" required placeholder="ex. Mini-séance de Noël" value="' + esc(o.title) + '" /></label>' +
       '<label class="ad-field"><span>Durée <em>(minutes)</em></span><input name="durationMin" type="number" min="5" max="720" step="5" required value="' + esc(o.durationMin) + '" /></label>' +
       "</div>" +
-      '<div class="ad-field-row">' +
-      '<label class="ad-field"><span>Prix de la séance <em>(€, facultatif)</em></span><input name="price" inputmode="decimal" placeholder="ex. 90" value="' + esc(bookingEurosInput(o.priceCents)) + '" /></label>' +
+      '<div class="ad-bk-pricing">' +
+      '<div class="ad-seg" role="group" aria-label="Tarif">' +
+      '<button type="button" class="ad-seg-btn" data-bk-pricing="single" aria-pressed="' + !tiered + '">Prix unique</button>' +
+      '<button type="button" class="ad-seg-btn" data-bk-pricing="tiers" aria-pressed="' + tiered + '">Plusieurs tarifs selon le nombre de photos</button>' +
+      "</div>" +
+      '<div class="ad-field-row" data-bk-pricing-panel="single"' + (tiered ? " hidden" : "") + ">" +
+      '<label class="ad-field"><span>Prix de la séance <em>(€, facultatif)</em></span><input name="price" inputmode="decimal" placeholder="ex. 90" value="' + esc(tiered ? "" : bookingEurosInput(o.priceCents)) + '" /></label>' +
+      "</div>" +
+      '<div class="ad-bk-tiers-box" data-bk-pricing-panel="tiers"' + (tiered ? "" : " hidden") + ">" +
+      '<div class="ad-bk-tiers" id="ad-bk-tiers">' + tierRows.map(bookingTierRowHtml).join("") + "</div>" +
+      '<button type="button" class="ad-link-btn" id="ad-bk-tier-add">+ Ajouter un tarif</button>' +
+      '<p class="ad-hint">Vos clients choisissent leur tarif en réservant, par exemple 5, 10 ou 15 photos. L\'acompte ci-dessous vaut pour tous les tarifs.</p>' +
+      "</div>" +
       '<label class="ad-field"><span>Acompte payé en ligne <em>(€, 0 = sans acompte)</em></span><input name="deposit" inputmode="decimal" placeholder="ex. 30" value="' + esc(bookingEurosInput(o.depositCents)) + '" /></label>' +
       "</div>" +
       '<label class="ad-field"><span>Lieu <em>(facultatif)</em></span><input name="location" maxlength="160" placeholder="ex. Studio, rue de la Station 12, Liège" value="' + esc(o.location) + '" /></label>' +
@@ -5234,7 +5265,9 @@
     var status = BOOKING_STATUS[b.status] || [b.status, ""];
     return "<tr>" +
       '<td><strong>' + esc(bookingDay(b.startsAt)) + "</strong><br>" + esc(bookingTime(b.startsAt)) + " · " + esc(durationText(b.durationMin)) + "</td>" +
-      "<td>" + esc(b.offerTitle) + (b.location ? '<br><span class="ad-hint">' + esc(b.location) + "</span>" : "") + "</td>" +
+      "<td>" + esc(b.offerTitle) +
+      (b.photos ? '<br><span class="ad-hint">' + esc(b.photos + " photo" + (b.photos > 1 ? "s" : "") + (b.tierLabel ? " (" + b.tierLabel + ")" : "") + " · " + formatEuros(b.priceCents)) + "</span>" : "") +
+      (b.location ? '<br><span class="ad-hint">' + esc(b.location) + "</span>" : "") + "</td>" +
       '<td><span class="ad-acc-name">' + clLink(b.clientName, b.clientEmail) + "</span>" +
       '<a class="ad-acc-sub" href="mailto:' + esc(b.clientEmail) + '">' + esc(b.clientEmail) + "</a>" +
       (b.clientPhone ? '<span class="ad-acc-sub">' + esc(b.clientPhone) + "</span>" : "") +
@@ -5340,17 +5373,63 @@
       offerForm.addEventListener("submit", async function (e) {
         e.preventDefault();
         var f = offerForm.elements;
-        var priceCents = bookingCents(f.price.value);
+        var tieredMode = offerForm.querySelector('[data-bk-pricing="tiers"]').getAttribute("aria-pressed") === "true";
+        var priceCents = tieredMode ? 0 : bookingCents(f.price.value);
         var depositCents = bookingCents(f.deposit.value);
         if (isNaN(priceCents) || isNaN(depositCents)) { toast("Montant illisible : écrivez par exemple 30 ou 30,50.", true); return; }
+        // Plusieurs tarifs : les lignes laissées vides sont ignorées.
+        var tiers = [];
+        if (tieredMode) {
+          var problem = "";
+          offerForm.querySelectorAll(".ad-bk-tier").forEach(function (row) {
+            var label = row.querySelector('[data-tier="label"]').value.trim();
+            var photosRaw = row.querySelector('[data-tier="photos"]').value.trim();
+            var priceRaw = row.querySelector('[data-tier="price"]').value.trim();
+            if (!label && !photosRaw && !priceRaw) return;
+            var photos = Number(photosRaw);
+            var cents = bookingCents(priceRaw);
+            if (!problem && !(Number.isInteger(photos) && photos >= 1)) problem = "Indiquez le nombre de photos de chaque tarif.";
+            if (!problem && (isNaN(cents) || cents < 100)) problem = "Indiquez le prix de chaque tarif, par exemple 120 ou 120,50.";
+            tiers.push({ label: label, photos: photos, priceCents: cents });
+          });
+          if (problem) { toast(problem, true); return; }
+          if (!tiers.length) { toast("Ajoutez au moins un tarif, ou choisissez « Prix unique ».", true); return; }
+        }
         var body = {
           title: f.title.value, durationMin: Number(f.durationMin.value), priceCents: priceCents, depositCents: depositCents,
-          location: f.location.value, description: f.description.value,
+          tiers: tiers, location: f.location.value, description: f.description.value,
         };
         var editing = bookingState.editingOfferId;
         var ok = await bookingCall("POST", editing ? "/offers/" + encodeURIComponent(editing) : "/offers", body, editing ? "Formule enregistrée." : "Formule ajoutée.");
         if (ok && editing) { bookingState.editingOfferId = ""; paintBooking(bookingState.data); }
       });
+    }
+    if (offerForm) {
+      // Prix unique ou plusieurs tarifs : un seul des deux panneaux visible.
+      offerForm.querySelectorAll("[data-bk-pricing]").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          var mode = btn.getAttribute("data-bk-pricing");
+          offerForm.querySelectorAll("[data-bk-pricing]").forEach(function (b) { b.setAttribute("aria-pressed", String(b === btn)); });
+          offerForm.querySelectorAll("[data-bk-pricing-panel]").forEach(function (panel) { panel.hidden = panel.getAttribute("data-bk-pricing-panel") !== mode; });
+          if (mode === "tiers") { var first = offerForm.querySelector('.ad-bk-tier [data-tier="photos"]'); if (first) first.focus(); }
+        });
+      });
+      var tierBox = document.getElementById("ad-bk-tiers");
+      var addTier = document.getElementById("ad-bk-tier-add");
+      var syncTierAdd = function () { addTier.hidden = tierBox.children.length >= 6; };
+      addTier.addEventListener("click", function () {
+        tierBox.insertAdjacentHTML("beforeend", bookingTierRowHtml());
+        tierBox.lastElementChild.querySelector('[data-tier="photos"]').focus();
+        syncTierAdd();
+      });
+      tierBox.addEventListener("click", function (e) {
+        var remove = e.target.closest("[data-tier-remove]");
+        if (!remove) return;
+        remove.closest(".ad-bk-tier").remove();
+        if (!tierBox.children.length) tierBox.insertAdjacentHTML("beforeend", bookingTierRowHtml());
+        syncTierAdd();
+      });
+      syncTierAdd();
     }
     var cancelEdit = document.getElementById("ad-bk-offer-cancel");
     if (cancelEdit) cancelEdit.addEventListener("click", function () { bookingState.editingOfferId = ""; paintBooking(data); });

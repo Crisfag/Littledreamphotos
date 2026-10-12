@@ -877,6 +877,7 @@ CREATE TABLE IF NOT EXISTS booking_offers (
   duration_min    INTEGER NOT NULL,
   price_cents     INTEGER NOT NULL DEFAULT 0, -- prix de la séance (indicatif, réglé avec le photographe)
   deposit_cents   INTEGER NOT NULL DEFAULT 0, -- acompte payé en ligne à la réservation (0 = sans acompte)
+  tiers           TEXT NOT NULL DEFAULT '',   -- tarifs selon le nombre de photos (JSON [{label, photos, priceCents}]), vide = prix unique
   location        TEXT NOT NULL DEFAULT '',
   active          INTEGER NOT NULL DEFAULT 1,
   position        INTEGER NOT NULL DEFAULT 0,
@@ -912,6 +913,8 @@ CREATE TABLE IF NOT EXISTS bookings (
   price_cents       INTEGER NOT NULL DEFAULT 0,
   deposit_cents     INTEGER NOT NULL DEFAULT 0,
   fee_cents         INTEGER NOT NULL DEFAULT 0,
+  photos            INTEGER,                  -- tarif choisi : nombre de photos (formule à plusieurs tarifs)
+  tier_label        TEXT NOT NULL DEFAULT '', -- tarif choisi : nom facultatif
   client_name       TEXT NOT NULL,
   client_email      TEXT NOT NULL,
   client_phone      TEXT NOT NULL DEFAULT '',

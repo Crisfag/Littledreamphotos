@@ -212,6 +212,17 @@ h3 { font-size: 1.4rem; margin-bottom: .8rem; }
 .pf-bk-time:hover { border-color: var(--rose); }
 .pf-bk-time[aria-pressed="true"] { background: var(--rose-deep); border-color: var(--rose-deep); color: #fff; }
 .pf-bk-form { max-width: 640px; }
+.pf-bk-tiers { display: grid; gap: .6rem; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); margin-bottom: .4rem; }
+.pf-bk-tier {
+  display: grid; gap: .15rem; justify-items: start; text-align: left; font: inherit; color: inherit; cursor: pointer;
+  padding: .85rem 1rem; background: #fff; border: 1px solid var(--line); border-radius: 12px;
+  transition: border-color .2s, box-shadow .2s;
+}
+.pf-bk-tier:hover { border-color: var(--rose); }
+.pf-bk-tier[aria-pressed="true"] { border-color: var(--rose-deep); box-shadow: 0 0 0 1px var(--rose-deep); }
+.pf-bk-tier strong { font-family: var(--serif); font-size: 1.2rem; font-weight: 500; color: var(--ink); line-height: 1.2; }
+.pf-bk-tier-price { font-size: 1rem; color: var(--ink); font-variant-numeric: tabular-nums; }
+.pf-bk-tier-label { font-size: .82rem; color: var(--muted); }
 .pf-bk-summary { padding: .9rem 1.1rem; background: var(--sand); border-radius: 12px; color: var(--ink); }
 .pf-bk-result { max-width: 640px; padding: 1.6rem 1.8rem; background: #fff; border: 1px solid var(--line); border-radius: 14px; }
 .pf-bk-result h3 { margin-bottom: .5rem; }
