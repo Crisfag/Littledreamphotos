@@ -1,0 +1,174 @@
+/* =====================================================================
+   Holypixx — guides (contrat de photographe…). Repose sur home.css
+   (jetons, navigation, boutons, questions, conclusion, pied de page) ;
+   ajoute l'ouverture d'article, l'atelier du modèle (formulaire + feuille
+   posée comme un objet produit), le texte long et l'impression.
+   ===================================================================== */
+
+/* ---------- Ouverture ---------- */
+
+.g-hero { padding: clamp(36px, 6vw, 72px) 0 clamp(56px, 8vw, 96px); }
+.g-crumbs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: clamp(28px, 4vw, 44px); font-size: .9rem; color: var(--muted); }
+.g-crumbs a { text-decoration: underline; text-decoration-color: var(--line-2); text-underline-offset: 3px; }
+.g-crumbs a:hover { color: var(--ink); text-decoration-color: currentColor; }
+.g-crumbs [aria-current] { color: var(--ink-2); }
+.g-hero-grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: clamp(28px, 5vw, 72px); align-items: end; }
+.g-hero h1 { font-size: clamp(2.5rem, 5.4vw, 4.4rem); line-height: 1; }
+.g-hero-side { display: grid; gap: 24px; }
+.g-lede { font-size: clamp(1.04rem, 1.3vw, 1.14rem); max-width: 46ch; }
+.g-hero-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+.g-hero-actions .ico { margin-left: 4px; }
+.g-meta { font-size: .88rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* ---------- Atelier du modèle ---------- */
+
+.g-builder { padding: clamp(72px, 9vw, 120px) 0; background: var(--mist); }
+.g-builder-head { display: grid; gap: 20px; max-width: 820px; margin-bottom: clamp(36px, 5vw, 56px); }
+.g-builder-grid { display: grid; grid-template-columns: minmax(300px, 380px) minmax(0, 1fr); gap: clamp(24px, 4vw, 48px); align-items: start; }
+
+.g-form {
+  position: sticky; top: 92px;
+  display: grid; gap: 22px;
+  padding: 24px; border-radius: 16px; background: var(--paper); box-shadow: 0 0 0 1px var(--line);
+}
+.g-group { border: 0; display: grid; gap: 12px; min-width: 0; }
+.g-group legend + * { clear: both; }
+.g-group + .g-group { padding-top: 20px; border-top: 1px solid var(--line); }
+.g-group legend { float: left; width: 100%; padding: 0; margin-bottom: 0; font-size: 1rem; font-weight: 600; letter-spacing: -0.01em; color: var(--ink); }
+.g-field { display: grid; gap: 6px; font-size: .86rem; font-weight: 500; color: var(--ink-2); min-width: 0; }
+.g-field input, .g-field select {
+  width: 100%; min-height: 44px; padding: 0 12px;
+  font: inherit; font-size: .96rem; font-weight: 400; color: var(--ink);
+  background: var(--paper); border: 1px solid var(--line-2); border-radius: 10px;
+  transition: border-color .15s var(--ease), box-shadow .15s var(--ease);
+}
+.g-field input::placeholder { color: #9a9aa8; }
+.g-field input:hover, .g-field select:hover { border-color: #c4c4d2; }
+.g-field input:focus, .g-field select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(59, 59, 246, .16); }
+.g-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.g-seg { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; padding: 3px; border-radius: 12px; background: var(--mist-2); }
+.g-seg label { position: relative; cursor: pointer; }
+.g-seg input { position: absolute; opacity: 0; pointer-events: none; }
+.g-seg span { display: grid; place-items: center; min-height: 38px; border-radius: 9px; font-size: .92rem; font-weight: 500; color: var(--muted); transition: background-color .2s var(--ease), color .2s var(--ease); }
+.g-seg label:hover span { color: var(--ink); }
+.g-seg input:checked + span { background: var(--paper); color: var(--ink); box-shadow: 0 1px 2px rgba(20, 20, 60, .12), 0 0 0 1px rgba(20, 20, 60, .04); }
+.g-seg input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.g-paper-wrap { display: grid; gap: 16px; min-width: 0; }
+.g-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.g-actions .btn { gap: 8px; }
+.g-actions .ico { width: 18px; height: 18px; }
+
+/* La feuille : posée sur la brume comme un document produit. */
+.g-paper {
+  padding: clamp(28px, 5vw, 64px) clamp(22px, 5vw, 64px);
+  border-radius: 6px; background: var(--paper);
+  box-shadow: var(--shadow-window), 0 0 0 1px rgba(20, 20, 60, .08);
+  font-size: .9rem; line-height: 1.65; color: var(--ink-2);
+}
+.g-paper p + p { margin-top: .55em; }
+.g-doc-title { text-align: center; font-size: 1.22rem; font-weight: 600; letter-spacing: -0.015em; color: var(--ink); }
+.g-paper .g-doc-sub { margin-top: 4px; text-align: center; color: var(--muted); }
+.g-paper .g-doc-h { margin-top: 1.6em; margin-bottom: -.1em; font-weight: 600; color: var(--ink); }
+.g-paper .g-doc-sub + .g-doc-h { margin-top: 2.2em; }
+.g-paper .g-doc-place { margin-top: 2em; }
+.g-doc-sign { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 1.4em; }
+.g-doc-sign div { display: grid; gap: 2px; padding-bottom: 64px; border-bottom: 1px solid var(--line-2); }
+.g-doc-sign span { font-weight: 600; color: var(--ink); }
+.g-doc-sign em { font-style: normal; font-size: .82rem; color: var(--muted); }
+
+/* Ce que le photographe a saisi, ce qui manque, ce que le client remplira. */
+.g-fill { padding: 0 3px; margin: 0 -1px; border-radius: 4px; background: var(--mist-2); color: var(--ink); transition: background-color .3s var(--ease); }
+.g-ph { color: var(--muted); text-decoration: underline dotted var(--line-2); text-underline-offset: 3px; }
+.g-blank { display: inline-block; width: 6.5em; height: 1em; vertical-align: -0.2em; border-bottom: 1px solid #b9b9c8; }
+.g-box { display: inline-block; width: .82em; height: .82em; margin-right: 2px; vertical-align: -0.08em; border: 1.3px solid var(--ink-2); border-radius: 2px; }
+
+.g-disclaimer { font-size: .84rem; color: var(--muted); max-width: 70ch; }
+
+/* ---------- Les clauses ---------- */
+
+.g-article { padding: clamp(80px, 11vw, 140px) 0; }
+.g-article-grid { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: clamp(32px, 6vw, 96px); align-items: start; }
+.g-toc { position: sticky; top: 100px; display: grid; gap: 12px; padding-top: 6px; }
+.g-toc-title { font-size: .86rem; font-weight: 600; color: var(--ink); }
+.g-toc ol { list-style: none; display: grid; gap: 2px; counter-reset: toc; }
+.g-toc a { display: block; padding: 6px 10px; margin-left: -10px; border-radius: 8px; font-size: .9rem; color: var(--muted); transition: color .2s, background-color .2s; }
+.g-toc a:hover { color: var(--ink); background: var(--mist); }
+.g-prose { max-width: 68ch; }
+.g-prose h2 { margin-bottom: 20px; }
+.g-prose .chapter-lede { margin-bottom: clamp(32px, 4vw, 48px); }
+.g-prose h3 { margin: 2.1em 0 .5em; font-size: 1.28rem; line-height: 1.25; letter-spacing: -0.02em; scroll-margin-top: 96px; }
+.g-prose h3:first-of-type { margin-top: 0; }
+.g-prose p { color: var(--ink-2); }
+.g-callout { display: flex; gap: 14px; align-items: flex-start; margin-top: 18px; padding: 18px 20px; border-radius: 14px; background: var(--mist); }
+.g-callout .ico { width: 22px; height: 22px; margin-top: 2px; color: var(--accent); }
+.g-callout p { font-size: .96rem; }
+.g-callout strong { color: var(--ink); font-weight: 600; }
+
+/* ---------- Signature en ligne ---------- */
+
+.g-sign { padding: clamp(80px, 11vw, 140px) 0; background: var(--mist); }
+.g-sign-grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: clamp(36px, 6vw, 88px); align-items: center; }
+.g-sign h2 { margin-bottom: 20px; }
+.g-ticks { list-style: none; display: grid; gap: 12px; margin: 28px 0 32px; }
+.g-ticks li { display: flex; gap: 12px; align-items: flex-start; color: var(--ink-2); }
+.g-ticks .ico { margin-top: 3px; color: var(--accent); }
+
+.g-signed { position: relative; padding: 0 0 40px; }
+.g-signed-card {
+  padding: 28px; border-radius: 16px; background: var(--paper);
+  box-shadow: var(--shadow-window), 0 0 0 1px rgba(20, 20, 60, .08);
+}
+.g-signed-kicker { font-size: .84rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.g-signed-title { margin: 4px 0 20px; font-size: 1.2rem; font-weight: 600; letter-spacing: -0.02em; color: var(--ink); }
+.g-signed-line { display: flex; justify-content: space-between; gap: 16px; padding: 12px 0; border-top: 1px solid var(--line); font-size: .94rem; color: var(--ink-2); }
+.g-signed-muted { color: var(--muted); }
+.g-mono { font-family: var(--mono); font-size: .9rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.g-signed-sig { display: grid; gap: 6px; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); }
+.g-signed-sig svg { width: 200px; height: 54px; fill: none; stroke: var(--ink); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.g-signed-sig span { font-size: .84rem; color: var(--muted); }
+.g-signed-stamp {
+  position: absolute; right: clamp(-12px, -1vw, 0px); bottom: 0;
+  display: inline-flex; align-items: center; gap: 10px; padding: 12px 16px; border-radius: 14px;
+  background: var(--paper); color: var(--ink-2); font-size: .92rem; font-weight: 500;
+  box-shadow: var(--shadow-float), 0 0 0 1px rgba(20, 20, 60, .06);
+}
+.g-signed-stamp .ico { width: 22px; height: 22px; padding: 3px; border-radius: 50%; color: #fff; background: var(--ok); stroke-width: 2.2; }
+
+/* ---------- Écrans plus étroits ---------- */
+
+@media (max-width: 1000px) {
+  .g-hero-grid, .g-builder-grid, .g-article-grid, .g-sign-grid { grid-template-columns: minmax(0, 1fr); }
+  .g-form { position: static; }
+  .g-toc { position: static; }
+  .g-toc ol { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
+  .g-signed { max-width: 520px; }
+}
+@media (max-width: 640px) {
+  .g-actions .btn { flex: 1 1 100%; justify-content: center; }
+  .g-paper { font-size: .86rem; }
+  .g-doc-sign { grid-template-columns: 1fr; }
+  .g-row { grid-template-columns: 1fr; }
+  .g-hero-actions .btn { flex: 1 1 100%; justify-content: center; }
+  .g-signed-stamp { right: 8px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .g-fill, .g-field input, .g-field select, .g-seg span { transition: none; }
+}
+
+/* ---------- Impression : la feuille seule, prête à enregistrer en PDF ---------- */
+
+@media print {
+  @page { size: A4; margin: 18mm 18mm 20mm; }
+  body { background: #fff; }
+  .skip, .sprite, .nav, .g-hero, .g-builder-head, .g-form, .g-actions, .g-disclaimer,
+  .g-article, .g-sign, #faq, .closing, .footer, .toast { display: none !important; }
+  .g-builder { padding: 0; background: #fff; }
+  .g-builder .wrap { width: 100%; }
+  .g-builder-grid, .g-paper-wrap { display: block; }
+  .g-paper { padding: 0; border-radius: 0; box-shadow: none; font-size: 10.5pt; color: #000; }
+  .g-fill { background: none; padding: 0; margin: 0; }
+  .g-ph { text-decoration: none; color: #000; }
+  .g-doc-sign { break-inside: avoid; }
+  .g-doc-h { break-after: avoid; }
+}
