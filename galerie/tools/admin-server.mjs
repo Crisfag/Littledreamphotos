@@ -199,10 +199,16 @@ async function serveStatic(req, res, pathname) {
   try {
     const info = await stat(full);
     if (!info.isFile()) throw new Error("not a file");
-    const body = await readFile(full);
-    const ext = full.split(".").pop();
-    res.writeHead(200, { "content-type": STATIC_TYPES[ext] || "application/octet-stream" });
-    res.end(body);
+    // Le navigateur revalide à chaque ouverture (304 si rien n'a changé) :
+    // après une mise à jour, l'admin affiche aussitôt la nouvelle version.
+    const etag = `"${info.size.toString(36)}-${Math.floor(info.mtimeMs).toString(36)}"`;
+    const headers = { "content-type": STATIC_TYPES[full.split(".").pop()] || "application/octet-stream", "cache-control": "no-cache", etag };
+    if (req.headers["if-none-match"] === etag) {
+      res.writeHead(304, headers);
+      return res.end();
+    }
+    res.writeHead(200, headers);
+    res.end(await readFile(full));
   } catch {
     json(res, 404, { error: "Introuvable" });
   }
