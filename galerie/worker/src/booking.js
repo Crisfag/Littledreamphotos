@@ -9,7 +9,14 @@
 //                       /api/booking/:handle/book                réserver (→ paiement Stripe)
 //                       /api/booking/:handle/reservation/:id     état d'une réservation (retour de Stripe)
 //                       /api/booking/:handle/release/:id         paiement abandonné : libère le créneau
-//   Photographe         /api/admin/booking[/offers|/slots|/bookings…]
+//                       /api/booking/:handle/image/:id           image d'illustration d'une formule
+//   Photographe         /api/admin/booking[/offers|/slots|/bookings|/templates|/images…]
+//
+// Une formule peut porter une image d'illustration (réduite en WebP par le
+// serveur d'administration, comme les photos du portfolio), un texte
+// « compris dans votre forfait » et un conseil vestimentaire, repris dans
+// les e-mails. Ses réglages peuvent être enregistrés comme « prestation »
+// pour la recréer d'un clic la fois suivante (booking_templates).
 
 import { json, fail } from "./http.js";
 import { randomBytes, b64url, hashIp } from "./auth.js";
@@ -38,6 +45,10 @@ const MIN_NOTICE_SECONDS = 12 * 3600;
 const MAX_AHEAD_SECONDS = 400 * 86400;
 const MAX_SLOTS_PER_REQUEST = 80;
 const BOOKINGS_PER_VISITOR_PER_HOUR = 6;
+export const MAX_OFFER_IMAGE_BYTES = 1536 * 1024;
+const MAX_OFFER_IMAGES = 60;
+const MAX_TEMPLATES = 40;
+const IMAGE_ID_RE = /^bki_[A-Za-z0-9_-]{8,20}$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function now() {
@@ -191,8 +202,146 @@ function offerOut(o) {
     depositCents: o.deposit_cents,
     tiers: parseTiers(o.tiers),
     location: o.location,
+    included: o.included || "",
+    dressCode: o.dress_code || "",
+    imageId: o.image_id || "",
     active: Boolean(o.active),
   };
+}
+
+/* ---------- Images d'illustration ---------- */
+
+function imageKey(photographerId, imageId) {
+  return `booking/${photographerId}/${imageId}.webp`;
+}
+
+function isWebp(bytes) {
+  return bytes.length > 12 &&
+    String.fromCharCode(...bytes.subarray(0, 4)) === "RIFF" &&
+    String.fromCharCode(...bytes.subarray(8, 12)) === "WEBP";
+}
+
+async function imageInUse(env, photographerId, imageId) {
+  const row = await env.DB.prepare(
+    `SELECT (SELECT COUNT(*) FROM booking_offers WHERE photographer_id = ?1 AND image_id = ?2)
+          + (SELECT COUNT(*) FROM booking_templates WHERE photographer_id = ?1 AND image_id = ?2) AS n`
+  ).bind(photographerId, imageId).first();
+  return (row?.n || 0) > 0;
+}
+
+// Une image que plus aucune formule ni prestation n'utilise est effacée.
+async function releaseImage(env, photographerId, imageId) {
+  if (!imageId || !IMAGE_ID_RE.test(imageId)) return;
+  if (await imageInUse(env, photographerId, imageId)) return;
+  await env.TILES.delete(imageKey(photographerId, imageId));
+}
+
+async function imageExists(env, photographerId, imageId) {
+  if (!IMAGE_ID_RE.test(imageId)) return false;
+  return Boolean(await env.TILES.head(imageKey(photographerId, imageId)));
+}
+
+// PUT /api/admin/booking/images — corps : l'image WebP. Les images envoyées
+// mais jamais enregistrées (formulaire abandonné) sont effacées au bout d'un
+// jour, à l'envoi suivant.
+async function addImage(request, env, photographer) {
+  const declared = Number(request.headers.get("content-length") || 0);
+  if (declared > MAX_OFFER_IMAGE_BYTES) return fail(413, "Image trop lourde");
+  const bytes = new Uint8Array(await request.arrayBuffer());
+  if (!bytes.length) return fail(400, "Image vide");
+  if (bytes.length > MAX_OFFER_IMAGE_BYTES) return fail(413, "Image trop lourde");
+  if (!isWebp(bytes)) return fail(400, "Format d'image inattendu");
+
+  const prefix = `booking/${photographer.id}/`;
+  const listed = await env.TILES.list({ prefix, include: ["customMetadata"] });
+  let kept = 0;
+  for (const object of listed.objects || []) {
+    const id = object.key.slice(prefix.length).replace(/\.webp$/, "");
+    const uploaded = Number(object.customMetadata?.uploaded || 0);
+    if (uploaded && uploaded < now() - 86400 && !(await imageInUse(env, photographer.id, id))) {
+      await env.TILES.delete(object.key);
+    } else {
+      kept++;
+    }
+  }
+  if (kept >= MAX_OFFER_IMAGES) return fail(409, `${MAX_OFFER_IMAGES} images au plus pour vos formules`);
+
+  const id = newId("bki");
+  await env.TILES.put(imageKey(photographer.id, id), bytes, {
+    httpMetadata: { contentType: "image/webp" },
+    customMetadata: { uploaded: String(now()) },
+  });
+  return json({ imageId: id, bytes: bytes.length }, { status: 201 });
+}
+
+async function serveImage(env, photographerId, imageId, cacheControl) {
+  if (!IMAGE_ID_RE.test(imageId)) return fail(404, "Image introuvable");
+  const object = await env.TILES.get(imageKey(photographerId, imageId));
+  if (!object) return fail(404, "Image introuvable");
+  return new Response(object.body, { headers: { "content-type": "image/webp", "cache-control": cacheControl } });
+}
+
+// Fichiers R2 des réservations, effacés avec le compte (privacy.js).
+export async function deleteBookingFiles(env, photographerId) {
+  const prefix = `booking/${photographerId}/`;
+  let cursor;
+  let count = 0;
+  do {
+    const listed = await env.TILES.list({ prefix, cursor });
+    for (const object of listed.objects || []) {
+      await env.TILES.delete(object.key);
+      count++;
+    }
+    cursor = listed.truncated ? listed.cursor : undefined;
+  } while (cursor);
+  return count;
+}
+
+/* ---------- Prestations enregistrées ---------- */
+
+const TEMPLATE_FIELDS = ["title", "description", "included", "dressCode", "durationMin", "priceCents", "depositCents", "tiers", "location"];
+
+function templateOut(t) {
+  let data = {};
+  try { data = JSON.parse(t.data) || {}; } catch { data = {}; }
+  const out = { id: t.id, imageId: t.image_id || "", updatedAt: t.updated_at };
+  for (const key of TEMPLATE_FIELDS) out[key] = data[key] ?? (key === "tiers" ? [] : key.endsWith("Cents") || key === "durationMin" ? 0 : "");
+  out.title = t.title;
+  out.tiers = parseTiers(out.tiers);
+  return out;
+}
+
+// Une prestation par nom (sans tenir compte des majuscules) : enregistrer à
+// nouveau « Mini-séance de Noël » met à jour la précédente.
+async function saveTemplate(env, photographerId, offer) {
+  const data = {
+    title: offer.title,
+    description: offer.description,
+    included: offer.included,
+    dressCode: offer.dressCode,
+    durationMin: offer.durationMin,
+    priceCents: offer.priceCents,
+    depositCents: offer.depositCents,
+    tiers: parseTiers(offer.tiers),
+    location: offer.location,
+  };
+  const ts = now();
+  const existing = await env.DB.prepare("SELECT * FROM booking_templates WHERE photographer_id = ? AND lower(title) = lower(?)")
+    .bind(photographerId, offer.title)
+    .first();
+  if (existing) {
+    await env.DB.prepare("UPDATE booking_templates SET title = ?, data = ?, image_id = ?, updated_at = ? WHERE id = ?")
+      .bind(offer.title, JSON.stringify(data), offer.imageId, ts, existing.id)
+      .run();
+    if (existing.image_id !== offer.imageId) await releaseImage(env, photographerId, existing.image_id);
+    return null;
+  }
+  const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM booking_templates WHERE photographer_id = ?").bind(photographerId).first();
+  if ((count?.n || 0) >= MAX_TEMPLATES) return `${MAX_TEMPLATES} prestations enregistrées au maximum : supprimez-en une pour enregistrer celle-ci`;
+  await env.DB.prepare(
+    "INSERT INTO booking_templates (id, photographer_id, title, data, image_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
+  ).bind(newId("bkt"), photographerId, offer.title, JSON.stringify(data), offer.imageId, ts, ts).run();
+  return null;
 }
 
 async function photographerById(env, id) {
@@ -244,6 +393,15 @@ export async function handleBookingPublic(request, env, path) {
     const url = new URL(request.url);
     return reservationStatus(env, photographer, decodeURIComponent(parts[4]), url.searchParams.get("session_id") || "");
   }
+  // Image d'une formule proposée : servie seulement si une formule active l'utilise.
+  if (parts[3] === "image" && parts[4] && parts.length === 5 && request.method === "GET") {
+    const imageId = decodeURIComponent(parts[4]);
+    const used = await env.DB.prepare("SELECT id FROM booking_offers WHERE photographer_id = ? AND image_id = ? AND active = 1 LIMIT 1")
+      .bind(photographer.id, imageId)
+      .first();
+    if (!used) return fail(404, "Image introuvable");
+    return serveImage(env, photographer.id, imageId, "public, max-age=86400");
+  }
   if (parts[3] === "release" && parts[4] && parts.length === 5 && request.method === "POST") {
     await env.DB.prepare("UPDATE bookings SET status = 'expired' WHERE id = ? AND photographer_id = ? AND status = 'pending'")
       .bind(decodeURIComponent(parts[4]), photographer.id)
@@ -288,7 +446,7 @@ async function book(request, env, row, photographer) {
   if ((recent?.n || 0) >= BOOKINGS_PER_VISITOR_PER_HOUR) return fail(429, "Trop de réservations tentées. Réessayez un peu plus tard.");
 
   const slot = await env.DB.prepare(
-    `SELECT s.*, o.title, o.duration_min, o.price_cents, o.deposit_cents, o.tiers, o.location, o.active
+    `SELECT s.*, o.title, o.duration_min, o.price_cents, o.deposit_cents, o.tiers, o.location, o.included, o.dress_code, o.active
        FROM booking_slots s JOIN booking_offers o ON o.id = s.offer_id
       WHERE s.id = ? AND s.photographer_id = ?`
   ).bind(String(body.slotId || ""), photographer.id).first();
@@ -318,12 +476,12 @@ async function book(request, env, row, photographer) {
   try {
     await env.DB.prepare(
       `INSERT INTO bookings (id, photographer_id, slot_id, offer_id, offer_title, location, starts_at, duration_min,
-         price_cents, deposit_cents, fee_cents, photos, tier_label, client_name, client_email, client_phone, message, status, hold_until,
+         price_cents, deposit_cents, fee_cents, photos, tier_label, included, dress_code, client_name, client_email, client_phone, message, status, hold_until,
          ip_hash, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).bind(
       id, photographer.id, slot.id, slot.offer_id, slot.title, slot.location, slot.starts_at, slot.duration_min,
-      priceCents, slot.deposit_cents, feeCents, photos, tierLabel, name, email, phone.phone, message,
+      priceCents, slot.deposit_cents, feeCents, photos, tierLabel, slot.included || "", slot.dress_code || "", name, email, phone.phone, message,
       withDeposit ? "pending" : "confirmed", withDeposit ? ts + HOLD_SECONDS : null, ipHash, ts
     ).run();
   } catch (err) {
@@ -373,6 +531,8 @@ function reservationOut(b) {
     priceCents: b.price_cents,
     photos: b.photos ?? null,
     tierLabel: b.tier_label || "",
+    included: b.included || "",
+    dressCode: b.dress_code || "",
   };
 }
 
@@ -445,6 +605,8 @@ function emailParams(env, portfolio, photographer, booking) {
     priceCents: booking.price_cents,
     photos: booking.photos ?? null,
     tierLabel: booking.tier_label || "",
+    included: booking.included || "",
+    dressCode: booking.dress_code || "",
     adminUrl: env.ADMIN_URL ? `${String(env.ADMIN_URL).replace(/\/$/, "")}/#/reservations` : "",
   };
 }
@@ -510,10 +672,15 @@ function readOffer(body) {
   if (priceCents && depositCents > priceCents) {
     return { error: tiers.length ? "L'acompte ne peut pas dépasser le tarif le moins cher" : "L'acompte ne peut pas dépasser le prix de la séance" };
   }
+  const imageId = String(body.imageId || "");
+  if (imageId && !IMAGE_ID_RE.test(imageId)) return { error: "Image introuvable" };
   return {
     offer: {
       title,
       description: cleanText(body.description, 1000),
+      included: cleanText(body.included, 1000),
+      dressCode: cleanText(body.dressCode, 1000),
+      imageId,
       durationMin,
       priceCents,
       depositCents,
@@ -543,7 +710,7 @@ function bookingAdminOut(b) {
 async function bookingForAdmin(env, photographer) {
   await expireHolds(env, photographer.id);
   const ts = now();
-  const [{ results: offers }, { results: slots }, { results: bookings }, portfolio] = await Promise.all([
+  const [{ results: offers }, { results: slots }, { results: bookings }, portfolio, { results: templates }] = await Promise.all([
     env.DB.prepare("SELECT * FROM booking_offers WHERE photographer_id = ? ORDER BY position ASC, created_at ASC").bind(photographer.id).all(),
     env.DB.prepare(
       `SELECT s.id, s.offer_id, s.starts_at,
@@ -555,6 +722,7 @@ async function bookingForAdmin(env, photographer) {
         ORDER BY starts_at ASC LIMIT 300`
     ).bind(photographer.id, ts - 60 * 86400).all(),
     env.DB.prepare("SELECT handle, published FROM portfolios WHERE photographer_id = ?").bind(photographer.id).first(),
+    env.DB.prepare("SELECT * FROM booking_templates WHERE photographer_id = ? ORDER BY lower(title) ASC").bind(photographer.id).all(),
   ]);
   return {
     enabled: hasFeature(env, photographer, "booking"),
@@ -566,6 +734,7 @@ async function bookingForAdmin(env, photographer) {
       url: portfolio?.handle ? (() => { const u = portfolioUrls(env, photographer, portfolio.handle); return (u.studio || u.site) + "#reserver"; })() : "",
     },
     offers: (offers || []).map(offerOut),
+    templates: (templates || []).map(templateOut),
     slots: (slots || []).map((s) => ({ id: s.id, offerId: s.offer_id, startsAt: s.starts_at, bookingId: s.booking_id || "" })),
     bookings: (bookings || []).map(bookingAdminOut),
   };
@@ -575,22 +744,41 @@ export async function handleBookingAdmin(request, env, photographer, parts) {
   // parts : ce qui suit /api/admin/booking
   const method = request.method;
   if (!parts.length && method === "GET") return json(await bookingForAdmin(env, photographer));
+  if (parts[0] === "images" && parts[1] && parts.length === 2 && method === "GET") {
+    return serveImage(env, photographer.id, decodeURIComponent(parts[1]), "private, max-age=300");
+  }
   if (!hasFeature(env, photographer, "booking")) return featureRefusal("booking");
+  if (parts[0] === "images" && parts.length === 1 && method === "PUT") return addImage(request, env, photographer);
   const body = method === "POST" ? await request.json().catch(() => ({})) : {};
   const ts = now();
+
+  // Prestations enregistrées : seule la suppression passe par ici ; elles
+  // s'enregistrent avec la formule (case « Sauvegarder le réglage »).
+  if (parts[0] === "templates" && parts[1] && parts.length === 2 && method === "DELETE") {
+    const template = await env.DB.prepare("SELECT * FROM booking_templates WHERE id = ? AND photographer_id = ?")
+      .bind(decodeURIComponent(parts[1]), photographer.id)
+      .first();
+    if (!template) return fail(404, "Prestation introuvable");
+    await env.DB.prepare("DELETE FROM booking_templates WHERE id = ?").bind(template.id).run();
+    await releaseImage(env, photographer.id, template.image_id);
+    return json(await bookingForAdmin(env, photographer));
+  }
 
   // Formules de séance.
   if (parts[0] === "offers" && parts.length === 1 && method === "POST") {
     const { offer, error } = readOffer(body);
     if (error) return fail(400, error);
+    if (offer.imageId && !(await imageExists(env, photographer.id, offer.imageId))) return fail(400, "Image introuvable : envoyez-la à nouveau");
     const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM booking_offers WHERE photographer_id = ?").bind(photographer.id).first();
     if ((count?.n || 0) >= 30) return fail(409, "30 formules au maximum");
     const id = newId("bko");
     await env.DB.prepare(
-      `INSERT INTO booking_offers (id, photographer_id, title, description, duration_min, price_cents, deposit_cents, tiers, location, active, position, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).bind(id, photographer.id, offer.title, offer.description, offer.durationMin, offer.priceCents, offer.depositCents, offer.tiers, offer.location, offer.active, count?.n || 0, ts).run();
-    return json({ ...(await bookingForAdmin(env, photographer)), createdOfferId: id }, { status: 201 });
+      `INSERT INTO booking_offers (id, photographer_id, title, description, duration_min, price_cents, deposit_cents, tiers, location, included, dress_code, image_id, active, position, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(id, photographer.id, offer.title, offer.description, offer.durationMin, offer.priceCents, offer.depositCents, offer.tiers, offer.location,
+      offer.included, offer.dressCode, offer.imageId, offer.active, count?.n || 0, ts).run();
+    const templateError = body.saveTemplate ? await saveTemplate(env, photographer.id, offer) : null;
+    return json({ ...(await bookingForAdmin(env, photographer)), createdOfferId: id, templateError }, { status: 201 });
   }
   if (parts[0] === "offers" && parts[1] && parts.length === 2) {
     const id = decodeURIComponent(parts[1]);
@@ -599,11 +787,18 @@ export async function handleBookingAdmin(request, env, photographer, parts) {
     if (method === "POST") {
       const { offer, error } = readOffer({ ...offerOut(existing), ...body });
       if (error) return fail(400, error);
+      if (offer.imageId && offer.imageId !== existing.image_id && !(await imageExists(env, photographer.id, offer.imageId))) {
+        return fail(400, "Image introuvable : envoyez-la à nouveau");
+      }
       await env.DB.prepare(
-        `UPDATE booking_offers SET title = ?, description = ?, duration_min = ?, price_cents = ?, deposit_cents = ?, tiers = ?, location = ?, active = ?
+        `UPDATE booking_offers SET title = ?, description = ?, duration_min = ?, price_cents = ?, deposit_cents = ?, tiers = ?, location = ?,
+            included = ?, dress_code = ?, image_id = ?, active = ?
           WHERE id = ?`
-      ).bind(offer.title, offer.description, offer.durationMin, offer.priceCents, offer.depositCents, offer.tiers, offer.location, offer.active, id).run();
-      return json(await bookingForAdmin(env, photographer));
+      ).bind(offer.title, offer.description, offer.durationMin, offer.priceCents, offer.depositCents, offer.tiers, offer.location,
+        offer.included, offer.dressCode, offer.imageId, offer.active, id).run();
+      const templateError = body.saveTemplate ? await saveTemplate(env, photographer.id, offer) : null;
+      if (existing.image_id !== offer.imageId) await releaseImage(env, photographer.id, existing.image_id);
+      return json({ ...(await bookingForAdmin(env, photographer)), templateError });
     }
     if (method === "DELETE") {
       await expireHolds(env, photographer.id);
@@ -612,6 +807,7 @@ export async function handleBookingAdmin(request, env, photographer, parts) {
       ).bind(id, ts).first();
       if (active?.n) return fail(409, "Des séances à venir sont réservées sur cette formule : annulez-les d'abord, ou désactivez simplement la formule.");
       await env.DB.prepare("DELETE FROM booking_offers WHERE id = ?").bind(id).run();
+      await releaseImage(env, photographer.id, existing.image_id);
       return json(await bookingForAdmin(env, photographer));
     }
   }

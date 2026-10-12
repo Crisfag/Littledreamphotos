@@ -4,6 +4,7 @@
 // forgot-password/reset-password dans authPhotographer.js.
 
 import { hasFeature, featureRefusal } from "./subscription.js";
+import { THEMES } from "./presentation.js";
 import { json, fail } from "./http.js";
 import { normalizeSubdomain } from "./studio.js";
 import { hashPassword, verifyPassword, randomBytes, b64url, hashToken } from "./auth.js";
@@ -11,7 +12,7 @@ import { sendEmailChangeConfirmation } from "./notify.js";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const EMAIL_CHANGE_TTL_SECONDS = 30 * 60; // 30 minutes
-const LAYOUT_VALUES = new Set(["grille", "mosaique", "defilement"]);
+const LAYOUT_VALUES = new Set(["grille", "mosaique", "defilement", "recit"]);
 
 function now() {
   return Math.floor(Date.now() / 1000);
@@ -185,12 +186,20 @@ export async function updateDefaults(request, env, photographerId) {
   } catch {
     return fail(400, "Requête invalide");
   }
-  const layout = String(body.defaultLayout || "grille");
-  if (!LAYOUT_VALUES.has(layout)) return fail(400, "Mise en page inconnue");
-
-  await env.DB.prepare("UPDATE photographers SET default_layout = ? WHERE id = ?")
-    .bind(layout, photographerId)
-    .run();
+  // Mise en page et style : chacun n'est changé que s'il est envoyé.
+  if (body.defaultLayout !== undefined) {
+    const layout = String(body.defaultLayout || "grille");
+    if (!LAYOUT_VALUES.has(layout)) return fail(400, "Mise en page inconnue");
+    await env.DB.prepare("UPDATE photographers SET default_layout = ? WHERE id = ?")
+      .bind(layout, photographerId)
+      .run();
+  }
+  if (body.defaultTheme !== undefined) {
+    if (!THEMES.includes(body.defaultTheme)) return fail(400, "Style inconnu");
+    await env.DB.prepare("UPDATE photographers SET default_theme = ? WHERE id = ?")
+      .bind(body.defaultTheme, photographerId)
+      .run();
+  }
   return json({ ok: true });
 }
 

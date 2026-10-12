@@ -389,8 +389,28 @@ Le tableau de bord s'organise en trois onglets, chacun avec son propre lien
   photos), *Mosaïque* (colonnes façon presse, chaque photo garde son propre
   format — pratique quand portraits et paysages se mélangent) ou
   *Défilement* (une photo à la fois, en grand — rendu éditorial, pour
-  raconter une séance plutôt que la survoler). Purement visuel : les trois
-  rendus s'appuient sur les mêmes tuiles, protégées de la même façon.
+  raconter une séance plutôt que la survoler) ou *Récit* (un livre photo :
+  paysages en pleine largeur, portraits par deux à la même hauteur, une
+  respiration toutes les six photos environ). Purement visuel : tous les
+  rendus s'appuient sur les mêmes tuiles, protégées de la même façon ; en
+  Récit et en Défilement, les grandes vignettes passent au niveau de tuiles
+  plein écran quand elles approchent de l'écran.
+- **Style de la galerie** (`worker/src/presentation.js`) : neuf styles —
+  Classique, Doux, Architectural, Moderne, Nuit (mode sombre), Éditorial,
+  Romantique, Bohème, Galerie d'art — qui changent palette, typographie,
+  en-tête et forme des vignettes (`gallery.css`, `body[data-theme]`).
+  Survoler une carte de style ouvre un aperçu de la galerie avec ses vraies
+  photos ; cliquer l'applique. Polices des titres et du texte au choix
+  (Google Fonts, une feuille par police ; une police manuscrite ne sert
+  qu'au grand titre), texte d'accompagnement sous le titre, et en-tête :
+  photo de couverture (étoile ★ sur une photo, peinte en pleine définition
+  dans un canvas) ou vidéo YouTube/Vimeo (lecteur sans cookies / sans suivi,
+  chargé seulement quand le client clique « Voir le film », la couverture
+  servant d'affiche) — pensé pour les mariages. Le style se choisit aussi à
+  la création de la galerie, et un style par défaut se règle dans les
+  paramètres. L'écran de mot de passe prend déjà le style et les polices.
+  Sur une base existante : `npx wrangler d1 execute galerie-protegee --remote
+  --file=migrations/2026-10-galeries-styles.sql` (depuis `worker/`).
 - **Musique d'ambiance** : trois sources au choix sur la fiche galerie,
   une seule à la fois.
   - **Bibliothèque** commune de morceaux libres de droits, classés par
@@ -809,9 +829,9 @@ Tout ce qui concerne le compte plutôt qu'une galerie en particulier :
   contrairement au nom de studio — facultative, sert uniquement à vous
   identifier sur l'onglet Admin (voir plus bas) si vous êtes la propriétaire
   de la plateforme.
-- **Présentation par défaut** : la mise en page (*Grille*, *Mosaïque* ou
-  *Défilement* — voir plus haut) proposée à la création d'une nouvelle
-  galerie. Une simple valeur de départ, jamais imposée : chaque galerie reste
+- **Présentation par défaut** : la mise en page (*Grille*, *Mosaïque*,
+  *Défilement* ou *Récit* — voir plus haut) et le style proposés à la
+  création d'une nouvelle galerie. Une simple valeur de départ, jamais imposée : chaque galerie reste
   modifiable au cas par cas depuis sa propre fiche, comme avant.
 - **Coordonnées fiscales** : raison sociale, adresse et n° de TVA à faire
   figurer sur les factures émises pour vos clients (voir l'onglet
@@ -988,6 +1008,22 @@ Studio) :
    client choisit le sien en réservant, la réservation garde le nombre de
    photos et le prix, repris dans les e-mails et le tableau de bord.
    L'acompte vaut pour tous les tarifs et ne dépasse pas le moins cher.
+   Chaque formule peut aussi porter une **image d'illustration** (réduite
+   à 1600 px en WebP par le serveur d'administration, stockée dans R2 sous
+   `booking/{photographe}/{image}.webp`, servie publiquement tant qu'une
+   formule proposée l'utilise), un texte **« Compris dans votre forfait »**
+   (une ligne par élément, affiché en liste sur le mini-site) et un
+   **conseil vestimentaire** (affiché avant la réservation, sur l'écran de
+   confirmation, dans l'e-mail de confirmation et dans le rappel de la
+   veille ; la réservation en garde une copie).
+   **Prestations enregistrées** : la case « Sauvegarder le réglage de cette
+   prestation » (cochée par défaut) garde tous les réglages de la formule,
+   image comprise, dans `booking_templates` (un par nom, mis à jour s'il
+   existe déjà ; 40 au plus). Le menu « Type de séance » les propose pour
+   recréer une formule pré-remplie, même après la suppression de la formule
+   d'origine ; « Créer une nouvelle prestation » ouvre un formulaire vide.
+   Une image que plus aucune formule ni prestation n'utilise est effacée ;
+   celles envoyées sans être enregistrées le sont au bout d'un jour.
 2. **Créneaux** : des horaires précis (« 10:00, 14:30 ») ou une série pour
    les mini-séances (« de 10 h à 16 h toutes les 20 min »), à l'heure de
    Bruxelles. Un créneau réservé ne peut pas être supprimé.
@@ -1015,6 +1051,7 @@ elle a déjà été appliquée) :
 cd worker
 npx wrangler d1 execute galerie-protegee --remote --file=migrations/2026-10-reservations.sql
 npx wrangler d1 execute galerie-protegee --remote --file=migrations/2026-10-reservations-tarifs.sql
+npx wrangler d1 execute galerie-protegee --remote --file=migrations/2026-10-reservations-prestations.sql
 npm run deploy
 ```
 

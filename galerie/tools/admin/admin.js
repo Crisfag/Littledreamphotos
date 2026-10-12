@@ -39,7 +39,48 @@
     { value: "grille", label: "Grille", hint: "Vignettes régulières — pour parcourir beaucoup de photos rapidement." },
     { value: "mosaique", label: "Mosaïque", hint: "Colonnes façon presse, chaque photo garde son format — portraits et paysages mélangés." },
     { value: "defilement", label: "Défilement", hint: "Une photo à la fois, en grand — effet éditorial, pour une séance à raconter." },
+    { value: "recit", label: "Récit", hint: "Comme un livre photo : paysages en grand, portraits par deux, des respirations — idéal pour un mariage." },
   ];
+
+  // Styles de galerie (palette et polices de l'aperçu ; la page cliente
+  // applique les mêmes dans gallery.css et gallery.js, data-theme).
+  var GALLERY_STYLES = [
+    { key: "classique", label: "Classique", ideal: "Toutes les séances", bg: "#fdfbf8", head: "linear-gradient(180deg, #f7f2ec, #fdfbf8)", ink: "#2b2521", muted: "#7c716a", accent: "#b98a7a", tile: "#efe6db", radius: 6, fonts: ["cormorant", "jost"] },
+    { key: "doux", label: "Doux", ideal: "Naissance, bébé, famille", bg: "#fffaf8", head: "radial-gradient(90% 120% at 50% 0%, #f9e3de, #fffaf8 70%)", ink: "#3b2f2c", muted: "#8c7b76", accent: "#c99a92", tile: "#f5e4df", radius: 12, fonts: ["cormorant", "nunito"] },
+    { key: "architectural", label: "Architectural", ideal: "Portrait, entreprise, architecture", bg: "#ffffff", head: "#ffffff", ink: "#0e0e0e", muted: "#6b6b6b", accent: "#111111", tile: "#e4e4e2", radius: 0, fonts: ["josefin", "worksans"] },
+    { key: "moderne", label: "Moderne", ideal: "Lifestyle, événement, marque", bg: "#f7f7f5", head: "#f7f7f5", ink: "#141414", muted: "#6e6e69", accent: "#2f5d50", tile: "#e3e3de", radius: 5, fonts: ["manrope", "manrope"] },
+    { key: "nuit", label: "Nuit", ideal: "Boudoir, soirée, concert", bg: "#111110", head: "linear-gradient(180deg, #1d1b19, #111110)", ink: "#f3ede4", muted: "#9a9086", accent: "#c8a46e", tile: "#2a2724", radius: 3, fonts: ["cormorant", "jost"] },
+    { key: "editorial", label: "Éditorial", ideal: "Mariage, reportage", bg: "#faf8f4", head: "#faf8f4", ink: "#191714", muted: "#7a7368", accent: "#8a7356", tile: "#e6dfd3", radius: 1, fonts: ["bodoni", "karla"] },
+    { key: "romantique", label: "Romantique", ideal: "Mariage, fiançailles, couple", bg: "#fffdfb", head: "radial-gradient(80% 120% at 50% 0%, #f7e9df, #fffdfb 72%)", ink: "#2e2622", muted: "#8a7d72", accent: "#b8916b", tile: "#f0e2d7", radius: 5, fonts: ["greatvibes", "lora"] },
+    { key: "boheme", label: "Bohème", ideal: "Grossesse, famille en extérieur", bg: "#f8f3ec", head: "linear-gradient(180deg, #efe3d3, #f8f3ec)", ink: "#2f271f", muted: "#857766", accent: "#b4694a", tile: "#e6d8c5", radius: 3, fonts: ["fraunces", "karla"] },
+    { key: "galerie", label: "Galerie d'art", ideal: "Portfolio, fine art, mode", bg: "#ffffff", head: "#ffffff", ink: "#111111", muted: "#8a8a8a", accent: "#3c3c3c", tile: "#ededed", radius: 0, fonts: ["marcellus", "worksans"] },
+  ];
+  // [famille, paramètres Google Fonts, repli, catégorie]
+  var GALLERY_FONTS = {
+    cormorant: ["Cormorant Garamond", "Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500", "Georgia, serif", "serif"],
+    playfair: ["Playfair Display", "Playfair+Display:ital,wght@0,400;0,500;0,600;1,400", "Georgia, serif", "serif"],
+    bodoni: ["Bodoni Moda", "Bodoni+Moda:ital,wght@0,400;0,500;0,600;1,400", "Didot, Georgia, serif", "serif"],
+    fraunces: ["Fraunces", "Fraunces:ital,wght@0,400;0,500;0,600;1,400", "Georgia, serif", "serif"],
+    dmserif: ["DM Serif Display", "DM+Serif+Display:ital@0;1", "Georgia, serif", "serif"],
+    marcellus: ["Marcellus", "Marcellus", "Georgia, serif", "serif"],
+    italiana: ["Italiana", "Italiana", "Georgia, serif", "serif"],
+    josefin: ["Josefin Sans", "Josefin+Sans:ital,wght@0,300;0,400;0,600;1,400", "sans-serif", "sans"],
+    manrope: ["Manrope", "Manrope:wght@300;400;500;600;700", "sans-serif", "sans"],
+    montserrat: ["Montserrat", "Montserrat:ital,wght@0,300;0,400;0,500;0,600;1,400", "sans-serif", "sans"],
+    syne: ["Syne", "Syne:wght@400;500;600;700", "sans-serif", "sans"],
+    greatvibes: ["Great Vibes", "Great+Vibes", "cursive", "script"],
+    parisienne: ["Parisienne", "Parisienne", "cursive", "script"],
+    jost: ["Jost", "Jost:ital,wght@0,300;0,400;0,500;1,300;1,400", "sans-serif", "sans"],
+    nunito: ["Nunito Sans", "Nunito+Sans:ital,wght@0,300;0,400;0,600;1,400", "sans-serif", "sans"],
+    worksans: ["Work Sans", "Work+Sans:ital,wght@0,300;0,400;0,500;1,400", "sans-serif", "sans"],
+    karla: ["Karla", "Karla:ital,wght@0,300;0,400;0,500;1,400", "sans-serif", "sans"],
+    lato: ["Lato", "Lato:ital,wght@0,300;0,400;0,700;1,400", "sans-serif", "sans"],
+    inter: ["Inter", "Inter:wght@300;400;500;600", "sans-serif", "sans"],
+    lora: ["Lora", "Lora:ital,wght@0,400;0,500;0,600;1,400", "Georgia, serif", "serif"],
+    ebgaramond: ["EB Garamond", "EB+Garamond:ital,wght@0,400;0,500;0,600;1,400", "Georgia, serif", "serif"],
+  };
+  var TITLE_FONT_KEYS = ["cormorant", "playfair", "bodoni", "fraunces", "dmserif", "marcellus", "italiana", "josefin", "manrope", "montserrat", "syne", "greatvibes", "parisienne"];
+  var BODY_FONT_KEYS = ["jost", "nunito", "worksans", "manrope", "karla", "lato", "inter", "lora", "ebgaramond", "montserrat"];
 
   var state = { view: "list", galleries: [], current: null, config: { previewCols: 2, previewRows: 2 } };
   var el = {
@@ -114,6 +155,7 @@
       el.account.title = el.account.textContent;
     }
     state.isOwner = Boolean(photographer.isOwner);
+    state.me = photographer;
     if (el.tabOwner) el.tabOwner.hidden = !state.isOwner;
     if (el.tabSchool) el.tabSchool.hidden = !photographer.schoolTab;
   }
@@ -265,7 +307,13 @@
   }
 
   function openCreateModal() {
-    document.getElementById("ad-create-form").reset();
+    var form = document.getElementById("ad-create-form");
+    form.reset();
+    // Style de départ : celui des paramètres, modifiable ici et ensuite.
+    var preferred = (state.me && state.me.defaultTheme) || "classique";
+    form.theme.innerHTML = GALLERY_STYLES.map(function (s) {
+      return '<option value="' + s.key + '"' + (s.key === preferred ? " selected" : "") + ">" + esc(s.label) + " — " + esc(s.ideal.toLowerCase()) + "</option>";
+    }).join("");
     document.getElementById("ad-create-error").hidden = true;
     openModal("ad-create-modal");
   }
@@ -592,7 +640,11 @@
       '<p class="ad-hint">Proposée à la création d\'une nouvelle galerie — modifiable au cas par cas ensuite, comme pour n\'importe quelle galerie déjà créée.</p>' +
       '<div class="ad-layout-options" id="ad-default-layout-options">' +
       layoutOptionsHtml({ layout: photographer.defaultLayout }) +
-      "</div></section>" +
+      "</div>" +
+      '<h4 class="ad-sc-subhead">Style par défaut</h4>' +
+      '<p class="ad-hint">Survolez un style pour l\'apercevoir ; il sera proposé à chaque nouvelle galerie.</p>' +
+      '<div class="ad-style-cards" id="ad-default-style-cards">' + styleCardsHtml(photographer.defaultTheme || "classique", "", "") + "</div>" +
+      "</section>" +
 
       '<section><div class="ad-section-header"><h3>Adresse de votre studio</h3></div>' +
       '<p class="ad-hint">Vos clients ouvrent leurs galeries à une adresse à votre nom — <strong>votre-studio.' + esc(state.config.studioDomain || "holypixx.com") + '</strong> — plutôt que sur le site de la plateforme. Lettres minuscules, chiffres et tirets, 3 à 30 caractères. Laissez vide pour revenir au site principal.</p>' +
@@ -742,6 +794,25 @@
         toast(box.checked ? "Relances automatiques activées." : "Relances automatiques désactivées.");
       } catch (err) {
         box.checked = !box.checked;
+        toast(err.message, true);
+      }
+    });
+
+    var defaultStyles = document.getElementById("ad-default-style-cards");
+    loadPreviewFonts();
+    var hideDefaultPreview = bindStylePreview(defaultStyles, function () {
+      return { studio: photographer.studioName || "", title: "Léa & Tom", client: "", intro: "", photos: [] };
+    });
+    defaultStyles.addEventListener("click", async function (e) {
+      var card = e.target.closest(".ad-style-card");
+      if (!card || card.classList.contains("ad-style-card-active")) return;
+      hideDefaultPreview();
+      try {
+        await api("POST", "/account/defaults", { defaultTheme: card.getAttribute("data-style") });
+        if (state.me) state.me.defaultTheme = card.getAttribute("data-style");
+        toast("Style par défaut : " + galleryStyleOf(card.getAttribute("data-style")).label + ".");
+        renderSettings(true);
+      } catch (err) {
         toast(err.message, true);
       }
     });
@@ -3121,6 +3192,8 @@
     var selected = isSelected(photo);
     var commented = hasComment(photo);
     var markCount = marksOf(photo).length;
+    var presentation = state.current && state.current.gallery && state.current.gallery.presentation;
+    var isCover = Boolean(presentation && presentation.coverPhotoId === photo.id);
     return (
       '<div class="ad-photo' + (selected ? " ad-photo-selected" : "") + '" data-photo-id="' + esc(photo.id) + '">' +
       '<div class="ad-photo-frame" title="' + esc(photo.source_name ? photo.source_name + " — voir en grand" : "Voir en grand") + '" style="aspect-ratio:' + photo.width + "/" + photo.height +
@@ -3134,6 +3207,7 @@
         : "") +
       (markCount ? '<span class="ad-photo-marks" title="' + markCount + " repère" + (markCount > 1 ? "s" : "") + ' annoté(s)">📍 ' + markCount + "</span>" : "") +
       "</div>" +
+      '<button type="button" class="ad-photo-cover' + (isCover ? " ad-photo-cover-on" : "") + '" title="' + (isCover ? "Photo de couverture" : "Choisir comme photo de couverture") + '" aria-label="' + (isCover ? "Photo de couverture" : "Choisir comme photo de couverture") + '" aria-pressed="' + isCover + '">★</button>' +
       '<button type="button" class="ad-photo-remove" title="Supprimer cette photo" aria-label="Supprimer cette photo">&times;</button>' +
       "</div>"
     );
@@ -3258,6 +3332,237 @@
     );
   }
 
+  /* ---------- Style de la galerie : cartes, aperçu au survol, polices ---------- */
+
+  var previewFontsLoaded = false;
+  function loadPreviewFonts() {
+    if (previewFontsLoaded) return;
+    previewFontsLoaded = true;
+    // Une feuille par police : une police indisponible n'empêche pas les autres.
+    Object.keys(GALLERY_FONTS).forEach(function (key) {
+      var link = document.createElement("link");
+      link.rel = "stylesheet";
+      link.href = "https://fonts.googleapis.com/css2?family=" + GALLERY_FONTS[key][1] + "&display=swap";
+      document.head.appendChild(link);
+    });
+  }
+  function fontStackOf(key) {
+    var f = GALLERY_FONTS[key];
+    return f ? '"' + f[0] + '", ' + f[2] : "inherit";
+  }
+  function galleryStyleOf(key) {
+    return GALLERY_STYLES.filter(function (s) { return s.key === key; })[0] || GALLERY_STYLES[0];
+  }
+  // Variables CSS d'un aperçu : palette du style, polices choisies (ou celles du style).
+  function styleVarsAttr(s, titleFont, bodyFont) {
+    var title = GALLERY_FONTS[titleFont] ? titleFont : s.fonts[0];
+    var body = GALLERY_FONTS[bodyFont] ? bodyFont : s.fonts[1];
+    return ' style="' + esc([
+      "--st-bg:" + s.bg, "--st-head:" + s.head, "--st-ink:" + s.ink, "--st-muted:" + s.muted,
+      "--st-accent:" + s.accent, "--st-tile:" + s.tile, "--st-radius:" + s.radius + "px",
+      "--st-title:" + fontStackOf(title), "--st-body:" + fontStackOf(body),
+    ].join(";")) + '"' + (GALLERY_FONTS[title][3] === "script" ? " data-script" : "");
+  }
+  function styleMiniHtml(s, titleFont, bodyFont) {
+    return '<span class="ad-style-mini ad-style-' + s.key + '"' + styleVarsAttr(s, titleFont, bodyFont) + ' aria-hidden="true">' +
+      '<span class="ad-style-mini-head"><span class="ad-style-mini-eyebrow">Studio</span><span class="ad-style-mini-title">Léa &amp; Tom</span></span>' +
+      '<span class="ad-style-mini-grid"><i></i><i></i><i></i><i></i><i></i><i></i></span></span>';
+  }
+  function styleCardsHtml(active, titleFont, bodyFont) {
+    return GALLERY_STYLES.map(function (s) {
+      var on = s.key === active;
+      return '<button type="button" class="ad-style-card' + (on ? " ad-style-card-active" : "") + '" data-style="' + s.key + '" aria-pressed="' + on + '">' +
+        styleMiniHtml(s, on ? titleFont : "", on ? bodyFont : "") +
+        '<span class="ad-style-name">' + esc(s.label) + "</span>" +
+        '<span class="ad-style-ideal">' + esc(s.ideal) + "</span></button>";
+    }).join("");
+  }
+  // Petite vignette d'une photo (tuiles d'aperçu 2×2, comme la grille).
+  function tileThumbHtml(photo) {
+    var cols = state.config.previewCols || 2;
+    var rows = state.config.previewRows || 2;
+    var cells = "";
+    for (var row = 0; row < rows; row++) {
+      for (var col = 0; col < cols; col++) cells += '<img src="/local/tiles/' + esc(photo.id) + "/0/" + col + "/" + row + '" alt="" />';
+    }
+    return '<span class="ad-tile-thumb" style="grid-template-columns:repeat(' + cols + ",1fr);grid-template-rows:repeat(" + rows + ',1fr)">' + cells + "</span>";
+  }
+  function fontOptionsHtml(keys, current, styleKey, part) {
+    var groups = { serif: "Avec empattements", sans: "Sans empattements", script: "Manuscrites" };
+    var themeFont = galleryStyleOf(styleKey).fonts[part];
+    var html = '<option value="">Celle du style (' + esc(GALLERY_FONTS[themeFont][0]) + ")</option>";
+    Object.keys(groups).forEach(function (g) {
+      var inGroup = keys.filter(function (k) { return GALLERY_FONTS[k][3] === g; });
+      if (!inGroup.length) return;
+      html += '<optgroup label="' + groups[g] + '">' + inGroup.map(function (k) {
+        return '<option value="' + k + '"' + (k === current ? " selected" : "") + ' style="font-family:' + esc(fontStackOf(k)) + '">' + esc(GALLERY_FONTS[k][0]) + "</option>";
+      }).join("") + "</optgroup>";
+    });
+    return html;
+  }
+
+  // Fenêtre d'aperçu au survol (ou au focus clavier) d'une carte de style :
+  // la galerie du client en miniature, avec ses vraies photos.
+  function bindStylePreview(container, context) {
+    var pop = document.getElementById("ad-style-pop");
+    if (!pop) {
+      pop = document.createElement("div");
+      pop.id = "ad-style-pop";
+      pop.className = "ad-style-pop";
+      pop.setAttribute("role", "tooltip");
+      pop.hidden = true;
+      document.body.appendChild(pop);
+    }
+    var timer = null;
+    function show(card) {
+      var s = galleryStyleOf(card.getAttribute("data-style"));
+      var c = context();
+      var photos = (c.photos || []).slice(0, 6);
+      var thumbs = photos.length
+        ? photos.map(function (p) { return '<span class="ad-style-pop-photo" style="aspect-ratio:' + p.width + "/" + p.height + '">' + tileThumbHtml(p) + "</span>"; }).join("")
+        : "<i></i><i></i><i></i><i></i><i></i><i></i>";
+      pop.innerHTML =
+        '<div class="ad-style-pop-page ad-style-' + s.key + '"' + styleVarsAttr(s, c.titleFont, c.bodyFont) + ">" +
+        '<div class="ad-style-pop-head">' +
+        '<span class="ad-style-pop-eyebrow">' + esc(c.studio || "Votre studio") + "</span>" +
+        '<span class="ad-style-pop-title">' + esc(c.title || "Léa & Tom") + "</span>" +
+        (c.client ? '<span class="ad-style-pop-sub">Galerie de ' + esc(c.client) + "</span>" : "") +
+        '<span class="ad-style-pop-intro">' + esc(c.intro || "Merci pour ces beaux moments partagés. Choisissez vos photos préférées en cliquant sur le cœur.") + "</span>" +
+        "</div>" +
+        '<div class="ad-style-pop-grid' + (photos.length ? "" : " ad-style-pop-grid-empty") + '">' + thumbs + "</div></div>" +
+        '<p class="ad-style-pop-cap"><strong>' + esc(s.label) + "</strong> · idéal pour " + esc(s.ideal.toLowerCase()) + "</p>";
+      pop.hidden = false;
+      var r = card.getBoundingClientRect();
+      var w = pop.offsetWidth;
+      var h = pop.offsetHeight;
+      // À droite de la carte, sinon à gauche, sinon dessous.
+      var left;
+      var top;
+      if (r.right + 14 + w <= window.innerWidth - 8) { left = r.right + 14; top = r.top + r.height / 2 - h / 2; }
+      else if (r.left - 14 - w >= 8) { left = r.left - 14 - w; top = r.top + r.height / 2 - h / 2; }
+      else { left = Math.max(8, Math.min(window.innerWidth - w - 8, r.left + r.width / 2 - w / 2)); top = r.bottom + 10 > window.innerHeight - h - 8 ? r.top - h - 10 : r.bottom + 10; }
+      pop.style.left = Math.round(left) + "px";
+      pop.style.top = Math.round(Math.max(8, Math.min(window.innerHeight - h - 8, top))) + "px";
+    }
+    function hide() {
+      clearTimeout(timer);
+      pop.hidden = true;
+    }
+    container.querySelectorAll(".ad-style-card").forEach(function (card) {
+      card.addEventListener("mouseenter", function () { clearTimeout(timer); timer = setTimeout(function () { show(card); }, 140); });
+      card.addEventListener("mouseleave", hide);
+      card.addEventListener("focus", function () { show(card); });
+      card.addEventListener("blur", hide);
+      card.addEventListener("keydown", function (e) { if (e.key === "Escape") hide(); });
+    });
+    return hide;
+  }
+
+  function presentationSectionHtml(data) {
+    var p = data.gallery.presentation || { theme: "classique", titleFont: "", bodyFont: "", intro: "", coverPhotoId: "", headerVideo: "" };
+    var cover = data.photos.filter(function (x) { return x.id === p.coverPhotoId; })[0];
+    var mode = p.headerVideo ? "video" : (cover ? "cover" : "none");
+    return '<section class="ad-style-section" id="ad-style-section">' +
+      '<div class="ad-section-header"><h3>Style de la galerie</h3></div>' +
+      '<p class="ad-hint">Survolez un style pour le voir avec vos photos, cliquez pour l\'appliquer. Votre client le découvre à sa prochaine visite.</p>' +
+      '<div class="ad-style-cards" id="ad-style-cards">' + styleCardsHtml(p.theme, p.titleFont, p.bodyFont) + "</div>" +
+      '<div class="ad-style-fonts">' +
+      '<label class="ad-field"><span>Police des titres</span><select id="ad-title-font">' + fontOptionsHtml(TITLE_FONT_KEYS, p.titleFont, p.theme, 0) + "</select></label>" +
+      '<label class="ad-field"><span>Police du texte d\'accompagnement</span><select id="ad-body-font">' + fontOptionsHtml(BODY_FONT_KEYS, p.bodyFont, p.theme, 1) + "</select></label>" +
+      '<p class="ad-style-sample" id="ad-style-sample"' + styleVarsAttr(galleryStyleOf(p.theme), p.titleFont, p.bodyFont) + ">" +
+      '<span class="ad-style-sample-title">' + esc(data.gallery.title) + "</span>" +
+      '<span class="ad-style-sample-body">' + esc(p.intro || "Merci pour ces beaux moments partagés : voici vos photos.") + "</span></p>" +
+      "</div>" +
+      '<form id="ad-presentation-form" class="ad-presentation-form" novalidate>' +
+      '<label class="ad-field"><span>Texte d\'accompagnement <em>(facultatif, sous le titre)</em></span>' +
+      '<textarea name="intro" rows="3" maxlength="600" placeholder="Merci pour cette belle journée ! Voici vos photos : choisissez vos préférées en cliquant sur le cœur.">' + esc(p.intro) + "</textarea></label>" +
+      '<div class="ad-style-header">' +
+      '<span class="ad-style-header-title">En-tête de la galerie</span>' +
+      '<div class="ad-seg" role="group" aria-label="En-tête de la galerie">' +
+      '<button type="button" class="ad-seg-btn" data-header-mode="none" aria-pressed="' + (mode === "none") + '">Sans</button>' +
+      '<button type="button" class="ad-seg-btn" data-header-mode="cover" aria-pressed="' + (mode === "cover") + '">Photo de couverture</button>' +
+      '<button type="button" class="ad-seg-btn" data-header-mode="video" aria-pressed="' + (mode === "video") + '">Vidéo</button></div>' +
+      '<div class="ad-style-cover" data-header-panel="cover"' + (mode === "cover" ? "" : " hidden") + ">" +
+      (cover ? '<span class="ad-style-cover-thumb" style="aspect-ratio:' + cover.width + "/" + cover.height + '">' + tileThumbHtml(cover) + "</span>" : "") +
+      '<span class="ad-hint">' + (cover ? "La photo n° " + (cover.position + 1) + " ouvre la galerie, en grand. " : "") +
+      "Pour en choisir une autre, cliquez sur l'étoile ★ d'une photo ci-dessous." + (data.photos.length && !cover ? " Sans choix, la première photo sera utilisée." : "") + "</span></div>" +
+      '<div data-header-panel="video"' + (mode === "video" ? "" : " hidden") + ">" +
+      '<label class="ad-field"><span>Lien de la vidéo <em>(YouTube ou Vimeo)</em></span><input name="headerVideo" inputmode="url" placeholder="https://vimeo.com/… ou https://youtu.be/…" value="' + esc(p.headerVideo) + '" /></label>' +
+      '<p class="ad-hint">Le film du mariage, la bande-annonce de la séance… en tête de galerie. Une vidéo non répertoriée fonctionne aussi.</p></div>' +
+      "</div>" +
+      '<div class="ad-sc-actions"><button type="submit" class="ad-btn ad-btn-primary">Enregistrer le texte et l\'en-tête</button></div>' +
+      "</form></section>";
+  }
+
+  // Branche la section « Style de la galerie » d'une galerie ouverte.
+  function bindPresentation(slug, data) {
+    var p = data.gallery.presentation || {};
+    var path = "/galleries/" + encodeURIComponent(slug) + "/presentation";
+    var save = async function (fields, message) {
+      try {
+        await api("POST", path, fields);
+        if (message) toast(message);
+        return true;
+      } catch (err) {
+        toast(err.message, true);
+        return false;
+      }
+    };
+    loadPreviewFonts();
+    var cards = document.getElementById("ad-style-cards");
+    var form = document.getElementById("ad-presentation-form");
+    var titleSelect = document.getElementById("ad-title-font");
+    var bodySelect = document.getElementById("ad-body-font");
+    var hidePreview = bindStylePreview(cards, function () {
+      return {
+        studio: (state.me && state.me.studioName) || "", title: data.gallery.title, client: data.gallery.client_name,
+        intro: form.elements.intro.value.trim(), photos: data.photos, titleFont: titleSelect.value, bodyFont: bodySelect.value,
+      };
+    });
+    cards.addEventListener("click", async function (e) {
+      var card = e.target.closest(".ad-style-card");
+      if (!card || card.classList.contains("ad-style-card-active")) return;
+      hidePreview();
+      var theme = card.getAttribute("data-style");
+      if (await save({ theme: theme }, "Style « " + galleryStyleOf(theme).label + " » appliqué.")) renderDetail(slug, true);
+    });
+    var syncSample = function () {
+      var sample = document.getElementById("ad-style-sample");
+      var fresh = document.createElement("div");
+      fresh.innerHTML = "<p" + styleVarsAttr(galleryStyleOf(p.theme), titleSelect.value, bodySelect.value) + "></p>";
+      sample.setAttribute("style", fresh.firstChild.getAttribute("style"));
+      sample.toggleAttribute("data-script", fresh.firstChild.hasAttribute("data-script"));
+    };
+    titleSelect.addEventListener("change", function () { syncSample(); save({ titleFont: titleSelect.value }, "Police des titres enregistrée."); });
+    bodySelect.addEventListener("change", function () { syncSample(); save({ bodyFont: bodySelect.value }, "Police du texte enregistrée."); });
+    form.elements.intro.addEventListener("input", function () {
+      document.querySelector("#ad-style-sample .ad-style-sample-body").textContent = form.elements.intro.value.trim() || "Merci pour ces beaux moments partagés : voici vos photos.";
+    });
+    var mode = form.querySelector('[data-header-mode][aria-pressed="true"]').getAttribute("data-header-mode");
+    form.querySelectorAll("[data-header-mode]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        mode = btn.getAttribute("data-header-mode");
+        form.querySelectorAll("[data-header-mode]").forEach(function (b) { b.setAttribute("aria-pressed", String(b === btn)); });
+        form.querySelectorAll("[data-header-panel]").forEach(function (panel) { panel.hidden = panel.getAttribute("data-header-panel") !== mode; });
+        if (mode === "video") form.elements.headerVideo.focus();
+      });
+    });
+    form.addEventListener("submit", async function (e) {
+      e.preventDefault();
+      var fields = { intro: form.elements.intro.value };
+      if (mode === "none") { fields.coverPhotoId = ""; fields.headerVideo = ""; }
+      if (mode === "cover") {
+        fields.headerVideo = "";
+        if (!p.coverPhotoId && data.photos.length) fields.coverPhotoId = data.photos[0].id;
+      }
+      if (mode === "video") {
+        if (!form.elements.headerVideo.value.trim()) { toast("Collez le lien de la vidéo (YouTube ou Vimeo).", true); return; }
+        fields.headerVideo = form.elements.headerVideo.value;
+      }
+      if (await save(fields, "Texte et en-tête enregistrés.")) renderDetail(slug, true);
+    });
+  }
+
   function layoutOptionsHtml(gallery) {
     var active = gallery.layout || "grille";
     return LAYOUT_OPTIONS.map(function (opt) {
@@ -3348,6 +3653,7 @@
           esc(state.config.api) + "/api/gallery/" + esc(data.gallery.slug) + "/background-image?t=" + Date.now() + '" />'
         : "") +
       "</section>" +
+      presentationSectionHtml(data) +
       '<section class="ad-layout">' +
       '<div class="ad-section-header"><h3>Mise en page de la galerie</h3></div>' +
       '<p class="ad-hint">Comment les photos s\'affichent chez le client — à choisir selon le type de séance.</p>' +
@@ -3513,6 +3819,7 @@
         saveBtn.disabled = false;
       }
     });
+    bindPresentation(slug, data);
     document.getElementById("ad-layout-options").addEventListener("click", async function (event) {
       var btn = event.target.closest(".ad-layout-option");
       if (!btn || btn.classList.contains("ad-layout-option-active")) return;
@@ -3603,6 +3910,21 @@
         var id = frame.closest(".ad-photo").getAttribute("data-photo-id");
         var photo = photos.find(function (p) { return p.id === id; });
         if (photo) openPhotoModal(photo);
+        return;
+      }
+      var star = event.target.closest(".ad-photo-cover");
+      if (star) {
+        var coverId = star.closest(".ad-photo").getAttribute("data-photo-id");
+        if (star.classList.contains("ad-photo-cover-on")) return;
+        api("POST", "/galleries/" + encodeURIComponent(slug) + "/presentation", { coverPhotoId: coverId })
+          .then(function () {
+            var presentation = state.current.gallery.presentation || {};
+            toast(presentation.headerVideo
+              ? "Photo de couverture choisie. La vidéo reste en tête tant qu'elle est renseignée (en-tête « Photo de couverture » pour l'afficher)."
+              : "Photo de couverture choisie : elle ouvre la galerie.");
+            renderDetail(slug, true);
+          })
+          .catch(function (err) { toast(err.message, true); });
         return;
       }
       var btn = event.target.closest(".ad-photo-remove");
@@ -3744,6 +4066,7 @@
       expires: form.expires.value || undefined,
       includedPhotos: form.includedPhotos.value.trim() || undefined,
       extraPhotoPrice: form.extraPhotoPrice.value.trim() || undefined,
+      theme: form.theme.value || undefined,
     };
 
     try {
@@ -5102,7 +5425,9 @@
     cancelled: ["Annulée", "ad-badge-expired"],
     conflict: ["Acompte à rembourser", "ad-badge-due"],
   };
-  var bookingState = { data: null, editingOfferId: "", slotMode: "times" };
+  // formOpen : formulaire de création ouvert ; draft : réglages de départ
+  // (prestation enregistrée choisie dans « Type de séance »).
+  var bookingState = { data: null, editingOfferId: "", slotMode: "times", formOpen: false, draft: null };
 
   function bookingDay(ts) {
     return new Date(ts * 1000).toLocaleDateString("fr-BE", { weekday: "long", day: "numeric", month: "long", timeZone: BOOKING_ZONE });
@@ -5152,12 +5477,39 @@
       "</div>";
   }
 
+  function bookingImageUrl(imageId) {
+    return "/local/booking/images/" + encodeURIComponent(imageId);
+  }
+
+  function offerImageFieldHtml(imageId) {
+    return '<div class="ad-bk-image" id="ad-bk-image">' +
+      '<input type="hidden" name="imageId" value="' + esc(imageId || "") + '" />' +
+      '<div class="ad-bk-image-preview">' + (imageId ? '<img src="' + esc(bookingImageUrl(imageId)) + '" alt="" />' : '<span>Aucune image</span>') + "</div>" +
+      '<div class="ad-bk-image-side">' +
+      '<span class="ad-bk-image-title">Image d\'illustration <em>(facultatif)</em></span>' +
+      '<span class="ad-hint">Elle accompagne la formule sur votre mini-site : le décor, une photo de la séance de l\'an dernier… JPEG, PNG ou WebP.</span>' +
+      '<div class="ad-bk-image-actions">' +
+      '<label class="ad-btn ad-btn-small ad-bk-image-pick"><input type="file" accept="image/jpeg,image/png,image/webp" id="ad-bk-image-file" />' + (imageId ? "Changer l\'image" : "Choisir une image") + "</label>" +
+      (imageId ? '<button type="button" class="ad-link-btn" id="ad-bk-image-remove">Retirer</button>' : "") +
+      "</div></div></div>";
+  }
+
+  // Une prestation enregistrée porte-t-elle déjà ce nom ?
+  function bookingTemplateNamed(title) {
+    var key = String(title || "").trim().toLowerCase();
+    return ((bookingState.data && bookingState.data.templates) || []).filter(function (t) { return t.title.toLowerCase() === key; })[0] || null;
+  }
+
   function offerFormHtml(o) {
-    o = o || { title: "", durationMin: 60, priceCents: 0, depositCents: 0, tiers: [], location: "", description: "" };
+    o = o || { title: "", durationMin: 60, priceCents: 0, depositCents: 0, tiers: [], location: "", description: "", included: "", dressCode: "", imageId: "" };
     var editing = Boolean(o.id);
     var tiered = Boolean(o.tiers && o.tiers.length);
     var tierRows = tiered ? o.tiers : [null, null];
+    // Nouvelle formule : enregistrée comme prestation par défaut ; formule
+    // existante : cochée si une prestation du même nom existe déjà.
+    var save = editing ? Boolean(bookingTemplateNamed(o.title)) : true;
     return '<form id="ad-bk-offer-form" class="ad-bk-offer-form" novalidate>' +
+      offerImageFieldHtml(o.imageId) +
       '<div class="ad-field-row">' +
       '<label class="ad-field"><span>Nom de la formule</span><input name="title" maxlength="80" required placeholder="ex. Mini-séance de Noël" value="' + esc(o.title) + '" /></label>' +
       '<label class="ad-field"><span>Durée <em>(minutes)</em></span><input name="durationMin" type="number" min="5" max="720" step="5" required value="' + esc(o.durationMin) + '" /></label>' +
@@ -5178,17 +5530,54 @@
       '<label class="ad-field"><span>Acompte payé en ligne <em>(€, 0 = sans acompte)</em></span><input name="deposit" inputmode="decimal" placeholder="ex. 30" value="' + esc(bookingEurosInput(o.depositCents)) + '" /></label>' +
       "</div>" +
       '<label class="ad-field"><span>Lieu <em>(facultatif)</em></span><input name="location" maxlength="160" placeholder="ex. Studio, rue de la Station 12, Liège" value="' + esc(o.location) + '" /></label>' +
-      '<label class="ad-field"><span>Description <em>(facultatif, visible par vos clients)</em></span><textarea name="description" rows="3" maxlength="1000" placeholder="Ce qui est inclus, le nombre de photos, la tenue conseillée…">' + esc(o.description) + "</textarea></label>" +
+      '<label class="ad-field"><span>Description <em>(facultatif, visible par vos clients)</em></span><textarea name="description" rows="3" maxlength="1000" placeholder="L\'ambiance de la séance, le décor, pour qui elle est pensée…">' + esc(o.description) + "</textarea></label>" +
+      '<div class="ad-field-row ad-bk-notes">' +
+      '<label class="ad-field"><span>Compris dans votre forfait <em>(une ligne par élément)</em></span><textarea name="included" rows="4" maxlength="1000" placeholder="10 photos retouchées&#10;Galerie privée en ligne&#10;Accessoires et tenues bébé fournis">' + esc(o.included || "") + "</textarea></label>" +
+      '<label class="ad-field"><span>Conseil vestimentaire <em>(facultatif)</em></span><textarea name="dressCode" rows="4" maxlength="1000" placeholder="Tons doux et unis, sans logo ni grosse inscription. Prévoyez une tenue de rechange pour les plus petits.">' + esc(o.dressCode || "") + "</textarea></label>" +
+      "</div>" +
+      '<label class="ad-check ad-bk-save"><input type="checkbox" name="saveTemplate"' + (save ? " checked" : "") + " />" +
+      "<span><strong>Sauvegarder le réglage de cette prestation</strong>" +
+      '<span class="ad-hint">Vous la retrouverez dans « Type de séance » pour la remettre en ligne sans tout reparamétrer.</span></span></label>' +
       '<div class="ad-sc-actions">' +
       '<button type="submit" class="ad-btn ad-btn-primary">' + (editing ? "Enregistrer la formule" : "Ajouter la formule") + "</button>" +
-      (editing ? '<button type="button" class="ad-btn" id="ad-bk-offer-cancel">Annuler</button>' : "") +
+      ((editing || bookingState.data && bookingState.data.offers.length) ? '<button type="button" class="ad-btn" id="ad-bk-offer-cancel">Annuler</button>' : "") +
       "</div></form>";
+  }
+
+  function templateMetaText(t) {
+    var tiered = t.tiers && t.tiers.length;
+    return [
+      durationText(t.durationMin),
+      tiered ? "à partir de " + formatEuros(t.tiers[0].priceCents) : (t.priceCents ? formatEuros(t.priceCents) : ""),
+    ].filter(Boolean).join(" · ");
+  }
+
+  // « Type de séance » : partir d'une prestation enregistrée, ou en créer une.
+  function offerStarterHtml(data) {
+    var templates = data.templates || [];
+    return '<div class="ad-bk-starter">' +
+      '<label class="ad-field"><span>Type de séance</span><select id="ad-bk-template">' +
+      '<option value="">' + (templates.length ? "Choisir une prestation enregistrée…" : "Aucune prestation enregistrée pour l\'instant") + "</option>" +
+      templates.map(function (t) {
+        return '<option value="' + esc(t.id) + '">' + esc(t.title) + " · " + esc(templateMetaText(t)) + "</option>";
+      }).join("") + "</select></label>" +
+      '<button type="button" class="ad-btn ad-btn-primary" id="ad-bk-new">Créer une nouvelle prestation</button>' +
+      "</div>" +
+      (templates.length
+        ? '<details class="ad-advanced ad-bk-templates"><summary>Prestations enregistrées (' + templates.length + ")</summary><ul>" +
+          templates.map(function (t) {
+            return '<li>' + (t.imageId ? '<img src="' + esc(bookingImageUrl(t.imageId)) + '" alt="" loading="lazy" />' : '<span class="ad-bk-thumb-empty" aria-hidden="true"></span>') +
+              '<span><strong>' + esc(t.title) + '</strong><span class="ad-hint">' + esc(templateMetaText(t)) + "</span></span>" +
+              '<button type="button" class="ad-btn ad-btn-small ad-btn-danger" data-bk-template-delete="' + esc(t.id) + '">Supprimer</button></li>';
+          }).join("") + "</ul></details>"
+        : '<p class="ad-hint">Cochez « Sauvegarder le réglage de cette prestation » en la créant : elle s\'ajoutera à cette liste.</p>');
   }
 
   function offersSectionHtml(data) {
     var rows = data.offers.map(function (o) {
       var slotsLeft = data.slots.filter(function (s) { return s.offerId === o.id && !s.bookingId && s.startsAt > Date.now() / 1000; }).length;
       return '<li class="ad-bk-offer' + (o.active ? "" : " ad-bk-offer-off") + '" data-offer-id="' + esc(o.id) + '">' +
+        (o.imageId ? '<img class="ad-bk-thumb" src="' + esc(bookingImageUrl(o.imageId)) + '" alt="" loading="lazy" />' : '<span class="ad-bk-thumb ad-bk-thumb-empty" aria-hidden="true"></span>') +
         '<div class="ad-bk-offer-main"><strong>' + esc(o.title) + "</strong>" +
         '<span class="ad-hint">' + esc(offerMetaText(o)) + "</span>" +
         '<span class="ad-hint">' + slotsLeft + " créneau" + (slotsLeft > 1 ? "x" : "") + " libre" + (slotsLeft > 1 ? "s" : "") +
@@ -5199,11 +5588,21 @@
         "</li>";
     }).join("");
     var editing = bookingState.editingOfferId && data.offers.filter(function (o) { return o.id === bookingState.editingOfferId; })[0];
+    var draft = bookingState.draft;
+    var creating = bookingState.formOpen || !data.offers.length;
     return '<section id="ad-bk-offers"><div class="ad-section-header"><h3>Formules de séance</h3></div>' +
       (rows ? '<ul class="ad-bk-offers">' + rows + "</ul>" : '<p class="ad-hint">Une formule décrit ce que vos clients réservent : séance famille d\'1 h, mini-séance de Noël de 20 min… Commencez par en créer une.</p>') +
       (editing
         ? '<h4 class="ad-sc-subhead">Modifier « ' + esc(editing.title) + " »</h4>" + offerFormHtml(editing)
-        : (rows ? '<details class="ad-advanced"' + (data.offers.length ? "" : " open") + '><summary>Ajouter une formule</summary>' + offerFormHtml() + "</details>" : offerFormHtml())) +
+        : offerStarterHtml(data) +
+          (creating
+            ? '<h4 class="ad-sc-subhead">' + (draft ? "Nouvelle formule à partir de « " + esc(draft.title) + " »" : "Nouvelle prestation") + "</h4>" +
+              offerFormHtml(draft ? {
+                title: draft.title, durationMin: draft.durationMin, priceCents: draft.priceCents, depositCents: draft.depositCents,
+                tiers: draft.tiers, location: draft.location, description: draft.description, included: draft.included,
+                dressCode: draft.dressCode, imageId: draft.imageId,
+              } : null)
+            : "")) +
       "</section>";
   }
 
@@ -5395,13 +5794,25 @@
           if (problem) { toast(problem, true); return; }
           if (!tiers.length) { toast("Ajoutez au moins un tarif, ou choisissez « Prix unique ».", true); return; }
         }
+        if (offerForm.getAttribute("data-uploading")) { toast("L'image est encore en cours d'envoi.", true); return; }
         var body = {
           title: f.title.value, durationMin: Number(f.durationMin.value), priceCents: priceCents, depositCents: depositCents,
           tiers: tiers, location: f.location.value, description: f.description.value,
+          included: f.included.value, dressCode: f.dressCode.value, imageId: f.imageId.value,
+          saveTemplate: f.saveTemplate.checked,
         };
         var editing = bookingState.editingOfferId;
-        var ok = await bookingCall("POST", editing ? "/offers/" + encodeURIComponent(editing) : "/offers", body, editing ? "Formule enregistrée." : "Formule ajoutée.");
-        if (ok && editing) { bookingState.editingOfferId = ""; paintBooking(bookingState.data); }
+        var saved = body.saveTemplate;
+        var ok = await bookingCall("POST", editing ? "/offers/" + encodeURIComponent(editing) : "/offers", body, function (res) {
+          if (res.templateError) return res.templateError;
+          return (editing ? "Formule enregistrée" : "Formule ajoutée") + (saved ? " et prestation sauvegardée." : ".");
+        });
+        if (ok) {
+          bookingState.editingOfferId = "";
+          bookingState.formOpen = false;
+          bookingState.draft = null;
+          paintBooking(bookingState.data);
+        }
       });
     }
     if (offerForm) {
@@ -5432,7 +5843,81 @@
       syncTierAdd();
     }
     var cancelEdit = document.getElementById("ad-bk-offer-cancel");
-    if (cancelEdit) cancelEdit.addEventListener("click", function () { bookingState.editingOfferId = ""; paintBooking(data); });
+    if (cancelEdit) cancelEdit.addEventListener("click", function () {
+      bookingState.editingOfferId = "";
+      bookingState.formOpen = false;
+      bookingState.draft = null;
+      paintBooking(data);
+    });
+
+    // Type de séance : une prestation enregistrée pré-remplit le formulaire.
+    var templateSelect = document.getElementById("ad-bk-template");
+    var openForm = function (draft) {
+      bookingState.formOpen = true;
+      bookingState.draft = draft;
+      paintBooking(data);
+      var form = document.getElementById("ad-bk-offer-form");
+      if (form) { form.scrollIntoView({ block: "start", behavior: "smooth" }); form.elements.title.focus({ preventScroll: true }); }
+    };
+    if (templateSelect) {
+      if (bookingState.draft) templateSelect.value = bookingState.draft.id || "";
+      templateSelect.addEventListener("change", function () {
+        var t = (data.templates || []).filter(function (x) { return x.id === templateSelect.value; })[0];
+        if (t) openForm(t);
+      });
+    }
+    var newOffer = document.getElementById("ad-bk-new");
+    if (newOffer) newOffer.addEventListener("click", function () { openForm(null); });
+    el.view.querySelectorAll("[data-bk-template-delete]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var id = btn.getAttribute("data-bk-template-delete");
+        var t = (data.templates || []).filter(function (x) { return x.id === id; })[0];
+        confirmAction("Supprimer la prestation enregistrée « " + t.title + " » ? Les formules déjà en ligne ne changent pas.", function () {
+          if (bookingState.draft && bookingState.draft.id === id) bookingState.draft = null;
+          bookingCall("DELETE", "/templates/" + encodeURIComponent(id), null, "Prestation supprimée.");
+        });
+      });
+    });
+
+    // Image d'illustration : envoyée dès qu'elle est choisie (réduite par le
+    // serveur), puis enregistrée avec la formule.
+    var imageBox = document.getElementById("ad-bk-image");
+    if (imageBox && offerForm) {
+      var setImage = function (imageId) {
+        var fresh = document.createElement("div");
+        fresh.innerHTML = offerImageFieldHtml(imageId);
+        imageBox.replaceWith(fresh.firstChild);
+        imageBox = document.getElementById("ad-bk-image");
+        bindImage();
+      };
+      var bindImage = function () {
+        var file = document.getElementById("ad-bk-image-file");
+        var remove = document.getElementById("ad-bk-image-remove");
+        if (remove) remove.addEventListener("click", function () { setImage(""); });
+        file.addEventListener("change", async function () {
+          var chosen = file.files && file.files[0];
+          if (!chosen) return;
+          if (chosen.size > 40 * 1024 * 1024) { toast("Image trop lourde (40 Mo maximum).", true); return; }
+          var body = new FormData();
+          body.append("file", chosen);
+          offerForm.setAttribute("data-uploading", "1");
+          imageBox.classList.add("ad-bk-image-busy");
+          imageBox.querySelector(".ad-bk-image-preview").innerHTML = "<span>Envoi…</span>";
+          try {
+            var response = await fetch("/local/booking/images", { method: "POST", body: body });
+            var result = await response.json().catch(function () { return {}; });
+            if (!response.ok) throw new Error(result.error || "L'image n'a pas pu être envoyée.");
+            offerForm.removeAttribute("data-uploading");
+            setImage(result.imageId);
+          } catch (err) {
+            offerForm.removeAttribute("data-uploading");
+            toast(err.message, true);
+            setImage(offerForm.elements.imageId.value);
+          }
+        });
+      };
+      bindImage();
+    }
 
     el.view.querySelectorAll(".ad-bk-offer").forEach(function (row) {
       var id = row.getAttribute("data-offer-id");

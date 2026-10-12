@@ -1,7 +1,9 @@
 // Réservation en ligne, de bout en bout dans un vrai navigateur : le
-// photographe crée une formule et ouvre des créneaux (un horaire, puis une
-// série de mini-séances) dans l'onglet Réservations ; un client réserve sur
-// le mini-site ; le photographe voit la séance et l'annule.
+// photographe crée une formule illustrée (image, compris, conseil
+// vestimentaire, sauvegardée comme prestation) et ouvre des créneaux (un
+// horaire, puis une série de mini-séances) dans l'onglet Réservations ; un
+// client réserve sur le mini-site ; le photographe voit la séance et
+// l'annule, puis remet la prestation en ligne depuis « Type de séance ».
 //
 //   npm run dev:local                                         (depuis worker/)
 //   GALERIE_API=http://127.0.0.1:8788 GALERIE_FORENSIC_KEY=… \
@@ -105,11 +107,34 @@ try {
   await page.fill('#ad-bk-offer-form [name="deposit"]', "0");
   await page.fill('#ad-bk-offer-form [name="location"]', "Studio, Liège");
   await page.fill('#ad-bk-offer-form [name="description"]', "Décor de Noël, 10 photos retouchées.");
+  await page.fill('#ad-bk-offer-form [name="included"]', "10 photos retouchées\n- Galerie privée en ligne");
+  await page.fill('#ad-bk-offer-form [name="dressCode"]', "Tons doux et unis, sans logo.");
+  check("la case « Sauvegarder le réglage de cette prestation » est cochée par défaut",
+        await page.isChecked('#ad-bk-offer-form [name="saveTemplate"]'));
+  await page.setInputFiles("#ad-bk-image-file", [PHOTO]);
+  await page.waitForSelector("#ad-bk-image .ad-bk-image-preview img", { timeout: 60000 });
+  const pickedImage = await page.inputValue('#ad-bk-offer-form [name="imageId"]');
+  check("l'image d'illustration est envoyée, réduite, et prévisualisée", /^bki_/.test(pickedImage) &&
+        await page.waitForFunction(() => { const img = document.querySelector("#ad-bk-image img"); return img.complete && img.naturalWidth > 0 && img.naturalWidth <= 1600; }, null, { timeout: 10000 }).then(() => true, () => false), pickedImage);
   await page.click('#ad-bk-offer-form button[type="submit"]');
   await page.waitForSelector(".ad-bk-offer", { timeout: 10000 });
   check("la formule apparaît avec sa durée, son prix et « sans acompte »",
         /20 min · 90,00 € · sans acompte · Studio, Liège/.test((await page.textContent(".ad-bk-offer")).replace(/ /g, " ")),
         (await page.textContent(".ad-bk-offer .ad-hint")).replace(/ /g, " "));
+
+  let admin = await client.request("GET", "/api/admin/booking");
+  const noelOffer = admin.offers.find((o) => o.title === "Mini-séance de Noël");
+  check("la formule garde son image, ce qui est compris et le conseil vestimentaire",
+        noelOffer.imageId === pickedImage && noelOffer.included === "10 photos retouchées\n- Galerie privée en ligne" && noelOffer.dressCode === "Tons doux et unis, sans logo.",
+        JSON.stringify(noelOffer));
+  check("elle est sauvegardée comme prestation (image comprise)",
+        admin.templates.length === 1 && admin.templates[0].title === "Mini-séance de Noël" && admin.templates[0].imageId === pickedImage &&
+        admin.templates[0].dressCode === "Tons doux et unis, sans logo.", JSON.stringify(admin.templates));
+  check("la vignette de la formule s'affiche dans la liste",
+        await page.waitForFunction(() => { const img = document.querySelector(".ad-bk-offer img.ad-bk-thumb"); return Boolean(img && img.complete && img.naturalWidth > 0); }, null, { timeout: 10000 }).then(() => true, () => false));
+  check("« Type de séance » propose la prestation enregistrée",
+        (await page.locator("#ad-bk-template option").allTextContents()).some((t) => t.replace(/ /g, " ").startsWith("Mini-séance de Noël · 20 min")),
+        (await page.locator("#ad-bk-template option").allTextContents()).join("|"));
 
   /* ---------- Créneaux : horaires précis puis série ---------- */
 
@@ -131,16 +156,21 @@ try {
         chips.slice(1).map((t) => t.replace("×", "").trim()).join("|") === "10 h 00|10 h 20|10 h 40", chips.join("|"));
 
   // Une formule avec acompte, alors que le paiement en ligne n'est pas actif.
-  await page.click(".ad-advanced summary");
+  await page.click("#ad-bk-new");
+  await page.waitForSelector("#ad-bk-offer-form", { timeout: 10000 });
+  check("« Créer une nouvelle prestation » ouvre un formulaire vide",
+        (await page.inputValue('#ad-bk-offer-form [name="title"]')) === "" && (await page.inputValue('#ad-bk-offer-form [name="imageId"]')) === "");
   await page.fill('#ad-bk-offer-form [name="title"]', "Séance famille");
   await page.fill('#ad-bk-offer-form [name="durationMin"]', "60");
   await page.fill('#ad-bk-offer-form [name="price"]', "180");
   await page.fill('#ad-bk-offer-form [name="deposit"]', "50");
+  await page.uncheck('#ad-bk-offer-form [name="saveTemplate"]');
   await page.click('#ad-bk-offer-form button[type="submit"]');
   await page.waitForFunction(() => document.querySelectorAll(".ad-bk-offer").length === 2, null, { timeout: 10000 });
   check("sans paiement en ligne actif, un bandeau prévient que les formules avec acompte attendront",
         (await page.locator(".ad-banner").allTextContents()).some((t) => t.includes("Onglet Facturation")));
-  let admin = await client.request("GET", "/api/admin/booking");
+  admin = await client.request("GET", "/api/admin/booking");
+  check("case décochée : la formule n'est pas sauvegardée comme prestation", admin.templates.length === 1);
   const familyOffer = admin.offers.find((o) => o.depositCents === 5000);
   await client.request("POST", "/api/admin/booking/slots", { offerId: familyOffer.id, date: DAY_A, times: ["16:00"] });
 
@@ -156,8 +186,15 @@ try {
         (await visitor.locator(".pf-bk-offer").count()) === 1 && (await visitor.textContent(".pf-bk-offer strong")) === "Mini-séance de Noël");
   check("la formule unique est présélectionnée, ses 4 créneaux affichés par jour",
         (await visitor.locator(".pf-bk-time").count()) === 4 && (await visitor.locator(".pf-bk-day").count()) === 2);
+  check("la formule s'affiche avec son image d'illustration",
+        await visitor.waitForFunction(() => { const img = document.querySelector(".pf-bk-offer img.pf-bk-offer-img"); return Boolean(img && img.complete && img.naturalWidth > 0); }, null, { timeout: 10000 }).then(() => true, () => false));
+  check("« Compris dans votre forfait » liste chaque ligne (tirets retirés)",
+        (await visitor.locator(".pf-bk-included-item").allTextContents()).join("|") === "10 photos retouchées|Galerie privée en ligne",
+        (await visitor.locator(".pf-bk-included-item").allTextContents()).join("|"));
 
   await visitor.locator(".pf-bk-time").nth(1).click();
+  check("le conseil vestimentaire s'affiche avant la réservation",
+        await visitor.isVisible("#pf-bk-dress") && (await visitor.textContent("#pf-bk-dress-text")) === "Tons doux et unis, sans logo.");
   check("le récapitulatif reprend la formule et l'horaire choisis",
         (await visitor.textContent("#pf-bk-summary")).replace(/ /g, " ").includes("Mini-séance de Noël") &&
         (await visitor.textContent("#pf-bk-summary")).includes("10 h 00"),
@@ -170,6 +207,8 @@ try {
   await visitor.waitForSelector("#pf-bk-result:not([hidden])", { timeout: 10000 });
   check("la réservation est confirmée à l'écran", (await visitor.textContent("#pf-bk-result h3")) === "Votre séance est réservée",
         await visitor.textContent("#pf-bk-result"));
+  check("la confirmation rappelle le conseil vestimentaire",
+        (await visitor.textContent("#pf-bk-result")).includes("Conseil vestimentaire : Tons doux et unis, sans logo."));
 
   /* ---------- Règles côté serveur ---------- */
 
@@ -179,6 +218,11 @@ try {
 
   admin = await client.request("GET", "/api/admin/booking");
   const booked = admin.bookings.find((b) => b.clientEmail === "camille.test@example.com");
+  check("la réservation garde une copie du conseil vestimentaire et de ce qui est compris (pour les e-mails)",
+        booked.dressCode === "Tons doux et unis, sans logo." && booked.included.startsWith("10 photos"));
+  const imageStatus = (id) => fetch(`${API}/api/booking/${HANDLE}/image/${id}`).then((r) => r.status);
+  check("l'image d'une formule proposée est publique, une image inconnue ne l'est pas",
+        (await imageStatus(pickedImage)) === 200 && (await imageStatus("bki_inconnue123")) === 404);
   const again = await fetch(`${API}/api/booking/${HANDLE}/book`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -235,7 +279,7 @@ try {
   await page.click("#ad-tab-galleries");
   await page.click("#ad-tab-booking");
   await page.waitForSelector("#ad-bk-offers", { timeout: 10000 });
-  await page.click("#ad-bk-offers details.ad-advanced summary");
+  await page.click("#ad-bk-new");
   await page.fill('#ad-bk-offer-form [name="title"]', "Mini-séance au choix");
   await page.fill('#ad-bk-offer-form [name="durationMin"]', "20");
   await page.click('#ad-bk-offer-form [data-bk-pricing="tiers"]');
@@ -305,6 +349,55 @@ try {
   admin = await client.request("GET", "/api/admin/booking");
   const single = admin.offers.find((o) => o.id === tiered.id);
   check("repasser au prix unique efface les tarifs", single.tiers.length === 0 && single.priceCents === 10000);
+
+  /* ---------- Prestations enregistrées : remettre en ligne sans tout reparamétrer ---------- */
+
+  admin = await client.request("GET", "/api/admin/booking");
+  const tieredTemplate = admin.templates.find((t) => t.title === "Mini-séance au choix");
+  check("la formule à plusieurs tarifs est aussi sauvegardée, avec ses tarifs", Boolean(tieredTemplate) && tieredTemplate.tiers.length === 3,
+        JSON.stringify(admin.templates.map((t) => t.title)));
+  // L'ancienne formule de Noël est supprimée : la prestation, elle, reste.
+  await client.request("DELETE", `/api/admin/booking/offers/${noelOffer.id}`);
+  const adminImage = (id) => client.rawGet(`/api/admin/booking/images/${id}`).then((r) => r.status);
+  check("supprimer la formule garde l'image tant que la prestation l'utilise", (await adminImage(pickedImage)) === 200);
+
+  await page.click("#ad-tab-galleries");
+  await page.click("#ad-tab-booking");
+  await page.waitForSelector("#ad-bk-template", { timeout: 10000 });
+  const noelTemplate = admin.templates.find((t) => t.title === "Mini-séance de Noël");
+  await page.selectOption("#ad-bk-template", noelTemplate.id);
+  await page.waitForSelector("#ad-bk-offer-form", { timeout: 10000 });
+  check("choisir la prestation pré-remplit tout le formulaire, image comprise",
+        (await page.inputValue('#ad-bk-offer-form [name="title"]')) === "Mini-séance de Noël" &&
+        (await page.inputValue('#ad-bk-offer-form [name="durationMin"]')) === "20" &&
+        (await page.inputValue('#ad-bk-offer-form [name="price"]')) === "90" &&
+        (await page.inputValue('#ad-bk-offer-form [name="dressCode"]')) === "Tons doux et unis, sans logo." &&
+        (await page.inputValue('#ad-bk-offer-form [name="imageId"]')) === pickedImage &&
+        (await page.textContent("#ad-bk-offers .ad-sc-subhead")).includes("à partir de « Mini-séance de Noël »"),
+        await page.textContent("#ad-bk-offers .ad-sc-subhead"));
+  await page.click('#ad-bk-offer-form button[type="submit"]');
+  await page.waitForFunction(() => [...document.querySelectorAll(".ad-bk-offer strong")].some((n) => n.textContent === "Mini-séance de Noël"), null, { timeout: 10000 });
+  admin = await client.request("GET", "/api/admin/booking");
+  const reborn = admin.offers.find((o) => o.title === "Mini-séance de Noël");
+  check("la formule est remise en ligne à l'identique, sans doublon de prestation",
+        Boolean(reborn) && reborn.imageId === pickedImage && reborn.included === noelOffer.included && reborn.location === "Studio, Liège" &&
+        admin.templates.filter((t) => t.title === "Mini-séance de Noël").length === 1, JSON.stringify(reborn));
+
+  // Supprimer la prestation (fenêtre de confirmation), puis la formule : l'image part avec la dernière.
+  await page.click("#ad-bk-offers .ad-bk-templates summary");
+  await page.click(`[data-bk-template-delete="${noelTemplate.id}"]`);
+  await page.waitForSelector("#ad-confirm-modal:not([hidden])");
+  await page.click("#ad-confirm-ok");
+  await page.waitForFunction((id) => !document.querySelector(`[data-bk-template-delete="${id}"]`), noelTemplate.id, { timeout: 10000 });
+  admin = await client.request("GET", "/api/admin/booking");
+  check("la prestation supprimée disparaît de « Type de séance », la formule reste en ligne",
+        !admin.templates.some((t) => t.id === noelTemplate.id) && admin.offers.some((o) => o.id === reborn.id) &&
+        !(await page.locator("#ad-bk-template option").allTextContents()).some((t) => t.startsWith("Mini-séance de Noël")));
+  check("l'image reste tant que la formule l'utilise", (await adminImage(pickedImage)) === 200);
+  await client.request("DELETE", `/api/admin/booking/offers/${reborn.id}`);
+  check("plus aucune formule ni prestation ne l'utilise : l'image est effacée", (await adminImage(pickedImage)) === 404);
+  const badImage = await client.request("POST", "/api/admin/booking/offers", { title: "Image fantôme", durationMin: 30, imageId: "bki_fantome1234" }).catch((err) => err);
+  check("une image inexistante est refusée", badImage.status === 400, badImage.status);
 
   check("aucune erreur JavaScript", exceptions.length === 0, exceptions.join(" | "));
 } finally {

@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS photographers (
   -- nom de studio ci-dessus (voir admin-server.mjs, brandFor) : pas besoin
   -- d'un réglage séparé qui ferait doublon.
   default_layout          TEXT NOT NULL DEFAULT 'grille',
+  default_theme           TEXT NOT NULL DEFAULT '',   -- style de départ des nouvelles galeries (presentation.js)
   -- Relances automatiques (client à J-7 et J-2 de l'expiration, photographe
   -- à J-2) tant que la sélection n'est pas validée. 1 = actives (défaut).
   reminders_enabled INTEGER NOT NULL DEFAULT 1,
@@ -108,9 +109,20 @@ CREATE TABLE IF NOT EXISTS galleries (
   login_background_color TEXT NOT NULL DEFAULT '',
   -- Mise en page proposée au client : 'grille' (vignettes régulières, défaut),
   -- 'mosaique' (colonnes façon presse, chaque photo garde son format) ou
-  -- 'defilement' (une photo à la fois, en grand). Purement visuel — ne change
-  -- rien au niveau de tuile chargé ni à la protection des images.
+  -- 'defilement' (une photo à la fois, en grand) ou 'recit' (paysages en
+  -- pleine largeur, portraits par deux, respirations). Purement visuel — ne
+  -- change rien à la protection des images (les grandes vignettes chargent
+  -- simplement le niveau de tuiles plein écran).
   layout                 TEXT NOT NULL DEFAULT 'grille',
+  -- Présentation (presentation.js) : style ('' = classique), polices
+  -- choisies ('' = celles du style), texte d'accompagnement, en-tête (photo
+  -- de couverture prise dans la galerie, ou vidéo YouTube/Vimeo).
+  theme                  TEXT NOT NULL DEFAULT '',
+  title_font             TEXT NOT NULL DEFAULT '',
+  body_font              TEXT NOT NULL DEFAULT '',
+  intro                  TEXT NOT NULL DEFAULT '',
+  cover_photo_id         TEXT NOT NULL DEFAULT '',
+  header_video           TEXT NOT NULL DEFAULT '',
   -- Forfait : nombre de photos incluses dans ce que le client a déjà payé.
   -- NULL = pas de forfait défini (comportement d'avant cette fonctionnalité :
   -- aucun supplément calculé, quel que soit le nombre de coups de cœur).
@@ -879,11 +891,28 @@ CREATE TABLE IF NOT EXISTS booking_offers (
   deposit_cents   INTEGER NOT NULL DEFAULT 0, -- acompte payé en ligne à la réservation (0 = sans acompte)
   tiers           TEXT NOT NULL DEFAULT '',   -- tarifs selon le nombre de photos (JSON [{label, photos, priceCents}]), vide = prix unique
   location        TEXT NOT NULL DEFAULT '',
+  included        TEXT NOT NULL DEFAULT '',   -- « compris dans votre forfait », une ligne par élément
+  dress_code      TEXT NOT NULL DEFAULT '',   -- conseil vestimentaire
+  image_id        TEXT NOT NULL DEFAULT '',   -- image d'illustration (R2 booking/{photographer}/{image}.webp)
   active          INTEGER NOT NULL DEFAULT 1,
   position        INTEGER NOT NULL DEFAULT 0,
   created_at      INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_booking_offers_photographer ON booking_offers(photographer_id, position);
+
+-- Prestations enregistrées : le réglage complet d'une formule (JSON des
+-- champs, image comprise), gardé pour la recréer d'un clic la fois suivante,
+-- même après la suppression de la formule. Un nom par prestation.
+CREATE TABLE IF NOT EXISTS booking_templates (
+  id              TEXT PRIMARY KEY,           -- bkt_…
+  photographer_id TEXT NOT NULL REFERENCES photographers(id) ON DELETE CASCADE,
+  title           TEXT NOT NULL,
+  data            TEXT NOT NULL,              -- JSON {title, description, included, dressCode, durationMin, priceCents, depositCents, tiers, location}
+  image_id        TEXT NOT NULL DEFAULT '',
+  created_at      INTEGER NOT NULL,
+  updated_at      INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_booking_templates_photographer ON booking_templates(photographer_id, title);
 
 CREATE TABLE IF NOT EXISTS booking_slots (
   id              TEXT PRIMARY KEY,           -- bks_…
@@ -915,6 +944,8 @@ CREATE TABLE IF NOT EXISTS bookings (
   fee_cents         INTEGER NOT NULL DEFAULT 0,
   photos            INTEGER,                  -- tarif choisi : nombre de photos (formule à plusieurs tarifs)
   tier_label        TEXT NOT NULL DEFAULT '', -- tarif choisi : nom facultatif
+  included          TEXT NOT NULL DEFAULT '', -- copie de la formule : compris dans le forfait
+  dress_code        TEXT NOT NULL DEFAULT '', -- copie de la formule : conseil vestimentaire (e-mails)
   client_name       TEXT NOT NULL,
   client_email      TEXT NOT NULL,
   client_phone      TEXT NOT NULL DEFAULT '',
