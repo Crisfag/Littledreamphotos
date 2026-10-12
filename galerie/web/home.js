@@ -49,6 +49,23 @@
     });
   }
 
+  /* ---------- Avant la séance : le moment de la réservation ---------- */
+  // Joué une fois quand le bureau arrive à l'écran : le créneau se prend,
+  // la signature se trace, le tampon tombe, l'acompte arrive. Sans script,
+  // sans IntersectionObserver ou en mouvement réduit : l'état final, direct.
+
+  var desk = document.getElementById("prep-desk");
+  if (desk && !still && "IntersectionObserver" in window) {
+    desk.classList.add("armed");
+    var deskSeen = new IntersectionObserver(function (entries) {
+      if (!entries.some(function (e) { return e.isIntersecting; })) return;
+      deskSeen.disconnect();
+      desk.classList.add("play");
+      setTimeout(function () { desk.classList.add("settled"); }, 700);
+    }, { threshold: 0.35 });
+    deskSeen.observe(desk);
+  }
+
   var tiled = Array.prototype.slice.call(document.querySelectorAll(".tiled"));
   if (still || !tiled.length) {
     showNotes();
