@@ -637,6 +637,25 @@ function bookingDetailsText({ offerTitle, when, durationMin, location, depositCe
   ].filter(Boolean).join("\n");
 }
 
+// Ce que le client doit savoir avant de venir : ce qui est compris dans son
+// forfait, et le conseil vestimentaire du photographe.
+function bookingNoteHtml(title, text) {
+  return `<div style="margin:0 0 14px;padding:14px 16px;background:${CREAM};border-radius:10px;font-family:${SANS};font-size:15px;line-height:1.6;color:${CHARCOAL};">` +
+    `<strong style="display:block;margin-bottom:4px;">${escapeHtml(title)}</strong><span style="white-space:pre-wrap;">${escapeHtml(text)}</span></div>`;
+}
+
+function bookingNotesHtml({ included, dressCode }, { withIncluded = true } = {}) {
+  return (withIncluded && included ? bookingNoteHtml("Compris dans votre forfait", included) : "") +
+    (dressCode ? bookingNoteHtml("Conseil vestimentaire", dressCode) : "");
+}
+
+function bookingNotesText({ included, dressCode }, { withIncluded = true } = {}) {
+  return [
+    withIncluded && included ? `\n\nCompris dans votre forfait :\n${included}` : "",
+    dressCode ? `\n\nConseil vestimentaire :\n${dressCode}` : "",
+  ].join("");
+}
+
 function studioContactLine({ studioName, studioEmail, studioPhone }) {
   return [studioEmail, studioPhone].filter(Boolean).length
     ? `Une question ? Répondez simplement à cet e-mail${studioPhone ? ` ou appelez ${escapeHtml(studioName)} au ${escapeHtml(studioPhone)}` : ""}.`
@@ -650,12 +669,13 @@ export function buildBookingConfirmationEmail(params) {
     eyebrow(studioName || "Votre photographe") +
     heading(`C'est noté${clientName ? `, ${escapeHtml(clientName)}` : ""} !`) +
     paragraph(bookingDetailsHtml(params)) +
+    bookingNotesHtml(params) +
     paragraph("L'invitation jointe ajoute la séance à votre agenda. Vous recevrez un petit rappel la veille.") +
     (studioContactLine(params) ? paragraph(studioContactLine(params), { small: true }) : "");
   const text = [
     `Votre séance avec ${studioName} est réservée.`,
     "",
-    bookingDetailsText(params),
+    bookingDetailsText(params) + bookingNotesText(params),
     "",
     "L'invitation jointe ajoute la séance à votre agenda. Vous recevrez un rappel la veille.",
   ].join("\n");
@@ -698,8 +718,9 @@ export function buildBookingReminderEmail(params) {
     heading("À très vite !") +
     paragraph(`Petit rappel de votre séance « ${escapeHtml(offerTitle)} ».`) +
     paragraph(bookingDetailsHtml(params)) +
+    bookingNotesHtml(params, { withIncluded: false }) +
     (studioContactLine(params) ? paragraph(studioContactLine(params), { small: true }) : "");
-  const text = [`Rappel de votre séance avec ${studioName}.`, "", bookingDetailsText(params)].join("\n");
+  const text = [`Rappel de votre séance avec ${studioName}.`, "", bookingDetailsText(params) + bookingNotesText(params, { withIncluded: false })].join("\n");
   return { subject, html: emailShell({ preheader: subject, bodyHtml }), text };
 }
 

@@ -67,6 +67,8 @@ const MAX_MUSIC_BYTES = 15 * 1024 * 1024;
 // Photos du portfolio : réduites ici avant l'envoi (vitrine, pas originaux).
 const MAX_PORTFOLIO_UPLOAD_BYTES = 40 * 1024 * 1024;
 const PORTFOLIO_MAX_SIDE = 2000;
+// Images d'illustration des formules de réservation : plus petites encore.
+const OFFER_IMAGE_MAX_SIDE = 1600;
 const SESSION_COOKIE = "galerie_session";
 const SESSION_MAX_AGE = 30 * 24 * 60 * 60; // aligné sur la durée du jeton côté Worker
 
@@ -828,6 +830,47 @@ async function handleApi(req, res, url) {
       return json(res, 200, await client.request(req.method, path, body));
     } catch (err) {
       return relayError(res, err, "Les devis et contrats n'ont pas pu répondre");
+    }
+  }
+
+  // POST /local/booking/images (multipart) : image d'illustration d'une
+  // formule, redressée, réduite à 1600 px et convertie en WebP sans ses
+  // métadonnées, comme les photos du portfolio. GET : relecture pour l'aperçu.
+  if (parts[0] === "booking" && parts[1] === "images") {
+    try {
+      if (parts.length === 2 && req.method === "POST") {
+        const contentLength = Number(req.headers["content-length"] || 0);
+        if (contentLength > MAX_PORTFOLIO_UPLOAD_BYTES + 64 * 1024) return json(res, 413, { error: "Image trop lourde (40 Mo maximum)" });
+        let form;
+        try {
+          form = await nodeRequestToWebRequest(req, await readBody(req, MAX_PORTFOLIO_UPLOAD_BYTES + 64 * 1024)).formData();
+        } catch (err) {
+          return json(res, err.status || 400, { error: err.status ? err.message : "Formulaire illisible" });
+        }
+        const file = form.get("file");
+        if (!file || typeof file.arrayBuffer !== "function") return json(res, 400, { error: "Aucun fichier reçu" });
+        let output;
+        try {
+          const input = Buffer.from(await file.arrayBuffer());
+          output = await withProcessingSlot(() => sharp(input, { failOn: "error" })
+            .rotate()
+            .resize({ width: OFFER_IMAGE_MAX_SIDE, height: OFFER_IMAGE_MAX_SIDE, fit: "inside", withoutEnlargement: true })
+            .toColourspace("srgb")
+            .webp({ quality: 82 })
+            .toBuffer());
+        } catch {
+          return json(res, 400, { error: "Image illisible (JPEG, PNG ou WebP attendu)" });
+        }
+        return json(res, 201, await client.request("PUT", "/api/admin/booking/images", output, true));
+      }
+      if (parts.length === 3 && req.method === "GET") {
+        const upstream = await client.rawGet("/api/admin/booking/images/" + encodeURIComponent(decodeURIComponent(parts[2])));
+        if (!upstream.ok) return json(res, upstream.status, { error: "Image introuvable" });
+        res.writeHead(200, { "content-type": "image/webp", "cache-control": "private, max-age=300" });
+        return res.end(Buffer.from(await upstream.arrayBuffer()));
+      }
+    } catch (err) {
+      return relayError(res, err, "L'image n'a pas pu être enregistrée");
     }
   }
 

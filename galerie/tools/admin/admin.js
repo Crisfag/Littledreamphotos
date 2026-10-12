@@ -5102,7 +5102,9 @@
     cancelled: ["Annulée", "ad-badge-expired"],
     conflict: ["Acompte à rembourser", "ad-badge-due"],
   };
-  var bookingState = { data: null, editingOfferId: "", slotMode: "times" };
+  // formOpen : formulaire de création ouvert ; draft : réglages de départ
+  // (prestation enregistrée choisie dans « Type de séance »).
+  var bookingState = { data: null, editingOfferId: "", slotMode: "times", formOpen: false, draft: null };
 
   function bookingDay(ts) {
     return new Date(ts * 1000).toLocaleDateString("fr-BE", { weekday: "long", day: "numeric", month: "long", timeZone: BOOKING_ZONE });
@@ -5152,12 +5154,39 @@
       "</div>";
   }
 
+  function bookingImageUrl(imageId) {
+    return "/local/booking/images/" + encodeURIComponent(imageId);
+  }
+
+  function offerImageFieldHtml(imageId) {
+    return '<div class="ad-bk-image" id="ad-bk-image">' +
+      '<input type="hidden" name="imageId" value="' + esc(imageId || "") + '" />' +
+      '<div class="ad-bk-image-preview">' + (imageId ? '<img src="' + esc(bookingImageUrl(imageId)) + '" alt="" />' : '<span>Aucune image</span>') + "</div>" +
+      '<div class="ad-bk-image-side">' +
+      '<span class="ad-bk-image-title">Image d\'illustration <em>(facultatif)</em></span>' +
+      '<span class="ad-hint">Elle accompagne la formule sur votre mini-site : le décor, une photo de la séance de l\'an dernier… JPEG, PNG ou WebP.</span>' +
+      '<div class="ad-bk-image-actions">' +
+      '<label class="ad-btn ad-btn-small ad-bk-image-pick"><input type="file" accept="image/jpeg,image/png,image/webp" id="ad-bk-image-file" />' + (imageId ? "Changer l\'image" : "Choisir une image") + "</label>" +
+      (imageId ? '<button type="button" class="ad-link-btn" id="ad-bk-image-remove">Retirer</button>' : "") +
+      "</div></div></div>";
+  }
+
+  // Une prestation enregistrée porte-t-elle déjà ce nom ?
+  function bookingTemplateNamed(title) {
+    var key = String(title || "").trim().toLowerCase();
+    return ((bookingState.data && bookingState.data.templates) || []).filter(function (t) { return t.title.toLowerCase() === key; })[0] || null;
+  }
+
   function offerFormHtml(o) {
-    o = o || { title: "", durationMin: 60, priceCents: 0, depositCents: 0, tiers: [], location: "", description: "" };
+    o = o || { title: "", durationMin: 60, priceCents: 0, depositCents: 0, tiers: [], location: "", description: "", included: "", dressCode: "", imageId: "" };
     var editing = Boolean(o.id);
     var tiered = Boolean(o.tiers && o.tiers.length);
     var tierRows = tiered ? o.tiers : [null, null];
+    // Nouvelle formule : enregistrée comme prestation par défaut ; formule
+    // existante : cochée si une prestation du même nom existe déjà.
+    var save = editing ? Boolean(bookingTemplateNamed(o.title)) : true;
     return '<form id="ad-bk-offer-form" class="ad-bk-offer-form" novalidate>' +
+      offerImageFieldHtml(o.imageId) +
       '<div class="ad-field-row">' +
       '<label class="ad-field"><span>Nom de la formule</span><input name="title" maxlength="80" required placeholder="ex. Mini-séance de Noël" value="' + esc(o.title) + '" /></label>' +
       '<label class="ad-field"><span>Durée <em>(minutes)</em></span><input name="durationMin" type="number" min="5" max="720" step="5" required value="' + esc(o.durationMin) + '" /></label>' +
@@ -5178,17 +5207,54 @@
       '<label class="ad-field"><span>Acompte payé en ligne <em>(€, 0 = sans acompte)</em></span><input name="deposit" inputmode="decimal" placeholder="ex. 30" value="' + esc(bookingEurosInput(o.depositCents)) + '" /></label>' +
       "</div>" +
       '<label class="ad-field"><span>Lieu <em>(facultatif)</em></span><input name="location" maxlength="160" placeholder="ex. Studio, rue de la Station 12, Liège" value="' + esc(o.location) + '" /></label>' +
-      '<label class="ad-field"><span>Description <em>(facultatif, visible par vos clients)</em></span><textarea name="description" rows="3" maxlength="1000" placeholder="Ce qui est inclus, le nombre de photos, la tenue conseillée…">' + esc(o.description) + "</textarea></label>" +
+      '<label class="ad-field"><span>Description <em>(facultatif, visible par vos clients)</em></span><textarea name="description" rows="3" maxlength="1000" placeholder="L\'ambiance de la séance, le décor, pour qui elle est pensée…">' + esc(o.description) + "</textarea></label>" +
+      '<div class="ad-field-row ad-bk-notes">' +
+      '<label class="ad-field"><span>Compris dans votre forfait <em>(une ligne par élément)</em></span><textarea name="included" rows="4" maxlength="1000" placeholder="10 photos retouchées&#10;Galerie privée en ligne&#10;Accessoires et tenues bébé fournis">' + esc(o.included || "") + "</textarea></label>" +
+      '<label class="ad-field"><span>Conseil vestimentaire <em>(facultatif)</em></span><textarea name="dressCode" rows="4" maxlength="1000" placeholder="Tons doux et unis, sans logo ni grosse inscription. Prévoyez une tenue de rechange pour les plus petits.">' + esc(o.dressCode || "") + "</textarea></label>" +
+      "</div>" +
+      '<label class="ad-check ad-bk-save"><input type="checkbox" name="saveTemplate"' + (save ? " checked" : "") + " />" +
+      "<span><strong>Sauvegarder le réglage de cette prestation</strong>" +
+      '<span class="ad-hint">Vous la retrouverez dans « Type de séance » pour la remettre en ligne sans tout reparamétrer.</span></span></label>' +
       '<div class="ad-sc-actions">' +
       '<button type="submit" class="ad-btn ad-btn-primary">' + (editing ? "Enregistrer la formule" : "Ajouter la formule") + "</button>" +
-      (editing ? '<button type="button" class="ad-btn" id="ad-bk-offer-cancel">Annuler</button>' : "") +
+      ((editing || bookingState.data && bookingState.data.offers.length) ? '<button type="button" class="ad-btn" id="ad-bk-offer-cancel">Annuler</button>' : "") +
       "</div></form>";
+  }
+
+  function templateMetaText(t) {
+    var tiered = t.tiers && t.tiers.length;
+    return [
+      durationText(t.durationMin),
+      tiered ? "à partir de " + formatEuros(t.tiers[0].priceCents) : (t.priceCents ? formatEuros(t.priceCents) : ""),
+    ].filter(Boolean).join(" · ");
+  }
+
+  // « Type de séance » : partir d'une prestation enregistrée, ou en créer une.
+  function offerStarterHtml(data) {
+    var templates = data.templates || [];
+    return '<div class="ad-bk-starter">' +
+      '<label class="ad-field"><span>Type de séance</span><select id="ad-bk-template">' +
+      '<option value="">' + (templates.length ? "Choisir une prestation enregistrée…" : "Aucune prestation enregistrée pour l\'instant") + "</option>" +
+      templates.map(function (t) {
+        return '<option value="' + esc(t.id) + '">' + esc(t.title) + " · " + esc(templateMetaText(t)) + "</option>";
+      }).join("") + "</select></label>" +
+      '<button type="button" class="ad-btn ad-btn-primary" id="ad-bk-new">Créer une nouvelle prestation</button>' +
+      "</div>" +
+      (templates.length
+        ? '<details class="ad-advanced ad-bk-templates"><summary>Prestations enregistrées (' + templates.length + ")</summary><ul>" +
+          templates.map(function (t) {
+            return '<li>' + (t.imageId ? '<img src="' + esc(bookingImageUrl(t.imageId)) + '" alt="" loading="lazy" />' : '<span class="ad-bk-thumb-empty" aria-hidden="true"></span>') +
+              '<span><strong>' + esc(t.title) + '</strong><span class="ad-hint">' + esc(templateMetaText(t)) + "</span></span>" +
+              '<button type="button" class="ad-btn ad-btn-small ad-btn-danger" data-bk-template-delete="' + esc(t.id) + '">Supprimer</button></li>';
+          }).join("") + "</ul></details>"
+        : '<p class="ad-hint">Cochez « Sauvegarder le réglage de cette prestation » en la créant : elle s\'ajoutera à cette liste.</p>');
   }
 
   function offersSectionHtml(data) {
     var rows = data.offers.map(function (o) {
       var slotsLeft = data.slots.filter(function (s) { return s.offerId === o.id && !s.bookingId && s.startsAt > Date.now() / 1000; }).length;
       return '<li class="ad-bk-offer' + (o.active ? "" : " ad-bk-offer-off") + '" data-offer-id="' + esc(o.id) + '">' +
+        (o.imageId ? '<img class="ad-bk-thumb" src="' + esc(bookingImageUrl(o.imageId)) + '" alt="" loading="lazy" />' : '<span class="ad-bk-thumb ad-bk-thumb-empty" aria-hidden="true"></span>') +
         '<div class="ad-bk-offer-main"><strong>' + esc(o.title) + "</strong>" +
         '<span class="ad-hint">' + esc(offerMetaText(o)) + "</span>" +
         '<span class="ad-hint">' + slotsLeft + " créneau" + (slotsLeft > 1 ? "x" : "") + " libre" + (slotsLeft > 1 ? "s" : "") +
@@ -5199,11 +5265,21 @@
         "</li>";
     }).join("");
     var editing = bookingState.editingOfferId && data.offers.filter(function (o) { return o.id === bookingState.editingOfferId; })[0];
+    var draft = bookingState.draft;
+    var creating = bookingState.formOpen || !data.offers.length;
     return '<section id="ad-bk-offers"><div class="ad-section-header"><h3>Formules de séance</h3></div>' +
       (rows ? '<ul class="ad-bk-offers">' + rows + "</ul>" : '<p class="ad-hint">Une formule décrit ce que vos clients réservent : séance famille d\'1 h, mini-séance de Noël de 20 min… Commencez par en créer une.</p>') +
       (editing
         ? '<h4 class="ad-sc-subhead">Modifier « ' + esc(editing.title) + " »</h4>" + offerFormHtml(editing)
-        : (rows ? '<details class="ad-advanced"' + (data.offers.length ? "" : " open") + '><summary>Ajouter une formule</summary>' + offerFormHtml() + "</details>" : offerFormHtml())) +
+        : offerStarterHtml(data) +
+          (creating
+            ? '<h4 class="ad-sc-subhead">' + (draft ? "Nouvelle formule à partir de « " + esc(draft.title) + " »" : "Nouvelle prestation") + "</h4>" +
+              offerFormHtml(draft ? {
+                title: draft.title, durationMin: draft.durationMin, priceCents: draft.priceCents, depositCents: draft.depositCents,
+                tiers: draft.tiers, location: draft.location, description: draft.description, included: draft.included,
+                dressCode: draft.dressCode, imageId: draft.imageId,
+              } : null)
+            : "")) +
       "</section>";
   }
 
@@ -5395,13 +5471,25 @@
           if (problem) { toast(problem, true); return; }
           if (!tiers.length) { toast("Ajoutez au moins un tarif, ou choisissez « Prix unique ».", true); return; }
         }
+        if (offerForm.getAttribute("data-uploading")) { toast("L'image est encore en cours d'envoi.", true); return; }
         var body = {
           title: f.title.value, durationMin: Number(f.durationMin.value), priceCents: priceCents, depositCents: depositCents,
           tiers: tiers, location: f.location.value, description: f.description.value,
+          included: f.included.value, dressCode: f.dressCode.value, imageId: f.imageId.value,
+          saveTemplate: f.saveTemplate.checked,
         };
         var editing = bookingState.editingOfferId;
-        var ok = await bookingCall("POST", editing ? "/offers/" + encodeURIComponent(editing) : "/offers", body, editing ? "Formule enregistrée." : "Formule ajoutée.");
-        if (ok && editing) { bookingState.editingOfferId = ""; paintBooking(bookingState.data); }
+        var saved = body.saveTemplate;
+        var ok = await bookingCall("POST", editing ? "/offers/" + encodeURIComponent(editing) : "/offers", body, function (res) {
+          if (res.templateError) return res.templateError;
+          return (editing ? "Formule enregistrée" : "Formule ajoutée") + (saved ? " et prestation sauvegardée." : ".");
+        });
+        if (ok) {
+          bookingState.editingOfferId = "";
+          bookingState.formOpen = false;
+          bookingState.draft = null;
+          paintBooking(bookingState.data);
+        }
       });
     }
     if (offerForm) {
@@ -5432,7 +5520,81 @@
       syncTierAdd();
     }
     var cancelEdit = document.getElementById("ad-bk-offer-cancel");
-    if (cancelEdit) cancelEdit.addEventListener("click", function () { bookingState.editingOfferId = ""; paintBooking(data); });
+    if (cancelEdit) cancelEdit.addEventListener("click", function () {
+      bookingState.editingOfferId = "";
+      bookingState.formOpen = false;
+      bookingState.draft = null;
+      paintBooking(data);
+    });
+
+    // Type de séance : une prestation enregistrée pré-remplit le formulaire.
+    var templateSelect = document.getElementById("ad-bk-template");
+    var openForm = function (draft) {
+      bookingState.formOpen = true;
+      bookingState.draft = draft;
+      paintBooking(data);
+      var form = document.getElementById("ad-bk-offer-form");
+      if (form) { form.scrollIntoView({ block: "start", behavior: "smooth" }); form.elements.title.focus({ preventScroll: true }); }
+    };
+    if (templateSelect) {
+      if (bookingState.draft) templateSelect.value = bookingState.draft.id || "";
+      templateSelect.addEventListener("change", function () {
+        var t = (data.templates || []).filter(function (x) { return x.id === templateSelect.value; })[0];
+        if (t) openForm(t);
+      });
+    }
+    var newOffer = document.getElementById("ad-bk-new");
+    if (newOffer) newOffer.addEventListener("click", function () { openForm(null); });
+    el.view.querySelectorAll("[data-bk-template-delete]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var id = btn.getAttribute("data-bk-template-delete");
+        var t = (data.templates || []).filter(function (x) { return x.id === id; })[0];
+        confirmAction("Supprimer la prestation enregistrée « " + t.title + " » ? Les formules déjà en ligne ne changent pas.", function () {
+          if (bookingState.draft && bookingState.draft.id === id) bookingState.draft = null;
+          bookingCall("DELETE", "/templates/" + encodeURIComponent(id), null, "Prestation supprimée.");
+        });
+      });
+    });
+
+    // Image d'illustration : envoyée dès qu'elle est choisie (réduite par le
+    // serveur), puis enregistrée avec la formule.
+    var imageBox = document.getElementById("ad-bk-image");
+    if (imageBox && offerForm) {
+      var setImage = function (imageId) {
+        var fresh = document.createElement("div");
+        fresh.innerHTML = offerImageFieldHtml(imageId);
+        imageBox.replaceWith(fresh.firstChild);
+        imageBox = document.getElementById("ad-bk-image");
+        bindImage();
+      };
+      var bindImage = function () {
+        var file = document.getElementById("ad-bk-image-file");
+        var remove = document.getElementById("ad-bk-image-remove");
+        if (remove) remove.addEventListener("click", function () { setImage(""); });
+        file.addEventListener("change", async function () {
+          var chosen = file.files && file.files[0];
+          if (!chosen) return;
+          if (chosen.size > 40 * 1024 * 1024) { toast("Image trop lourde (40 Mo maximum).", true); return; }
+          var body = new FormData();
+          body.append("file", chosen);
+          offerForm.setAttribute("data-uploading", "1");
+          imageBox.classList.add("ad-bk-image-busy");
+          imageBox.querySelector(".ad-bk-image-preview").innerHTML = "<span>Envoi…</span>";
+          try {
+            var response = await fetch("/local/booking/images", { method: "POST", body: body });
+            var result = await response.json().catch(function () { return {}; });
+            if (!response.ok) throw new Error(result.error || "L'image n'a pas pu être envoyée.");
+            offerForm.removeAttribute("data-uploading");
+            setImage(result.imageId);
+          } catch (err) {
+            offerForm.removeAttribute("data-uploading");
+            toast(err.message, true);
+            setImage(offerForm.elements.imageId.value);
+          }
+        });
+      };
+      bindImage();
+    }
 
     el.view.querySelectorAll(".ad-bk-offer").forEach(function (row) {
       var id = row.getAttribute("data-offer-id");

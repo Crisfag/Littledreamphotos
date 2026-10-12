@@ -200,6 +200,21 @@ h3 { font-size: 1.4rem; margin-bottom: .8rem; }
 .pf-bk-offer strong { font-family: var(--serif); font-size: 1.35rem; font-weight: 500; color: var(--ink); line-height: 1.2; }
 .pf-bk-meta { font-size: .88rem; color: var(--muted); }
 .pf-bk-desc { font-size: .92rem; white-space: pre-line; }
+.pf-bk-offer-pic { padding-top: 0; overflow: hidden; align-content: start; }
+.pf-bk-offer-img {
+  display: block; width: calc(100% + 2.4rem); max-width: none; margin: 0 -1.2rem .55rem; aspect-ratio: 3 / 2; object-fit: cover;
+  background: var(--sand);
+}
+.pf-bk-included { display: grid; gap: .25rem; margin-top: .45rem; padding-top: .7rem; border-top: 1px solid var(--line); font-size: .9rem; }
+.pf-bk-included-title { font-size: .78rem; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.pf-bk-included-item { position: relative; padding-left: 1.3rem; }
+.pf-bk-included-item::before {
+  content: ""; position: absolute; left: .15rem; top: .38em; width: .5rem; height: .28rem;
+  border-left: 1.6px solid var(--rose-deep); border-bottom: 1.6px solid var(--rose-deep); transform: rotate(-45deg);
+}
+.pf-bk-dress { margin-top: .8rem; padding: .9rem 1.1rem; border-radius: 12px; border: 1px solid var(--line); background: #fff; }
+.pf-bk-dress strong { display: block; font-family: var(--sans); font-size: .85rem; font-weight: 600; color: var(--ink); margin-bottom: .2rem; }
+.pf-bk-dress p { margin: 0; font-size: .92rem; white-space: pre-line; }
 .pf-bk-days { display: grid; gap: 1rem; }
 .pf-bk-day h3 { font-family: var(--sans); font-size: .95rem; font-weight: 500; margin-bottom: .5rem; }
 .pf-bk-day h3::first-letter { text-transform: uppercase; }

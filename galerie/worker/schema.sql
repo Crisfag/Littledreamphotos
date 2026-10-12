@@ -879,11 +879,28 @@ CREATE TABLE IF NOT EXISTS booking_offers (
   deposit_cents   INTEGER NOT NULL DEFAULT 0, -- acompte payé en ligne à la réservation (0 = sans acompte)
   tiers           TEXT NOT NULL DEFAULT '',   -- tarifs selon le nombre de photos (JSON [{label, photos, priceCents}]), vide = prix unique
   location        TEXT NOT NULL DEFAULT '',
+  included        TEXT NOT NULL DEFAULT '',   -- « compris dans votre forfait », une ligne par élément
+  dress_code      TEXT NOT NULL DEFAULT '',   -- conseil vestimentaire
+  image_id        TEXT NOT NULL DEFAULT '',   -- image d'illustration (R2 booking/{photographer}/{image}.webp)
   active          INTEGER NOT NULL DEFAULT 1,
   position        INTEGER NOT NULL DEFAULT 0,
   created_at      INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_booking_offers_photographer ON booking_offers(photographer_id, position);
+
+-- Prestations enregistrées : le réglage complet d'une formule (JSON des
+-- champs, image comprise), gardé pour la recréer d'un clic la fois suivante,
+-- même après la suppression de la formule. Un nom par prestation.
+CREATE TABLE IF NOT EXISTS booking_templates (
+  id              TEXT PRIMARY KEY,           -- bkt_…
+  photographer_id TEXT NOT NULL REFERENCES photographers(id) ON DELETE CASCADE,
+  title           TEXT NOT NULL,
+  data            TEXT NOT NULL,              -- JSON {title, description, included, dressCode, durationMin, priceCents, depositCents, tiers, location}
+  image_id        TEXT NOT NULL DEFAULT '',
+  created_at      INTEGER NOT NULL,
+  updated_at      INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_booking_templates_photographer ON booking_templates(photographer_id, title);
 
 CREATE TABLE IF NOT EXISTS booking_slots (
   id              TEXT PRIMARY KEY,           -- bks_…
@@ -915,6 +932,8 @@ CREATE TABLE IF NOT EXISTS bookings (
   fee_cents         INTEGER NOT NULL DEFAULT 0,
   photos            INTEGER,                  -- tarif choisi : nombre de photos (formule à plusieurs tarifs)
   tier_label        TEXT NOT NULL DEFAULT '', -- tarif choisi : nom facultatif
+  included          TEXT NOT NULL DEFAULT '', -- copie de la formule : compris dans le forfait
+  dress_code        TEXT NOT NULL DEFAULT '', -- copie de la formule : conseil vestimentaire (e-mails)
   client_name       TEXT NOT NULL,
   client_email      TEXT NOT NULL,
   client_phone      TEXT NOT NULL DEFAULT '',

@@ -1235,7 +1235,7 @@ main section > p, .ad-share > p { max-width: 75ch; }
 
 .ad-bk-offers { list-style: none; margin: 0 0 1rem; padding: 0; display: grid; gap: .45rem; }
 .ad-bk-offer {
-  display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; gap: .7rem; align-items: center;
+  display: grid; grid-template-columns: 56px minmax(0, 1fr) auto auto auto; gap: .7rem; align-items: center;
   padding: .7rem .85rem; border: 1px solid var(--line); border-radius: 10px; background: var(--paper);
 }
 .ad-bk-offer-main { display: grid; gap: .1rem; min-width: 0; }
@@ -1244,6 +1244,43 @@ main section > p, .ad-share > p { max-width: 75ch; }
 .ad-bk-offer-off { background: var(--mist); }
 .ad-bk-offer-off .ad-bk-offer-main { opacity: .6; }
 .ad-bk-offer-form { margin-top: .9rem; max-width: 720px; }
+.ad-bk-thumb { width: 56px; height: 42px; border-radius: 6px; object-fit: cover; background: var(--mist-2); }
+.ad-bk-thumb-empty { display: block; background: repeating-linear-gradient(135deg, var(--mist) 0 6px, var(--mist-2) 6px 12px); }
+
+/* Type de séance : prestation enregistrée ou nouvelle prestation. */
+.ad-bk-starter { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .6rem .8rem; margin: .4rem 0 .6rem; padding: .9rem; border-radius: 12px; background: var(--mist); }
+.ad-bk-starter .ad-field { flex: 1 1 280px; margin: 0; }
+.ad-bk-starter .ad-btn { min-height: 42px; }
+.ad-bk-templates ul { list-style: none; display: grid; gap: .4rem; margin: .6rem 0 0; padding: 0; }
+.ad-bk-templates li { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; gap: .7rem; align-items: center; padding: .45rem .6rem; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); }
+.ad-bk-templates li > img, .ad-bk-templates li > .ad-bk-thumb-empty { width: 48px; height: 36px; border-radius: 6px; object-fit: cover; }
+.ad-bk-templates li > span:not(.ad-bk-thumb-empty) { display: grid; min-width: 0; }
+.ad-bk-templates strong { font-weight: 600; font-size: .9rem; color: var(--ink); }
+.ad-bk-templates .ad-hint { font-size: .8rem; }
+
+/* Image d'illustration d'une formule. */
+.ad-bk-image { display: grid; grid-template-columns: 168px minmax(0, 1fr); gap: 1rem; align-items: center; margin-bottom: 1rem; }
+.ad-bk-image-preview {
+  display: grid; place-items: center; aspect-ratio: 4 / 3; overflow: hidden; border-radius: 10px;
+  background: var(--mist); box-shadow: 0 0 0 1px var(--line) inset; color: var(--muted); font-size: .82rem;
+}
+.ad-bk-image-preview img { width: 100%; height: 100%; object-fit: cover; }
+.ad-bk-image-busy .ad-bk-image-preview { animation: ad-bk-pulse 1.2s ease-in-out infinite; }
+@keyframes ad-bk-pulse { 50% { opacity: .55; } }
+.ad-bk-image-side { display: grid; gap: .3rem; justify-items: start; }
+.ad-bk-image-title { font-size: .86rem; font-weight: 600; color: var(--ink-2); }
+.ad-bk-image-title em { font-style: normal; font-weight: 400; color: var(--muted); }
+.ad-bk-image-side .ad-hint { font-size: .82rem; max-width: 46ch; }
+.ad-bk-image-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; margin-top: .3rem; }
+.ad-bk-image-pick { position: relative; overflow: hidden; cursor: pointer; }
+.ad-bk-image-pick input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.ad-bk-image-pick:focus-within { box-shadow: var(--ring); }
+.ad-bk-notes textarea { min-height: 6.5rem; }
+.ad-bk-save { align-items: flex-start; gap: .65rem; margin: .2rem 0 1rem; padding: .8rem .9rem; border-radius: 10px; background: var(--accent-soft); }
+.ad-bk-save input { margin-top: .2rem; width: 17px; height: 17px; accent-color: var(--accent); flex: none; }
+.ad-bk-save > span { display: grid; gap: .1rem; }
+.ad-bk-save strong { font-weight: 600; color: var(--ink); }
+.ad-bk-save .ad-hint { font-size: .82rem; }
 .ad-bk-slot-form { display: grid; gap: .8rem; margin: .4rem 0 1.2rem; }
 .ad-bk-slot-form .ad-seg { justify-self: start; }
 .ad-bk-slot-fields { display: flex; flex-wrap: wrap; gap: .2rem .8rem; align-items: flex-end; }
@@ -1275,6 +1312,9 @@ main section > p, .ad-share > p { max-width: 75ch; }
 @media (max-width: 720px) {
   .ad-bk-offer { grid-template-columns: repeat(3, auto); justify-content: start; }
   .ad-bk-offer-main { grid-column: 1 / -1; }
+  .ad-bk-offer > .ad-bk-thumb { display: none; }
+  .ad-bk-image { grid-template-columns: 120px minmax(0, 1fr); }
+  .ad-bk-notes { grid-template-columns: minmax(0, 1fr); }
   .ad-bk-slot-fields .ad-field { flex: 1 1 140px; }
 }
 
@@ -1529,6 +1569,7 @@ main section > p, .ad-share > p { max-width: 75ch; }
 }
 @media (prefers-reduced-motion: reduce) {
   .ad-cl-remind, .ad-cl-link, .ad-cl-search input, .ad-cl-notes { transition: none; }
+  .ad-bk-image-busy .ad-bk-image-preview { animation: none; }
 }
 
 /* Formule : prix unique ou plusieurs tarifs selon le nombre de photos. */

@@ -73,6 +73,16 @@ check("tarifs illisibles en base : liste vide plutôt qu'une erreur", parseTiers
 const tierMail = buildBookingConfirmationEmail({ ...params, photos: 10, tierLabel: "Complète", priceCents: 12000 });
 check("e-mail de confirmation : la formule choisie, son prix", tierMail.html.includes("10 photos retouchées (Complète), 120,00") && tierMail.text.includes("Formule : 10 photos retouchées (Complète)"),
       tierMail.text.split("\n").find((l) => l.startsWith("Formule")));
+const notes = { ...params, included: "10 photos retouchées\nGalerie <privée>", dressCode: "Tons doux & unis" };
+const notedMail = buildBookingConfirmationEmail(notes);
+check("e-mail de confirmation : « Compris dans votre forfait » et conseil vestimentaire, échappés",
+      notedMail.html.includes("Compris dans votre forfait") && notedMail.html.includes("Galerie &lt;privée&gt;") &&
+      notedMail.html.includes("Tons doux &amp; unis") && notedMail.text.includes("Conseil vestimentaire :\nTons doux & unis"));
+const notedReminder = buildBookingReminderEmail(notes);
+check("rappel de la veille : le conseil vestimentaire, sans répéter ce qui est compris",
+      notedReminder.html.includes("Conseil vestimentaire") && !notedReminder.html.includes("Compris dans votre forfait"));
+check("sans ces champs, les e-mails restent inchangés",
+      !buildBookingConfirmationEmail(params).html.includes("Conseil vestimentaire") && !buildBookingConfirmationEmail(params).text.includes("Compris"));
 
 const failed = checks.filter((c) => !c.ok).length;
 console.log(`\n${checks.length - failed}/${checks.length} vérifications réussies`);

@@ -15,7 +15,7 @@ import { sendDeliveryReady } from "./notify.js";
 import { exportAccount, deleteAccount } from "./privacy.js";
 import { galleryQuotaRefusal, subscriptionForAdmin, startSubscriptionCheckout, openBillingPortal, syncSubscription, setScolairePlan } from "./subscription.js";
 import { handleSchoolAdmin } from "./school.js";
-import { handleBookingAdmin } from "./booking.js";
+import { handleBookingAdmin, deleteBookingFiles } from "./booking.js";
 import { handleContractsAdmin } from "./contracts.js";
 import { handleClientsAdmin } from "./clients.js";
 import { setPromo, sendPromoToClient, promoForAdmin } from "./campaigns.js";
@@ -895,7 +895,10 @@ export async function handleAdmin(request, env, ctx, path) {
     return exportAccount(env, photographerId);
   }
   if (section === "account" && parts[3] === "delete" && parts.length === 4 && request.method === "POST") {
-    return deleteAccount(request, env, photographerId, (gallery) => eraseGallery(env, gallery), () => deletePortfolioFiles(env, photographerId));
+    return deleteAccount(request, env, photographerId, (gallery) => eraseGallery(env, gallery), async () => {
+      await deletePortfolioFiles(env, photographerId);
+      await deleteBookingFiles(env, photographerId);
+    });
   }
   if (section === "account" && parts[3] === "name" && parts.length === 4 && request.method === "POST") {
     return updateName(request, env, photographerId);

@@ -988,6 +988,22 @@ Studio) :
    client choisit le sien en réservant, la réservation garde le nombre de
    photos et le prix, repris dans les e-mails et le tableau de bord.
    L'acompte vaut pour tous les tarifs et ne dépasse pas le moins cher.
+   Chaque formule peut aussi porter une **image d'illustration** (réduite
+   à 1600 px en WebP par le serveur d'administration, stockée dans R2 sous
+   `booking/{photographe}/{image}.webp`, servie publiquement tant qu'une
+   formule proposée l'utilise), un texte **« Compris dans votre forfait »**
+   (une ligne par élément, affiché en liste sur le mini-site) et un
+   **conseil vestimentaire** (affiché avant la réservation, sur l'écran de
+   confirmation, dans l'e-mail de confirmation et dans le rappel de la
+   veille ; la réservation en garde une copie).
+   **Prestations enregistrées** : la case « Sauvegarder le réglage de cette
+   prestation » (cochée par défaut) garde tous les réglages de la formule,
+   image comprise, dans `booking_templates` (un par nom, mis à jour s'il
+   existe déjà ; 40 au plus). Le menu « Type de séance » les propose pour
+   recréer une formule pré-remplie, même après la suppression de la formule
+   d'origine ; « Créer une nouvelle prestation » ouvre un formulaire vide.
+   Une image que plus aucune formule ni prestation n'utilise est effacée ;
+   celles envoyées sans être enregistrées le sont au bout d'un jour.
 2. **Créneaux** : des horaires précis (« 10:00, 14:30 ») ou une série pour
    les mini-séances (« de 10 h à 16 h toutes les 20 min »), à l'heure de
    Bruxelles. Un créneau réservé ne peut pas être supprimé.
@@ -1015,6 +1031,7 @@ elle a déjà été appliquée) :
 cd worker
 npx wrangler d1 execute galerie-protegee --remote --file=migrations/2026-10-reservations.sql
 npx wrangler d1 execute galerie-protegee --remote --file=migrations/2026-10-reservations-tarifs.sql
+npx wrangler d1 execute galerie-protegee --remote --file=migrations/2026-10-reservations-prestations.sql
 npm run deploy
 ```
 

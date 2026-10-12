@@ -384,6 +384,8 @@
     $("pf-bk-summary").textContent = o.title + " · " + slotDay(slot.startsAt) + " à " + slotTime(slot.startsAt) + " · " + duration(o.durationMin) +
       (tier ? " · " + photosText(tier.photos) + ", " + euros(tier.priceCents) : "") +
       (o.location ? " · " + o.location : "");
+    $("pf-bk-dress-text").textContent = o.dressCode || "";
+    $("pf-bk-dress").hidden = !o.dressCode;
   }
 
   function chooseSlot(slot, button) {
@@ -422,6 +424,7 @@
       r.offerTitle + ", " + slotDay(r.startsAt) + " à " + slotTime(r.startsAt) + " (" + duration(r.durationMin) + ")" + (r.location ? ", " + r.location : "") + ".",
       r.photos ? "Votre formule : " + photosText(r.photos) + " retouchée" + (r.photos > 1 ? "s" : "") + (r.tierLabel ? " (" + r.tierLabel + ")" : "") + ", " + euros(r.priceCents) + "." : "",
       r.depositCents ? "Acompte réglé : " + euros(r.depositCents) + (rest ? " ; reste à régler : " + euros(rest) + "." : ".") : "",
+      r.dressCode ? "Conseil vestimentaire : " + r.dressCode : "",
       "Un e-mail de confirmation vient de partir, avec l'invitation pour votre agenda.",
     ];
   }
@@ -431,9 +434,18 @@
     var list = $("pf-bk-offers");
     list.textContent = "";
     offers.forEach(function (o) {
-      var b = el("button", "pf-bk-offer");
+      var b = el("button", "pf-bk-offer" + (o.imageId ? " pf-bk-offer-pic" : ""));
       b.type = "button";
       b.setAttribute("aria-pressed", "false");
+      if (o.imageId) {
+        var pic = el("img", "pf-bk-offer-img");
+        pic.src = bookingApi("/image/" + encodeURIComponent(o.imageId));
+        pic.alt = "";
+        pic.loading = "lazy";
+        pic.decoding = "async";
+        pic.addEventListener("error", function () { pic.remove(); b.classList.remove("pf-bk-offer-pic"); });
+        b.appendChild(pic);
+      }
       b.appendChild(el("strong", "", o.title));
       var tiers = o.tiers || [];
       var fewest = tiers.length ? Math.min.apply(null, tiers.map(function (t) { return t.photos; })) : 0;
@@ -445,6 +457,14 @@
         o.location,
       ].filter(Boolean).join(" · ")));
       if (o.description) b.appendChild(el("span", "pf-bk-desc", o.description));
+      // « Compris dans votre forfait » : une ligne par élément.
+      var included = String(o.included || "").split(/\n+/).map(function (l) { return l.replace(/^[-•*·\s]+/, "").trim(); }).filter(Boolean);
+      if (included.length) {
+        var box = el("span", "pf-bk-included");
+        box.appendChild(el("span", "pf-bk-included-title", "Compris dans votre forfait"));
+        included.forEach(function (line) { box.appendChild(el("span", "pf-bk-included-item", line)); });
+        b.appendChild(box);
+      }
       b.addEventListener("click", function () { chooseOffer(o, b); });
       list.appendChild(b);
     });
@@ -555,6 +575,7 @@
       showBookingResult("Votre séance est réservée", confirmedLines({
         offerTitle: o.title, startsAt: booking.slot.startsAt, durationMin: o.durationMin, location: o.location, depositCents: 0,
         priceCents: chosen ? chosen.priceCents : o.priceCents, photos: chosen ? chosen.photos : null, tierLabel: chosen ? chosen.label : "",
+        dressCode: o.dressCode || "",
       }), "hide");
       $("reserver").scrollIntoView();
     } catch (err) {
