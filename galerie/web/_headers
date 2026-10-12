@@ -2,6 +2,12 @@
 /assets/*
   Cache-Control: public, max-age=2592000, stale-while-revalidate=86400
 
+# Polices : fichiers figés, gardés un an (« ! » retire l'en-tête de /assets/*,
+# sinon Cloudflare Pages accolerait les deux valeurs).
+/assets/fonts/*
+  ! Cache-Control
+  Cache-Control: public, max-age=31536000, immutable
+
 /*
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
