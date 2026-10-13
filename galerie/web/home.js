@@ -1,7 +1,7 @@
 /* =====================================================================
    Holypixx — page d'accueil : liens vers l'interface photographe, menu,
-   recomposition des photos en tuiles (jouée une fois), labo de protection,
-   rythme de paiement des tarifs et offre Fondateurs.
+   recomposition des photos en tuiles (jouée une fois), styles de galerie,
+   labo de protection, rythme de paiement des tarifs et offre Fondateurs.
    ===================================================================== */
 (function () {
   "use strict";
@@ -95,6 +95,82 @@
     if (first.complete) setTimeout(start, 150);
     else { first.addEventListener("load", function () { setTimeout(start, 150); }); first.addEventListener("error", start); }
     setTimeout(start, 2500);
+  }
+
+  /* ---------- Styles de galerie ---------- */
+  // Survoler un style l'essaie, cliquer le garde (comme dans l'espace
+  // photographe). Sans script : le style Éditorial, affiché tel quel.
+
+  var sty = document.getElementById("sty");
+  if (sty) {
+    var STYLE_INFO = {
+      classique: ["Classique", "Cormorant Garamond", "Jost"],
+      doux: ["Doux", "Cormorant Garamond", "Nunito Sans"],
+      architectural: ["Architectural", "Josefin Sans", "Work Sans"],
+      moderne: ["Moderne", "Manrope", "Manrope"],
+      nuit: ["Nuit", "Cormorant Garamond", "Jost"],
+      editorial: ["Éditorial", "Bodoni Moda", "Karla"],
+      romantique: ["Romantique", "Great Vibes", "Lora"],
+      boheme: ["Bohème", "Fraunces", "Karla"],
+      galerie: ["Galerie d'art", "Marcellus", "Work Sans"],
+    };
+    var styPage = document.getElementById("sty-page");
+    var styWin = document.getElementById("sty-win");
+    var styCaption = document.getElementById("sty-caption");
+    var styList = sty.querySelector(".sty-list");
+    var chosen = styPage.getAttribute("data-style");
+
+    var showStyle = function (key) {
+      var info = STYLE_INFO[key];
+      if (!info || styPage.getAttribute("data-style") === key) return;
+      styPage.setAttribute("data-style", key);
+      styWin.setAttribute("aria-label", "Aperçu d'une galerie client au style " + info[0]);
+      styCaption.innerHTML = info[1] === info[2]
+        ? "Titres et texte en <b>" + info[1] + "</b>&nbsp;: changez-les librement."
+        : "Titres en <b>" + info[1] + "</b>, texte en <b>" + info[2] + "</b>&nbsp;: changez-les librement.";
+    };
+
+    styList.querySelectorAll(".sty-opt").forEach(function (btn) {
+      var key = btn.getAttribute("data-style");
+      btn.addEventListener("click", function () {
+        chosen = key;
+        scrollPreview(false);
+        styList.querySelectorAll(".sty-opt").forEach(function (b) { b.setAttribute("aria-pressed", String(b === btn)); });
+        showStyle(key);
+      });
+      btn.addEventListener("pointerenter", function (e) { if (e.pointerType === "mouse") showStyle(key); });
+    });
+    styList.addEventListener("pointerleave", function (e) { if (e.pointerType === "mouse") showStyle(chosen); });
+
+    // La fenêtre défile comme une vraie page : vers les photos pour une mise
+    // en page, vers le haut pour un style ou un en-tête.
+    var styScroll = document.getElementById("sty-scroll");
+    var scrollPreview = function (toGrid) {
+      var grid = styScroll.querySelector(".sty-grid");
+      styScroll.scrollTo({ top: toGrid ? grid.offsetTop - 16 : 0 });
+    };
+
+    sty.querySelectorAll(".seg-opt").forEach(function (btn) {
+      var attr = btn.hasAttribute("data-head") ? "data-head" : "data-layout";
+      btn.addEventListener("click", function () {
+        styPage.setAttribute(attr, btn.getAttribute(attr));
+        scrollPreview(attr === "data-layout");
+        btn.parentNode.querySelectorAll(".seg-opt").forEach(function (b) { b.setAttribute("aria-pressed", String(b === btn)); });
+      });
+    });
+
+    // Les noms des styles s'affichent dans leur police de titre : les
+    // polices ne se chargent qu'à l'approche de la section.
+    if ("IntersectionObserver" in window) {
+      var styNear = new IntersectionObserver(function (entries) {
+        if (!entries.some(function (e) { return e.isIntersecting; })) return;
+        styNear.disconnect();
+        sty.classList.add("near");
+      }, { rootMargin: "600px 0px" });
+      styNear.observe(sty);
+    } else {
+      sty.classList.add("near");
+    }
   }
 
   /* ---------- Labo de protection ---------- */
