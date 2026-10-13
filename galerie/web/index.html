@@ -115,9 +115,9 @@
         ],
         "offers": [
           { "@type": "Offer", "name": "Découverte", "price": "0", "priceCurrency": "EUR", "description": "Gratuit, 3 galeries actives, 5 Go." },
-          { "@type": "Offer", "name": "Essentiel", "price": "15", "priceCurrency": "EUR", "description": "25 galeries actives, 200 Go, boutique de tirages et suppléments en ligne. Ou 150 € par an.",
+          { "@type": "Offer", "name": "Essentiel", "price": "15", "priceCurrency": "EUR", "description": "25 galeries actives, 200 Go, boutique de tirages, suppléments payés en ligne et factures. Ou 150 € par an.",
             "priceSpecification": { "@type": "UnitPriceSpecification", "price": "15", "priceCurrency": "EUR", "unitText": "mois", "billingDuration": "P1M" } },
-          { "@type": "Offer", "name": "Pro", "price": "29", "priceCurrency": "EUR", "description": "Galeries illimitées, 1 To, adresse à votre nom. Ou 290 € par an.",
+          { "@type": "Offer", "name": "Pro", "price": "29", "priceCurrency": "EUR", "description": "Galeries illimitées, 1 To, réservation en ligne avec acompte, devis et contrats signés, campagnes de vente, adresse à votre nom. Ou 290 € par an.",
             "priceSpecification": { "@type": "UnitPriceSpecification", "price": "29", "priceCurrency": "EUR", "unitText": "mois", "billingDuration": "P1M" } }
         ]
       }
@@ -138,7 +138,7 @@
       { "@type": "Question", "name": "Puis-je personnaliser l'apparence de mes galeries ?",
         "acceptedAnswer": { "@type": "Answer", "text": "Oui, avec toutes les formules. Neuf styles (classique, doux, architectural, moderne, nuit, éditorial, romantique, bohème, galerie d'art), chacun avec sa palette, ses formes et ses polices. Vous pouvez changer la police des titres (13 au choix) et du texte (10), écrire un mot d'accueil, choisir la photo de couverture ou placer un film YouTube ou Vimeo en tête de galerie, idéal pour un mariage. Votre style préféré se règle une fois dans vos paramètres et s'applique à chaque nouvelle galerie." } },
       { "@type": "Question", "name": "Mes clients peuvent-ils réserver et signer en ligne ?",
-        "acceptedAnswer": { "@type": "Answer", "text": "Oui, avec les formules Essentiel, Pro et Studio. Vous ouvrez vos créneaux (ou une série de mini-séances), vos clients réservent depuis votre portfolio et paient l'acompte sur votre compte Stripe. Pour une séance sur mesure, vous leur envoyez un devis qu'ils signent en ligne ; chacun reçoit le contrat signé en PDF." } },
+        "acceptedAnswer": { "@type": "Answer", "text": "Oui, avec les formules Pro et Studio. Vous ouvrez vos créneaux (ou une série de mini-séances), vos clients réservent depuis votre portfolio et paient l'acompte sur votre compte Stripe. Pour une séance sur mesure, vous leur envoyez un devis qu'ils signent en ligne ; chacun reçoit le contrat signé en PDF." } },
       { "@type": "Question", "name": "Un contrat signé en ligne est-il valable ?",
         "acceptedAnswer": { "@type": "Answer", "text": "C'est une signature électronique simple au sens du règlement européen eIDAS : elle ne peut pas être écartée au seul motif qu'elle est électronique. Holypixx conserve sa preuve : le nom saisi, la date, l'empreinte du document signé. Les conditions proposées sont un modèle à adapter, pas un conseil juridique." } },
       { "@type": "Question", "name": "Holypixx m'aide-t-il à faire revenir mes clients ?",
@@ -313,7 +313,7 @@
       <div class="wrap">
         <div class="chapter-head">
           <h2>Réservé, signé, payé&nbsp;: avant même le premier déclic.</h2>
-          <p class="chapter-lede">Votre client choisit son créneau sur votre portfolio, signe votre contrat en ligne et règle l'acompte. Vous recevez la séance dans votre agenda, sans un seul PDF à imprimer ni un message à relancer.</p>
+          <p class="chapter-lede">Votre client choisit son créneau sur votre portfolio, signe votre contrat en ligne et règle l'acompte. Vous recevez la séance dans votre agenda, sans un seul PDF à imprimer ni un message à relancer. <span class="tagline">Formule Pro</span></p>
         </div>
 
         <div class="prep-desk" id="prep-desk">
@@ -789,22 +789,23 @@
               <li>Tout Découverte</li>
               <li>Boutique de tirages intégrée</li>
               <li>Suppléments payés en ligne, factures</li>
-              <li>Campagnes et tableau des ventes</li>
-              <li>Réservation en ligne avec acompte, prestations illustrées</li>
-              <li>Devis et contrats signés en ligne</li>
+              <li>Tableau de bord des ventes</li>
               <li>Bientôt : écoles, crèches et clubs, 5&nbsp;% des ventes scolaires</li>
             </ul>
           </article>
           <article class="plan plan-pro">
             <p class="plan-flag">Recommandé</p>
             <h3>Pro</h3>
-            <p class="plan-for">Pour un studio à votre nom, sans limite.</p>
+            <p class="plan-for">Pour gérer tout votre studio, à votre nom.</p>
             <p class="plan-price" data-plan="pro"><span class="plan-amount">29 €</span><span class="plan-per">/ mois</span></p>
             <p class="plan-alt" data-alt="pro">ou 290 € par an</p>
             <a class="btn btn-primary" data-signup href="https://holypixx-admin.onrender.com/#/inscription" rel="nofollow">Essayer 10 jours gratuitement</a>
             <ul class="ticks">
               <li>Galeries illimitées, 1 To</li>
               <li>Tout Essentiel</li>
+              <li>Réservation en ligne avec acompte, prestations illustrées</li>
+              <li>Devis et contrats signés en ligne</li>
+              <li>Campagnes de vente : promotions, relances des paniers</li>
               <li>Adresse à votre nom : <span class="nowrap">votre-studio.holypixx.com</span></li>
               <li>Portfolio sur votre adresse</li>
               <li>Bientôt : écoles, crèches et clubs, 5&nbsp;% des ventes scolaires</li>
@@ -861,7 +862,7 @@
           <details><summary>Peut-on empêcher une capture d'écran ?</summary><p>Aucun site au monde ne le peut. Holypixx rend une capture inutile (basse définition, filigrane dense), vous prévient par e-mail quand une capture est tentée, et retrouve la galerie d'origine d'une image grâce à son empreinte invisible. Tout est expliqué dans notre guide <a class="inline-link" href="/proteger-ses-photos">protéger ses photos en ligne</a>.</p></details>
           <details><summary>Mon client doit-il créer un compte ?</summary><p>Non. Il reçoit un lien et un mot de passe, rien d'autre.</p></details>
           <details><summary>Puis-je personnaliser l'apparence de mes galeries ?</summary><p>Oui, avec toutes les formules. Neuf styles (classique, doux, architectural, moderne, nuit, éditorial, romantique, bohème, galerie d'art), chacun avec sa palette, ses formes et ses polices. Vous pouvez changer la police des titres (13&nbsp;au choix) et du texte (10), écrire un mot d'accueil, choisir la photo de couverture ou placer un film YouTube ou Vimeo en tête de galerie, idéal pour un mariage. Votre style préféré se règle une fois dans vos paramètres et s'applique à chaque nouvelle galerie.</p></details>
-          <details><summary>Mes clients peuvent-ils réserver et signer en ligne ?</summary><p>Oui, avec les formules Essentiel, Pro et Studio. Vous ouvrez vos créneaux (ou une série de mini-séances), vos clients réservent depuis votre portfolio et paient l'acompte sur votre compte Stripe. Pour une séance sur mesure, vous leur envoyez un devis qu'ils signent en ligne&nbsp;; chacun reçoit le contrat signé en PDF.</p></details>
+          <details><summary>Mes clients peuvent-ils réserver et signer en ligne ?</summary><p>Oui, avec les formules Pro et Studio. Vous ouvrez vos créneaux (ou une série de mini-séances), vos clients réservent depuis votre portfolio et paient l'acompte sur votre compte Stripe. Pour une séance sur mesure, vous leur envoyez un devis qu'ils signent en ligne&nbsp;; chacun reçoit le contrat signé en PDF.</p></details>
           <details><summary>Un contrat signé en ligne est-il valable ?</summary><p>C'est une signature électronique simple au sens du règlement européen eIDAS&nbsp;: elle ne peut pas être écartée au seul motif qu'elle est électronique. Holypixx conserve sa preuve&nbsp;: le nom saisi, la date, l'empreinte du document signé. Les conditions proposées sont un modèle à adapter, pas un conseil juridique.</p></details>
           <details><summary>Holypixx m'aide-t-il à faire revenir mes clients ?</summary><p>Oui. Chaque client a sa fiche&nbsp;: historique, montants encaissés, notes. Holypixx vous prévient au bon moment, avec un message prêt à envoyer&nbsp;: le premier anniversaire d'un bébé photographié à 6&nbsp;mois, un anniversaire de mariage, vos séances de Noël à proposer à tous vos clients, ou un client sans séance depuis un an. Notre guide pour <a class="inline-link" href="/fideliser-clients-photographe">fidéliser ses clients</a> vous donne un calendrier gratuit et les messages à envoyer.</p></details>
           <details><summary>Comment fonctionne la boutique de tirages ?</summary><p>Vous choisissez vos formats et fixez votre marge. Le client commande depuis sa galerie et paie en ligne sur votre compte Stripe ; le laboratoire Prodigi imprime et livre directement chez lui, avec suivi.</p></details>

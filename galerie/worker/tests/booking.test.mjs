@@ -56,8 +56,8 @@ check("e-mail photographe : coordonnées du client, message échappé, lien vers
       notice.html.includes("camille@example.com") && notice.html.includes("&lt;Rex&gt;") && notice.html.includes("#/reservations"));
 check("e-mails d'annulation et de rappel", buildBookingCancelledEmail(params).html.includes("remboursé") && buildBookingReminderEmail(params).subject.startsWith("Rappel"));
 
-check("réservation en ligne : Essentiel, Pro et Studio, pas Découverte ni Scolaire",
-      PLANS.essentiel.features.booking && PLANS.pro.features.booking && PLANS.studio.features.booking && !PLANS.free.features.booking && !PLANS.scolaire.features.booking);
+check("réservation en ligne : Pro et Studio, pas Découverte, Essentiel ni Scolaire",
+      !PLANS.essentiel.features.booking && PLANS.pro.features.booking && PLANS.studio.features.booking && !PLANS.free.features.booking && !PLANS.scolaire.features.booking);
 
 /* ---------- Plusieurs tarifs selon le nombre de photos ---------- */
 

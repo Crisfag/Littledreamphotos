@@ -23,7 +23,7 @@ export const PLANS = {
     priceCents: 0,
     maxActiveGalleries: 3,
     storageBytes: 5e9,
-    features: { shop: false, subdomain: false, school: false, booking: false, contracts: false },
+    features: { shop: false, extras: false, campaigns: false, subdomain: false, school: false, booking: false, contracts: false },
     pitch: "Pour essayer : 3 galeries actives, protection complète, sélection, livraison HD.",
   },
   essentiel: {
@@ -38,8 +38,10 @@ export const PLANS = {
     schoolFeePercent: 5,
     maxActiveGalleries: 25,
     storageBytes: 200e9,
-    features: { shop: true, subdomain: false, school: true, booking: true, contracts: true },
-    pitch: "25 galeries actives et la boutique de tirages.",
+    // Vendre : boutique de tirages et suppléments payés en ligne. Campagnes,
+    // réservation et contrats sont réservés à Pro.
+    features: { shop: true, extras: true, campaigns: false, subdomain: false, school: true, booking: false, contracts: false },
+    pitch: "25 galeries actives, la boutique de tirages et les suppléments payés en ligne.",
   },
   pro: {
     key: "pro",
@@ -51,8 +53,8 @@ export const PLANS = {
     schoolFeePercent: 5,
     maxActiveGalleries: null,
     storageBytes: 1000e9,
-    features: { shop: true, subdomain: true, school: true, booking: true, contracts: true },
-    pitch: "Galeries illimitées, boutique, et vos galeries à votre nom (votre-studio.holypixx.com).",
+    features: { shop: true, extras: true, campaigns: true, subdomain: true, school: true, booking: true, contracts: true },
+    pitch: "Galeries illimitées, réservation et contrats en ligne, campagnes de vente, et vos galeries à votre nom (votre-studio.holypixx.com).",
   },
   // Photo de groupe (écoles, crèches, clubs) : voir school.js. Ces deux
   // formules dédiées (schoolPlan) ne sont proposées qu'une fois le module
@@ -70,7 +72,7 @@ export const PLANS = {
     schoolFeePercent: 5,
     maxActiveGalleries: 3,
     storageBytes: 500e9,
-    features: { shop: false, subdomain: false, school: true, booking: false, contracts: false },
+    features: { shop: false, extras: false, campaigns: false, subdomain: false, school: true, booking: false, contracts: false },
     pitch: "Pour les photographes qui ne font que du scolaire : on ne paie que sur ce qu'on vend.",
   },
   // Studio : tout Pro, plus le scolaire sans commission (seulement les frais
@@ -90,7 +92,7 @@ export const PLANS = {
     schoolPlan: true,
     maxActiveGalleries: null,
     storageBytes: 2000e9,
-    features: { shop: true, subdomain: true, school: true, booking: true, contracts: true },
+    features: { shop: true, extras: true, campaigns: true, subdomain: true, school: true, booking: true, contracts: true },
     pitch: "Tout Pro, plus les écoles, crèches et clubs, sans commission.",
   },
 };
@@ -125,14 +127,20 @@ export const INTERVALS = ["month", "year"];
 
 export const FEATURE_LABELS = {
   shop: "La boutique de tirages",
+  extras: "Le paiement en ligne des suppléments",
+  campaigns: "Les campagnes de vente",
   subdomain: "L'adresse à votre nom",
   school: "Le module écoles, crèches et clubs",
   booking: "La réservation en ligne",
   contracts: "Les devis et contrats signés en ligne",
 };
-// Accord du participe : « La boutique… est incluse », « Le module… est inclus ».
-const FEATURE_MASCULINE = {
-  school: true,
+// Accord : « La boutique… est incluse », « Le module… est inclus »,
+// « Les campagnes… sont incluses ».
+const FEATURE_AGREEMENT = {
+  school: "est inclus",
+  extras: "est inclus",
+  contracts: "sont inclus",
+  campaigns: "sont incluses",
 };
 
 // Statuts Stripe qui ouvrent droit à la formule payée (past_due : période de
@@ -182,8 +190,8 @@ export function schoolEnabled(env, photographer) {
 // Réponse 402 expliquant quelle formule débloque une fonctionnalité.
 export function featureRefusal(feature) {
   const needed = Object.values(PLANS).find((p) => p.features[feature]);
-  const included = FEATURE_MASCULINE[feature] ? "inclus" : "incluse";
-  return fail(402, `${FEATURE_LABELS[feature] || "Cette fonctionnalité"} est ${included} à partir de la formule ${needed?.label || "payante"} (onglet Abonnement).`);
+  const included = FEATURE_AGREEMENT[feature] || "est incluse";
+  return fail(402, `${FEATURE_LABELS[feature] || "Cette fonctionnalité"} ${included} à partir de la formule ${needed?.label || "payante"} (onglet Abonnement).`);
 }
 
 export async function activeGalleryCount(env, photographerId) {

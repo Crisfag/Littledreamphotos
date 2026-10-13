@@ -16,6 +16,7 @@
 import { json, fail } from "./http.js";
 import { sendPrintPromo, sendCartReminder, sendFavoritesPrint } from "./notify.js";
 import { galleryUrlFor } from "./reminders.js";
+import { hasFeature } from "./subscription.js";
 
 export const PROMO_PERCENTS = [10, 15, 20, 25, 30, 40, 50];
 const DAY = 24 * 60 * 60;
@@ -194,7 +195,7 @@ export async function runSalesReminders(env, shopState, options = {}) {
       .first();
     if (ordered) continue;
     const state = await shopState(env, gallery);
-    if (!state) continue;
+    if (!state || !hasFeature(env, state.photographer, "campaigns")) continue;
     const marked = await env.DB.prepare("UPDATE print_carts SET reminded_at = ? WHERE gallery_id = ? AND reminded_at IS NULL")
       .bind(now, gallery.id)
       .run();
@@ -233,7 +234,7 @@ export async function runSalesReminders(env, shopState, options = {}) {
   for (const gallery of galleries) {
     if (!gallery.printable_favorites) continue;
     const state = await shopState(env, gallery);
-    if (!state) continue;
+    if (!state || !hasFeature(env, state.photographer, "campaigns")) continue;
     const inserted = await env.DB.prepare("INSERT OR IGNORE INTO reminders_sent (gallery_id, kind, sent_at) VALUES (?, 'print_favorites', ?)")
       .bind(gallery.id, now)
       .run();

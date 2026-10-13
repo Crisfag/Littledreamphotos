@@ -1447,6 +1447,8 @@
       plan.storageBytes ? formatStorage(plan.storageBytes) + " de stockage" : "",
       "Protection, sélection, musique et livraison HD",
       (plan.features.shop ? "✓ " : "— ") + "Boutique de tirages",
+      (plan.features.extras ? "✓ " : "— ") + "Suppléments payés en ligne, factures",
+      (plan.features.campaigns ? "✓ " : "— ") + "Campagnes de vente (promotions, relances)",
       (plan.features.subdomain ? "✓ " : "— ") + "Vos galeries à votre nom",
       (plan.features.booking ? "✓ " : "— ") + "Réservation en ligne avec acompte",
       (plan.features.contracts ? "✓ " : "— ") + "Devis et contrats signés en ligne",
@@ -2450,6 +2452,13 @@
     var sales = gallery.sales || { promo: null, percents: [10, 15, 20, 25, 30, 40, 50], cart: null };
     var promo = sales.promo;
     var html = '<div class="ad-promo"><h4>Promotion sur les tirages</h4>';
+    if (sales.enabled === false) {
+      // Campagnes réservées à Pro : une promotion déjà lancée peut être arrêtée.
+      html += '<p class="ad-banner ad-banner-muted">Promotions à durée limitée et relances des paniers oubliés : les campagnes de vente sont incluses dans la formule Pro. ' +
+        '<button type="button" class="ad-link-btn" data-goto-plans>Voir les formules</button></p>';
+      if (promo) html += '<div class="ad-promo-actions"><button type="button" class="ad-btn" id="ad-promo-stop">Arrêter la promotion</button></div>';
+      return html + "</div>";
+    }
     if (promo) {
       html += '<p class="ad-promo-on"><strong>−' + promo.percent + " %</strong> sur tous les tirages jusqu'au " + esc(formatDate(promo.endsAt)) +
         (promo.sentAt ? ' · <span class="ad-hint">annoncée au client le ' + esc(formatDate(promo.sentAt)) + "</span>" : "") + "</p>" +
@@ -2474,6 +2483,9 @@
   }
 
   function wirePromoBlock(slug) {
+    el.view.querySelectorAll("[data-goto-plans]").forEach(function (btn) {
+      btn.addEventListener("click", function () { renderSubscription(); });
+    });
     var start = document.getElementById("ad-promo-start");
     if (start) {
       start.addEventListener("click", async function () {
@@ -3624,7 +3636,8 @@
       "</section>" +
       '<section class="ad-quota">' +
       '<div class="ad-section-header"><h3>Forfait et suppléments</h3></div>' +
-      '<p class="ad-hint">Le nombre de photos déjà payées par le client, et le prix de chaque photo au-delà. Calculé automatiquement à partir de ses coups de cœur — réglable en ligne par le client une fois votre compte Stripe actif (écran Facturation).</p>' +
+      '<p class="ad-hint">Le nombre de photos déjà payées par le client, et le prix de chaque photo au-delà. Calculé automatiquement à partir de ses coups de cœur — réglable en ligne par le client une fois votre compte Stripe actif (écran Facturation).' +
+      (data.gallery.extras_online === false ? " Le paiement en ligne des suppléments est inclus à partir de la formule Essentiel : d'ici là, le montant dû s'affiche et se règle directement avec vous." : "") + "</p>" +
       '<form class="ad-field-row" id="ad-quota-form">' +
       '<label class="ad-field"><span>Photos incluses</span>' +
       '<input type="number" name="includedPhotos" min="0" step="1" placeholder="aucun forfait" value="' +
@@ -5709,7 +5722,7 @@
 
     var notices = "";
     if (!data.enabled) {
-      notices += '<p class="ad-banner ad-banner-muted">La réservation en ligne est incluse à partir de la formule Essentiel. ' +
+      notices += '<p class="ad-banner ad-banner-muted">La réservation en ligne est incluse dans la formule Pro. ' +
         '<button type="button" class="ad-link-btn" data-bk-goto="subscription">Voir les formules</button></p>';
     } else {
       if (!data.portfolio.published) {
@@ -6100,7 +6113,7 @@
       '<p class="ad-hint">Envoyez un devis : votre client le lit, le signe en ligne et règle l\'acompte. Chacun reçoit le contrat signé en PDF.</p></div>' +
       (data.enabled && !editing ? '<button type="button" class="ad-btn ad-btn-primary" id="ad-ct-new">+ Nouveau devis</button>' : "") +
       "</header>" +
-      (!data.enabled ? '<p class="ad-banner ad-banner-muted">Les devis et contrats signés en ligne sont inclus à partir de la formule Essentiel. <button type="button" class="ad-link-btn" id="ad-ct-plans">Voir les formules</button></p>' : "") +
+      (!data.enabled ? '<p class="ad-banner ad-banner-muted">Les devis et contrats signés en ligne sont inclus dans la formule Pro. <button type="button" class="ad-link-btn" id="ad-ct-plans">Voir les formules</button></p>' : "") +
       (data.enabled && !data.stripeReady ? '<p class="ad-banner ad-banner-muted">Sans paiement en ligne actif, vos clients signent mais ne peuvent pas régler l\'acompte en ligne. <button type="button" class="ad-link-btn" id="ad-ct-billing">Onglet Facturation</button></p>' : "") +
       (editing ? contractEditorHtml(data, editing === "new" ? null : editing) : "") +
       (data.enabled && list.length && !editing

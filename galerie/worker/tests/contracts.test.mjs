@@ -51,7 +51,7 @@ check("e-mail au client : lien de signature, total, acompte, validité",
 check("e-mail de contrat signé : rappel de l'acompte s'il reste dû", buildContractSignedEmail({ ...params, depositDue: true }).text.includes("Acompte à régler") && !buildContractSignedEmail(params).text.includes("Acompte à régler"));
 check("e-mail de refus : motif échappé", buildContractDeclinedEmail(params).html.includes("&lt;désolée&gt;"));
 check("e-mails d'acompte reçu, client et photographe", buildContractDepositPaidEmail(params, false).subject.startsWith("Acompte reçu") && buildContractDepositPaidEmail(params, true).html.includes("Camille"));
-check("devis et contrats : Essentiel, Pro et Studio", PLANS.essentiel.features.contracts && PLANS.pro.features.contracts && PLANS.studio.features.contracts && !PLANS.free.features.contracts && !PLANS.scolaire.features.contracts);
+check("devis et contrats : Pro et Studio, pas Essentiel", !PLANS.essentiel.features.contracts && PLANS.pro.features.contracts && PLANS.studio.features.contracts && !PLANS.free.features.contracts && !PLANS.scolaire.features.contracts);
 
 const failed = checks.filter((c) => !c.ok).length;
 console.log(`\n${checks.length - failed}/${checks.length} vérifications réussies`);
