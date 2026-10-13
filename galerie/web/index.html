@@ -35,6 +35,7 @@
 
   <link rel="preload" href="/assets/fonts/geist-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="stylesheet" href="/assets/fonts/geist.css" />
+  <link rel="stylesheet" href="/assets/fonts/styles/styles.css" />
   <link rel="preload" as="image" href="assets/home/golden.webp" type="image/webp" />
   <link rel="stylesheet" href="home.css" />
 
@@ -89,21 +90,26 @@
         "applicationSubCategory": "Galeries photo clients",
         "operatingSystem": "Web",
         "inLanguage": "fr",
-        "description": "Galeries clients protégées pour photographes : photos impossibles à télécharger pendant la sélection, empreinte invisible traçable, alerte de capture d'écran, sélection et annotations du client, relances automatiques, suppléments payés en ligne, boutique de tirages, livraison HD, portfolio et adresse à votre nom.",
+        "description": "Galeries clients protégées pour photographes : photos impossibles à télécharger pendant la sélection, empreinte invisible traçable, alerte de capture d'écran, neuf styles de galerie personnalisables, sélection et annotations du client, relances automatiques, suppléments payés en ligne, boutique de tirages, livraison HD, portfolio et adresse à votre nom.",
         "image": "https://www.holypixx.com/assets/og-holypixx.jpg",
         "publisher": { "@id": "https://www.holypixx.com/#organization" },
         "featureList": [
           "Photos découpées en tuiles, impossibles à télécharger pendant la sélection",
           "Filigrane dense et empreinte invisible propre à chaque galerie",
           "Alerte e-mail en cas de capture d'écran",
+          "Neuf styles de galerie, polices des titres et du texte au choix, mot d'accueil",
+          "En-tête de galerie : photo de couverture ou film YouTube et Vimeo, pour les mariages",
+          "Quatre mises en page : grille, mosaïque, éditoriale et récit",
           "Sélection, coups de cœur, codes couleur et repères annotés",
           "Relances automatiques avant expiration",
           "Forfait et suppléments payés en ligne, factures PDF",
           "Boutique de tirages livrés par le laboratoire",
           "Réservation de séances en ligne avec acompte",
+          "Prestations illustrées et enregistrées : image, tarifs, ce qui est compris, conseil vestimentaire",
           "Devis et contrats signés en ligne",
           "Campagnes de vente et tableau de bord des ventes",
           "Livraison des fichiers HD",
+          "Fiches clients et relances : étapes de bébé, anniversaires, séances de saison",
           "Portfolio et adresse à votre nom",
           "Bientôt : photo scolaire (établissements, fiches parents avec QR code, espace famille, commande groupée et envoi au laboratoire)"
         ],
@@ -129,6 +135,8 @@
         "acceptedAnswer": { "@type": "Answer", "text": "Aucun site au monde ne le peut. Holypixx rend une capture inutile (basse définition, filigrane dense), vous prévient par e-mail quand une capture est tentée, et retrouve la galerie d'origine d'une image grâce à son empreinte invisible. Tout est expliqué dans notre guide « Protéger ses photos en ligne »." } },
       { "@type": "Question", "name": "Mon client doit-il créer un compte ?",
         "acceptedAnswer": { "@type": "Answer", "text": "Non. Il reçoit un lien et un mot de passe, rien d'autre." } },
+      { "@type": "Question", "name": "Puis-je personnaliser l'apparence de mes galeries ?",
+        "acceptedAnswer": { "@type": "Answer", "text": "Oui, avec toutes les formules. Neuf styles (classique, doux, architectural, moderne, nuit, éditorial, romantique, bohème, galerie d'art), chacun avec sa palette, ses formes et ses polices. Vous pouvez changer la police des titres (13 au choix) et du texte (10), écrire un mot d'accueil, choisir la photo de couverture ou placer un film YouTube ou Vimeo en tête de galerie, idéal pour un mariage. Votre style préféré se règle une fois dans vos paramètres et s'applique à chaque nouvelle galerie." } },
       { "@type": "Question", "name": "Mes clients peuvent-ils réserver et signer en ligne ?",
         "acceptedAnswer": { "@type": "Answer", "text": "Oui, avec les formules Essentiel, Pro et Studio. Vous ouvrez vos créneaux (ou une série de mini-séances), vos clients réservent depuis votre portfolio et paient l'acompte sur votre compte Stripe. Pour une séance sur mesure, vous leur envoyez un devis qu'ils signent en ligne ; chacun reçoit le contrat signé en PDF." } },
       { "@type": "Question", "name": "Un contrat signé en ligne est-il valable ?",
@@ -182,6 +190,7 @@
     <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/><path d="m9.5 15 2 2 3.5-3.5"/></symbol>
     <symbol id="i-sign" viewBox="0 0 24 24"><path d="M14.5 4.5 19.5 9.5 9 20H4v-5L14.5 4.5Z"/><path d="M12.5 6.5l5 5"/></symbol>
     <symbol id="i-filter" viewBox="0 0 24 24"><path d="M4 5.5h16l-6 7.2v5.3l-4 2v-7.3L4 5.5Z"/></symbol>
+    <symbol id="i-palette" viewBox="0 0 24 24"><path d="M12 3.5a8.5 8.5 0 0 0 0 17c1.2 0 1.8-.8 1.8-1.7 0-1.3-1-1.6-1-2.7 0-1 .8-1.6 1.8-1.6h2.2a3.7 3.7 0 0 0 3.7-3.7C20.5 6.6 16.7 3.5 12 3.5Z"/><circle cx="7.8" cy="11.2" r="1.1"/><circle cx="10.6" cy="7.6" r="1.1"/><circle cx="15" cy="7.8" r="1.1"/></symbol>
     <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
     <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
   </svg>
@@ -197,6 +206,7 @@
         <a href="#seance">Réservation</a>
         <a href="#protection">Protection</a>
         <a href="#selection">Sélection</a>
+        <a href="#styles">Styles</a>
         <a href="#vente">Vente</a>
         <a href="#scolaire">Scolaire</a>
         <a href="#tarifs">Tarifs</a>
@@ -221,7 +231,7 @@
         <h1>Montrez vos photos.<br />Gardez-les.</h1>
         <div class="hero-side">
           <p class="hero-lede">
-            Des galeries privées que vos clients ne peuvent pas télécharger.
+            Des galeries privées, à votre style, que vos clients ne peuvent pas télécharger.
             Ils choisissent, annotent, paient leurs suppléments et commandent
             leurs tirages&nbsp;— vous gardez vos images, votre nom et votre marge.
           </p>
@@ -287,10 +297,12 @@
           <li><svg class="ico"><use href="#i-calendar"/></svg>Réservation en ligne</li>
           <li><svg class="ico"><use href="#i-sign"/></svg>Contrats signés</li>
           <li><svg class="ico"><use href="#i-shield"/></svg>Galeries protégées</li>
+          <li><svg class="ico"><use href="#i-palette"/></svg>Neuf styles de galerie</li>
           <li><svg class="ico"><use href="#i-pin"/></svg>Sélection annotée</li>
           <li><svg class="ico"><use href="#i-receipt"/></svg>Suppléments en ligne</li>
           <li><svg class="ico"><use href="#i-cart"/></svg>Boutique de tirages</li>
           <li><svg class="ico"><use href="#i-download"/></svg>Livraison HD</li>
+          <li><svg class="ico"><use href="#i-users"/></svg>Fiches clients et relances</li>
           <li><svg class="ico"><use href="#i-globe"/></svg>Portfolio à votre nom</li>
         </ul>
       </div>
@@ -306,14 +318,23 @@
 
         <div class="prep-desk" id="prep-desk">
           <!-- La page de réservation, telle que la voit le client -->
-          <figure class="window bk" aria-label="Page de réservation d'un studio : créneaux d'une mini-séance">
+          <figure class="window bk" aria-label="Page de réservation d'un studio : une mini-séance illustrée, ses tarifs et ses créneaux">
             <div class="window-bar">
               <span class="window-dots" aria-hidden="true"><i></i><i></i><i></i></span>
               <span class="window-url"><svg class="ico ico-xs"><use href="#i-lock"/></svg>votre-studio.holypixx.com<span class="window-path">/#reserver</span></span>
             </div>
+            <div class="bk-cover"><img src="assets/home/studio.webp" width="1367" height="913" alt="" loading="lazy" /></div>
             <div class="bk-body">
               <p class="bk-title">Mini-séance de Noël</p>
-              <p class="bk-meta">20 min · 90 € · acompte 30 € · au studio</p>
+              <p class="bk-meta">20 min · au studio · acompte 30 €</p>
+              <div class="bk-tiers">
+                <span class="bk-tier on"><b>5 photos</b><span class="num">90 €</span></span>
+                <span class="bk-tier"><b>10 photos</b><span class="num">140 €</span></span>
+              </div>
+              <dl class="bk-notes">
+                <div><dt>Compris dans votre forfait</dt><dd>Photos retouchées, galerie privée</dd></div>
+                <div><dt>Conseil vestimentaire</dt><dd>Pulls en maille, tons crème ou bordeaux</dd></div>
+              </dl>
               <p class="bk-day">Samedi 5 décembre</p>
               <ul class="bk-slots" aria-label="Créneaux du samedi">
                 <li class="bk-slot taken"><span>10 h 00</span></li>
@@ -322,12 +343,6 @@
                 <li class="bk-slot taken"><span>11 h 00</span></li>
                 <li class="bk-slot"><span>11 h 20</span></li>
                 <li class="bk-slot taken"><span>11 h 40</span></li>
-              </ul>
-              <p class="bk-day">Dimanche 6 décembre</p>
-              <ul class="bk-slots" aria-label="Créneaux du dimanche">
-                <li class="bk-slot"><span>10 h 00</span></li>
-                <li class="bk-slot taken"><span>10 h 20</span></li>
-                <li class="bk-slot"><span>10 h 40</span></li>
               </ul>
               <span class="bk-btn">Réserver et payer l'acompte</span>
             </div>
@@ -369,6 +384,7 @@
 
         <ul class="prep-facts">
           <li><h3>Réservation en ligne</h3><p>Formules, créneaux et séries de mini-séances ouverts en deux clics. Vos clients réservent depuis votre portfolio et paient l'acompte&nbsp;; un créneau ne se réserve jamais deux fois. Planifiez vos <a class="inline-link" href="/reservation-seance-photo">mini-séances de Noël</a> avec notre calculateur.</p></li>
+          <li><h3>Des prestations qui donnent envie</h3><p>Une photo pour l'illustrer, plusieurs tarifs selon le nombre de photos, ce qui est compris dans le forfait et un conseil vestimentaire. Cochez «&nbsp;Sauvegarder le réglage&nbsp;»&nbsp;: la prochaine fois, choisissez-la dans la liste, tout est prêt.</p></li>
           <li><h3>Devis et contrats signés</h3><p>Vos prestations et vos conditions, signées en ligne sans imprimante. Chacun reçoit le contrat signé en PDF, avec la date et l'empreinte du document. Pas encore de conditions&nbsp;? Partez de notre <a class="inline-link" href="/contrat-photographe">modèle de contrat gratuit</a>.</p></li>
           <li><h3>Agenda et rappels</h3><p>Chaque séance arrive avec son invitation pour votre agenda, et votre client reçoit un rappel la veille. Moins d'oublis, moins de messages.</p></li>
         </ul>
@@ -459,11 +475,95 @@
             <li><svg class="ico"><use href="#i-heart"/></svg><div><h3>Coups de cœur et codes couleur</h3><p>Validée, à retoucher, à écarter : chaque photo garde l'avis du client.</p></div></li>
             <li><svg class="ico"><use href="#i-pin"/></svg><div><h3>Repères annotés</h3><p>Un repère posé à l'endroit précis, avec sa remarque. Fini les captures entourées au feutre.</p></div></li>
             <li><svg class="ico"><use href="#i-clock"/></svg><div><h3>Relances automatiques</h3><p>Rappel au client 7 et 2 jours avant l'expiration, à vous 2 jours avant. Chaque relance ne part qu'une fois.</p></div></li>
-            <li><svg class="ico"><use href="#i-layout"/></svg><div><h3>Trois mises en page, votre musique</h3><p>Grille, mosaïque ou défilement éditorial, avec une bibliothèque libre de droits ou votre playlist.</p></div></li>
+            <li><svg class="ico"><use href="#i-layout"/></svg><div><h3>Quatre mises en page, votre musique</h3><p>Grille, mosaïque, éditorial ou récit, avec une bibliothèque libre de droits ou votre playlist. Et <a class="inline-link" href="#styles">neuf styles</a> pour l'habiller.</p></div></li>
             <li><svg class="ico"><use href="#i-filter"/></svg><div><h3>Sélection exportée vers Lightroom</h3><p>Les noms des photos choisies se collent dans le filtre de Lightroom&nbsp;: JPEG et RAW retrouvés d'un coup, prêts pour la retouche.</p></div></li>
             <li><svg class="ico"><use href="#i-lock"/></svg><div><h3>Accès sous contrôle</h3><p>Mot de passe régénérable d'un clic, expiration automatique, écran d'accueil à vos couleurs.</p></div></li>
           </ul>
         </div>
+      </div>
+    </section>
+
+    <!-- ============ Styles de galerie ============ -->
+    <section class="chapter" id="styles">
+      <div class="wrap">
+        <div class="chapter-head">
+          <h2>Une galerie à l'image de chaque séance.</h2>
+          <p class="chapter-lede">Le poudré d'une naissance, le magazine d'un mariage, le noir et or d'une soirée, le blanc silencieux d'une galerie d'art&nbsp;: neuf styles, vos polices, votre mot d'accueil, et le film du mariage en ouverture. Survolez un style pour l'essayer.</p>
+        </div>
+
+        <div class="sty" id="sty">
+          <div class="sty-side">
+            <div class="sty-list" role="group" aria-label="Style de la galerie">
+              <button type="button" class="sty-opt" data-style="classique" aria-pressed="false"><span class="sty-sw" aria-hidden="true"></span><span class="sty-name">Classique</span><span class="sty-ideal">Toutes les séances</span></button>
+              <button type="button" class="sty-opt" data-style="doux" aria-pressed="false"><span class="sty-sw" aria-hidden="true"></span><span class="sty-name">Doux</span><span class="sty-ideal">Naissance, bébé, famille</span></button>
+              <button type="button" class="sty-opt" data-style="architectural" aria-pressed="false"><span class="sty-sw" aria-hidden="true"></span><span class="sty-name">Architectural</span><span class="sty-ideal">Portrait, entreprise</span></button>
+              <button type="button" class="sty-opt" data-style="moderne" aria-pressed="false"><span class="sty-sw" aria-hidden="true"></span><span class="sty-name">Moderne</span><span class="sty-ideal">Lifestyle, événement</span></button>
+              <button type="button" class="sty-opt" data-style="nuit" aria-pressed="false"><span class="sty-sw" aria-hidden="true"></span><span class="sty-name">Nuit</span><span class="sty-ideal">Boudoir, soirée, concert</span></button>
+              <button type="button" class="sty-opt" data-style="editorial" aria-pressed="true"><span class="sty-sw" aria-hidden="true"></span><span class="sty-name">Éditorial</span><span class="sty-ideal">Mariage, reportage</span></button>
+              <button type="button" class="sty-opt" data-style="romantique" aria-pressed="false"><span class="sty-sw" aria-hidden="true"></span><span class="sty-name">Romantique</span><span class="sty-ideal">Mariage, fiançailles</span></button>
+              <button type="button" class="sty-opt" data-style="boheme" aria-pressed="false"><span class="sty-sw" aria-hidden="true"></span><span class="sty-name">Bohème</span><span class="sty-ideal">Grossesse, extérieur</span></button>
+              <button type="button" class="sty-opt" data-style="galerie" aria-pressed="false"><span class="sty-sw" aria-hidden="true"></span><span class="sty-name">Galerie d'art</span><span class="sty-ideal">Portfolio, fine art</span></button>
+            </div>
+            <div class="sty-switches">
+              <div class="seg" role="group" aria-labelledby="seg-head">
+                <span class="seg-label" id="seg-head">En-tête</span>
+                <span class="seg-opts">
+                  <button type="button" class="seg-opt" data-head="photo" aria-pressed="true">Photo</button>
+                  <button type="button" class="seg-opt" data-head="film" aria-pressed="false">Film</button>
+                </span>
+              </div>
+              <div class="seg" role="group" aria-labelledby="seg-layout">
+                <span class="seg-label" id="seg-layout">Mise en page</span>
+                <span class="seg-opts">
+                  <button type="button" class="seg-opt" data-layout="grille" aria-pressed="true">Grille</button>
+                  <button type="button" class="seg-opt" data-layout="recit" aria-pressed="false">Récit</button>
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div class="sty-main">
+            <figure class="window sty-win" id="sty-win" aria-label="Aperçu d'une galerie client au style Éditorial">
+              <div class="window-bar" aria-hidden="true">
+                <span class="window-dots"><i></i><i></i><i></i></span>
+                <span class="window-url"><svg class="ico ico-xs"><use href="#i-lock"/></svg>votre-studio.holypixx.com<span class="window-path">/l-ete-des-martin</span></span>
+              </div>
+              <div class="sty-page" id="sty-page" data-style="editorial" data-head="photo" data-layout="grille" aria-hidden="true">
+                <div class="sty-scroll" id="sty-scroll">
+                <div class="sty-hero">
+                  <img class="sty-cover" src="assets/home/golden.webp" width="1400" height="934" alt="" loading="lazy" />
+                  <div class="sty-film">
+                    <img src="assets/home/field.webp" width="2000" height="1335" alt="" loading="lazy" />
+                    <span class="sty-play"><i></i>Voir le film</span>
+                  </div>
+                </div>
+                <div class="sty-head">
+                  <p class="sty-eyebrow">Votre studio</p>
+                  <p class="sty-title">L'été des Martin</p>
+                  <p class="sty-sub">Séance en famille · 14 septembre</p>
+                  <p class="sty-intro">Merci pour cette fin d'après-midi dans les blés. Prenez le temps de choisir vos préférées&nbsp;: votre sélection reste ouverte jusqu'au 30 septembre.</p>
+                </div>
+                <div class="sty-grid">
+                  <span class="sty-ph"><img src="assets/home/studio.webp" width="1367" height="913" alt="" loading="lazy" /></span>
+                  <span class="sty-ph"><img src="assets/home/leaves.webp" width="900" height="1348" alt="" loading="lazy" /></span>
+                  <span class="sty-ph"><img src="assets/home/swing.webp" width="900" height="1200" alt="" loading="lazy" /></span>
+                  <span class="sty-ph"><img src="assets/home/mother.webp" width="900" height="1348" alt="" loading="lazy" /></span>
+                  <span class="sty-ph"><img src="assets/home/red.webp" width="900" height="1125" alt="" loading="lazy" /></span>
+                  <span class="sty-ph"><img src="assets/home/newborn.webp" width="900" height="900" alt="" loading="lazy" /></span>
+                </div>
+                </div>
+              </div>
+            </figure>
+            <p class="sty-caption" id="sty-caption">Titres en <b>Bodoni Moda</b>, texte en <b>Karla</b>&nbsp;: changez-les librement.</p>
+          </div>
+        </div>
+
+        <ul class="facts">
+          <li><h3>Neuf styles, vos polices</h3><p>Chaque style apporte sa palette, ses formes et son duo de polices. Changez la police des titres (13&nbsp;au choix, dont deux manuscrites) ou du texte (10)&nbsp;: l'aperçu suit en direct.</p></li>
+          <li><h3>Le film du mariage en ouverture</h3><p>Collez un lien YouTube ou Vimeo&nbsp;: le film s'affiche en tête de galerie et ne se charge que lorsque vos clients lancent la lecture. Ou choisissez la photo de couverture d'un clic sur l'étoile.</p></li>
+          <li><h3>Un mot d'accueil, quatre mises en page</h3><p>Quelques lignes pour accueillir vos clients. Grille, mosaïque, éditorial ou récit, qui alterne grandes images et paires comme un livre photo.</p></li>
+          <li><h3>Un style par type de séance</h3><p>Choisissez votre style par défaut une fois&nbsp;; à chaque nouvelle galerie, changez-le d'un survol, aperçu à l'appui. Rien ne change pour la protection&nbsp;: tuiles, filigrane et empreinte restent.</p></li>
+        </ul>
       </div>
     </section>
 
@@ -535,6 +635,65 @@
             <p>Vos plus belles photos, votre présentation, vos prestations et un formulaire de contact qui arrive dans votre boîte e-mail.</p>
           </article>
         </div>
+      </div>
+    </section>
+
+    <!-- ============ Clients : fiches et relances ============ -->
+    <section class="chapter ruled" id="clients">
+      <div class="wrap">
+        <div class="chapter-head">
+          <h2>Vos clients reviennent. Vous n'avez plus à y penser.</h2>
+          <p class="chapter-lede">Chaque galerie, réservation et contrat enrichit la fiche de votre client. Quand vient le moment d'une nouvelle séance, Holypixx vous prévient, avec le message déjà écrit.</p>
+        </div>
+
+        <div class="duo duo-rev">
+          <ul class="rows">
+            <li><svg class="ico"><use href="#i-user"/></svg><div><h3>Une fiche par client, toute seule</h3><p>Galeries, réservations, contrats et paiements se rangent sous l'adresse e-mail du client, avec son téléphone et vos notes.</p></div></li>
+            <li><svg class="ico"><use href="#i-heart"/></svg><div><h3>Les dates qui comptent</h3><p>Étapes de bébé (3, 6, 9&nbsp;mois, 1&nbsp;an), anniversaire de mariage, séance de saison&nbsp;: chaque date a son rappel, au délai que vous choisissez.</p></div></li>
+            <li><svg class="ico"><use href="#i-mail"/></svg><div><h3>Le message est déjà écrit</h3><p>«&nbsp;Proposer une séance&nbsp;» ouvre votre messagerie avec un texte prêt, lien de réservation compris. Les clients sans séance depuis bientôt un an remontent aussi.</p></div></li>
+            <li><svg class="ico"><use href="#i-calendar"/></svg><div><h3>Vos temps forts</h3><p>Noël, fête des mères, rentrée&nbsp;: six semaines avant, Holypixx vous rappelle qui prévenir et prépare un envoi groupé en copie cachée.</p></div></li>
+          </ul>
+
+          <div class="cl-stage">
+            <figure class="window cl-card" aria-label="Fiche client de Camille Dubois dans Holypixx">
+              <div class="window-bar" aria-hidden="true">
+                <span class="window-dots"><i></i><i></i><i></i></span>
+                <span class="window-url">Clients<span class="window-path">&nbsp;/ Camille Dubois</span></span>
+              </div>
+              <div class="cl-body">
+                <div class="cl-head">
+                  <span class="cl-avatar" aria-hidden="true">CD</span>
+                  <div><p class="cl-name">Camille Dubois</p><p class="cl-mail">camille.dubois@exemple.be</p></div>
+                </div>
+                <dl class="cl-stats">
+                  <div><dt>Séances</dt><dd class="num">3</dd></div>
+                  <div><dt>Encaissé</dt><dd class="num">600 €</dd></div>
+                  <div><dt>Cliente depuis</dt><dd>oct. 2025</dd></div>
+                </dl>
+                <ol class="cl-hist">
+                  <li><img src="assets/home/red.webp" width="900" height="1125" alt="" loading="lazy" /><span><b>Grossesse</b><em>18 oct. 2025 · galerie livrée</em></span><span class="num">250 €</span></li>
+                  <li><img src="assets/home/newborn.webp" width="900" height="900" alt="" loading="lazy" /><span><b>Naissance de Léa</b><em>28 déc. 2025 · tirages commandés</em></span><span class="num">320 €</span></li>
+                  <li><span class="cl-hist-ico"><svg class="ico ico-xs" aria-hidden="true"><use href="#i-calendar"/></svg></span><span><b>Mini-séance de Noël</b><em>5 déc. 2026 · acompte réglé</em></span><span class="num">30 €</span></li>
+                </ol>
+                <div class="cl-date">
+                  <span class="cl-date-label">Date à retenir</span>
+                  <span><b>Léa</b>, née le 14 décembre 2025 · suivi bébé</span>
+                  <span class="cl-steps"><i class="done">3 m</i><i class="done">6 m</i><i class="done">9 m</i><i class="next">1 an</i><i>18 m</i></span>
+                </div>
+              </div>
+            </figure>
+            <div class="prep-note cl-note cl-note-1">
+              <span class="note-ico"><svg class="ico"><use href="#i-bell"/></svg></span>
+              <span><strong>Léa aura 1 an le 14 décembre</strong><em>Proposer une séance · message prêt</em></span>
+            </div>
+            <div class="prep-note cl-note cl-note-2">
+              <span class="note-ico"><svg class="ico"><use href="#i-calendar"/></svg></span>
+              <span><strong>Mini-séances de Noël</strong><em>Dans six semaines · 18 clients à prévenir</em></span>
+            </div>
+          </div>
+        </div>
+
+        <a class="chapter-cta" href="/fideliser-clients-photographe">Le calendrier de relances gratuit<svg class="ico"><use href="#i-arrow"/></svg></a>
       </div>
     </section>
 
@@ -612,8 +771,10 @@
             <ul class="ticks">
               <li>3 galeries actives, 5 Go</li>
               <li>Protection complète : tuiles, filigrane, empreinte, alertes</li>
+              <li>Neuf styles de galerie, polices, film en tête</li>
               <li>Sélection, annotations, relances</li>
               <li>Livraison des photos HD</li>
+              <li>Fiches clients et rappels des dates</li>
               <li>Portfolio en ligne</li>
             </ul>
           </article>
@@ -629,7 +790,7 @@
               <li>Boutique de tirages intégrée</li>
               <li>Suppléments payés en ligne, factures</li>
               <li>Campagnes et tableau des ventes</li>
-              <li>Réservation en ligne avec acompte</li>
+              <li>Réservation en ligne avec acompte, prestations illustrées</li>
               <li>Devis et contrats signés en ligne</li>
               <li>Bientôt : écoles, crèches et clubs, 5&nbsp;% des ventes scolaires</li>
             </ul>
@@ -699,6 +860,7 @@
           <details><summary>Un client peut-il télécharger les photos ?</summary><p>Pas pendant la sélection : les photos sont découpées en tuiles et recomposées à l'écran, aucun fichier n'est téléchargeable. Quand la séance est terminée, vous déposez les fichiers définitifs : il les télécharge alors en haute définition, en ZIP ou une par une.</p></details>
           <details><summary>Peut-on empêcher une capture d'écran ?</summary><p>Aucun site au monde ne le peut. Holypixx rend une capture inutile (basse définition, filigrane dense), vous prévient par e-mail quand une capture est tentée, et retrouve la galerie d'origine d'une image grâce à son empreinte invisible. Tout est expliqué dans notre guide <a class="inline-link" href="/proteger-ses-photos">protéger ses photos en ligne</a>.</p></details>
           <details><summary>Mon client doit-il créer un compte ?</summary><p>Non. Il reçoit un lien et un mot de passe, rien d'autre.</p></details>
+          <details><summary>Puis-je personnaliser l'apparence de mes galeries ?</summary><p>Oui, avec toutes les formules. Neuf styles (classique, doux, architectural, moderne, nuit, éditorial, romantique, bohème, galerie d'art), chacun avec sa palette, ses formes et ses polices. Vous pouvez changer la police des titres (13&nbsp;au choix) et du texte (10), écrire un mot d'accueil, choisir la photo de couverture ou placer un film YouTube ou Vimeo en tête de galerie, idéal pour un mariage. Votre style préféré se règle une fois dans vos paramètres et s'applique à chaque nouvelle galerie.</p></details>
           <details><summary>Mes clients peuvent-ils réserver et signer en ligne ?</summary><p>Oui, avec les formules Essentiel, Pro et Studio. Vous ouvrez vos créneaux (ou une série de mini-séances), vos clients réservent depuis votre portfolio et paient l'acompte sur votre compte Stripe. Pour une séance sur mesure, vous leur envoyez un devis qu'ils signent en ligne&nbsp;; chacun reçoit le contrat signé en PDF.</p></details>
           <details><summary>Un contrat signé en ligne est-il valable ?</summary><p>C'est une signature électronique simple au sens du règlement européen eIDAS&nbsp;: elle ne peut pas être écartée au seul motif qu'elle est électronique. Holypixx conserve sa preuve&nbsp;: le nom saisi, la date, l'empreinte du document signé. Les conditions proposées sont un modèle à adapter, pas un conseil juridique.</p></details>
           <details><summary>Holypixx m'aide-t-il à faire revenir mes clients ?</summary><p>Oui. Chaque client a sa fiche&nbsp;: historique, montants encaissés, notes. Holypixx vous prévient au bon moment, avec un message prêt à envoyer&nbsp;: le premier anniversaire d'un bébé photographié à 6&nbsp;mois, un anniversaire de mariage, vos séances de Noël à proposer à tous vos clients, ou un client sans séance depuis un an. Notre guide pour <a class="inline-link" href="/fideliser-clients-photographe">fidéliser ses clients</a> vous donne un calendrier gratuit et les messages à envoyer.</p></details>
@@ -731,7 +893,9 @@
         <a href="#seance">Réservation</a>
         <a href="#protection">Protection</a>
         <a href="#selection">Sélection</a>
+        <a href="#styles">Styles</a>
         <a href="#vente">Vente</a>
+        <a href="#clients">Clients</a>
         <a href="#tarifs">Tarifs</a>
         <a href="#faq">Questions</a>
         <a data-admin href="https://holypixx-admin.onrender.com/" rel="nofollow">Connexion</a>
