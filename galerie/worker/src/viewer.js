@@ -13,6 +13,7 @@ import { musicForClient, audioKeyFor, serveAudio, getTrack } from "./music.js";
 import { deliveryForClient, createDownloadLink, downloadFile, downloadZip } from "./delivery.js";
 import { saveCart } from "./campaigns.js";
 import { presentationForClient } from "./presentation.js";
+import { hasFeature } from "./subscription.js";
 
 const SESSION_TTL_SECONDS = 2 * 60 * 60; // 2 h
 const MAX_FAILED_LOGINS = 10;
@@ -138,7 +139,7 @@ async function handleLogin(request, env, slug) {
     .all();
 
   const photographer = await env.DB.prepare(
-    "SELECT stripe_account_id, stripe_charges_enabled, studio_name FROM photographers WHERE id = ?"
+    "SELECT * FROM photographers WHERE id = ?"
   )
     .bind(gallery.photographer_id)
     .first();
@@ -172,7 +173,7 @@ async function handleLogin(request, env, slug) {
       includedPhotos: gallery.included_photos,
       extraPhotoPriceCents: gallery.extra_photo_price_cents || 0,
       paidExtraCount: await paidExtraCount(env, gallery.id),
-      canPayOnline: Boolean(photographer?.stripe_account_id) && Boolean(photographer?.stripe_charges_enabled),
+      canPayOnline: Boolean(photographer?.stripe_account_id) && Boolean(photographer?.stripe_charges_enabled) && hasFeature(env, photographer, "extras"),
       invoices: invoices.map((i) => ({
         id: i.id,
         number: i.number,
@@ -474,7 +475,7 @@ async function handleCheckout(request, env, slug) {
   )
     .bind(gallery.photographer_id)
     .first();
-  if (!photographer?.stripe_account_id || !photographer.stripe_charges_enabled) {
+  if (!photographer?.stripe_account_id || !photographer.stripe_charges_enabled || !hasFeature(env, photographer, "extras")) {
     return fail(503, "Le paiement en ligne n'est pas encore activé pour cette galerie");
   }
 

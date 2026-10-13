@@ -489,6 +489,8 @@ export async function shopState(env, gallery) {
   const products = (await listProducts(env, photographer.id)).filter((p) => p.active);
   if (!products.length) return null;
   // Promotion en cours : le prix remisé est celui affiché ET encaissé.
+  // Campagnes réservées aux formules qui les incluent (Pro et Studio).
+  if (!hasFeature(env, photographer, "campaigns")) return { photographer, products, promo: null };
   return { photographer, products: applyPromo(products, gallery), promo: activePromo(gallery) };
 }
 

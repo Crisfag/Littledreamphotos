@@ -13,7 +13,7 @@ import { listLibrary, setMusicChoice, musicForAdmin } from "./music.js";
 import { handleDeliveryAdmin, deliveryForAdmin } from "./delivery.js";
 import { sendDeliveryReady } from "./notify.js";
 import { exportAccount, deleteAccount } from "./privacy.js";
-import { galleryQuotaRefusal, subscriptionForAdmin, startSubscriptionCheckout, openBillingPortal, syncSubscription, setScolairePlan } from "./subscription.js";
+import { galleryQuotaRefusal, subscriptionForAdmin, startSubscriptionCheckout, openBillingPortal, syncSubscription, setScolairePlan, hasFeature, featureRefusal } from "./subscription.js";
 import { handleSchoolAdmin } from "./school.js";
 import { handleBookingAdmin, deleteBookingFiles } from "./booking.js";
 import { THEMES, themeOf, readPresentation, linkOfEmbed } from "./presentation.js";
@@ -110,7 +110,7 @@ async function createGallery(request, env, photographerId) {
     return fail(400, "Slug invalide (minuscules, chiffres et tirets, 2 à 61 caractères)");
   }
   // Nombre de galeries actives limité selon la formule (voir subscription.js).
-  const owner = await env.DB.prepare("SELECT * FROM photographers WHERE id = ?").bind(photographerId).first();
+  const account = await env.DB.prepare("SELECT * FROM photographers WHERE id = ?").bind(photographerId).first();
   const quotaRefusal = await galleryQuotaRefusal(env, owner);
   if (quotaRefusal) return quotaRefusal;
   const password = String(body.password || "");
@@ -208,6 +208,7 @@ async function getGallery(env, photographerId, slug) {
   const gallery = await ownedGallery(env, photographerId, slug);
   if (!gallery) return fail(404, "Galerie introuvable");
 
+  const account = await env.DB.prepare("SELECT * FROM photographers WHERE id = ?").bind(photographerId).first();
   const { results: photos } = await env.DB.prepare(
     `SELECT id, position, width, height, cols, rows, preview_width, preview_height,
             forensic_id, selected, selected_at, comment, comment_at, tag, marks, has_original, source_name, created_at
@@ -261,7 +262,10 @@ async function getGallery(env, photographerId, slug) {
       music_name: gallery.music_name || "",
       music: await musicForAdmin(env, gallery),
       delivery: await deliveryForAdmin(env, gallery),
-      sales: await promoForAdmin(env, gallery),
+      sales: { ...(await promoForAdmin(env, gallery)), enabled: hasFeature(env, account, "campaigns") },
+      // Paiement en ligne des suppléments : selon la formule (le forfait et
+      // le montant dû restent affichés dans toutes les formules).
+      extras_online: hasFeature(env, account, "extras"),
       selection_done_at: gallery.selection_done_at,
       shop_enabled: Boolean(gallery.shop_enabled),
       included_photos: gallery.included_photos,
@@ -540,7 +544,7 @@ async function addPhoto(request, env, photographerId, slug) {
     const clash = await env.DB.prepare("SELECT id FROM photos WHERE id = ?").bind(id).first();
     if (clash) return fail(409, "Identifiant de photo déjà utilisé");
   }
-  const owner = await env.DB.prepare("SELECT * FROM photographers WHERE id = ?").bind(photographerId).first();
+  const account = await env.DB.prepare("SELECT * FROM photographers WHERE id = ?").bind(photographerId).first();
   const storageFull = await storageRefusal(env, owner, TILE_BYTES_PER_PHOTO);
   if (storageFull) return storageFull;
 
@@ -797,8 +801,11 @@ export async function handleAdmin(request, env, ctx, path) {
     if ((parts.length === 5 || (parts.length === 6 && parts[5] === "send")) && parts[4] === "promo" && request.method === "POST") {
       const gallery = await ownedGallery(env, photographerId, slug);
       if (!gallery) return fail(404, "Galerie introuvable");
+      // Campagnes réservées à Pro ; arrêter une promotion reste toujours permis.
+      const photographer = await env.DB.prepare("SELECT * FROM photographers WHERE id = ?").bind(photographerId).first();
+      const stopping = parts.length === 5 && Number((await request.clone().json().catch(() => null))?.percent || 0) === 0;
+      if (!stopping && !hasFeature(env, photographer, "campaigns")) return featureRefusal("campaigns");
       if (parts.length === 5) return setPromo(request, env, gallery);
-      const photographer = await env.DB.prepare("SELECT studio_name FROM photographers WHERE id = ?").bind(photographerId).first();
       return sendPromoToClient(env, gallery, photographer?.studio_name || "");
     }
     // /api/admin/galleries/<slug>/delivery[/files[/<id>]] — livraison HD.

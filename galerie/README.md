@@ -466,9 +466,14 @@ Le tableau de bord s'organise en trois onglets, chacun avec son propre lien
 - **Abonnements Holypixx** : trois formules (`worker/src/subscription.js`,
   prix à ajuster au même endroit et dans la section Tarifs de
   `web/index.html`). *Découverte* (gratuite) : 3 galeries actives ;
-  *Essentiel* (15 €/mois ou 150 €/an) : 25 galeries actives et la boutique
-  de tirages ; *Pro* (29 €/mois ou 290 €/an) : galeries illimitées, boutique
-  et adresse à son nom. La formule annuelle offre 2 mois.
+  *Essentiel* (15 €/mois ou 150 €/an) : 25 galeries actives, la boutique
+  de tirages et le paiement en ligne des suppléments (`shop`, `extras`) ;
+  *Pro* (29 €/mois ou 290 €/an) : galeries illimitées, réservation en ligne
+  (`booking`), devis et contrats signés (`contracts`), campagnes de vente
+  (`campaigns` : promotions, relances des paniers et des coups de cœur) et
+  adresse à son nom (`subdomain`). Découverte garde le forfait de photos
+  incluses : le montant dû s'affiche, sans paiement en ligne. La formule
+  annuelle offre 2 mois.
   **Essai gratuit de 10 jours** au premier abonnement (`TRIAL_DAYS`) : carte
   enregistrée par Stripe, rien n'est prélevé avant la fin de l'essai.
   **Offre Fondateurs** (`FOUNDERS_LIMIT`, 50 places) : les premiers abonnés
@@ -655,7 +660,9 @@ Le tableau de bord s'organise en trois onglets, chacun avec son propre lien
     premier rappel.
   - *À venir* : réponses de BePhoto (adresse, tri par enfant, pochettes),
     part de l'établissement, ventes scolaires dans le tableau des ventes.
-- **Campagnes de vente des tirages** (`worker/src/campaigns.js`) :
+- **Campagnes de vente des tirages** (`worker/src/campaigns.js`, formules
+  Pro et Studio : ailleurs, aucune remise appliquée ni relance envoyée ;
+  une promotion déjà lancée peut toujours être arrêtée) :
   - *Promotion à durée limitée* sur une galerie (−10 à −50 % jusqu'à une
     date, depuis la section boutique de la fiche) : bandeau et prix barrés
     chez le client, remise appliquée par le serveur au paiement, jamais en
@@ -997,8 +1004,7 @@ l'interface d'administration, insérée en lien dans l'e-mail.
 
 ### Réservation en ligne (séances et mini-séances)
 
-Onglet **Réservations** du tableau de bord (formules Essentiel, Pro et
-Studio) :
+Onglet **Réservations** du tableau de bord (formules Pro et Studio) :
 
 1. **Formules de séance** : nom, durée, prix, acompte payé en ligne (0 =
    sans acompte), lieu, description. Une formule se retire du mini-site
@@ -1057,7 +1063,7 @@ npm run deploy
 
 ### Devis et contrats signés en ligne
 
-Onglet **Devis & contrats** (formules Essentiel, Pro et Studio) :
+Onglet **Devis & contrats** (formules Pro et Studio) :
 
 1. **Nouveau devis** : client, e-mail, titre, date prévue, prestations
    (montants TTC, total calculé), acompte à la signature, date de

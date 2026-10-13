@@ -4,7 +4,7 @@
 //
 //   node tests/subscription.test.mjs
 
-import { PLANS, planFor, hasFeature, planKeyFromSubscription, handleSubscriptionEvent, TRIAL_DAYS, FOUNDERS_LIMIT, founderCoupon, trialAvailable, founderEligible, publicPlans, syncSubscription, monthlyRevenueCents, STUDIO_FOUNDERS_LIMIT, schoolEnabled, planOut } from "../src/subscription.js";
+import { PLANS, planFor, hasFeature, planKeyFromSubscription, handleSubscriptionEvent, TRIAL_DAYS, FOUNDERS_LIMIT, founderCoupon, trialAvailable, founderEligible, publicPlans, syncSubscription, monthlyRevenueCents, STUDIO_FOUNDERS_LIMIT, schoolEnabled, planOut, featureRefusal } from "../src/subscription.js";
 
 const checks = [];
 function check(label, ok, detail) {
@@ -24,6 +24,20 @@ check("la propriétaire a tout, sans abonnement", planFor(env, { email: "proprie
 check("fonctionnalités par formule : boutique dès Essentiel, adresse à son nom en Pro",
       !hasFeature(env, { plan: "free" }, "shop") && hasFeature(env, { plan: "essentiel", plan_status: "active" }, "shop") &&
       !hasFeature(env, { plan: "essentiel", plan_status: "active" }, "subdomain") && hasFeature(env, { plan: "pro", plan_status: "active" }, "subdomain"));
+{
+  const ess = { plan: "essentiel", plan_status: "active" };
+  const pro = { plan: "pro", plan_status: "active" };
+  const studio = { plan: "studio", plan_status: "active" };
+  check("Essentiel vend (boutique, suppléments en ligne) ; réservation, contrats et campagnes réservés à Pro et Studio",
+        hasFeature(env, ess, "extras") && !hasFeature(env, { plan: "free" }, "extras") &&
+        ["booking", "contracts", "campaigns"].every((f) => !hasFeature(env, ess, f) && hasFeature(env, pro, f) && hasFeature(env, studio, f)) &&
+        ["extras", "campaigns"].every((f) => !PLANS.scolaire.features[f]));
+  const refusal = await featureRefusal("campaigns").json();
+  const contractsRefusal = await featureRefusal("contracts").json();
+  check("refus explicite : la formule qui débloque, accord correct",
+        /Les campagnes de vente sont incluses à partir de la formule Pro/.test(refusal.error) &&
+        /sont inclus à partir de la formule Pro/.test(contractsRefusal.error), refusal.error);
+}
 check("la formule d'un abonnement se lit dans ses métadonnées, sinon d'après son prix (changement depuis le portail)",
       planKeyFromSubscription({ metadata: { plan: "essentiel" } }) === "essentiel" &&
       planKeyFromSubscription({ metadata: {}, items: { data: [{ price: { unit_amount: PLANS.pro.priceCents } }] } }) === "pro" &&

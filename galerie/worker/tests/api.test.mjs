@@ -1689,6 +1689,17 @@ const essentielSubdomain = await free("POST", "/api/admin/account/subdomain", { 
 const essentielFifth = await free("POST", "/api/admin/galleries", { slug: `${SLUG}-gratuit-5`, password: "mot-de-passe-solide", title: "Gratuite 5" });
 check("abonnement Essentiel actif : plus de galeries et la boutique, mais pas encore l'adresse à son nom",
       essentielSub.plan?.key === "essentiel" && essentielShop.ok && essentielFifth.status === 201 && essentielSubdomain.status === 402);
+const essentielPromo = await free("POST", `/api/admin/galleries/${SLUG}-gratuit-1/promo`, { percent: 20, endsAt: Math.floor(Date.now() / 1000) + 3 * 86400 });
+const essentielPromoStop = await free("POST", `/api/admin/galleries/${SLUG}-gratuit-1/promo`, { percent: 0 });
+const essentielOffer = await free("POST", "/api/admin/booking/offers", { title: "Mini-séance", durationMinutes: 20, priceCents: 9000 });
+const essentielTerms = await free("POST", "/api/admin/contracts/terms", { terms: "Conditions" });
+const essentielGallery = await (await free("GET", `/api/admin/galleries/${SLUG}-gratuit-1`)).json();
+const promoError = (await essentielPromo.json()).error || "";
+check("Essentiel : campagnes, réservation et contrats refusés (402, formule Pro), arrêt d'une promotion permis, suppléments en ligne inclus",
+      essentielPromo.status === 402 && /Pro/.test(promoError) && essentielPromoStop.ok &&
+      essentielOffer.status === 402 && essentielTerms.status === 402 &&
+      essentielGallery.gallery?.sales?.enabled === false && essentielGallery.gallery?.extras_online === true,
+      `${essentielPromo.status} ${essentielPromoStop.status} ${essentielOffer.status} ${essentielTerms.status} ${promoError}`);
 await setPlan(freeEmail, "essentiel", "past_due");
 check("pendant que Stripe retente un prélèvement (past_due), la formule reste acquise",
       (await (await free("GET", "/api/admin/subscription")).json()).plan?.key === "essentiel");
