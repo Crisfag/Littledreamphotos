@@ -308,3 +308,13 @@
   .g-doc-sign { break-inside: avoid; }
   .g-doc-h { break-after: avoid; }
 }
+
+/* ---------- Galerie de mariage ---------- */
+/* L'aperçu reprend la page de galerie de la démonstration des styles
+   (home.css, .sty-*) : Romantique, le film en ouverture. */
+.m-win { align-self: center; }
+.m-win .sty-page { height: clamp(420px, 40vw, 520px); }
+@media (max-width: 640px) {
+  .m-win .sty-page { height: 440px; }
+}
+
