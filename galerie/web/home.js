@@ -255,7 +255,7 @@
         cell.style.top = b[1] / 10 + "%";
         cell.style.width = b[2] / 10 + "%";
         cell.style.height = b[3] / 10 + "%";
-        cell.innerHTML = '<img src="assets/home/swing.webp" alt="" loading="lazy" />';
+        cell.innerHTML = '<img src="assets/home/garcon.webp" alt="" loading="lazy" />';
         planche.insertBefore(cell, planche.firstChild);
       });
   }

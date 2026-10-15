@@ -110,7 +110,7 @@ async function createGallery(request, env, photographerId) {
     return fail(400, "Slug invalide (minuscules, chiffres et tirets, 2 à 61 caractères)");
   }
   // Nombre de galeries actives limité selon la formule (voir subscription.js).
-  const account = await env.DB.prepare("SELECT * FROM photographers WHERE id = ?").bind(photographerId).first();
+  const owner = await env.DB.prepare("SELECT * FROM photographers WHERE id = ?").bind(photographerId).first();
   const quotaRefusal = await galleryQuotaRefusal(env, owner);
   if (quotaRefusal) return quotaRefusal;
   const password = String(body.password || "");
@@ -544,7 +544,7 @@ async function addPhoto(request, env, photographerId, slug) {
     const clash = await env.DB.prepare("SELECT id FROM photos WHERE id = ?").bind(id).first();
     if (clash) return fail(409, "Identifiant de photo déjà utilisé");
   }
-  const account = await env.DB.prepare("SELECT * FROM photographers WHERE id = ?").bind(photographerId).first();
+  const owner = await env.DB.prepare("SELECT * FROM photographers WHERE id = ?").bind(photographerId).first();
   const storageFull = await storageRefusal(env, owner, TILE_BYTES_PER_PHOTO);
   if (storageFull) return storageFull;
 
