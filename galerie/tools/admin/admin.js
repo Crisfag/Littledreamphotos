@@ -2178,6 +2178,50 @@
     );
   }
 
+  /* ---------- Admin : liste d'attente « Holypixx in English » ---------- */
+
+  var WAITLIST_SPECIALTY = {
+    wedding: "Mariage", family: "Famille", newborn: "Naissance", portrait: "Portrait",
+    events: "Événementiel", school: "Scolaire", other: "Autre", "": "Non précisé",
+  };
+
+  function waitlistSectionHtml(data) {
+    var head = '<section id="ad-waitlist"><div class="ad-section-header"><h3>Liste d\'attente « Holypixx in English »' +
+      (data ? " (" + data.total + ")" : "") + "</h3></div>" +
+      '<p class="ad-hint">Les photographes anglophones inscrits depuis <a href="https://www.holypixx.com/en/" target="_blank" rel="noopener">holypixx.com/en</a> : la demande réelle, pays par pays, avant de traduire l\'espace photographe.</p>';
+    if (!data) return head + '<p class="ad-hint">Liste indisponible pour le moment.</p></section>';
+    if (!data.total) return head + '<p class="ad-hint">Personne pour l\'instant.</p></section>';
+    var chips = function (items, label) {
+      return '<p class="ad-hint">' + items.map(function (i) { return esc(label(i)) + " · <b>" + i.count + "</b>"; }).join(" &nbsp; ") + "</p>";
+    };
+    var rows = data.latest.map(function (e) {
+      return "<tr><td>" + esc(e.email) + "</td><td>" + esc(e.country || "—") + "</td><td>" + esc(WAITLIST_SPECIALTY[e.specialty] || e.specialty) +
+        "</td><td>" + esc(shortDate(e.createdAt)) + '</td><td><button type="button" class="ad-btn ad-btn-small" data-waitlist-remove="' + esc(e.email) + '">Retirer</button></td></tr>';
+    });
+    return head +
+      chips(data.byCountry, function (i) { return i.country || "Pays non précisé"; }) +
+      chips(data.bySpecialty, function (i) { return WAITLIST_SPECIALTY[i.specialty] || i.specialty; }) +
+      '<div class="ad-table-wrap"><table class="ad-table"><thead><tr><th>E-mail</th><th>Pays</th><th>Spécialité</th><th>Inscription</th><th></th></tr></thead><tbody>' +
+      rows.join("") + "</tbody></table></div></section>";
+  }
+
+  function wireWaitlist() {
+    document.querySelectorAll("[data-waitlist-remove]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var email = btn.getAttribute("data-waitlist-remove");
+        confirmAction("Retirer " + email + " de la liste d'attente ? (à faire sur demande de la personne)", async function () {
+          try {
+            await api("DELETE", "/owner/waitlist", { email: email });
+            toast("Adresse retirée de la liste d'attente.");
+            renderOwner(true);
+          } catch (err) {
+            toast(err.message, true);
+          }
+        });
+      });
+    });
+  }
+
   /* ---------- Admin : comptes photographes ---------- */
 
   function shortDate(ts) {
@@ -2394,10 +2438,11 @@
     setActiveTab("owner");
     el.view.innerHTML = '<p class="ad-loading">Chargement…</p>';
 
-    var statsData, photographersData;
+    var statsData, photographersData, waitlistData;
     try {
       statsData = await api("GET", "/owner/stats");
       photographersData = await api("GET", "/owner/photographers");
+      waitlistData = await api("GET", "/owner/waitlist").catch(function () { return null; });
     } catch (err) {
       toast(err.message, true);
       return renderList();
@@ -2422,6 +2467,8 @@
       photographersTableHtml(photographersData.photographers) +
       "</section>" +
 
+      waitlistSectionHtml(waitlistData) +
+
       ownerMusicSectionHtml() +
 
       '<section><div class="ad-section-header"><h3>Relances automatiques</h3></div>' +
@@ -2437,6 +2484,7 @@
 
     wireOwnerMusic();
     wireAccountsTable();
+    wireWaitlist();
     document.getElementById("ad-run-reminders").addEventListener("click", async function () {
       var btn = this;
       var out = document.getElementById("ad-run-reminders-result");

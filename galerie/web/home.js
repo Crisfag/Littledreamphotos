@@ -7,6 +7,9 @@
   "use strict";
 
   var config = window.HOME_CONFIG || {};
+  // Page anglaise (/en/) : mêmes comportements, textes en anglais.
+  var EN = document.documentElement.lang === "en";
+  function T(fr, en) { return EN ? en : fr; }
   var still = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   /* ---------- Liens et année ---------- */
@@ -51,7 +54,7 @@
   function setMenu(open) {
     links.classList.toggle("open", open);
     toggle.setAttribute("aria-expanded", String(open));
-    toggle.setAttribute("aria-label", open ? "Fermer le menu" : "Ouvrir le menu");
+    toggle.setAttribute("aria-label", open ? T("Fermer le menu", "Close menu") : T("Ouvrir le menu", "Open menu"));
     toggle.querySelector("use").setAttribute("href", open ? "#i-close" : "#i-menu");
   }
   toggle.addEventListener("click", function () { setMenu(!links.classList.contains("open")); });
@@ -126,15 +129,15 @@
   var sty = document.getElementById("sty");
   if (sty) {
     var STYLE_INFO = {
-      classique: ["Classique", "Cormorant Garamond", "Jost"],
-      doux: ["Doux", "Cormorant Garamond", "Nunito Sans"],
+      classique: [T("Classique", "Classic"), "Cormorant Garamond", "Jost"],
+      doux: [T("Doux", "Soft"), "Cormorant Garamond", "Nunito Sans"],
       architectural: ["Architectural", "Josefin Sans", "Work Sans"],
-      moderne: ["Moderne", "Manrope", "Manrope"],
-      nuit: ["Nuit", "Cormorant Garamond", "Jost"],
-      editorial: ["Éditorial", "Bodoni Moda", "Karla"],
-      romantique: ["Romantique", "Great Vibes", "Lora"],
-      boheme: ["Bohème", "Fraunces", "Karla"],
-      galerie: ["Galerie d'art", "Marcellus", "Work Sans"],
+      moderne: [T("Moderne", "Modern"), "Manrope", "Manrope"],
+      nuit: [T("Nuit", "Night"), "Cormorant Garamond", "Jost"],
+      editorial: [T("Éditorial", "Editorial"), "Bodoni Moda", "Karla"],
+      romantique: [T("Romantique", "Romantic"), "Great Vibes", "Lora"],
+      boheme: [T("Bohème", "Boho"), "Fraunces", "Karla"],
+      galerie: [T("Galerie d'art", "Art gallery"), "Marcellus", "Work Sans"],
     };
     var styPage = document.getElementById("sty-page");
     var styWin = document.getElementById("sty-win");
@@ -146,10 +149,11 @@
       var info = STYLE_INFO[key];
       if (!info || styPage.getAttribute("data-style") === key) return;
       styPage.setAttribute("data-style", key);
-      styWin.setAttribute("aria-label", "Aperçu d'une galerie client au style " + info[0]);
+      styWin.setAttribute("aria-label", T("Aperçu d'une galerie client au style ", "Preview of a client gallery in the style ") + info[0]);
       styCaption.innerHTML = info[1] === info[2]
-        ? "Titres et texte en <b>" + info[1] + "</b>&nbsp;: changez-les librement."
-        : "Titres en <b>" + info[1] + "</b>, texte en <b>" + info[2] + "</b>&nbsp;: changez-les librement.";
+        ? T("Titres et texte en <b>" + info[1] + "</b>&nbsp;: changez-les librement.", "Headings and text in <b>" + info[1] + "</b>: change them freely.")
+        : T("Titres en <b>" + info[1] + "</b>, texte en <b>" + info[2] + "</b>&nbsp;: changez-les librement.",
+            "Headings in <b>" + info[1] + "</b>, text in <b>" + info[2] + "</b>: change them freely.");
     };
 
     styList.querySelectorAll(".sty-opt").forEach(function (btn) {
@@ -218,13 +222,13 @@
       if (b) b.setAttribute("aria-pressed", "true");
     });
     result.hidden = false;
-    captureBtn.innerHTML = '<svg class="ico"><use href="#i-camera"/></svg>Recommencer';
+    captureBtn.innerHTML = '<svg class="ico"><use href="#i-camera"/></svg>' + T("Recommencer", "Start again");
     setTimeout(function () { photo.classList.remove("captured"); }, 1600);
   }
   captureBtn.addEventListener("click", function () {
-    if (!result.hidden && captureBtn.textContent.indexOf("Recommencer") !== -1) {
+    if (!result.hidden && captureBtn.textContent.indexOf(T("Recommencer", "Start again")) !== -1) {
       result.hidden = true;
-      captureBtn.innerHTML = '<svg class="ico"><use href="#i-camera"/></svg>Simuler une capture d\'écran';
+      captureBtn.innerHTML = '<svg class="ico"><use href="#i-camera"/></svg>' + T("Simuler une capture d'écran", "Simulate a screenshot");
       return;
     }
     capture();
@@ -236,7 +240,8 @@
   var toastTimer = 0;
   document.addEventListener("keyup", function (e) {
     if (e.key !== "PrintScreen") return;
-    toast.textContent = "Capture repérée. Sur une galerie Holypixx, le photographe en serait prévenu par e-mail, avec la photo affichée.";
+    toast.textContent = T("Capture repérée. Sur une galerie Holypixx, le photographe en serait prévenu par e-mail, avec la photo affichée.",
+      "Screenshot spotted. On a Holypixx gallery, the photographer would get an email about it, naming the photo on screen.");
     toast.hidden = false;
     clearTimeout(toastTimer);
     toastTimer = setTimeout(function () { toast.hidden = true; }, 6000);
@@ -291,7 +296,7 @@
   var billing = "month";
   var founders = false;
 
-  function euros(n) { return n.toLocaleString("fr-BE") + " €"; }
+  function euros(n) { return EN ? "€" + n.toLocaleString("en-GB") : n.toLocaleString("fr-BE") + " €"; }
 
   function renderPrices() {
     Object.keys(PRICES).forEach(function (key) {
@@ -300,15 +305,15 @@
       var alt = document.querySelector('[data-alt="' + key + '"]');
       if (!amount || !alt) return;
       if (billing === "year") {
-        amount.innerHTML = '<span class="plan-amount">' + euros(founders ? p.founderYear : p.year) + '</span><span class="plan-per">/ an</span>';
+        amount.innerHTML = '<span class="plan-amount">' + euros(founders ? p.founderYear : p.year) + '</span><span class="plan-per">' + T("/ an", "/ year") + "</span>";
         alt.innerHTML = founders
           ? "la 1<sup>re</sup> année, puis " + euros(p.year) + " par an"
-          : "soit " + euros(Math.round(p.year / 12 * 100) / 100).replace(",00", "") + " par mois";
+          : T("soit ", "that's ") + euros(Math.round(p.year / 12 * 100) / 100).replace(",00", "") + T(" par mois", " a month");
       } else {
-        amount.innerHTML = '<span class="plan-amount">' + euros(founders ? p.founderMonth : p.month) + '</span><span class="plan-per">/ mois</span>';
+        amount.innerHTML = '<span class="plan-amount">' + euros(founders ? p.founderMonth : p.month) + '</span><span class="plan-per">' + T("/ mois", "/ month") + "</span>";
         alt.innerHTML = founders
           ? "la 1<sup>re</sup> année, puis " + euros(p.month) + " par mois"
-          : "ou " + euros(p.year) + " par an";
+          : T("ou ", "or ") + euros(p.year) + T(" par an", " a year");
       }
     });
     document.querySelectorAll("[data-founder]").forEach(function (el) {
@@ -326,8 +331,9 @@
   });
   renderPrices();
 
-  // L'offre Fondateurs n'apparaît que tant qu'il reste des places.
-  if (config.api && window.fetch) {
+  // L'offre Fondateurs n'apparaît que tant qu'il reste des places (page
+  // française : l'inscription y est ouverte).
+  if (config.api && window.fetch && !EN) {
     fetch(String(config.api).replace(/\/+$/, "") + "/api/public/plans")
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (data) {
@@ -348,5 +354,52 @@
         renderPrices();
       })
       .catch(function () { /* sans réponse, l'offre n'est simplement pas affichée */ });
+  }
+
+  /* ---------- Liste d'attente (page anglaise) ---------- */
+  // « Holypixx in English » : e-mail, pays et spécialité, envoyés au Worker.
+  // Même réponse que l'adresse soit nouvelle ou déjà inscrite.
+
+  var wlForm = document.getElementById("waitlist-form");
+  if (wlForm) {
+    var wlStatus = document.getElementById("waitlist-status");
+    var wlSubmit = document.getElementById("waitlist-submit");
+    var setWl = function (text, kind) {
+      wlStatus.textContent = text;
+      wlStatus.className = "wl-status" + (kind ? " " + kind : "");
+    };
+    wlForm.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var email = wlForm.email.value.trim();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        setWl("Please enter a valid email address.", "err");
+        wlForm.email.focus();
+        return;
+      }
+      if (!config.api || !window.fetch) return setWl("Something went wrong. Please try again in a moment.", "err");
+      wlSubmit.disabled = true;
+      setWl("Adding you…");
+      fetch(String(config.api).replace(/\/+$/, "") + "/api/public/waitlist", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          email: email, country: wlForm.country.value, specialty: wlForm.specialty.value,
+          website: wlForm.website.value, lang: "en",
+        }),
+      })
+        .then(function (r) {
+          return r.json().catch(function () { return {}; }).then(function (data) {
+            if (!r.ok) throw new Error(data.error || "");
+          });
+        })
+        .then(function () {
+          wlForm.reset();
+          setWl("You're on the list. We'll email you once, the day Holypixx opens in English.", "ok");
+        })
+        .catch(function (err) {
+          setWl(err.message || "Something went wrong. Please try again in a moment.", "err");
+        })
+        .then(function () { wlSubmit.disabled = false; });
+    });
   }
 })();

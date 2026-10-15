@@ -1116,6 +1116,20 @@ texte d'accompagnement et les e-mails qu'il reçoit restent tels quels. Les
 prix restent en euros. Migration :
 `worker/migrations/2026-10-langue-international.sql`.
 
+### Page d'accueil en anglais et liste d'attente
+
+`web/en/index.html` (servie sur `/en/`, liée à la page française par
+`hreflang` et un bouton FR / EN) : la même vitrine en anglais, sans le
+chapitre scolaire, avec une **liste d'attente « Holypixx in English »** à la
+place de l'inscription (l'espace photographe n'existe encore qu'en
+français ; un lien « Start today in French » reste proposé). Le formulaire
+envoie e-mail, pays et spécialité à `POST /api/public/waitlist`
+(`worker/src/waitlist.js`) : même réponse qu'une adresse soit nouvelle ou
+déjà inscrite, champ piège contre les robots. L'onglet **Admin** de la
+propriétaire affiche l'effectif, la répartition par pays et par spécialité,
+et permet de retirer une adresse sur demande. Migration :
+`worker/migrations/2026-10-liste-attente.sql`.
+
 ### Parrainage entre photographes
 
 `worker/src/referral.js`. Onglet **Abonnement** : lien de parrainage

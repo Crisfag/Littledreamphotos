@@ -1097,3 +1097,15 @@ CREATE TABLE IF NOT EXISTS referral_rewards (
   stripe_txn_id TEXT NOT NULL DEFAULT '',
   PRIMARY KEY (parrain_id, card)
 );
+
+-- Liste d'attente « Holypixx in English » (page d'accueil /en/, voir
+-- worker/src/waitlist.js) : photographes anglophones à prévenir du
+-- lancement. Une adresse n'y figure qu'une fois ; jamais confirmée au
+-- visiteur. Supprimable depuis l'espace propriétaire.
+CREATE TABLE IF NOT EXISTS waitlist (
+  email      TEXT PRIMARY KEY,
+  country    TEXT NOT NULL DEFAULT '',
+  specialty  TEXT NOT NULL DEFAULT '',
+  lang       TEXT NOT NULL DEFAULT 'en',
+  created_at INTEGER NOT NULL
+);

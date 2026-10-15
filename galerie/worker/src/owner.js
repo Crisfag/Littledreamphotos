@@ -8,6 +8,7 @@
 // authPhotographer.js : ce champ n'est qu'un indicateur d'affichage, jamais
 // une autorisation en soi.
 
+import { waitlistForOwner, removeFromWaitlist } from "./waitlist.js";
 import { json, fail } from "./http.js";
 import { authenticatePhotographer } from "./authPhotographer.js";
 import { supplementFor } from "./admin.js";
@@ -202,6 +203,17 @@ export async function handleOwner(request, env, path) {
     const owner = await requireOwner(env, photographerId);
     if (!owner) return fail(403, "Accès réservé");
     return json(await runStoragePurge(env));
+  }
+  // Liste d'attente « Holypixx in English » : lecture, retrait d'une adresse.
+  if (action === "waitlist") {
+    const owner = await requireOwner(env, photographerId);
+    if (!owner) return fail(403, "Accès réservé");
+    if (parts.length === 3 && request.method === "GET") return json(await waitlistForOwner(env));
+    if (parts.length === 3 && request.method === "DELETE") {
+      const body = await request.json().catch(() => null);
+      return json(await removeFromWaitlist(env, body?.email));
+    }
+    return fail(404, "Route inconnue");
   }
   // Bibliothèque musicale commune : ajout et retrait de morceaux.
   if (action === "music") {

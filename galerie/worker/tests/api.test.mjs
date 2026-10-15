@@ -1466,6 +1466,28 @@ check("un compte créé plus haut dans ce test apparaît dans la liste, avec son
 check("les mots de passe ne figurent jamais dans la liste",
       !JSON.stringify(ownerPhotographers).toLowerCase().includes("password"));
 
+/* ---------- Liste d'attente « Holypixx in English » ---------- */
+
+const WL_EMAIL = `wl-${Date.now().toString(36)}@test.invalid`;
+const joinWl = (body) => fetch(`${BASE}/api/public/waitlist`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+const wlBad = await joinWl({ email: "pas-un-mail" });
+const wlFirst = await joinWl({ email: WL_EMAIL.toUpperCase(), country: "us", specialty: "wedding" });
+const wlAgain = await joinWl({ email: WL_EMAIL, country: "GB", specialty: "family" });
+const wlBot = await joinWl({ email: `bot-${WL_EMAIL}`, website: "http://spam.example" });
+check("liste d'attente : e-mail invalide refusé (400), même réponse pour une nouvelle adresse ou une adresse déjà inscrite",
+      wlBad.status === 400 && wlFirst.ok && wlAgain.ok && wlBot.ok &&
+      JSON.stringify(await wlFirst.json()) === JSON.stringify(await wlAgain.json()));
+const wlForbidden = await admin("GET", "/api/owner/waitlist");
+const wlOwner = await (await ownerClient("GET", "/api/owner/waitlist")).json();
+const wlRow = wlOwner.latest?.find((e) => e.email === WL_EMAIL);
+check("seule la propriétaire lit la liste (403 sinon) ; adresse en minuscules, une seule fois, premiers choix gardés, robot écarté",
+      wlForbidden.status === 403 && wlRow?.country === "US" && wlRow?.specialty === "wedding" &&
+      wlOwner.latest.filter((e) => e.email === WL_EMAIL).length === 1 && !wlOwner.latest.some((e) => e.email.startsWith("bot-")) &&
+      wlOwner.byCountry.some((c) => c.country === "US"), JSON.stringify(wlRow));
+const wlRemoved = await (await ownerClient("DELETE", "/api/owner/waitlist", { email: WL_EMAIL })).json();
+const wlAfter = await (await ownerClient("GET", "/api/owner/waitlist")).json();
+check("la propriétaire retire une adresse sur demande", wlRemoved.removed === 1 && !wlAfter.latest.some((e) => e.email === WL_EMAIL));
+
 /* ---------- Bibliothèque musicale et liens Spotify & co ---------- */
 
 const TRACK = new Uint8Array(6000);

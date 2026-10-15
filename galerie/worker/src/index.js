@@ -28,6 +28,7 @@ import { runClientReminders } from "./clients.js";
 import { runStoragePurge } from "./storage.js";
 import { plansForPublic } from "./subscription.js";
 import { publicReferral, runReferralRewards } from "./referral.js";
+import { joinWaitlist } from "./waitlist.js";
 import { shopState } from "./shop.js";
 import { studioSubdomainOf, handleStudioHost } from "./studio.js";
 import { handlePrintAsset, handleProdigiCallback } from "./shop.js";
@@ -103,6 +104,9 @@ export default {
       } else if (path.startsWith("/api/public/referral/") && request.method === "GET") {
         // Lien de parrainage : le studio qui parraine (page d'accueil, inscription).
         response = await publicReferral(env, decodeURIComponent(path.slice("/api/public/referral/".length)));
+      } else if (path === "/api/public/waitlist" && request.method === "POST") {
+        // Liste d'attente « Holypixx in English » (page d'accueil /en/).
+        response = await joinWaitlist(request, env);
       } else if (path.startsWith("/api/portfolio/")) {
         // Mini-site public du photographe (lecture, photos, formulaire de contact).
         response = await handlePortfolioPublic(request, env, path);

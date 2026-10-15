@@ -1187,6 +1187,18 @@ async function handleApi(req, res, url) {
     }
   }
 
+  // /local/owner/waitlist — liste d'attente « Holypixx in English » (lecture,
+  // retrait d'une adresse), revérifiée par le Worker.
+  if (parts.length === 2 && parts[0] === "owner" && parts[1] === "waitlist" && (req.method === "GET" || req.method === "DELETE")) {
+    try {
+      let payload;
+      if (req.method === "DELETE") payload = JSON.parse((await readBody(req, 10000)).toString() || "{}");
+      return json(res, 200, await client.request(req.method, "/api/owner/waitlist", payload));
+    } catch (err) {
+      return relayError(res, err, "Impossible de lire la liste d'attente");
+    }
+  }
+
   // GET /local/music-library — bibliothèque musicale commune.
   if (parts.length === 1 && parts[0] === "music-library" && req.method === "GET") {
     try {
