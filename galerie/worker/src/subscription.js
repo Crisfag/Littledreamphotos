@@ -17,6 +17,10 @@ import { createSubscriptionCheckout, createBillingPortalSession, ensureCoupon, r
 import { storageForAdmin } from "./storage.js";
 import { convertReferral, settleRewards } from "./referral.js";
 
+
+// Noms des formules dans l'espace photographe en anglais.
+export const PLAN_LABELS_EN = { free: "Free", essentiel: "Essentials", pro: "Pro", studio: "Studio", scolaire: "School" };
+
 export const PLANS = {
   free: {
     key: "free",
@@ -365,7 +369,10 @@ export async function startSubscriptionCheckout(request, env, photographer) {
       email: photographer.email,
       customerId: photographer.stripe_customer_id || "",
       planKey: plan.key,
-      label: `Holypixx ${plan.label}${interval === "year" ? " (annuel)" : ""}`,
+      label: photographer.ui_language === "en"
+        ? `Holypixx ${PLAN_LABELS_EN[plan.key] || plan.label}${interval === "year" ? " (yearly)" : ""}`
+        : `Holypixx ${plan.label}${interval === "year" ? " (annuel)" : ""}`,
+      locale: photographer.ui_language === "en" ? "en" : undefined,
       unitAmountCents: interval === "year" ? plan.yearlyCents : plan.priceCents,
       interval,
       trialDays: trialAvailable(photographer) ? TRIAL_DAYS : 0,

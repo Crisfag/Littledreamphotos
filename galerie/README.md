@@ -1120,15 +1120,50 @@ prix restent en euros. Migration :
 
 `web/en/index.html` (servie sur `/en/`, liée à la page française par
 `hreflang` et un bouton FR / EN) : la même vitrine en anglais, sans le
-chapitre scolaire, avec une **liste d'attente « Holypixx in English »** à la
-place de l'inscription (l'espace photographe n'existe encore qu'en
-français ; un lien « Start today in French » reste proposé). Le formulaire
+chapitre scolaire. Ses boutons mènent à l'inscription en anglais
+(`#/inscription?lang=en`) ; la **liste d'attente** qui reste en bas de page
+sert aux photographes qui attendent la réservation et les contrats en
+anglais (voir ci-dessous). Le formulaire
 envoie e-mail, pays et spécialité à `POST /api/public/waitlist`
 (`worker/src/waitlist.js`) : même réponse qu'une adresse soit nouvelle ou
 déjà inscrite, champ piège contre les robots. L'onglet **Admin** de la
 propriétaire affiche l'effectif, la répartition par pays et par spécialité,
 et permet de retirer une adresse sur demande. Migration :
 `worker/migrations/2026-10-liste-attente.sql`.
+
+### Espace photographe en anglais (parcours de base)
+
+Langue propre à chaque compte (`photographers.ui_language`, `fr` par
+défaut) : choisie à l'inscription (`language`, `en` depuis la page
+anglaise), modifiable dans **Paramètres → Dashboard language**
+(`POST /api/admin/account/language`), renvoyée par `/api/auth/me`
+(`uiLanguage`). Avant connexion, l'écran reste en français sauf choix
+explicite (`?lang=en`, bouton **English**, dernière langue utilisée dans ce
+navigateur) : la langue du navigateur ne suffit pas, pour qu'aucun compte ne
+naisse en anglais sans qu'on l'ait voulu.
+
+- **Traduit** : connexion, inscription, mot de passe oublié ; galeries
+  (liste, création, fiche : partage, forfait et suppléments, fond d'écran,
+  style, mise en page, musique, livraison HD, boutique de la galerie,
+  photos, journal) ; Boutique (catalogue Prodigi, pays, commandes) ;
+  Facturation ; Abonnement et parrainage ; Paramètres ; « Vérifier une
+  photo ». Une nouvelle galerie propose la langue de l'espace pour le client.
+- **E-mails du photographe** en anglais : alerte de capture, mot de passe,
+  changement d'adresse, rappel de sélection, sélection validée, commande de
+  tirages, purge du stockage. Le paiement d'abonnement Stripe s'ouvre en
+  anglais.
+- **Messages du serveur** : rédigés en français, traduits à l'affichage par
+  `SERVER_EN` (et quelques motifs pour les messages composés : formule,
+  quota, stockage) dans `tools/admin/admin.js` ; un message inconnu reste
+  en français, plus précis qu'un texte générique.
+- **Pas encore traduit** (bandeau « This section is still in French ») :
+  Clients, Réservations, Devis et contrats, Ventes, Portfolio, Scolaire et
+  l'onglet Admin, avec leurs e-mails. Les prix restent en euros.
+
+Côté code : `L("français", "English")` dans `admin.js`, attributs
+`data-en*` dans `index.html` (réversibles, le français est gardé dans
+`data-fr*`). Test : `tools/tests/dashboard-english.test.mjs`. Migration :
+`worker/migrations/2026-10-interface-anglais.sql`.
 
 ### Parrainage entre photographes
 

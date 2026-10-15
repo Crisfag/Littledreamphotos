@@ -335,7 +335,8 @@ async function handleAuth(req, res, parts) {
       signupRes = await fetch(`${config.api}/api/auth/signup`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email, password, studioName, firstName, lastName, acceptTerms: true, referralCode: String(body.referralCode || "").slice(0, 20) }),
+        body: JSON.stringify({ email, password, studioName, firstName, lastName, acceptTerms: true, referralCode: String(body.referralCode || "").slice(0, 20),
+          language: body.language === "en" ? "en" : "fr" }),
       });
     } catch {
       return json(res, 502, { error: "Worker injoignable" });
@@ -1083,6 +1084,16 @@ async function handleApi(req, res, url) {
       return json(res, 200, result);
     } catch (err) {
       return relayError(res, err, "Impossible de supprimer le compte");
+    }
+  }
+
+  // POST /local/account/language — langue de l'espace photographe.
+  if (parts.length === 2 && parts[0] === "account" && parts[1] === "language" && req.method === "POST") {
+    const body = JSON.parse((await readBody(req, 10000)).toString("utf8") || "{}");
+    try {
+      return json(res, 200, await client.request("POST", "/api/admin/account/language", { language: body.language }));
+    } catch (err) {
+      return relayError(res, err, "Impossible d'enregistrer la langue");
     }
   }
 

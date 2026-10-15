@@ -119,7 +119,8 @@ function paragraph(html, opts) {
 }
 
 // Fonction pure (pas d'accès réseau) : facile à tester unitairement.
-export function buildCaptureAlertEmail({ studioName, galleryTitle, clientName, photoLabel, reason, ts, adminUrl }) {
+export function buildCaptureAlertEmail({ studioName, galleryTitle, clientName, photoLabel, reason, ts, adminUrl, lang }) {
+  if (lang === "en") return captureAlertEn({ studioName, galleryTitle, clientName, photoLabel, reason, ts, adminUrl });
   const reasonLabel = REASON_LABELS[reason] || "une capture d'écran";
   const subject = `Capture suspectée sur « ${galleryTitle} »`;
   const photoLine = photoLabel
@@ -154,7 +155,8 @@ export function buildCaptureAlertEmail({ studioName, galleryTitle, clientName, p
 }
 
 // Fonction pure : facile à tester unitairement, sans accès réseau.
-export function buildPasswordResetEmail({ studioName, resetUrl, ts }) {
+export function buildPasswordResetEmail({ studioName, resetUrl, ts, lang }) {
+  if (lang === "en") return passwordResetEn({ studioName, resetUrl, ts });
   const subject = "Réinitialisation de votre mot de passe Holypixx";
 
   const bodyHtml = [
@@ -205,7 +207,8 @@ export function buildFamilyLoginLinkEmail({ loginUrl, ts }) {
 }
 
 // Fonction pure : facile à tester unitairement, sans accès réseau.
-export function buildEmailChangeConfirmationEmail({ studioName, confirmUrl, ts }) {
+export function buildEmailChangeConfirmationEmail({ studioName, confirmUrl, ts, lang }) {
+  if (lang === "en") return emailChangeEn({ studioName, confirmUrl, ts });
   const subject = "Confirmez votre nouvelle adresse e-mail Holypixx";
 
   const bodyHtml = [
@@ -432,6 +435,143 @@ function printOrderShippedEn({ studioName, galleryTitle, recipientName, tracking
   return enMail(subject, bodyHtml, `Your prints from “${galleryTitle}” have just shipped.${trackingUrl ? `\n\nTracking: ${trackingUrl}` : ""}`);
 }
 
+/* ---------- Espace photographe en anglais : e-mails au photographe ---------- */
+
+const REASON_LABELS_EN = {
+  "impr-ecran": "the Print Screen key",
+  "capture-macos": "a macOS screenshot shortcut",
+  "absence-breve": "a strong screenshot signal (a very brief window switch)",
+};
+
+function formatWhenEn(ts) {
+  return new Date(ts * 1000).toLocaleString("en-GB", { dateStyle: "long", timeStyle: "short", timeZone: "Europe/Brussels" });
+}
+
+function hello(studioName) {
+  return `Hello${studioName ? " " + escapeHtml(studioName) : ""},`;
+}
+
+function captureAlertEn({ studioName, galleryTitle, clientName, photoLabel, reason, ts, adminUrl }) {
+  const reasonLabel = REASON_LABELS_EN[reason] || "a screenshot";
+  const subject = `Screenshot suspected on “${galleryTitle}”`;
+  const photoLine = photoLabel
+    ? `<strong>${escapeHtml(photoLabel)}</strong> was on screen at that moment.`
+    : "No specific photo could be identified (screenshot from the overview).";
+  const bodyHtml = [
+    eyebrow("Screenshot alert"),
+    heading(`Screenshot suspected on “${escapeHtml(galleryTitle)}”`),
+    paragraph(hello(studioName)),
+    paragraph(`A visitor to your gallery <strong>${escapeHtml(galleryTitle)}</strong>${clientName ? " (" + escapeHtml(clientName) + ")" : ""} triggered ${reasonLabel} on ${escapeHtml(formatWhenEn(ts))}.`),
+    paragraph(photoLine),
+    paragraph("This is never an absolute certainty — only a strong signal, recorded in this gallery's access log.", { small: true }),
+    adminUrl ? emailButton(adminUrl, "Open my dashboard") : "",
+  ].join("\n");
+  const text = `A visitor to your gallery "${galleryTitle}"${clientName ? " (" + clientName + ")" : ""} triggered ${reasonLabel} on ${formatWhenEn(ts)}. ` +
+    (photoLabel ? `Photo: ${photoLabel}.` : "Photo not identified (overview).") + (adminUrl ? ` Dashboard: ${adminUrl}` : "");
+  return { subject, html: emailShell({ preheader: `Screenshot suspected on ${galleryTitle}`, bodyHtml, lang: "en" }), text };
+}
+
+function passwordResetEn({ studioName, resetUrl, ts }) {
+  const subject = "Reset your Holypixx password";
+  const bodyHtml = [
+    eyebrow("Account security"),
+    heading("Reset your password"),
+    paragraph(hello(studioName)),
+    paragraph(`A password reset was requested for your Holypixx account on ${escapeHtml(formatWhenEn(ts))}.`),
+    emailButton(resetUrl, "Choose a new password"),
+    `<div style="height:20px;"></div>`,
+    paragraph("This link is valid for half an hour and works only once. If you didn't ask for this, just ignore this email: your current password stays the same.", { small: true }),
+  ].join("\n");
+  const text = `A password reset was requested for your Holypixx account on ${formatWhenEn(ts)}. Choose a new password: ${resetUrl} ` +
+    "This link is valid for half an hour and works only once. If you didn't ask for this, just ignore this email.";
+  return { subject, html: emailShell({ preheader: "Choose a new password for your Holypixx account", bodyHtml, lang: "en" }), text };
+}
+
+function emailChangeEn({ studioName, confirmUrl, ts }) {
+  const subject = "Confirm your new Holypixx email address";
+  const bodyHtml = [
+    eyebrow("Account security"),
+    heading("Confirm your new address"),
+    paragraph(hello(studioName)),
+    paragraph(`An email address change was requested for your Holypixx account on ${escapeHtml(formatWhenEn(ts))}. Once confirmed, this address becomes your sign-in email.`),
+    emailButton(confirmUrl, "Confirm this address"),
+    `<div style="height:20px;"></div>`,
+    paragraph("This link is valid for half an hour and works only once. If you didn't ask for this, just ignore this email: nothing changes until the link is opened.", { small: true }),
+  ].join("\n");
+  const text = `An email address change was requested for your Holypixx account on ${formatWhenEn(ts)}. Confirm this address: ${confirmUrl} ` +
+    "This link is valid for half an hour and works only once. If you didn't ask for this, just ignore this email.";
+  return { subject, html: emailShell({ preheader: subject, bodyHtml, lang: "en" }), text };
+}
+
+function photographerReminderEn({ galleryTitle, clientName, daysLeft, selectedCount, adminUrl }) {
+  const when = daysLeft <= 1 ? "tomorrow" : `in ${daysLeft} days`;
+  const subject = `Selection still pending on “${galleryTitle}” (closes ${when})`;
+  const who = clientName ? escapeHtml(clientName) : "Your client";
+  const bodyHtml =
+    eyebrow("Automatic reminder") +
+    heading(`“${escapeHtml(galleryTitle)}” closes ${escapeHtml(when)}`) +
+    paragraph(`${who} hasn't confirmed their selection yet (${selectedCount} favourite${selectedCount === 1 ? "" : "s"} so far). The automatic reminders have been sent; a word from you may make the difference.`) +
+    (adminUrl ? emailButton(adminUrl, "Open the dashboard") : "") +
+    paragraph("You can turn these reminders off in Settings.", { small: true });
+  const text = `“${galleryTitle}” closes ${when} and ${clientName || "your client"} hasn't confirmed their selection yet (${selectedCount} favourite(s)).${adminUrl ? `\n\nDashboard: ${adminUrl}` : ""}`;
+  return { subject, html: emailShell({ preheader: subject, bodyHtml, lang: "en" }), text };
+}
+
+function selectionValidatedEn({ galleryTitle, clientName, selectedCount, dueExtraCount, dueTotalCents, adminUrl }) {
+  const subject = `Selection confirmed on “${galleryTitle}”`;
+  const dueLine = dueExtraCount > 0
+    ? `Extras due: ${dueExtraCount} photo${dueExtraCount > 1 ? "s" : ""} beyond the package, ${formatEurosEn(dueTotalCents)}.`
+    : "No extras due.";
+  const bodyHtml =
+    eyebrow("Selection confirmed") +
+    heading(`${escapeHtml(clientName || "Your client")} confirmed their selection`) +
+    paragraph(`Gallery “<strong>${escapeHtml(galleryTitle)}</strong>”: <strong>${selectedCount} photo${selectedCount === 1 ? "" : "s"}</strong> chosen.`) +
+    paragraph(escapeHtml(dueLine)) +
+    (adminUrl ? emailButton(adminUrl, "See the selection") : "");
+  const text = `${clientName || "Your client"} confirmed their selection on “${galleryTitle}”: ${selectedCount} photo(s). ${dueLine}${adminUrl ? `\n\nDashboard: ${adminUrl}` : ""}`;
+  return { subject, html: emailShell({ preheader: subject, bodyHtml, lang: "en" }), text };
+}
+
+function printOrderPhotographerEn({ galleryTitle, recipientName, lines, totalCents, labStatus, labError, adminUrl }) {
+  const failed = labStatus === "failed";
+  const subject = failed ? `⚠️ Print order needs attention — ${galleryTitle}` : `New print order — ${galleryTitle}`;
+  const bodyHtml =
+    eyebrow(failed ? "Action needed" : "New order") +
+    heading(`${escapeHtml(recipientName || "A client")} ordered prints`) +
+    paragraph(`Gallery “<strong>${escapeHtml(galleryTitle)}</strong>”, ${formatEurosEn(totalCents)} paid online.`) +
+    printLinesHtmlEn(lines) +
+    paragraph(failed
+      ? `<strong>The lab rejected the order:</strong> ${escapeHtml(labError || "unknown reason")}. Fix the format in question in the Shop tab, then resubmit the order from the gallery page.`
+      : "The order was sent to the lab automatically. Nothing to do on your side: your client will get tracking when it ships.") +
+    (adminUrl ? emailButton(adminUrl, "Open the dashboard") : "");
+  const text = `${recipientName || "A client"} ordered prints on “${galleryTitle}” (${formatEurosEn(totalCents)}).\n\n` +
+    lines.map((l) => `- ${l.copies} × ${l.label} (photo no. ${l.photoNumber}): ${formatEurosEn(l.lineCents)}`).join("\n") + "\n\n" +
+    (failed ? `The lab rejected the order: ${labError || "unknown reason"}. Resubmit it from the gallery page.` : "Order sent to the lab automatically.");
+  return { subject, html: emailShell({ preheader: subject, bodyHtml, lang: "en" }), text };
+}
+
+function storagePurgeEn({ studioName, galleryTitle, deliveryCount, originalCount, sizeLabel, purgeAt, adminUrl }) {
+  const day = formatDayEn(purgeAt);
+  const subject = `HD files of “${galleryTitle}” will be deleted on ${day}`;
+  const what = [
+    deliveryCount ? `${deliveryCount} high-resolution delivered photo${deliveryCount > 1 ? "s" : ""} (${sizeLabel})` : "",
+    originalCount ? `${originalCount} print file${originalCount > 1 ? "s" : ""}` : "",
+  ].filter(Boolean).join(" and ");
+  const bodyHtml =
+    eyebrow(studioName || "Your storage") +
+    heading("Some files are about to be deleted") +
+    paragraph(`The gallery “<strong>${escapeHtml(galleryTitle)}</strong>” has expired. To free up your storage, ${escapeHtml(what)} will be deleted on <strong>${escapeHtml(day)}</strong>.`) +
+    paragraph("The gallery's photos themselves stay online. To keep these files, simply extend the gallery: the deletion date moves back accordingly.") +
+    (adminUrl ? emailButton(adminUrl, "Open the gallery") : "") +
+    paragraph("Have the originals on your computer? Nothing to do: you can always upload them again.", { small: true });
+  const text = [
+    `The gallery “${galleryTitle}” has expired: ${what} will be deleted on ${day}.`,
+    "The gallery's photos stay online. Extend the gallery to keep these files.",
+    adminUrl ? `\nOpen the gallery: ${adminUrl}` : "",
+  ].join("\n");
+  return { subject, html: emailShell({ preheader: subject, bodyHtml, lang: "en" }), text };
+}
+
 function daysLabel(daysLeft) {
   if (daysLeft <= 1) return "demain";
   return `dans ${daysLeft} jours`;
@@ -464,7 +604,8 @@ export function buildClientReminderEmail({ studioName, galleryTitle, clientName,
 
 // Relance au photographe : la galerie expire dans deux jours et le client
 // n'a toujours pas validé — de quoi le contacter directement.
-export function buildPhotographerReminderEmail({ galleryTitle, clientName, daysLeft, selectedCount, adminUrl }) {
+export function buildPhotographerReminderEmail({ galleryTitle, clientName, daysLeft, selectedCount, adminUrl, lang }) {
+  if (lang === "en") return photographerReminderEn({ galleryTitle, clientName, daysLeft, selectedCount, adminUrl });
   const when = daysLabel(daysLeft);
   const subject = `Sélection toujours en attente sur « ${galleryTitle} » (expire ${when})`;
   const bodyHtml =
@@ -479,7 +620,8 @@ export function buildPhotographerReminderEmail({ galleryTitle, clientName, daysL
 
 // Le client vient de cliquer « Valider ma sélection » : le photographe est
 // prévenu tout de suite, avec le compte des photos et le supplément dû.
-export function buildSelectionValidatedEmail({ galleryTitle, clientName, selectedCount, dueExtraCount, dueTotalCents, adminUrl }) {
+export function buildSelectionValidatedEmail({ galleryTitle, clientName, selectedCount, dueExtraCount, dueTotalCents, adminUrl, lang }) {
+  if (lang === "en") return selectionValidatedEn({ galleryTitle, clientName, selectedCount, dueExtraCount, dueTotalCents, adminUrl });
   const subject = `Sélection validée sur « ${galleryTitle} »`;
   const dueLine = dueExtraCount > 0
     ? `Supplément à régler : ${dueExtraCount} photo${dueExtraCount > 1 ? "s" : ""} au-delà du forfait, soit ${formatEuros(dueTotalCents)}.`
@@ -606,7 +748,8 @@ export function buildSchoolReminderEmail({ kind, studioName, schoolName, childNa
 }
 
 // Au photographe : nouvelle commande payée, et ce qu'il en est côté labo.
-export function buildPrintOrderPhotographerEmail({ galleryTitle, recipientName, lines, totalCents, labStatus, labError, adminUrl }) {
+export function buildPrintOrderPhotographerEmail({ galleryTitle, recipientName, lines, totalCents, labStatus, labError, adminUrl, lang }) {
+  if (lang === "en") return printOrderPhotographerEn({ galleryTitle, recipientName, lines, totalCents, labStatus, labError, adminUrl });
   const failed = labStatus === "failed";
   const subject = failed
     ? `⚠️ Commande de tirages à relancer — ${galleryTitle}`
@@ -726,7 +869,8 @@ export function buildPrintOrderShippedEmail({ studioName, galleryTitle, recipien
   return { subject, html: emailShell({ preheader: subject, bodyHtml }), text };
 }
 
-export function buildStoragePurgeNoticeEmail({ studioName, galleryTitle, deliveryCount, originalCount, sizeLabel, purgeAt, adminUrl }) {
+export function buildStoragePurgeNoticeEmail({ studioName, galleryTitle, deliveryCount, originalCount, sizeLabel, purgeAt, adminUrl, lang }) {
+  if (lang === "en") return storagePurgeEn({ studioName, galleryTitle, deliveryCount, originalCount, sizeLabel, purgeAt, adminUrl });
   const subject = `Fichiers HD de « ${galleryTitle} » effacés le ${formatDay(purgeAt)}`;
   const what = [
     deliveryCount ? `${deliveryCount} photo${deliveryCount > 1 ? "s" : ""} livrée${deliveryCount > 1 ? "s" : ""} en haute définition (${sizeLabel})` : "",

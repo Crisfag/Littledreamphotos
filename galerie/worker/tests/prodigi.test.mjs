@@ -250,6 +250,22 @@ check("option traduite (couleur du cadre)",
 check("libellé réécrit par le photographe gardé tel quel", productLabelFor({ label: "Mon beau tirage", catalog_ref: print.ref }, "en") === "Mon beau tirage");
 check("galerie en français : libellé d'origine", productLabelFor({ label: print.label, catalog_ref: print.ref }, "fr") === print.label);
 
+/* ---------- Catalogue pour l'espace photographe en anglais ---------- */
+
+const enCatalogue = catalogueForAdmin("en");
+const enCatalogueText = JSON.stringify(enCatalogue).replace(/giclée/gi, "giclee"); // mot anglais emprunté
+const enProducts = enCatalogue.flatMap((c) => c.products);
+check("catalogue en anglais : chaque catégorie, produit, description, format et option a son libellé anglais",
+      enCatalogue.length === catalogueForAdmin().length && enProducts.length === catalogueForAdmin().flatMap((c) => c.products).length &&
+      !/[àâéèêçô«»]|Tirage|Toile|Affiche|Papier|Finition|Cadre|Sans /.test(enCatalogueText),
+      (enCatalogueText.match(/[^"]*[àâéèêçô«»][^"]*/g) || []).slice(0, 5).join(" | "));
+check("catalogue en anglais : formats en pouces d'abord",
+      enProducts[0].sizes.some((sz) => sz.label === "8 × 10 in (20 × 25 cm)"), enProducts[0].sizes.map((sz) => sz.label).join(", "));
+check("catalogue sans langue : toujours en français",
+      /Tirage/.test(JSON.stringify(catalogueForAdmin())));
+check("catégorie libre en anglais : « Other products »",
+      categoryLabelFor({ category: "zz-inconnue" }, "en") === "Other products", categoryLabelFor({ category: "zz-inconnue" }, "en"));
+
 const failed = checks.filter((c) => !c.ok);
 console.log(failed.length ? `\n${failed.length} vérification(s) en échec.` : `\n${checks.length} vérifications, toutes passent.`);
 process.exit(failed.length ? 1 : 0);

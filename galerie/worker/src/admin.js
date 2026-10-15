@@ -28,7 +28,7 @@ import { handlePortfolioAdmin, deletePortfolioFiles } from "./portfolio.js";
 import { storageRefusal, TILE_BYTES_PER_PHOTO } from "./storage.js";
 import { authenticatePhotographer } from "./authPhotographer.js";
 import { connectStripe, refreshStripeStatus, setBillingProfile } from "./billing.js";
-import { updateStudioName, updateName, changePassword, requestEmailChange, updateDefaults, updateReminders, updateSubdomain } from "./account.js";
+import { updateStudioName, updateName, changePassword, requestEmailChange, updateDefaults, updateReminders, updateSubdomain, updateUiLanguage } from "./account.js";
 
 function now() {
   return Math.floor(Date.now() / 1000);
@@ -949,6 +949,9 @@ export async function handleAdmin(request, env, ctx, path) {
       await deletePortfolioFiles(env, photographerId);
       await deleteBookingFiles(env, photographerId);
     });
+  }
+  if (section === "account" && parts[3] === "language" && parts.length === 4 && request.method === "POST") {
+    return updateUiLanguage(request, env, photographerId);
   }
   if (section === "account" && parts[3] === "name" && parts.length === 4 && request.method === "POST") {
     return updateName(request, env, photographerId);

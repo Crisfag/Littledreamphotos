@@ -363,6 +363,34 @@ function sizeLabelEn(product, size) {
   return SIZE_TEXT_EN[size] || size;
 }
 
+// Espace photographe en anglais : catégories, descriptions, noms d'options.
+const CATEGORY_EN = {
+  photo: "Photo prints", art: "Fine art prints & posters", canvas: "Canvases", frames: "Frames",
+  panels: "Acrylic & aluminium", gifts: "Objects & gifts", cards: "Cards",
+};
+const DESCRIPTION_EN = {
+  "photo-ctype": "Traditional photo paper (C-type), a classic photographic look.",
+  "art-fineart": "Giclée printing with pigment inks, archival quality.",
+  "art-photorag": "308 gsm 100% cotton paper, the photographers' benchmark: giclée with pigment inks, museum quality.",
+  "art-budget-poster": "Affordable poster, satin paper.",
+  "canvas-stretched": "Canvas stretched on a 38 mm wooden frame, ready to hang.",
+  "canvas-rolled": "400 gsm artist canvas shipped rolled, to stretch or frame.",
+  "canvas-float": "Stretched canvas in a float frame.",
+  "frame-classic-mount": "Fine art print under glass, white mount.",
+  "frame-classic": "Fine art print under glass, no mount.",
+  "frame-box-mount": "Deep box frame, white mount.",
+  "frame-box": "Deep box frame, no mount.",
+  "acrylic-panel": "Fine art print mounted under 10 mm gloss acrylic, hidden hanging: gallery look, deep colours.",
+  "metal-aluminium": "Dye-sublimation print on gloss ChromaLuxe aluminium: vivid colours, light, moisture-resistant.",
+  "gift-board": "Print mounted on a rigid board, to stand or hang.",
+  "gift-mug": "11 oz mug printed by sublimation, dishwasher and microwave safe. The whole photo is centred on the mug, uncropped.",
+  "gift-cushion": "Soft velvet-touch cover printed on one side, plain back, with filling.",
+  "card-matte": "Folded card on 324 gsm Mohawk fine art paper, your photo on the cover.",
+  "card-gloss": "Folded card, 280 gsm gloss laminated, your photo on the cover.",
+};
+const OPTION_LABEL_EN = { finish: "Finish", wrap: "Edges", color: "Frame colour" };
+const OPTION_CHOICE_EN = { lustre: "Lustre (satin)", gloss: "Gloss" };
+
 // Libellé d'un format de la boutique dans la langue de la galerie. Un
 // libellé que le photographe a réécrit lui-même est gardé tel quel.
 export function productLabelFor(row, lang) {
@@ -399,26 +427,35 @@ export function sizingForSku(sku) {
 }
 
 // Version envoyée à l'admin pour construire les menus (libellés en cm).
-export function catalogueForAdmin() {
+export function catalogueForAdmin(lang) {
+  const en = lang === "en";
+  const choiceEn = (value, label) => {
+    if (!en) return label;
+    const text = OPTION_CHOICE_EN[value] || OPTION_EN[value] || label;
+    return text.charAt(0).toUpperCase() + text.slice(1);
+  };
   return CATALOGUE.map((category) => ({
     key: category.key,
-    label: category.label,
+    label: en ? CATEGORY_EN[category.key] || category.label : category.label,
     products: category.products.map((p) => ({
       key: p.key,
-      label: p.label,
-      description: p.description,
-      sizes: p.sizes.map((s) => ({ key: s, label: sizeLabel(p, s) })),
-      option: p.option ? { label: p.option.label, choices: Object.entries(p.option.choices).map(([value, label]) => ({ value, label })) } : null,
+      label: en ? PRODUCT_EN[p.key] || p.label : p.label,
+      description: en ? DESCRIPTION_EN[p.key] || "" : p.description,
+      sizes: p.sizes.map((s) => ({ key: s, label: en ? sizeLabelEn(p, s) : sizeLabel(p, s) })),
+      option: p.option ? {
+        label: en ? OPTION_LABEL_EN[p.option.attribute] || p.option.label : p.option.label,
+        choices: Object.entries(p.option.choices).map(([value, label]) => ({ value, label: choiceEn(value, label) })),
+      } : null,
     })),
   }));
 }
 
 // Retrouve la catégorie d'un produit déjà en boutique (pour le regrouper
 // dans l'admin), d'après sa référence de catalogue ou, à défaut, son SKU.
-export function categoryLabelFor(row) {
+export function categoryLabelFor(row, lang) {
   const productKey = String(row.catalog_ref || "").split("|")[0];
   const found = productKey ? findProduct(productKey) : null;
-  if (found) return found.category.label;
+  if (found) return lang === "en" ? CATEGORY_EN[found.category.key] || found.category.label : found.category.label;
   // Produit ajouté avant les menus, ou en mode avancé : on se fie au plus
   // long préfixe de SKU connu (GLOBAL-CAN-ROL-SC- avant GLOBAL-CAN-).
   const sku = String(row.sku || "").toUpperCase();
@@ -426,10 +463,10 @@ export function categoryLabelFor(row) {
   for (const category of CATALOGUE) {
     for (const product of category.products) {
       const prefix = skuPrefix(product);
-      if (sku.startsWith(prefix) && (!best || prefix.length > best.prefix.length)) best = { prefix, label: category.label };
+      if (sku.startsWith(prefix) && (!best || prefix.length > best.prefix.length)) best = { prefix, label: lang === "en" ? CATEGORY_EN[category.key] || category.label : category.label };
     }
   }
-  return best ? best.label : "Autres produits";
+  return best ? best.label : (lang === "en" ? "Other products" : "Autres produits");
 }
 
 // Formats proposés d'un clic (« Ajouter les formats suggérés »).

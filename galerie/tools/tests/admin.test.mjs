@@ -893,7 +893,9 @@ check("modifier un prix recalcule la marge (nette des frais de paiement) immédi
 await firstRow.locator("[data-save-product]").click();
 await page.waitForFunction(() => document.querySelector('#ad-shop-products tr[data-product-id] [data-field="price"]')?.value === "16.50", { timeout: 10000 });
 check("le nouveau prix est enregistré (relu après rechargement de l'écran)", true);
-check("aucune commande n'est encore listée", await page.isVisible("#ad-print-orders-empty"));
+// L'écran se redessine après l'enregistrement : on attend qu'il soit stable.
+check("aucune commande n'est encore listée",
+      await page.waitForSelector("#ad-print-orders-empty", { state: "visible", timeout: 5000 }).then(() => true, () => false));
 
 await page.click("#ad-tab-galleries");
 await page.waitForSelector(".ad-card", { timeout: 10000 });
