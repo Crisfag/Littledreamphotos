@@ -128,10 +128,15 @@ check("une galerie du classement mène à sa fiche", true);
 
 await page.setViewportSize({ width: 375, height: 800 });
 await page.goto(`${BASE}/#/ventes`, { waitUntil: "domcontentloaded" });
+// Simple changement d'ancre : l'écran se redessine, on attend qu'il soit stable.
+await page.waitForTimeout(800);
 await page.waitForSelector(".ad-chart-svg", { timeout: 10000 });
 check("sur téléphone, le graphique tient dans la largeur",
-      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1 &&
-        document.querySelector(".ad-chart-svg").getBoundingClientRect().right <= window.innerWidth));
+      await page.evaluate(() => {
+        const chart = document.querySelector(".ad-chart-svg");
+        return Boolean(chart) && document.documentElement.scrollWidth <= window.innerWidth + 1 &&
+          chart.getBoundingClientRect().right <= window.innerWidth;
+      }));
 if (SCREENSHOT) await page.screenshot({ path: SCREENSHOT.replace(/\.png$/, "-mobile.png"), fullPage: true });
 
 /* ---------- Photographe scolaire : commandes des familles ---------- */

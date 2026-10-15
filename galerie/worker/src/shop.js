@@ -55,16 +55,16 @@ function parseJson(text, fallback) {
   }
 }
 
-function productOut(p) {
+function productOut(p, lang) {
   return {
     id: p.id,
-    label: p.label,
+    label: productLabelFor(p, lang),
     sku: p.sku,
     attributes: parseJson(p.attributes || "{}", {}),
     priceCents: p.price_cents,
     active: Boolean(p.active),
     position: p.position,
-    category: categoryLabelFor(p),
+    category: categoryLabelFor(p, lang),
     fromCatalogue: Boolean(p.catalog_ref),
     costCents: p.cost_cents || 0,
     shipCostCents: p.ship_cost_cents || 0,
@@ -113,6 +113,7 @@ async function getShop(env, photographerId) {
   if (!photographer) return fail(404, "Compte introuvable");
   const apiKey = await decryptApiKey(env.AUTH_SECRET, photographer.prodigi_api_key_enc);
   const products = await listProducts(env, photographerId);
+  const lang = languageOf(photographer.ui_language);
   return json({
     settings: {
       connected: Boolean(apiKey),
@@ -125,10 +126,12 @@ async function getShop(env, photographerId) {
       // Frais de paiement retenus sur chaque commande (voir fees.js).
       paymentFee: feeRuleForAdmin(env, photographer),
     },
-    products: products.map(productOut),
+    // Espace photographe en anglais : libellés du catalogue, des formats et
+    // des pays dans sa langue (les libellés enregistrés restent inchangés).
+    products: products.map((p) => productOut(p, lang)),
     suggested: SUGGESTED_PRODUCTS,
-    catalogue: catalogueForAdmin(),
-    countries: SHOP_COUNTRIES,
+    catalogue: catalogueForAdmin(lang),
+    countries: lang === "en" ? Object.fromEntries(countriesForClient({ shop_shipping_world_cents: 0 }, "en").map((c) => [c.code, c.name])) : SHOP_COUNTRIES,
   });
 }
 
@@ -329,10 +332,10 @@ async function quoteSelection(request, env, photographerId) {
     const data = await prodigiRequest(env, creds, "POST", "/quotes", buildQuotePayload({ sku: resolved.sku, attributes: resolved.attributes, countryCode }));
     const cost = costFromQuote(data);
     if (!cost) throw new Error("Devis illisible");
-    return json({ available: true, label: resolved.label, countryCode, ...cost });
+    return json({ available: true, label: productLabelFor({ label: resolved.label, catalog_ref: resolved.ref }, languageOf(photographer?.ui_language)), countryCode, ...cost });
   } catch (err) {
     if (err.prodigiStatus === 401) return fail(502, err.message);
-    return json({ available: false, label: resolved.label, countryCode, error: err.message || "Indisponible chez le labo" });
+    return json({ available: false, label: productLabelFor({ label: resolved.label, catalog_ref: resolved.ref }, languageOf(photographer?.ui_language)), countryCode, error: err.message || "Indisponible chez le labo" });
   }
 }
 
@@ -736,6 +739,7 @@ export async function handlePrintPaymentConfirmed(env, payment, origin) {
     });
     if (photographer?.email) {
       await sendPrintOrderPhotographer(env, {
+        lang: photographer.ui_language,
         to: photographer.email,
         galleryTitle: gallery.title,
         recipientName: recipient.name,

@@ -21,6 +21,7 @@ import {
   b64url,
 } from "./auth.js";
 import { sendPasswordResetEmail } from "./notify.js";
+import { languageOf } from "./i18n.js";
 import { confirmEmailChange } from "./account.js";
 
 // Outil utilisé au long cours (CLI, admin locale) plutôt qu'une session web
@@ -80,6 +81,8 @@ function profileOf(photographer, env) {
     firstName: photographer.first_name || "",
     lastName: photographer.last_name || "",
     studioName: photographer.studio_name || "",
+    // Langue de l'espace photographe ('fr' ou 'en', voir i18n.js).
+    uiLanguage: languageOf(photographer.ui_language),
     stripeConnected: Boolean(photographer.stripe_account_id),
     stripeChargesEnabled: Boolean(photographer.stripe_charges_enabled),
     billingCompanyName: photographer.billing_company_name || "",
@@ -129,20 +132,22 @@ async function signup(request, env) {
   const id = newId();
 
   await env.DB.prepare(
-    `INSERT INTO photographers (id, email, password_hash, password_salt, studio_name, first_name, last_name, created_at, terms_accepted_at, terms_version)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO photographers (id, email, password_hash, password_salt, studio_name, first_name, last_name, created_at, terms_accepted_at, terms_version, ui_language)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   )
     // Acceptation des conditions et de la politique de confidentialité :
     // exigée par l'écran d'inscription (admin-server), horodatée ici avec la
     // version des textes acceptés.
     .bind(id, email, hash, salt, studioName, firstName, lastName, now(),
-      body.acceptTerms === true ? now() : null, body.acceptTerms === true ? TERMS_VERSION : "")
+      body.acceptTerms === true ? now() : null, body.acceptTerms === true ? TERMS_VERSION : "",
+      // Langue de l'espace photographe, choisie à l'inscription (page /en/).
+      languageOf(body.language))
     .run();
 
   // Lien de parrainage : un code inconnu est ignoré, l'inscription aboutit.
   if (body.referralCode) await recordReferral(env, id, body.referralCode).catch(() => false);
 
-  const photographer = { id, email, studio_name: studioName, first_name: firstName, last_name: lastName };
+  const photographer = { id, email, studio_name: studioName, first_name: firstName, last_name: lastName, ui_language: languageOf(body.language) };
   const token = await issueSession(env, photographer);
   return json(
     { token, expiresIn: SESSION_TTL_SECONDS, photographer: profileOf(photographer, env) },
@@ -250,6 +255,7 @@ async function forgotPassword(request, env, ctx) {
       const adminUrl = env.ADMIN_URL || "";
       const resetUrl = adminUrl ? `${adminUrl.replace(/\/$/, "")}/?reset=${token}` : "";
       await sendPasswordResetEmail(env, {
+        lang: languageOf(photographer.ui_language),
         to: photographer.email,
         studioName: photographer.studio_name,
         resetUrl,

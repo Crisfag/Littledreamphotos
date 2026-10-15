@@ -154,7 +154,7 @@ async function purgeGallery(env, gallery) {
 // Galeries expirées qui portent encore des fichiers HD ou d'impression.
 async function galleriesWithHeavyFiles(env, { expiredBefore, expiredAfter = 0 }) {
   const { results } = await env.DB.prepare(
-    `SELECT g.id, g.slug, g.title, g.expires_at, p.email AS photographer_email, p.studio_name,
+    `SELECT g.id, g.slug, g.title, g.expires_at, p.email AS photographer_email, p.studio_name, p.ui_language,
             (SELECT COUNT(*) FROM delivery_files d WHERE d.gallery_id = g.id) AS delivery_count,
             (SELECT COALESCE(SUM(d.size), 0) FROM delivery_files d WHERE d.gallery_id = g.id) AS delivery_bytes,
             (SELECT COUNT(*) FROM photos ph WHERE ph.gallery_id = g.id AND ph.has_original = 1) AS original_count
@@ -190,6 +190,7 @@ export async function runStoragePurge(env, options = {}) {
       .run();
     if (!inserted?.meta?.changes) continue;
     await sendStoragePurgeNotice(env, {
+      lang: g.ui_language,
       to: g.photographer_email,
       studioName: g.studio_name,
       galleryTitle: g.title,

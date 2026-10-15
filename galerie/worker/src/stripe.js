@@ -176,7 +176,7 @@ export function createSchoolCheckout(env, connectedAccountId, { lineItems, email
 // PLATEFORME : pas de transfert, pas de compte connecté. Le prix est créé à
 // la volée (price_data + recurring). La formule voyage dans les métadonnées
 // de la session et de l'abonnement, relues par le webhook.
-export function createSubscriptionCheckout(env, { photographerId, email, customerId, planKey, label, unitAmountCents, interval = "month", trialDays = 0, couponId = "", successUrl, cancelUrl }) {
+export function createSubscriptionCheckout(env, { photographerId, email, customerId, planKey, label, unitAmountCents, interval = "month", trialDays = 0, couponId = "", successUrl, cancelUrl, locale }) {
   // Essai et coupon voyagent dans les métadonnées de la session : le
   // webhook s'en sert pour marquer l'essai consommé et la place Fondateurs.
   const flags = { trial: trialDays > 0 ? "1" : "0", founder: couponId ? "1" : "0" };
@@ -202,6 +202,7 @@ export function createSubscriptionCheckout(env, { photographerId, email, custome
     ...(couponId ? { discounts: [{ coupon: couponId }] } : { allow_promotion_codes: true }),
     success_url: successUrl,
     cancel_url: cancelUrl,
+    ...(locale ? { locale } : {}),
   });
 }
 

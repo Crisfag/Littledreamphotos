@@ -438,6 +438,7 @@ async function handleValidate(request, env, ctx, slug) {
         const photographer = await photographerOf(env, gallery.photographer_id);
         if (!photographer?.email) return;
         await sendSelectionValidated(env, {
+          lang: photographer.ui_language,
           to: photographer.email,
           galleryTitle: gallery.title,
           clientName: gallery.client_name,
@@ -572,7 +573,7 @@ async function recentAlertAlreadySent(env, galleryId) {
 }
 
 async function photographerOf(env, photographerId) {
-  return env.DB.prepare("SELECT email, studio_name FROM photographers WHERE id = ?")
+  return env.DB.prepare("SELECT email, studio_name, ui_language FROM photographers WHERE id = ?")
     .bind(photographerId)
     .first();
 }
@@ -631,11 +632,12 @@ async function handleEvent(request, env, ctx, slug) {
         }
         console.log(`Envoi d'une alerte de capture à ${photographer.email} (galerie ${auth.gallery.id}, raison ${detail})`);
         await sendCaptureAlert(env, {
+          lang: photographer.ui_language,
           to: photographer.email,
           studioName: photographer.studio_name,
           galleryTitle: auth.gallery.title,
           clientName: auth.gallery.client_name,
-          photoLabel: photo ? `Photo n° ${photo.position + 1}` : "",
+          photoLabel: photo ? `${photographer.ui_language === "en" ? "Photo no." : "Photo n°"} ${photo.position + 1}` : "",
           reason: detail,
           ts: now(),
           adminUrl: env.ADMIN_URL || "",

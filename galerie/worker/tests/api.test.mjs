@@ -1755,6 +1755,30 @@ const ownerSub = await (await ownerClient("GET", "/api/admin/subscription")).jso
 check("le compte propriétaire a toutes les fonctionnalités, sans abonnement", ownerSub.owner === true && ownerSub.plan?.key === "pro");
 for (const n of [1, 2, 4, 5]) await free("DELETE", `/api/admin/galleries/${SLUG}-gratuit-${n}`);
 
+/* ---------- Espace photographe en anglais ---------- */
+
+const enSignup = await (await fetch(`${BASE}/api/auth/signup`, {
+  method: "POST", headers: { "content-type": "application/json" },
+  body: JSON.stringify({ email: `english-${RUN}@test.invalid`, password: "english-password-1234", studioName: "English Studio", language: "en" }),
+})).json();
+check("inscription depuis la page anglaise : espace en anglais d'emblée", enSignup.photographer?.uiLanguage === "en", JSON.stringify(enSignup.photographer));
+const en = adminClient(enSignup.token);
+check("sans langue à l'inscription : espace en français", signupData.photographer?.uiLanguage === "fr", signupData.photographer?.uiLanguage);
+const enShop = await (await en("GET", "/api/admin/shop")).json();
+const enShopText = JSON.stringify(enShop.catalogue || []);
+check("boutique d'un compte anglais : catalogue et pays en anglais",
+      /Photo prints/.test(enShopText) && !/Tirages photo/.test(enShopText) &&
+      JSON.stringify(enShop).includes("Germany"), (enShop.catalogue || []).map((c) => c.label).join(", "));
+const badUiLanguage = await en("POST", "/api/admin/account/language", { language: "de" });
+check("langue inconnue refusée", badUiLanguage.status === 400, badUiLanguage.status);
+const toFrench = await en("POST", "/api/admin/account/language", { language: "fr" });
+const meFrench = await (await en("GET", "/api/auth/me")).json();
+check("passage de l'espace en français, retenu au compte", toFrench.ok && meFrench.photographer?.uiLanguage === "fr", meFrench.photographer?.uiLanguage);
+const frShop = await (await en("GET", "/api/admin/shop")).json();
+check("…et le catalogue repasse en français", /Tirages photo/.test(JSON.stringify(frShop.catalogue || [])));
+await en("POST", "/api/admin/account/language", { language: "en" });
+check("retour à l'anglais", (await (await en("GET", "/api/auth/me")).json()).photographer?.uiLanguage === "en");
+
 /* ---------- Droits RGPD : consentement, export, suppression du compte ---------- */
 
 const rgpdEmail = `rgpd-${RUN}@test.invalid`;

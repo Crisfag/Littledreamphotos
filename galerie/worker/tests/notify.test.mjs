@@ -9,6 +9,7 @@ import {
   buildSchoolOrderConfirmationEmail,
   buildInvoiceEmail, buildDeliveryReadyEmail, buildPrintOrderConfirmationEmail, buildPrintOrderShippedEmail,
   buildPrintPromoEmail, buildCartReminderEmail, buildFavoritesPrintEmail,
+  buildPrintOrderPhotographerEmail, buildStoragePurgeNoticeEmail,
 } from "../src/notify.js";
 
 const checks = [];
@@ -190,6 +191,26 @@ check("tous les e-mails client existent en anglais, sans reste de français",
       enMails.map((m) => m.subject).join(" | "));
 check("sans langue précisée, les e-mails restent en français",
       buildDeliveryReadyEmail({ galleryTitle: "Smith", clientName: "", count: 2, galleryUrl: "" }).subject === "Vos photos « Smith » sont prêtes");
+
+/* ---------- Espace photographe en anglais ---------- */
+
+const enPhotographerMails = [
+  buildCaptureAlertEmail({ ...base, galleryTitle: "Smith wedding", lang: "en", photoLabel: "Photo no. 3" }),
+  buildPasswordResetEmail({ studioName: "Studio Test", resetUrl: "https://x/?reset=abc", ts: 1_700_000_000, lang: "en" }),
+  buildEmailChangeConfirmationEmail({ studioName: "Studio Test", confirmUrl: "https://x/?confirm-email=abc", ts: 1_700_000_000, lang: "en" }),
+  buildPhotographerReminderEmail({ galleryTitle: "Smith", clientName: "Anna", daysLeft: 2, selectedCount: 0, adminUrl: "https://x", lang: "en" }),
+  buildSelectionValidatedEmail({ galleryTitle: "Smith", clientName: "Anna", selectedCount: 12, dueExtraCount: 2, dueTotalCents: 3000, adminUrl: "https://x", lang: "en" }),
+  buildPrintOrderPhotographerEmail({ galleryTitle: "Smith", recipientName: "Anna", lines: enLines, totalCents: 4490, labStatus: "sent", labError: "", adminUrl: "https://x", lang: "en" }),
+  buildStoragePurgeNoticeEmail({ studioName: "Studio Test", galleryTitle: "Smith", deliveryCount: 10, originalCount: 40, sizeLabel: "1.2 GB", purgeAt: 1_790_000_000, adminUrl: "https://x", lang: "en" }),
+];
+check("e-mails du photographe en anglais : tous, sans reste de français",
+      enPhotographerMails.every((m) => m.subject && m.html.includes('lang="en"') && !/[àéèç«»]|Votre|Bonjour|galerie /.test(m.subject + m.text)),
+      enPhotographerMails.map((m) => m.subject).join(" | "));
+const enCapture = enPhotographerMails[0];
+check("alerte de capture en anglais : motif traduit, photo et lien",
+      /screenshot/i.test(enCapture.subject) && enCapture.text.includes("Print Screen key") && enCapture.text.includes("Photo no. 3") && enCapture.text.includes("https://holypixx-admin.onrender.com/"), enCapture.text);
+check("sans langue précisée, les e-mails du photographe restent en français",
+      /Bonjour|Réinitialis|mot de passe/i.test(buildPasswordResetEmail({ studioName: "Studio Test", resetUrl: "https://x", ts: 1_700_000_000 }).text));
 
 const failed = checks.filter((c) => !c.ok);
 console.log(failed.length ? `\n${failed.length} vérification(s) en échec.` : `\n${checks.length} vérifications, toutes passent.`);

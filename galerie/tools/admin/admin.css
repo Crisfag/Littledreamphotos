@@ -102,6 +102,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
 /* ---------- Connexion ---------- */
 
 .ad-login-shell {
+  position: relative;
   min-height: 100vh;
   display: grid;
   place-items: center;
@@ -1741,4 +1742,18 @@ main section > p, .ad-share > p { max-width: 75ch; }
 @media (max-width: 700px) {
   .ad-ref-grid { grid-template-columns: 1fr; }
   .ad-ref-list li { flex-direction: column; gap: .2rem; }
+}
+
+/* ---------- Langue : bouton English / Français, sections pas encore traduites ---------- */
+
+.ad-lang-switch {
+  position: absolute; top: 18px; right: 18px; padding: 7px 12px; border-radius: 8px;
+  border: 1px solid var(--line, #e6e6ee); background: #fff; color: var(--ink, #0b0b10);
+  font: inherit; font-size: .85rem; font-weight: 500; cursor: pointer;
+}
+.ad-lang-switch:hover { background: var(--mist, #f6f6f9); }
+.ad-lang-switch:focus-visible { outline: 2px solid var(--accent, #3b3bf6); outline-offset: 2px; }
+#ad-view[data-untranslated]::before {
+  content: attr(data-untranslated); display: block; margin-bottom: 18px; padding: 10px 14px; border-radius: 10px;
+  background: var(--accent-soft, #ededff); color: var(--accent-deep, #2626d4); font-size: .9rem;
 }

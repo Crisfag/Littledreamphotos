@@ -15,32 +15,33 @@
 <body>
   <!-- ============ Connexion ============ -->
   <main class="ad-login-shell" id="ad-login" hidden>
+    <button type="button" class="ad-lang-switch" id="ad-lang-switch" lang="en">English</button>
     <section class="ad-login-card" id="ad-login-card">
       <div class="ad-brand">
         <span class="ad-brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M10 8v16M22 8v16M10 16h12"/></svg></span>
         <div>
           <p class="ad-brand-name">Holypixx</p>
-          <p class="ad-brand-sub">Galeries protégées — administration</p>
+          <p class="ad-brand-sub" data-en="Protected galleries — dashboard">Galeries protégées — administration</p>
         </div>
       </div>
       <form id="ad-login-form" autocomplete="on">
         <label class="ad-field">
-          <span>E-mail</span>
+          <span data-en="Email">E-mail</span>
           <input type="email" name="email" required autocomplete="username" />
         </label>
         <label class="ad-field">
-          <span>Mot de passe</span>
+          <span data-en="Password">Mot de passe</span>
           <input type="password" name="password" required autocomplete="current-password" />
         </label>
         <p class="ad-error" id="ad-login-error" hidden></p>
-        <button type="submit" class="ad-btn ad-btn-primary" id="ad-login-submit">Se connecter</button>
+        <button type="submit" class="ad-btn ad-btn-primary" id="ad-login-submit" data-en="Sign in">Se connecter</button>
       </form>
       <p class="ad-hint">
-        <button type="button" class="ad-link-btn" id="ad-show-forgot">Mot de passe oublié ?</button>
+        <button type="button" class="ad-link-btn" id="ad-show-forgot" data-en="Forgot your password?">Mot de passe oublié ?</button>
       </p>
       <p class="ad-hint">
-        Pas encore de compte ?
-        <button type="button" class="ad-link-btn" id="ad-show-signup">Créer un compte</button>
+        <span data-en="No account yet?">Pas encore de compte ?</span>
+        <button type="button" class="ad-link-btn" id="ad-show-signup" data-en="Create an account">Créer un compte</button>
       </p>
     </section>
 
@@ -49,19 +50,19 @@
         <span class="ad-brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M10 8v16M22 8v16M10 16h12"/></svg></span>
         <div>
           <p class="ad-brand-name">Holypixx</p>
-          <p class="ad-brand-sub">Réinitialiser votre mot de passe</p>
+          <p class="ad-brand-sub" data-en="Reset your password">Réinitialiser votre mot de passe</p>
         </div>
       </div>
       <form id="ad-forgot-form" autocomplete="on">
         <label class="ad-field">
-          <span>E-mail de votre compte</span>
+          <span data-en="Your account email">E-mail de votre compte</span>
           <input type="email" name="email" required autocomplete="username" />
         </label>
         <p class="ad-hint" id="ad-forgot-message" hidden></p>
-        <button type="submit" class="ad-btn ad-btn-primary" id="ad-forgot-submit">Recevoir un lien</button>
+        <button type="submit" class="ad-btn ad-btn-primary" id="ad-forgot-submit" data-en="Send me a link">Recevoir un lien</button>
       </form>
       <p class="ad-hint">
-        <button type="button" class="ad-link-btn" id="ad-forgot-back">&larr; Retour à la connexion</button>
+        <button type="button" class="ad-link-btn" id="ad-forgot-back" data-en="← Back to sign in">&larr; Retour à la connexion</button>
       </p>
     </section>
 
@@ -70,16 +71,16 @@
         <span class="ad-brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M10 8v16M22 8v16M10 16h12"/></svg></span>
         <div>
           <p class="ad-brand-name">Holypixx</p>
-          <p class="ad-brand-sub">Choisir un nouveau mot de passe</p>
+          <p class="ad-brand-sub" data-en="Choose a new password">Choisir un nouveau mot de passe</p>
         </div>
       </div>
       <form id="ad-reset-form" autocomplete="on">
         <label class="ad-field">
-          <span>Nouveau mot de passe <em>(10 caractères minimum)</em></span>
+          <span data-en-html="New password &lt;em&gt;(at least 10 characters)&lt;/em&gt;">Nouveau mot de passe <em>(10 caractères minimum)</em></span>
           <input type="password" name="password" required minlength="10" autocomplete="new-password" />
         </label>
         <p class="ad-error" id="ad-reset-error" hidden></p>
-        <button type="submit" class="ad-btn ad-btn-primary" id="ad-reset-submit">Valider le nouveau mot de passe</button>
+        <button type="submit" class="ad-btn ad-btn-primary" id="ad-reset-submit" data-en="Save the new password">Valider le nouveau mot de passe</button>
       </form>
     </section>
 
@@ -88,44 +89,44 @@
         <span class="ad-brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M10 8v16M22 8v16M10 16h12"/></svg></span>
         <div>
           <p class="ad-brand-name">Holypixx</p>
-          <p class="ad-brand-sub">Créer un compte photographe</p>
+          <p class="ad-brand-sub" data-en="Create a photographer account">Créer un compte photographe</p>
         </div>
       </div>
       <p class="ad-banner ad-signup-referral" id="ad-signup-referral" hidden></p>
       <form id="ad-signup-form" autocomplete="on">
         <div class="ad-field-row">
           <label class="ad-field">
-            <span>Prénom</span>
-            <input type="text" name="firstName" autocomplete="given-name" placeholder="Christine" />
+            <span data-en="First name">Prénom</span>
+            <input type="text" name="firstName" autocomplete="given-name" placeholder="Christine" data-en-placeholder="Emma" />
           </label>
           <label class="ad-field">
-            <span>Nom</span>
-            <input type="text" name="lastName" autocomplete="family-name" placeholder="Fagnant" />
+            <span data-en="Last name">Nom</span>
+            <input type="text" name="lastName" autocomplete="family-name" placeholder="Fagnant" data-en-placeholder="Collins" />
           </label>
         </div>
         <label class="ad-field">
-          <span>Nom de votre studio</span>
-          <input type="text" name="studioName" autocomplete="organization" placeholder="Mon Studio" />
+          <span data-en="Your studio name">Nom de votre studio</span>
+          <input type="text" name="studioName" autocomplete="organization" placeholder="Mon Studio" data-en-placeholder="My Studio" />
         </label>
         <label class="ad-field">
-          <span>E-mail</span>
+          <span data-en="Email">E-mail</span>
           <input type="email" name="email" required autocomplete="username" />
         </label>
         <label class="ad-field">
-          <span>Mot de passe <em>(10 caractères minimum)</em></span>
+          <span data-en-html="Password &lt;em&gt;(at least 10 characters)&lt;/em&gt;">Mot de passe <em>(10 caractères minimum)</em></span>
           <input type="password" name="password" required minlength="10" autocomplete="new-password" />
         </label>
         <label class="ad-terms">
           <input type="checkbox" name="acceptTerms" required />
-          <span>J'accepte les <a href="https://www.holypixx.com/conditions.html" target="_blank" rel="noopener">conditions d'utilisation</a>
+          <span data-en-html="I accept the &lt;a href=&quot;https://www.holypixx.com/conditions.html&quot; target=&quot;_blank&quot; rel=&quot;noopener&quot;&gt;terms of service&lt;/a&gt; and the &lt;a href=&quot;https://www.holypixx.com/confidentialite.html&quot; target=&quot;_blank&quot; rel=&quot;noopener&quot;&gt;privacy policy&lt;/a&gt; (currently in French).">J'accepte les <a href="https://www.holypixx.com/conditions.html" target="_blank" rel="noopener">conditions d'utilisation</a>
           et la <a href="https://www.holypixx.com/confidentialite.html" target="_blank" rel="noopener">politique de confidentialité</a>.</span>
         </label>
         <p class="ad-error" id="ad-signup-error" hidden></p>
-        <button type="submit" class="ad-btn ad-btn-primary" id="ad-signup-submit">Créer mon compte</button>
+        <button type="submit" class="ad-btn ad-btn-primary" id="ad-signup-submit" data-en="Create my account">Créer mon compte</button>
       </form>
       <p class="ad-hint">
-        Déjà un compte ?
-        <button type="button" class="ad-link-btn" id="ad-show-login">Se connecter</button>
+        <span data-en="Already have an account?">Déjà un compte ?</span>
+        <button type="button" class="ad-link-btn" id="ad-show-login" data-en="Sign in">Se connecter</button>
       </p>
     </section>
   </main>
@@ -136,68 +137,68 @@
         <span class="ad-brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M10 8v16M22 8v16M10 16h12"/></svg></span>
         <div>
           <p class="ad-brand-name">Holypixx</p>
-          <p class="ad-brand-sub" id="ad-current-account">Galeries protégées — administration</p>
+          <p class="ad-brand-sub" id="ad-current-account" data-en="Protected galleries — dashboard">Galeries protégées — administration</p>
         </div>
       </div>
-      <nav class="ad-tabs" id="ad-tabs" aria-label="Sections du tableau de bord">
-        <p class="ad-nav-group">Activité</p>
+      <nav class="ad-tabs" id="ad-tabs" aria-label="Sections du tableau de bord" data-en-label="Dashboard sections">
+        <p class="ad-nav-group" data-en="Activity">Activité</p>
           <button type="button" class="ad-tab" id="ad-tab-galleries" data-tab="galleries">
             <span class="ad-tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/></svg></span>
-            <span class="ad-tab-text"><span class="ad-tab-label">Galeries</span><span class="ad-tab-hint">Séances et clients</span></span>
+            <span class="ad-tab-text"><span class="ad-tab-label" data-en-html="Galleries">Galeries</span><span class="ad-tab-hint" data-en="Sessions and clients">Séances et clients</span></span>
           </button>
           <button type="button" class="ad-tab" id="ad-tab-clients" data-tab="clients">
             <span class="ad-tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
-            <span class="ad-tab-text"><span class="ad-tab-label">Clients</span><span class="ad-tab-hint">Fiches et relances</span></span>
+            <span class="ad-tab-text"><span class="ad-tab-label" data-en-html="Clients">Clients</span><span class="ad-tab-hint" data-en="Records and reminders">Fiches et relances</span></span>
           </button>
           <button type="button" class="ad-tab" id="ad-tab-booking" data-tab="booking">
             <span class="ad-tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="16.5" rx="2"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/><path d="m9 15 2 2 4-4"/></svg></span>
-            <span class="ad-tab-text"><span class="ad-tab-label">Réservations</span><span class="ad-tab-hint">Séances et créneaux</span></span>
+            <span class="ad-tab-text"><span class="ad-tab-label" data-en-html="Bookings">Réservations</span><span class="ad-tab-hint" data-en="Sessions and slots">Séances et créneaux</span></span>
           </button>
           <button type="button" class="ad-tab" id="ad-tab-contracts" data-tab="contracts">
             <span class="ad-tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/><path d="M8 13h8M8 17h3"/><path d="m14 18 1.5 1.5L19 16"/></svg></span>
-            <span class="ad-tab-text"><span class="ad-tab-label">Devis &amp; contrats</span><span class="ad-tab-hint">Signés en ligne</span></span>
+            <span class="ad-tab-text"><span class="ad-tab-label" data-en-html="Quotes &amp; contracts">Devis &amp; contrats</span><span class="ad-tab-hint" data-en="Signed online">Signés en ligne</span></span>
           </button>
           <button type="button" class="ad-tab" id="ad-tab-sales" data-tab="sales">
             <span class="ad-tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 6-6"/><path d="M16 8h4v4"/></svg></span>
-            <span class="ad-tab-text"><span class="ad-tab-label">Ventes</span><span class="ad-tab-hint">Chiffres et marges</span></span>
+            <span class="ad-tab-text"><span class="ad-tab-label" data-en-html="Sales">Ventes</span><span class="ad-tab-hint" data-en="Revenue and margins">Chiffres et marges</span></span>
           </button>
           <button type="button" class="ad-tab" id="ad-tab-billing" data-tab="billing">
             <span class="ad-tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h14v18l-3-2-2 2-2-2-2 2-2-2-3 2z"/><path d="M9 8h6M9 12h6M9 16h3"/></svg></span>
-            <span class="ad-tab-text"><span class="ad-tab-label">Facturation</span><span class="ad-tab-hint">Paiements et factures</span></span>
+            <span class="ad-tab-text"><span class="ad-tab-label" data-en-html="Billing">Facturation</span><span class="ad-tab-hint" data-en="Payments and invoices">Paiements et factures</span></span>
           </button>
         <button type="button" class="ad-tab" id="ad-tab-school" data-tab="school" hidden>
             <span class="ad-tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m22 9-10-5L2 9l10 5 10-5z"/><path d="M6 11.5V16c0 1.5 2.7 3 6 3s6-1.5 6-3v-4.5"/><path d="M22 9v6"/></svg></span>
-            <span class="ad-tab-text"><span class="ad-tab-label">Écoles &amp; clubs</span><span class="ad-tab-hint">Photo de groupe</span></span>
+            <span class="ad-tab-text"><span class="ad-tab-label" data-en-html="Schools &amp; clubs">Écoles &amp; clubs</span><span class="ad-tab-hint" data-en="Group photos">Photo de groupe</span></span>
           </button>
-        <p class="ad-nav-group">Vitrine</p>
+        <p class="ad-nav-group" data-en="Showcase">Vitrine</p>
           <button type="button" class="ad-tab" id="ad-tab-shop" data-tab="shop">
             <span class="ad-tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg></span>
-            <span class="ad-tab-text"><span class="ad-tab-label">Boutique</span><span class="ad-tab-hint">Tirages et prix</span></span>
+            <span class="ad-tab-text"><span class="ad-tab-label" data-en-html="Shop">Boutique</span><span class="ad-tab-hint" data-en="Prints and prices">Tirages et prix</span></span>
           </button>
           <button type="button" class="ad-tab" id="ad-tab-portfolio" data-tab="portfolio">
             <span class="ad-tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18a14 14 0 0 1 0-18z"/></svg></span>
-            <span class="ad-tab-text"><span class="ad-tab-label">Portfolio</span><span class="ad-tab-hint">Votre mini-site</span></span>
+            <span class="ad-tab-text"><span class="ad-tab-label" data-en-html="Portfolio">Portfolio</span><span class="ad-tab-hint" data-en="Your mini-site">Votre mini-site</span></span>
           </button>
-        <p class="ad-nav-group">Compte</p>
+        <p class="ad-nav-group" data-en="Account">Compte</p>
           <button type="button" class="ad-tab" id="ad-tab-subscription" data-tab="subscription">
             <span class="ad-tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/><path d="M6 15h4"/></svg></span>
-            <span class="ad-tab-text"><span class="ad-tab-label">Abonnement</span><span class="ad-tab-hint">Votre formule</span></span>
+            <span class="ad-tab-text"><span class="ad-tab-label" data-en-html="Subscription">Abonnement</span><span class="ad-tab-hint" data-en="Your plan">Votre formule</span></span>
           </button>
           <button type="button" class="ad-tab" id="ad-tab-settings" data-tab="settings">
             <span class="ad-tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg></span>
-            <span class="ad-tab-text"><span class="ad-tab-label">Paramètres</span><span class="ad-tab-hint">Studio et sécurité</span></span>
+            <span class="ad-tab-text"><span class="ad-tab-label" data-en-html="Settings">Paramètres</span><span class="ad-tab-hint" data-en="Studio and security">Studio et sécurité</span></span>
           </button>
           <button type="button" class="ad-tab" id="ad-tab-owner" data-tab="owner" hidden>
             <span class="ad-tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/><path d="m9 12 2 2 4-4"/></svg></span>
-            <span class="ad-tab-text"><span class="ad-tab-label">Admin</span><span class="ad-tab-hint">Toute la plateforme</span></span>
+            <span class="ad-tab-text"><span class="ad-tab-label" data-en-html="Admin">Admin</span><span class="ad-tab-hint" data-en="The whole platform">Toute la plateforme</span></span>
           </button>
       </nav>
       <div class="ad-sidebar-actions">
-        <button type="button" class="ad-side-action" id="ad-check-photo" title="Retrouver à qui une photo a été remise">
-          <span class="ad-side-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></span><span>Vérifier une photo</span>
+        <button type="button" class="ad-side-action" id="ad-check-photo" title="Retrouver à qui une photo a été remise" data-en-title="Find out who a photo was given to">
+          <span class="ad-side-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></span><span data-en="Check a photo">Vérifier une photo</span>
         </button>
         <button type="button" class="ad-side-action" id="ad-logout">
-          <span class="ad-side-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg></span><span>Se déconnecter</span>
+          <span class="ad-side-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg></span><span data-en="Sign out">Se déconnecter</span>
         </button>
       </div>
     </aside>
@@ -210,51 +211,51 @@
   <!-- ============ Modale : nouvelle galerie ============ -->
   <div class="ad-modal-backdrop" id="ad-create-modal" hidden>
     <div class="ad-modal" role="dialog" aria-modal="true" aria-labelledby="ad-create-title">
-      <h2 id="ad-create-title">Nouvelle galerie</h2>
+      <h2 id="ad-create-title" data-en="New gallery">Nouvelle galerie</h2>
       <form id="ad-create-form">
         <label class="ad-field">
-          <span>Titre <em>(affiché au client)</em></span>
-          <input type="text" name="title" required placeholder="Séance famille Dupont" />
+          <span data-en-html="Title &lt;em&gt;(shown to your client)&lt;/em&gt;">Titre <em>(affiché au client)</em></span>
+          <input type="text" name="title" required placeholder="Séance famille Dupont" data-en-placeholder="Smith family session" />
         </label>
         <label class="ad-field">
-          <span>Client</span>
-          <input type="text" name="clientName" placeholder="Famille Dupont" />
+          <span data-en="Client">Client</span>
+          <input type="text" name="clientName" placeholder="Famille Dupont" data-en-placeholder="The Smiths" />
         </label>
         <label class="ad-field">
-          <span>E-mail du client <em>(optionnel — pour lui envoyer sa facture)</em></span>
-          <input type="email" name="clientEmail" placeholder="famille.dupont@example.com" />
+          <span data-en-html="Client email &lt;em&gt;(optional — to send their invoice)&lt;/em&gt;">E-mail du client <em>(optionnel — pour lui envoyer sa facture)</em></span>
+          <input type="email" name="clientEmail" placeholder="famille.dupont@example.com" data-en-placeholder="smith.family@example.com" />
         </label>
         <label class="ad-field">
-          <span>Identifiant dans l'adresse <em>(généré depuis le titre si vide)</em></span>
-          <input type="text" name="slug" placeholder="dupont-mai" pattern="[a-z0-9][a-z0-9-]*" />
+          <span data-en-html="Name in the link &lt;em&gt;(generated from the title if empty)&lt;/em&gt;">Identifiant dans l'adresse <em>(généré depuis le titre si vide)</em></span>
+          <input type="text" name="slug" placeholder="dupont-mai" data-en-placeholder="smith-may" pattern="[a-z0-9][a-z0-9-]*" />
         </label>
         <div class="ad-field-row">
           <label class="ad-field">
-            <span>Mot de passe <em>(généré si vide)</em></span>
-            <input type="text" name="password" placeholder="généré automatiquement" autocomplete="off" />
+            <span data-en-html="Password &lt;em&gt;(generated if empty)&lt;/em&gt;">Mot de passe <em>(généré si vide)</em></span>
+            <input type="text" name="password" placeholder="généré automatiquement" data-en-placeholder="generated automatically" autocomplete="off" />
           </label>
           <label class="ad-field">
-            <span>Expire le <em>(optionnel)</em></span>
+            <span data-en-html="Expires on &lt;em&gt;(optional)&lt;/em&gt;">Expire le <em>(optionnel)</em></span>
             <input type="date" name="expires" />
           </label>
         </div>
         <div class="ad-field-row">
           <label class="ad-field">
-            <span>Photos incluses dans le forfait <em>(optionnel)</em></span>
-            <input type="number" name="includedPhotos" min="0" step="1" placeholder="ex. 20" />
+            <span data-en-html="Photos included in the package &lt;em&gt;(optional)&lt;/em&gt;">Photos incluses dans le forfait <em>(optionnel)</em></span>
+            <input type="number" name="includedPhotos" min="0" step="1" placeholder="ex. 20" data-en-placeholder="e.g. 20" />
           </label>
           <label class="ad-field">
-            <span>Prix du supplément <em>(par photo, en €)</em></span>
-            <input type="number" name="extraPhotoPrice" min="0" step="0.01" placeholder="ex. 15" />
+            <span data-en-html="Extra photo price &lt;em&gt;(per photo, in €)&lt;/em&gt;">Prix du supplément <em>(par photo, en €)</em></span>
+            <input type="number" name="extraPhotoPrice" min="0" step="0.01" placeholder="ex. 15" data-en-placeholder="e.g. 15" />
           </label>
         </div>
         <div class="ad-field-row">
           <label class="ad-field">
-            <span>Style de la galerie <em>(modifiable ensuite, avec aperçu)</em></span>
+            <span data-en-html="Gallery style &lt;em&gt;(you can change it later, with a preview)&lt;/em&gt;">Style de la galerie <em>(modifiable ensuite, avec aperçu)</em></span>
             <select name="theme"></select>
           </label>
           <label class="ad-field">
-            <span>Langue pour votre client</span>
+            <span data-en="Language for your client">Langue pour votre client</span>
             <select name="language">
               <option value="fr" selected>Français</option>
               <option value="en">English</option>
@@ -263,8 +264,8 @@
         </div>
         <p class="ad-error" id="ad-create-error" hidden></p>
         <div class="ad-modal-actions">
-          <button type="button" class="ad-btn" data-close-modal>Annuler</button>
-          <button type="submit" class="ad-btn ad-btn-primary" id="ad-create-submit">Créer la galerie</button>
+          <button type="button" class="ad-btn" data-close-modal data-en="Cancel">Annuler</button>
+          <button type="submit" class="ad-btn ad-btn-primary" id="ad-create-submit" data-en="Create the gallery">Créer la galerie</button>
         </div>
       </form>
     </div>
@@ -273,31 +274,31 @@
   <!-- ============ Modale : galerie créée, informations à transmettre ============ -->
   <div class="ad-modal-backdrop" id="ad-created-modal" hidden>
     <div class="ad-modal" role="dialog" aria-modal="true" aria-labelledby="ad-created-title">
-      <h2 id="ad-created-title">Galerie créée</h2>
-      <p class="ad-lede">
+      <h2 id="ad-created-title" data-en="Gallery created">Galerie créée</h2>
+      <p class="ad-lede" data-en="Send these two details to your client — the password is only shown once, here.">
         Transmettez ces deux informations à votre client — le mot de passe
         n'est affiché qu'une seule fois, ici.
       </p>
       <label class="ad-field">
-        <span>Lien</span>
+        <span data-en="Link">Lien</span>
         <div class="ad-copy-row">
           <input type="text" id="ad-created-link" readonly />
-          <button type="button" class="ad-btn" data-copy="ad-created-link">Copier</button>
+          <button type="button" class="ad-btn" data-copy="ad-created-link" data-en="Copy">Copier</button>
         </div>
       </label>
-      <p class="ad-hint" id="ad-created-hint">
+      <p class="ad-hint" id="ad-created-hint" data-en="GALERIE_SITE isn't configured: add the address of your galerie.html page in front of this link before sending it.">
         GALERIE_SITE n'est pas configuré : complétez l'adresse de votre page
         galerie.html devant ce lien avant de le transmettre.
       </p>
       <label class="ad-field">
-        <span>Mot de passe</span>
+        <span data-en="Password">Mot de passe</span>
         <div class="ad-copy-row">
           <input type="text" id="ad-created-password" readonly />
-          <button type="button" class="ad-btn" data-copy="ad-created-password">Copier</button>
+          <button type="button" class="ad-btn" data-copy="ad-created-password" data-en="Copy">Copier</button>
         </div>
       </label>
       <div class="ad-modal-actions">
-        <button type="button" class="ad-btn ad-btn-primary" data-close-modal>C'est noté</button>
+        <button type="button" class="ad-btn ad-btn-primary" data-close-modal data-en="Got it">C'est noté</button>
       </div>
     </div>
   </div>
@@ -305,20 +306,20 @@
   <!-- ============ Modale : nouveau mot de passe généré ============ -->
   <div class="ad-modal-backdrop" id="ad-password-modal" hidden>
     <div class="ad-modal" role="dialog" aria-modal="true" aria-labelledby="ad-password-title">
-      <h2 id="ad-password-title">Nouveau mot de passe</h2>
-      <p class="ad-lede">
+      <h2 id="ad-password-title" data-en="New password">Nouveau mot de passe</h2>
+      <p class="ad-lede" data-en="The old one no longer works. Send this one to your client — it is only shown once, here.">
         L'ancien ne fonctionne plus. Transmettez celui-ci à votre client — il
         n'est affiché qu'une seule fois, ici.
       </p>
       <label class="ad-field">
-        <span>Mot de passe</span>
+        <span data-en="Password">Mot de passe</span>
         <div class="ad-copy-row">
           <input type="text" id="ad-password-value" readonly />
-          <button type="button" class="ad-btn" data-copy="ad-password-value">Copier</button>
+          <button type="button" class="ad-btn" data-copy="ad-password-value" data-en="Copy">Copier</button>
         </div>
       </label>
       <div class="ad-modal-actions">
-        <button type="button" class="ad-btn ad-btn-primary" data-close-modal>C'est noté</button>
+        <button type="button" class="ad-btn ad-btn-primary" data-close-modal data-en="Got it">C'est noté</button>
       </div>
     </div>
   </div>
@@ -329,7 +330,7 @@
     <div class="ad-modal ad-modal-wide" role="dialog" aria-modal="true" aria-labelledby="ad-photo-modal-title">
       <div class="ad-section-header">
         <h2 id="ad-photo-modal-title">Photo</h2>
-        <button type="button" class="ad-btn" id="ad-photo-modal-close" data-close-modal>Fermer</button>
+        <button type="button" class="ad-btn" id="ad-photo-modal-close" data-close-modal data-en="Close">Fermer</button>
       </div>
       <div id="ad-photo-modal-body"></div>
     </div>
@@ -337,11 +338,11 @@
 
   <div class="ad-modal-backdrop" id="ad-confirm-modal" hidden>
     <div class="ad-modal ad-modal-narrow" role="alertdialog" aria-modal="true" aria-labelledby="ad-confirm-title">
-      <h2 id="ad-confirm-title">Confirmer</h2>
+      <h2 id="ad-confirm-title" data-en="Confirm">Confirmer</h2>
       <p class="ad-lede" id="ad-confirm-text"></p>
       <div class="ad-modal-actions">
-        <button type="button" class="ad-btn" data-close-modal>Annuler</button>
-        <button type="button" class="ad-btn ad-btn-danger" id="ad-confirm-ok">Confirmer</button>
+        <button type="button" class="ad-btn" data-close-modal data-en="Cancel">Annuler</button>
+        <button type="button" class="ad-btn ad-btn-danger" id="ad-confirm-ok" data-en="Confirm">Confirmer</button>
       </div>
     </div>
   </div>

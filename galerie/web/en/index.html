@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Protected client photo galleries for photographers | Holypixx</title>
-  <meta name="description" content="Client galleries that can't be downloaded, print sales shipped worldwide, online booking and signed contracts. Holypixx is coming in English: join the waitlist." />
+  <meta name="description" content="Client galleries that can't be downloaded, print sales shipped worldwide, online booking and signed contracts. Holypixx is in English: start free, up to 3 galleries." />
   <link rel="canonical" href="https://www.holypixx.com/en/" />
   <link rel="alternate" hreflang="en" href="https://www.holypixx.com/en/" />
   <link rel="alternate" hreflang="fr" href="https://www.holypixx.com/" />
@@ -45,10 +45,10 @@
 
   <script>
     window.HOME_CONFIG = {
-      // Interface photographe (en français pour l'instant) : lien « Sign in »
-      // et inscription directe pour qui lit le français.
+      // Espace photographe : inscription en anglais (?lang=en), réservation,
+      // contrats et fiches clients encore en français.
       adminUrl: "https://holypixx-admin.onrender.com/",
-      // Liste d'attente (POST /api/public/waitlist).
+      // Liste d'attente « booking & contracts in English » (POST /api/public/waitlist).
       api: "https://galerie-protegee.littledreamphotos-be.workers.dev",
     };
   </script>
@@ -94,7 +94,7 @@
     "@type": "FAQPage",
     "mainEntity": [
       { "@type": "Question", "name": "Is Holypixx available in English?",
-        "acceptedAnswer": { "@type": "Answer", "text": "Your clients' side already is: galleries, emails, print shop, payment pages and invoices are in English. The photographer workspace is in French for now. Join the waitlist and we'll email you once, when the English version opens." } },
+        "acceptedAnswer": { "@type": "Answer", "text": "Yes. Your clients' side is fully in English: galleries, emails, print shop, payment pages and invoices. Your dashboard is in English too for everything you need to run galleries: creating them, styles, proofing, HD delivery, print shop, billing and settings. Online booking, contracts and client records are still in French while we translate them; join the list and we'll email you once, when they open in English." } },
       { "@type": "Question", "name": "Can a client download the photos?",
         "acceptedAnswer": { "@type": "Answer", "text": "Not while they choose: photos are cut into tiles and reassembled on screen, so there is no file to download. Once the session is done, you upload the final files and they download them in high resolution, as a ZIP or one by one." } },
       { "@type": "Question", "name": "Can you stop a screenshot?",
@@ -162,11 +162,13 @@
         <a href="#selling">Selling</a>
         <a href="#pricing">Pricing</a>
         <a href="#faq">FAQ</a>
+        <a class="nav-login-mobile" href="https://holypixx-admin.onrender.com/?lang=en" rel="nofollow">Sign in</a>
         <a class="nav-login-mobile" href="/" hreflang="fr" lang="fr">Version française</a>
       </nav>
       <div class="nav-actions">
         <a class="nav-lang" href="/" hreflang="fr" lang="fr" title="Version française">FR</a>
-        <a class="btn btn-primary btn-sm" href="#waitlist">Join the waitlist</a>
+        <a class="nav-login" href="https://holypixx-admin.onrender.com/?lang=en" rel="nofollow">Sign in</a>
+        <a class="btn btn-primary btn-sm" data-signup href="https://holypixx-admin.onrender.com/#/inscription?lang=en" rel="nofollow">Start free</a>
         <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="nav-links" aria-label="Open menu">
           <svg class="ico"><use href="#i-menu"/></svg>
         </button>
@@ -187,10 +189,10 @@
             prints&nbsp;— you keep your images, your name and your margin.
           </p>
           <div class="hero-actions">
-            <a class="btn btn-primary btn-lg" href="#waitlist">Join the English waitlist</a>
+            <a class="btn btn-primary btn-lg" data-signup href="https://holypixx-admin.onrender.com/#/inscription?lang=en" rel="nofollow">Start free</a>
             <a class="btn btn-quiet btn-lg" href="#pricing">See pricing</a>
           </div>
-          <p class="hero-assure">Your clients' side already speaks English · free plan up to 3 galleries · no account for your clients</p>
+          <p class="hero-assure">Free plan up to 3 galleries · your dashboard and your clients' side in English · no account for your clients</p>
         </div>
       </div>
 
@@ -394,7 +396,7 @@
           </div>
         </div>
 
-        <a class="chapter-cta" href="#waitlist">Get early access<svg class="ico"><use href="#i-arrow"/></svg></a>
+        <a class="chapter-cta" data-signup href="https://holypixx-admin.onrender.com/#/inscription?lang=en" rel="nofollow">Protect your first gallery<svg class="ico"><use href="#i-arrow"/></svg></a>
       </div>
     </section>
 
@@ -676,7 +678,7 @@
             <p class="plan-for">To try it with your first sessions.</p>
             <p class="plan-price"><span class="plan-amount">€0</span><span class="plan-per">/ month</span></p>
             <p class="plan-alt">Free, with no time limit</p>
-            <a class="btn btn-outline" href="#waitlist">Join the waitlist</a>
+            <a class="btn btn-outline" data-signup href="https://holypixx-admin.onrender.com/#/inscription?lang=en" rel="nofollow">Start free</a>
             <ul class="ticks">
               <li>3 active galleries, 5 GB</li>
               <li>Full protection: tiles, watermark, fingerprint, alerts</li>
@@ -692,7 +694,7 @@
             <p class="plan-for">To sell your extras and your prints.</p>
             <p class="plan-price" data-plan="essentiel"><span class="plan-amount">€15</span><span class="plan-per">/ month</span></p>
             <p class="plan-alt" data-alt="essentiel">or €150 a year</p>
-            <a class="btn btn-outline" href="#waitlist">Join the waitlist</a>
+            <a class="btn btn-outline" data-signup href="https://holypixx-admin.onrender.com/#/inscription?lang=en" rel="nofollow">Start with Essentials</a>
             <ul class="ticks">
               <li>25 active galleries, 200 GB</li>
               <li>Everything in Free</li>
@@ -707,12 +709,12 @@
             <p class="plan-for">To run your whole studio, in your name.</p>
             <p class="plan-price" data-plan="pro"><span class="plan-amount">€29</span><span class="plan-per">/ month</span></p>
             <p class="plan-alt" data-alt="pro">or €290 a year</p>
-            <a class="btn btn-primary" href="#waitlist">Join the waitlist</a>
+            <a class="btn btn-primary" data-signup href="https://holypixx-admin.onrender.com/#/inscription?lang=en" rel="nofollow">Start with Pro</a>
             <ul class="ticks">
               <li>Unlimited galleries, 1 TB</li>
               <li>Everything in Essentials</li>
-              <li>Online booking with deposit, illustrated sessions</li>
-              <li>Quotes and contracts signed online</li>
+              <li>Online booking with deposit, illustrated sessions <em class="plan-soon">(in French for now)</em></li>
+              <li>Quotes and contracts signed online <em class="plan-soon">(in French for now)</em></li>
               <li>Sales campaigns: promotions, cart reminders</li>
               <li>Your own address: <span class="nowrap">your-studio.holypixx.com</span></li>
               <li>Portfolio on your address</li>
@@ -728,7 +730,7 @@
       <div class="wrap faq-wrap">
         <h2>Good questions, straight answers.</h2>
         <div class="faq">
-          <details><summary>Is Holypixx available in English?</summary><p>Your clients' side already is: galleries, emails, print shop, payment pages and invoices are in English. The photographer workspace is in French for now. <a class="inline-link" href="#waitlist">Join the waitlist</a> and we'll email you once, when the English version opens. Comfortable reading French? You can <a class="inline-link" data-signup href="https://holypixx-admin.onrender.com/#/inscription" rel="nofollow">start today</a>.</p></details>
+          <details><summary>Is Holypixx available in English?</summary><p>Yes. Your clients' side is fully in English: galleries, emails, print shop, payment pages and invoices. Your dashboard is in English too for everything you need to run galleries: creating them, styles, proofing, HD delivery, print shop, billing and settings. Online booking, contracts and client records are still in French while we translate them: <a class="inline-link" href="#waitlist">join the list</a> and we'll email you once, when they open in English.</p></details>
           <details><summary>Can a client download the photos?</summary><p>Not while they choose: photos are cut into tiles and reassembled on screen, so there is no file to download. Once the session is done, you upload the final files and they download them in high resolution, as a ZIP or one by one.</p></details>
           <details><summary>Can you stop a screenshot?</summary><p>No website in the world can. Holypixx makes a screenshot useless (low resolution, dense watermark), emails you when one is attempted, and finds the source gallery of an image from its invisible fingerprint.</p></details>
           <details><summary>Do my clients need an account?</summary><p>No. They get a link and a password, nothing else.</p></details>
@@ -744,8 +746,11 @@
     <!-- ============ Waitlist ============ -->
     <section class="closing" id="waitlist">
       <div class="wrap closing-inner">
-        <h2>Be among the first to use<br />Holypixx in English.</h2>
-        <p>The photographer workspace is being translated. Leave your email: we'll write once, the day it opens.</p>
+        <h2>Your first protected gallery,<br />in English, today.</h2>
+        <p>Free up to 3 galleries, no card needed. Your dashboard, your clients' galleries and their emails are in English.</p>
+        <a class="btn btn-primary btn-lg" data-signup href="https://holypixx-admin.onrender.com/#/inscription?lang=en" rel="nofollow">Start free</a>
+        <h3 class="wl-title">Waiting for booking and contracts in English?</h3>
+        <p class="wl-lede">They're being translated. Leave your email: we'll write once, the day they open.</p>
         <form class="wl-form" id="waitlist-form" novalidate>
           <label class="wl-field wl-email"><span>Email</span><input type="email" name="email" autocomplete="email" required maxlength="200" placeholder="you@yourstudio.com" /></label>
           <label class="wl-field"><span>Country</span>
@@ -780,10 +785,10 @@
             </select>
           </label>
           <label class="wl-trap" aria-hidden="true">Website<input type="text" name="website" tabindex="-1" autocomplete="off" /></label>
-          <button type="submit" class="btn btn-primary btn-lg" id="waitlist-submit">Join the waitlist</button>
+          <button type="submit" class="btn btn-outline-night btn-lg" id="waitlist-submit">Notify me</button>
         </form>
         <p class="wl-status" id="waitlist-status" role="status" aria-live="polite"></p>
-        <p class="wl-fine">One email when the English version opens, nothing else; ask us any time to remove your address. Read French? <a data-signup href="https://holypixx-admin.onrender.com/#/inscription" rel="nofollow">Start today in French</a>.</p>
+        <p class="wl-fine">One email when booking and contracts open in English, nothing else; ask us any time to remove your address.</p>
       </div>
     </section>
   </main>

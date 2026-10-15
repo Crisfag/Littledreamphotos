@@ -24,7 +24,11 @@
     if (referral) localStorage.setItem("holypixx-parrain", referral);
     else referral = localStorage.getItem("holypixx-parrain") || "";
   } catch (err) { /* navigation privée : seul le lien compte */ }
-  var signupUrl = admin + "#/inscription" + (referral ? "?parrain=" + encodeURIComponent(referral) : "");
+  // Page anglaise : l'espace photographe s'ouvre en anglais (?lang=en).
+  var signupParams = [];
+  if (referral) signupParams.push("parrain=" + encodeURIComponent(referral));
+  if (EN) signupParams.push("lang=en");
+  var signupUrl = admin + "#/inscription" + (signupParams.length ? "?" + signupParams.join("&") : "");
   document.querySelectorAll("[data-admin]").forEach(function (a) { a.href = admin; });
   document.querySelectorAll("[data-signup]").forEach(function (a) { a.href = signupUrl; });
   var referralNote = document.getElementById("referral-note");
@@ -394,7 +398,7 @@
         })
         .then(function () {
           wlForm.reset();
-          setWl("You're on the list. We'll email you once, the day Holypixx opens in English.", "ok");
+          setWl("You're on the list. We'll email you once, the day booking and contracts open in English.", "ok");
         })
         .catch(function (err) {
           setWl(err.message || "Something went wrong. Please try again in a moment.", "err");

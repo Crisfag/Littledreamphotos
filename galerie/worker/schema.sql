@@ -80,6 +80,8 @@ CREATE TABLE IF NOT EXISTS photographers (
   -- port en centimes, ou NULL tant que le photographe ne l'a pas ouverte
   -- (voir prodigi.js, WORLD_COUNTRIES).
   shop_shipping_world_cents INTEGER,
+  -- Langue de l'espace photographe et des e-mails qu'il reçoit ('fr'/'en').
+  ui_language          TEXT NOT NULL DEFAULT 'fr',
   -- Compte BePhoto du photographe (labo des photos scolaires, schoollab.js) :
   -- l'API ne connaît que l'e-mail et le mot de passe du compte, chiffré
   -- comme la clé Prodigi ; le jeton de session obtenu est gardé (chiffré)

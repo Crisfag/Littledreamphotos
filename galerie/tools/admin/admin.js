@@ -94,6 +94,300 @@
     tabSchool: document.getElementById("ad-tab-school"),
   };
 
+  /* ---------- Langue de l'espace photographe (français / anglais) ---------- */
+  // Choisie à l'inscription (?lang=en depuis la page anglaise), modifiable
+  // dans Paramètres ; avant connexion : bouton English / Français, puis la
+  // dernière langue utilisée dans ce navigateur. L("…", "…") rend le texte
+  // dans la langue en cours. Les sections pas encore traduites (réservation,
+  // contrats, clients, ventes, portfolio, scolaire) restent en français,
+  // avec un bandeau qui le dit.
+
+  var LANG = "fr";
+  var LANG_KEY = "holypixx-admin-lang";
+
+  function L(fr, en) {
+    return LANG === "en" ? en : fr;
+  }
+
+  function locale() {
+    return LANG === "en" ? "en-GB" : "fr-BE";
+  }
+
+  function initialLanguage() {
+    var match = /[?&]lang=(en|fr)\b/.exec(location.search + "&" + location.hash);
+    if (match) return match[1];
+    try {
+      var saved = localStorage.getItem(LANG_KEY);
+      if (saved === "en" || saved === "fr") return saved;
+    } catch (err) { /* navigation privée */ }
+    // Français par défaut, même si le navigateur est en anglais : l'anglais
+    // se choisit (page anglaise ?lang=en, bouton « English », Paramètres),
+    // pour qu'aucun compte ne naisse en anglais sans qu'on l'ait voulu.
+    return "fr";
+  }
+
+  // Textes des constantes ci-dessus, en anglais (le français reste la valeur
+  // d'origine, gardée à côté pour pouvoir revenir en arrière).
+  var EVENT_LABELS_EN = {
+    login: "Sign-in", login_failed: "Wrong password", login_expired: "Attempt after expiry", view: "Photo opened",
+    select: "Favourite", deselect: "Favourite removed", comment: "Note left", tag: "Colour code set", mark: "Annotated markers",
+    validate: "Selection confirmed by the client", capture_suspected: "Screenshot suspected", blur: "Photo blurred",
+    print: "Print attempt", devtools: "Developer tools opened",
+  };
+  var BACKGROUND_PRESETS_EN = ["Default", "Sand", "Rose", "Sage", "Lavender", "Charcoal"];
+  var LAYOUT_OPTIONS_EN = {
+    grille: ["Grid", "Regular thumbnails — to browse many photos quickly."],
+    mosaique: ["Mosaic", "Press-style columns, each photo keeps its shape — portraits and landscapes mixed."],
+    defilement: ["Scroll", "One photo at a time, large — an editorial feel, for a session that tells a story."],
+    recit: ["Story", "Like a photo book: big landscapes, portraits in pairs, breathing space — ideal for a wedding."],
+  };
+  var GALLERY_STYLES_EN = {
+    classique: ["Classic", "Every session"], doux: ["Soft", "Newborn, baby, family"],
+    architectural: ["Architectural", "Portrait, corporate, architecture"], moderne: ["Modern", "Lifestyle, events, brands"],
+    nuit: ["Night", "Boudoir, party, concert"], editorial: ["Editorial", "Wedding, documentary"],
+    romantique: ["Romantic", "Wedding, engagement, couple"], boheme: ["Boho", "Maternity, outdoor family"],
+    galerie: ["Art gallery", "Portfolio, fine art, fashion"],
+  };
+
+  function swapTexts() {
+    Object.keys(EVENT_LABELS).forEach(function (key) {
+      if (!swapTexts.events) swapTexts.events = Object.assign({}, EVENT_LABELS);
+      EVENT_LABELS[key] = LANG === "en" ? EVENT_LABELS_EN[key] || swapTexts.events[key] : swapTexts.events[key];
+    });
+    BACKGROUND_PRESETS.forEach(function (p, i) {
+      if (p.labelFr === undefined) p.labelFr = p.label;
+      p.label = LANG === "en" ? BACKGROUND_PRESETS_EN[i] : p.labelFr;
+    });
+    LAYOUT_OPTIONS.forEach(function (o) {
+      if (o.labelFr === undefined) { o.labelFr = o.label; o.hintFr = o.hint; }
+      var en = LAYOUT_OPTIONS_EN[o.value];
+      o.label = LANG === "en" && en ? en[0] : o.labelFr;
+      o.hint = LANG === "en" && en ? en[1] : o.hintFr;
+    });
+    GALLERY_STYLES.forEach(function (st) {
+      if (st.labelFr === undefined) { st.labelFr = st.label; st.idealFr = st.ideal; }
+      var en = GALLERY_STYLES_EN[st.key];
+      st.label = LANG === "en" && en ? en[0] : st.labelFr;
+      st.ideal = LANG === "en" && en ? en[1] : st.idealFr;
+    });
+  }
+
+  // Textes fixes de index.html : data-en, data-en-html, data-en-label,
+  // data-en-title, data-en-placeholder (le français d'origine est gardé
+  // dans data-fr-*, pour revenir en arrière sans recharger).
+  function applyStaticLanguage() {
+    var pairs = [["data-en", null], ["data-en-html", "html"], ["data-en-label", "aria-label"], ["data-en-title", "title"], ["data-en-placeholder", "placeholder"]];
+    pairs.forEach(function (pair) {
+      document.querySelectorAll("[" + pair[0] + "]").forEach(function (node) {
+        var frKey = pair[0].replace("data-en", "data-fr");
+        if (!node.hasAttribute(frKey)) {
+          node.setAttribute(frKey, pair[1] === null ? node.textContent : pair[1] === "html" ? node.innerHTML : node.getAttribute(pair[1]) || "");
+        }
+        var value = LANG === "en" ? node.getAttribute(pair[0]) : node.getAttribute(frKey);
+        if (pair[1] === null) node.textContent = value;
+        else if (pair[1] === "html") node.innerHTML = value;
+        else node.setAttribute(pair[1], value);
+      });
+    });
+    var switcher = document.getElementById("ad-lang-switch");
+    if (switcher) {
+      switcher.textContent = LANG === "en" ? "Français" : "English";
+      switcher.setAttribute("lang", LANG === "en" ? "fr" : "en");
+    }
+    document.title = L("Espace photographe — Holypixx", "Photographer dashboard — Holypixx");
+  }
+
+  function setLanguage(lang, remember) {
+    LANG = lang === "en" ? "en" : "fr";
+    document.documentElement.lang = LANG;
+    swapTexts();
+    applyStaticLanguage();
+    if (remember) {
+      try { localStorage.setItem(LANG_KEY, LANG); } catch (err) { /* navigation privée */ }
+    }
+  }
+
+  // Messages d'erreur du serveur (rédigés en français) : leur traduction
+  // quand elle est connue ; sinon le message d'origine, plus précis qu'un
+  // message générique.
+  var SERVER_EN = {
+    "Adresse de retour invalide": "Invalid return URL",
+    "Adresse e-mail invalide": "Invalid email address",
+    "Ambiance inconnue": "Unknown mood",
+    "Au moins 3 caractères": "At least 3 characters",
+    "Aucun abonnement à gérer": "No subscription to manage",
+    "Aucun fichier reçu": "No file received",
+    "Aucune livraison": "No delivery",
+    "Aucune musique": "No music",
+    "C'est déjà votre adresse actuelle": "That is already your current address",
+    "C'est un lien raccourci : ouvrez-le dans votre navigateur, puis copiez l'adresse complète qui s'affiche.": "This is a short link: open it in your browser, then copy the full address that appears.",
+    "Ce lien n'est pas valide": "This link is not valid",
+    "Ce nom est réservé": "This name is reserved",
+    "Ce slug est déjà utilisé": "This link name is already taken",
+    "Ce sous-domaine est déjà pris": "This subdomain is already taken",
+    "Cette adresse est déjà utilisée par un autre compte": "This address is already used by another account",
+    "Cette commande a déjà été transmise au laboratoire": "This order has already been sent to the lab",
+    "Cette formule n'est pas encore ouverte.": "This plan is not open yet.",
+    "Cette formule s'active sans paiement, depuis l'onglet Abonnement.": "This plan is activated without payment, from the Subscription tab.",
+    "Cette photo n'est pas dans la galerie": "This photo is not in the gallery",
+    "Cette session de paiement ne vous appartient pas": "This payment session does not belong to you",
+    "Clé Prodigi invalide": "Invalid Prodigi key",
+    "Clé forensique non configurée sur ce serveur": "Forensic key not configured on this server",
+    "Code de parrainage inconnu": "Unknown referral code",
+    "Collez le lien d'un morceau ou d'une playlist": "Paste the link of a track or a playlist",
+    "Commande introuvable": "Order not found",
+    "Compte introuvable": "Account not found",
+    "Couleur invalide (format #rrggbb)": "Invalid colour (#rrggbb format)",
+    "Date d'expiration illisible": "Unreadable expiry date",
+    "Dimensions invalides": "Invalid dimensions",
+    "Déposez d'abord les photos à livrer": "Upload the photos to deliver first",
+    "E-mail du client invalide": "Invalid client email",
+    "E-mail et mot de passe requis": "Email and password required",
+    "E-mail ou mot de passe incorrect": "Incorrect email or password",
+    "Empreinte CRC-32 manquante (envoyez le fichier depuis l'interface d'administration)": "Missing CRC-32 checksum (upload the file from the dashboard)",
+    "Enregistrez d'abord votre clé Prodigi": "Save your Prodigi key first",
+    "Erreur interne": "Internal error",
+    "Facture introuvable": "Invoice not found",
+    "Fichier d'impression introuvable": "Print file not found",
+    "Fichier d'impression trop volumineux": "Print file too large",
+    "Fichier indisponible": "File unavailable",
+    "Fichier introuvable": "File not found",
+    "Fichier trop volumineux": "File too large",
+    "Fichier trop volumineux (15 Mo maximum)": "File too large (15 MB maximum)",
+    "Fichier trop volumineux (80 Mo maximum)": "File too large (80 MB maximum)",
+    "Fichier vide": "Empty file",
+    "Format introuvable": "Product not found",
+    "Formats acceptés : JPEG, PNG, TIFF, WebP, HEIC": "Accepted formats: JPEG, PNG, TIFF, WebP, HEIC",
+    "Formule inconnue": "Unknown plan",
+    "Frais de port hors Europe invalides": "Invalid shipping cost outside Europe",
+    "Frais de port invalides": "Invalid shipping cost",
+    "Galerie introuvable": "Gallery not found",
+    "Identifiant de photo déjà utilisé": "Photo ID already used",
+    "Identifiant de photo invalide": "Invalid photo ID",
+    "Image illisible (JPEG, PNG ou WebP attendu)": "Unreadable image (JPEG, PNG or WebP expected)",
+    "Image introuvable": "Image not found",
+    "Image trop lourde (40 Mo maximum)": "Image too large (40 MB maximum)",
+    "Interdit": "Forbidden",
+    "Introuvable": "Not found",
+    "La boutique de tirages n'est pas ouverte sur cette galerie": "The print shop is not open on this gallery",
+    "Langue inconnue": "Unknown language",
+    "Le compte propriétaire a déjà toutes les fonctionnalités.": "The owner account already has every feature.",
+    "Le libellé est requis": "A label is required",
+    "Le nom du studio est requis": "Studio name is required",
+    "Le paiement des abonnements n'est pas encore configuré sur la plateforme.": "Subscription payments are not configured on the platform yet.",
+    "Le paiement en ligne n'est pas encore activé": "Online payment is not enabled yet",
+    "Le paiement en ligne n'est pas encore configuré sur cette plateforme": "Online payment is not configured on this platform yet",
+    "Le titre est requis": "A title is required",
+    "Lettres minuscules, chiffres et tirets seulement (30 caractères maximum, sans tiret au début ni à la fin)": "Lowercase letters, digits and hyphens only (30 characters maximum, no hyphen at the start or end)",
+    "Lien Deezer non reconnu : copiez le lien d'un titre, d'un album ou d'une playlist.": "Deezer link not recognised: copy the link of a track, an album or a playlist.",
+    "Lien SoundCloud non reconnu : copiez le lien d'un morceau ou d'une playlist.": "SoundCloud link not recognised: copy the link of a track or a playlist.",
+    "Lien Spotify non reconnu : copiez le lien d'un titre, d'un album ou d'une playlist (Partager → Copier le lien).": "Spotify link not recognised: copy the link of a track, an album or a playlist (Share → Copy link).",
+    "Lien Vimeo non reconnu : copiez le lien de la vidéo.": "Vimeo link not recognised: copy the link of the video.",
+    "Lien YouTube non reconnu : copiez le lien d'une vidéo ou d'une playlist.": "YouTube link not recognised: copy the link of a video or a playlist.",
+    "Lien YouTube non reconnu : copiez le lien de la vidéo (Partager → Copier le lien).": "YouTube link not recognised: copy the link of the video (Share → Copy link).",
+    "Lien et mot de passe requis": "Link and password required",
+    "Lien invalide": "Invalid link",
+    "Lien invalide ou expiré": "Invalid or expired link",
+    "Lien de confirmation invalide ou expiré.": "Invalid or expired confirmation link.",
+    "Livraison trop volumineuse (4 Go maximum par galerie)": "Delivery too large (4 GB maximum per gallery)",
+    "Merci d'accepter les conditions d'utilisation et la politique de confidentialité": "Please accept the terms of use and the privacy policy",
+    "Mise en page inconnue": "Unknown layout",
+    "Morceau inconnu": "Unknown track",
+    "Morceau introuvable dans la bibliothèque": "Track not found in the library",
+    "Mot de passe actuel incorrect": "Current password is incorrect",
+    "Mot de passe incorrect": "Incorrect password",
+    "Mot de passe trop court (10 caractères minimum)": "Password too short (10 characters minimum)",
+    "Mot de passe trop court (8 caractères minimum)": "Password too short (8 characters minimum)",
+    "Nombre de photos incluses invalide": "Invalid number of included photos",
+    "Non connecté": "Not signed in",
+    "Nouveau mot de passe trop court (10 caractères minimum)": "New password too short (10 characters minimum)",
+    "Options (attributs) invalides": "Invalid options (attributes)",
+    "Options (attributs) invalides : un objet JSON est attendu": "Invalid options (attributes): a JSON object is expected",
+    "Pays de livraison non proposé": "Shipping country not offered",
+    "Photo introuvable": "Photo not found",
+    "Photo trop lourde (40 Mo maximum)": "Photo too large (40 MB maximum)",
+    "Police de texte inconnue": "Unknown body font",
+    "Police de titre inconnue": "Unknown title font",
+    "Prix du supplément invalide": "Invalid extra photo price",
+    "Prix invalide": "Invalid price",
+    "Produit inconnu": "Unknown product",
+    "Requête invalide": "Invalid request",
+    "Référence (SKU) Prodigi invalide": "Invalid Prodigi SKU",
+    "Session invalide": "Invalid session",
+    "Session invalide ou expirée": "Invalid or expired session",
+    "Seul le format MP3 est accepté": "Only MP3 files are accepted",
+    "Seuls les liens Spotify, Deezer, SoundCloud et YouTube sont acceptés.": "Only Spotify, Deezer, SoundCloud and YouTube links are accepted.",
+    "Seuls les liens YouTube et Vimeo sont acceptés pour la vidéo d'en-tête.": "Only YouTube and Vimeo links are accepted for the header video.",
+    "Si un compte existe avec cette adresse, un lien vient d'être envoyé.": "If an account exists with this address, a link has just been sent.",
+    "Slug invalide (minuscules, chiffres et tirets, 2 à 61 caractères)": "Invalid link name (lowercase letters, digits and hyphens, 2 to 61 characters)",
+    "Source de musique inconnue": "Unknown music source",
+    "Stripe a refusé la demande de paiement": "Stripe declined the payment request",
+    "Style inconnu": "Unknown style",
+    "Titre requis": "Title required",
+    "Trop de tentatives. Réessayez dans quelques minutes.": "Too many attempts. Try again in a few minutes.",
+    "Un compte existe déjà avec cette adresse e-mail": "An account already exists with this email address",
+    "Vous avez déjà un abonnement : changez de formule depuis « Gérer mon abonnement ».": "You already have a subscription: change plan from “Manage my subscription”.",
+    "Vous avez déjà un abonnement en cours : il vient d'être enregistré, rechargez la page.": "You already have an active subscription: it has just been recorded, reload the page.",
+    "Vous avez un abonnement en cours : résiliez-le d'abord depuis « Gérer mon abonnement », ou passez à Studio qui comprend déjà le scolaire.": "You have an active subscription: cancel it first from “Manage my subscription”, or switch to Studio, which already includes schools.",
+    "Worker injoignable": "Server unreachable",
+    "Inscription refusée": "Sign-up refused",
+    "Connexion refusée": "Sign-in refused",
+    "Réinitialisation refusée": "Reset refused",
+    "Confirmation refusée": "Confirmation refused",
+    "Échec de l'analyse de l'image": "Image analysis failed",
+    "Impossible de démarrer la connexion à Stripe": "Could not start the Stripe connection",
+    "Impossible de générer un identifiant unique": "Could not generate a unique ID",
+  };
+  // Messages composés côté serveur (formule, quota, stockage).
+  var FEATURE_LABELS_EN = {
+    "La boutique de tirages": "The print shop",
+    "Le paiement en ligne des suppléments": "Online payment for extra photos",
+    "Les campagnes de vente": "Sales campaigns",
+    "L'adresse à votre nom": "A gallery address in your name",
+    "Le module écoles, crèches et clubs": "The schools, nurseries and clubs module",
+    "La réservation en ligne": "Online booking",
+    "Les devis et contrats signés en ligne": "Quotes and contracts signed online",
+    "Cette fonctionnalité": "This feature",
+  };
+  var PLAN_LABELS_FR_EN = { "Découverte": "Free", "Essentiel": "Essentials", "Pro": "Pro", "Scolaire": "School", "Studio": "Studio", "payante": "paid" };
+  function sizeEn(text) {
+    return text.replace(",", ".").replace(/ To$/, " TB").replace(/ Go$/, " GB").replace(/ Mo$/, " MB");
+  }
+  var SERVER_EN_PATTERNS = [
+    [/^(.+?) (?:est incluse|est inclus|sont inclus|sont incluses) à partir de la formule (\S+) \(onglet Abonnement\)\.$/, function (m) {
+      return (FEATURE_LABELS_EN[m[1]] || m[1]) + " is included from the " + (PLAN_LABELS_FR_EN[m[2]] || m[2]) + " plan (Subscription tab).";
+    }],
+    [/^Votre formule (\S+) permet (\d+) galeries actives\./, function (m) {
+      return "Your " + (PLAN_LABELS_FR_EN[m[1]] || m[1]) + " plan allows " + m[2] + " active galleries. Delete a gallery or let one expire, or upgrade your plan (Subscription tab).";
+    }],
+    [/^Votre espace de stockage est plein \((.+?) avec la formule (\S+)\)\./, function (m) {
+      return "Your storage is full (" + sizeEn(m[1]) + " with the " + (PLAN_LABELS_FR_EN[m[2]] || m[2]) + " plan). Delete old galleries or deliveries, or upgrade your plan (Subscription tab).";
+    }],
+    [/^Au plus (\d+) formats$/, function (m) { return "At most " + m[1] + " products"; }],
+    [/^(\d+) fichiers maximum par galerie$/, function (m) { return m[1] + " files maximum per gallery"; }],
+    [/^Erreur HTTP (\d+)$/, function (m) { return "HTTP error " + m[1]; }],
+  ];
+  function serverText(message) {
+    if (LANG !== "en" || !message) return message;
+    if (SERVER_EN[message]) return SERVER_EN[message];
+    for (var i = 0; i < SERVER_EN_PATTERNS.length; i++) {
+      var m = SERVER_EN_PATTERNS[i][0].exec(message);
+      if (m) return SERVER_EN_PATTERNS[i][1](m);
+    }
+    return message;
+  }
+
+  // Sections pas encore traduites : un bandeau le dit, en anglais.
+  var UNTRANSLATED_TABS = { clients: 1, booking: 1, contracts: 1, sales: 1, portfolio: 1, school: 1, owner: 1 };
+
+  setLanguage(initialLanguage(), false);
+  var langSwitch = document.getElementById("ad-lang-switch");
+  if (langSwitch) {
+    langSwitch.addEventListener("click", function () {
+      setLanguage(LANG === "en" ? "fr" : "en", true);
+    });
+  }
+
   /* ---------- Onglets (Galeries / Facturation / Paramètres) ---------- */
   // Purement visuel : chaque écran reste atteignable par son propre lien de
   // hachage (#/facturation, #/parametres…) — les onglets ne sont qu'un
@@ -101,6 +395,10 @@
 
   function setActiveTab(name) {
     stopTrackPreview();
+    if (el.view) {
+      if (LANG === "en" && UNTRANSLATED_TABS[name]) el.view.setAttribute("data-untranslated", "This section is still in French — its English version is on its way.");
+      else el.view.removeAttribute("data-untranslated");
+    }
     if (!el.tabs) return;
     el.tabs.querySelectorAll(".ad-tab").forEach(function (btn) {
       var active = btn.getAttribute("data-tab") === name;
@@ -167,18 +465,21 @@
       var response = await fetch("/local/referral/" + encodeURIComponent(code));
       if (!response.ok) return;
       var data = await response.json();
-      banner.innerHTML = "<strong>" + esc(data.studio) + "</strong> vous parraine : −" + Number(data.discountPercent) +
-        " % sur votre mois suivant, dès votre premier paiement.";
+      banner.innerHTML = L(
+        "<strong>" + esc(data.studio) + "</strong> vous parraine : −" + Number(data.discountPercent) + " % sur votre mois suivant, dès votre premier paiement.",
+        "<strong>" + esc(data.studio) + "</strong> referred you: " + Number(data.discountPercent) + "% off your following month, from your first payment."
+      );
       banner.hidden = false;
     } catch (err) { /* sans bandeau, l'inscription garde le code */ }
   }
   showReferralBanner();
 
   function showApp(photographer) {
+    setLanguage(photographer.uiLanguage, true);
     el.login.hidden = true;
     el.app.hidden = false;
     if (el.account) {
-      el.account.textContent = (photographer.studioName || photographer.email) + " · Galeries protégées";
+      el.account.textContent = (photographer.studioName || photographer.email) + L(" · Galeries protégées", " · Protected galleries");
       el.account.title = el.account.textContent;
     }
     state.isOwner = Boolean(photographer.isOwner);
@@ -200,7 +501,7 @@
     // l'écran de connexion directement.
     if (response.status === 401) {
       showLogin();
-      throw new Error("Session expirée — reconnectez-vous.");
+      throw new Error(L("Session expirée — reconnectez-vous.", "Session expired — please sign in again."));
     }
     var data = null;
     try {
@@ -209,7 +510,7 @@
       /* réponse vide, sans conséquence */
     }
     if (!response.ok) {
-      var message = (data && data.error) || ("Erreur HTTP " + response.status);
+      var message = serverText((data && data.error) || ("Erreur HTTP " + response.status));
       var error = new Error(message);
       error.status = response.status;
       throw error;
@@ -236,10 +537,10 @@
           /* réponse illisible : traité ci-dessous comme une erreur */
         }
         if (xhr.status >= 200 && xhr.status < 300) resolve(data);
-        else reject(new Error((data && data.error) || "Échec de l'envoi (" + xhr.status + ")"));
+        else reject(new Error(serverText(data && data.error) || L("Échec de l'envoi (", "Upload failed (") + xhr.status + ")"));
       };
       xhr.onerror = function () {
-        reject(new Error("Connexion au serveur d'administration perdue"));
+        reject(new Error(L("Connexion au serveur d'administration perdue", "Lost connection to the dashboard server")));
       };
       xhr.send(form);
     });
@@ -269,12 +570,12 @@
 
   function formatDate(ts) {
     if (!ts) return "";
-    return new Date(ts * 1000).toLocaleDateString("fr-BE", { day: "numeric", month: "long", year: "numeric" });
+    return new Date(ts * 1000).toLocaleDateString(locale(), { day: "numeric", month: "long", year: "numeric" });
   }
 
   function formatDateTime(ts) {
     if (!ts) return "";
-    return new Date(ts * 1000).toLocaleString("fr-BE", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+    return new Date(ts * 1000).toLocaleString(locale(), { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
   }
 
   function openModal(id) {
@@ -313,10 +614,10 @@
     if (copyBtn) {
       var input = document.getElementById(copyBtn.getAttribute("data-copy"));
       navigator.clipboard.writeText(input.value).then(function () {
-        toast("Copié dans le presse-papiers.");
+        toast(L("Copié dans le presse-papiers.", "Copied to the clipboard."));
       }).catch(function () {
         input.select();
-        toast("Sélectionné — copiez avec Ctrl/Cmd + C.");
+        toast(L("Sélectionné — copiez avec Ctrl/Cmd + C.", "Selected — copy with Ctrl/Cmd + C."));
       });
     }
   });
@@ -325,12 +626,12 @@
 
   function galleryStatus(gallery) {
     if (gallery.expires_at && gallery.expires_at * 1000 < Date.now()) {
-      return { label: "Expirée", cls: "ad-badge-expired" };
+      return { label: L("Expirée", "Expired"), cls: "ad-badge-expired" };
     }
     if (gallery.expires_at) {
-      return { label: "Expire le " + formatDate(gallery.expires_at), cls: "ad-badge-soon" };
+      return { label: L("Expire le ", "Expires on ") + formatDate(gallery.expires_at), cls: "ad-badge-soon" };
     }
-    return { label: "Sans expiration", cls: "" };
+    return { label: L("Sans expiration", "No expiry"), cls: "" };
   }
 
   function openCreateModal() {
@@ -341,6 +642,8 @@
     form.theme.innerHTML = GALLERY_STYLES.map(function (s) {
       return '<option value="' + s.key + '"' + (s.key === preferred ? " selected" : "") + ">" + esc(s.label) + " — " + esc(s.ideal.toLowerCase()) + "</option>";
     }).join("");
+    // Langue du client : celle de l'espace photographe, au départ.
+    form.language.value = LANG;
     document.getElementById("ad-create-error").hidden = true;
     openModal("ad-create-modal");
   }
@@ -361,14 +664,14 @@
   function statsHtml(stats) {
     return (
       '<div class="ad-stats">' +
-      statTile("Galeries créées", stats.galleriesCount) +
-      statTile("Ventes effectuées", stats.salesCount) +
-      statTile("Montant encaissé", formatEuros(stats.salesAmountCents)) +
-      statTile("Suppléments en ordre", stats.extrasPaidCount, "", stats.extrasPaidCount > 0 ? "ad-stat-success" : "") +
+      statTile(L("Galeries créées", "Galleries created"), stats.galleriesCount) +
+      statTile(L("Ventes effectuées", "Sales made"), stats.salesCount) +
+      statTile(L("Montant encaissé", "Amount received"), formatEuros(stats.salesAmountCents)) +
+      statTile(L("Suppléments en ordre", "Extras paid"), stats.extrasPaidCount, "", stats.extrasPaidCount > 0 ? "ad-stat-success" : "") +
       statTile(
-        "Suppléments en attente",
+        L("Suppléments en attente", "Extras pending"),
         stats.extrasDueCount,
-        stats.extrasDueCount > 0 ? formatEuros(stats.extrasDueAmountCents) + " à régler" : "",
+        stats.extrasDueCount > 0 ? formatEuros(stats.extrasDueAmountCents) + L(" à régler", " due") : "",
         stats.extrasDueCount > 0 ? "ad-stat-warn" : ""
       ) +
       "</div>"
@@ -378,13 +681,13 @@
   async function renderList(skipHash) {
     if (!skipHash && location.hash) history.pushState(null, "", location.pathname);
     setActiveTab("galleries");
-    el.view.innerHTML = '<p class="ad-loading">Chargement des galeries…</p>';
+    el.view.innerHTML = '<p class="ad-loading">' + L("Chargement des galeries…", "Loading galleries…") + "</p>";
     var data;
     try {
       data = await api("GET", "/galleries");
     } catch (err) {
       el.view.innerHTML =
-        '<div class="ad-error-panel"><h2>Impossible de joindre le Worker</h2><p>' + esc(err.message) + "</p></div>";
+        '<div class="ad-error-panel"><h2>' + L("Impossible de joindre le Worker", "Can't reach the server") + "</h2><p>" + esc(err.message) + "</p></div>";
       return;
     }
     state.galleries = data.galleries;
@@ -402,16 +705,16 @@
 
     var header =
       '<div class="ad-section-header">' +
-      "<h2>Vos galeries</h2>" +
-      '<button type="button" class="ad-btn ad-btn-primary" id="ad-new-gallery">+ Nouvelle galerie</button>' +
+      "<h2>" + L("Vos galeries", "Your galleries") + "</h2>" +
+      '<button type="button" class="ad-btn ad-btn-primary" id="ad-new-gallery">' + L("+ Nouvelle galerie", "+ New gallery") + "</button>" +
       "</div>";
 
     if (state.galleries.length === 0) {
       el.view.innerHTML =
         statsBar +
         header +
-        '<div class="ad-empty"><h2>Aucune galerie pour le moment</h2>' +
-        '<p>Cliquez sur « Nouvelle galerie » pour envoyer votre première séance.</p></div>';
+        '<div class="ad-empty"><h2>' + L("Aucune galerie pour le moment", "No galleries yet") + "</h2>" +
+        "<p>" + L("Cliquez sur « Nouvelle galerie » pour envoyer votre première séance.", "Click “New gallery” to send your first session.") + "</p></div>";
       document.getElementById("ad-new-gallery").addEventListener("click", openCreateModal);
       return;
     }
@@ -425,7 +728,7 @@
         '<p class="ad-card-sub">' + (g.client_name ? esc(g.client_name) + " · " : "") + esc(g.slug) + "</p>" +
         "</div>" +
         '<div class="ad-card-meta">' +
-        "<span>" + g.photo_count + (g.photo_count > 1 ? " photos" : " photo") + "</span>" +
+        "<span>" + g.photo_count + (g.photo_count === 1 ? " photo" : " photos") + "</span>" +
         (g.selected_count > 0
           ? '<span class="ad-badge ad-badge-selected">♥ ' + g.selected_count + "</span>"
           : "") +
@@ -436,7 +739,7 @@
           ? '<span class="ad-badge ad-badge-due">💶 ' + formatEuros(g.due_total_cents) + "</span>"
           : "") +
         (g.selection_done_at
-          ? '<span class="ad-badge ad-badge-validated" title="Sélection validée le ' + formatDate(g.selection_done_at) + '">✓ Validée</span>'
+          ? '<span class="ad-badge ad-badge-validated" title="' + L("Sélection validée le ", "Selection confirmed on ") + formatDate(g.selection_done_at) + '">' + L("✓ Validée", "✓ Confirmed") + "</span>"
           : "") +
         (status.label ? '<span class="ad-badge ' + status.cls + '">' + esc(status.label) + "</span>" : "") +
         "</div>" +
@@ -470,38 +773,43 @@
   function paymentFeeHintHtml(photographer) {
     var fee = photographer.paymentFee;
     if (!fee || (!fee.percent && !fee.fixedCents)) return "";
-    return '<p class="ad-hint ad-fee-hint">Frais de paiement : <strong>' + esc(fee.label) + "</strong> par vente (carte bancaire et virement vers votre compte). " +
-      "Aucune commission Holypixx sur vos ventes.</p>";
+    return '<p class="ad-hint ad-fee-hint">' + L("Frais de paiement : <strong>", "Payment fees: <strong>") + esc(feeText(fee.label)) + "</strong>" +
+      L(" par vente (carte bancaire et virement vers votre compte). Aucune commission Holypixx sur vos ventes.",
+        " per sale (card and transfer to your account). No Holypixx commission on your sales.") + "</p>";
   }
 
   function stripeStatusHtml(photographer) {
     if (photographer.stripeChargesEnabled) {
       return (
-        '<p class="ad-stripe-badge ad-stripe-badge-ok">✓ Compte Stripe actif</p>' +
-        '<p class="ad-hint">Les suppléments et tirages payés par vos clients (carte, Apple Pay, Bancontact…) arrivent directement sur votre compte.</p>' +
+        '<p class="ad-stripe-badge ad-stripe-badge-ok">' + L("✓ Compte Stripe actif", "✓ Stripe account active") + "</p>" +
+        '<p class="ad-hint">' + L("Les suppléments et tirages payés par vos clients (carte, Apple Pay, Bancontact…) arrivent directement sur votre compte.",
+          "Extras and prints paid by your clients (card, Apple Pay, Bancontact…) go straight to your account.") + "</p>" +
         paymentFeeHintHtml(photographer)
       );
     }
     if (photographer.stripeConnected) {
       return (
-        '<p class="ad-stripe-badge">Configuration Stripe incomplète</p>' +
-        '<p class="ad-hint">Le compte a été créé, mais Stripe attend encore quelques informations (identité, coordonnées bancaires) avant d\'activer les paiements.</p>' +
+        '<p class="ad-stripe-badge">' + L("Configuration Stripe incomplète", "Stripe setup incomplete") + "</p>" +
+        '<p class="ad-hint">' + L("Le compte a été créé, mais Stripe attend encore quelques informations (identité, coordonnées bancaires) avant d'activer les paiements.",
+          "The account exists, but Stripe still needs some details (identity, bank account) before enabling payments.") + "</p>" +
         '<div class="ad-stripe-actions">' +
-        '<button type="button" class="ad-btn ad-btn-primary" id="ad-stripe-connect">Continuer la configuration</button>' +
-        '<button type="button" class="ad-btn" id="ad-stripe-refresh">Vérifier le statut</button>' +
+        '<button type="button" class="ad-btn ad-btn-primary" id="ad-stripe-connect">' + L("Continuer la configuration", "Continue setup") + "</button>" +
+        '<button type="button" class="ad-btn" id="ad-stripe-refresh">' + L("Vérifier le statut", "Check status") + "</button>" +
         "</div>"
       );
     }
     return (
-      '<p class="ad-hint">Connectez un compte Stripe pour que vos clients puissent régler leurs suppléments en ligne (carte, Apple Pay, PayPal) — l\'argent arrive directement chez vous.</p>' +
+      '<p class="ad-hint">' + L("Connectez un compte Stripe pour que vos clients puissent régler leurs suppléments en ligne (carte, Apple Pay, PayPal) — l'argent arrive directement chez vous.",
+        "Connect a Stripe account so your clients can pay for extras online (card, Apple Pay, PayPal) — the money goes straight to you.") + "</p>" +
       paymentFeeHintHtml(photographer) +
-      '<button type="button" class="ad-btn ad-btn-primary" id="ad-stripe-connect">Connecter Stripe</button>'
+      '<button type="button" class="ad-btn ad-btn-primary" id="ad-stripe-connect">' + L("Connecter Stripe", "Connect Stripe") + "</button>"
     );
   }
 
   function invoiceRowsHtml(invoices) {
     if (!invoices.length) {
-      return '<p class="ad-hint">Aucune facture émise pour l\'instant — elles apparaissent ici dès qu\'un client règle un supplément en ligne.</p>';
+      return '<p class="ad-hint">' + L("Aucune facture émise pour l'instant — elles apparaissent ici dès qu'un client règle un supplément en ligne.",
+        "No invoices yet — they appear here as soon as a client pays for extras online.") + "</p>";
     }
     var rows = invoices.map(function (inv) {
       return (
@@ -516,7 +824,7 @@
     });
     return (
       '<div class="ad-table-wrap"><table class="ad-table"><thead><tr>' +
-      "<th>Quand</th><th>Facture</th><th>Galerie</th><th>Montant</th><th>Envoyée à</th>" +
+      "<th>" + L("Quand", "When") + "</th><th>" + L("Facture", "Invoice") + "</th><th>" + L("Galerie", "Gallery") + "</th><th>" + L("Montant", "Amount") + "</th><th>" + L("Envoyée à", "Sent to") + "</th>" +
       "</tr></thead><tbody>" + rows.join("") + "</tbody></table></div>"
     );
   }
@@ -527,21 +835,22 @@
   function dueSummaryHtml(galleries) {
     var due = galleries.filter(function (g) { return g.due_extra_count > 0; });
     if (!due.length) {
-      return '<p class="ad-hint">Aucun supplément en attente de règlement pour l\'instant.</p>';
+      return '<p class="ad-hint">' + L("Aucun supplément en attente de règlement pour l'instant.", "No extras awaiting payment for now.") + "</p>";
     }
     var totalCents = due.reduce(function (sum, g) { return sum + g.due_total_cents; }, 0);
     var rows = due.map(function (g) {
       return (
         "<tr>" +
         '<td><button type="button" class="ad-link-btn" data-slug="' + esc(g.slug) + '">' + esc(g.title) + "</button></td>" +
-        "<td>" + g.due_extra_count + " photo" + (g.due_extra_count > 1 ? "s" : "") + "</td>" +
+        "<td>" + g.due_extra_count + (g.due_extra_count === 1 ? " photo" : " photos") + "</td>" +
         "<td>" + formatEuros(g.due_total_cents) + "</td>" +
         "</tr>"
       );
     });
     return (
-      '<p class="ad-quota-due">' + formatEuros(totalCents) + " au total, sur " + due.length + " galerie" + (due.length > 1 ? "s" : "") + "</p>" +
-      '<div class="ad-table-wrap"><table class="ad-table"><thead><tr><th>Galerie</th><th>Suppléments</th><th>Montant</th></tr></thead><tbody>' +
+      '<p class="ad-quota-due">' + formatEuros(totalCents) + L(" au total, sur " + due.length + " galerie" + (due.length > 1 ? "s" : ""),
+        " in total, across " + due.length + " galler" + (due.length > 1 ? "ies" : "y")) + "</p>" +
+      '<div class="ad-table-wrap"><table class="ad-table"><thead><tr><th>' + L("Galerie", "Gallery") + "</th><th>" + L("Suppléments", "Extras") + "</th><th>" + L("Montant", "Amount") + "</th></tr></thead><tbody>" +
       rows.join("") + "</tbody></table></div>"
     );
   }
@@ -552,7 +861,7 @@
     if (cameFromStripe) history.replaceState(null, "", "#/facturation");
     setActiveTab("billing");
 
-    el.view.innerHTML = '<p class="ad-loading">Chargement…</p>';
+    el.view.innerHTML = '<p class="ad-loading">' + L("Chargement…", "Loading…") + "</p>";
     if (cameFromStripe) {
       // Le webhook Stripe peut arriver après nous : on relit explicitement
       // plutôt que d'afficher un statut qui n'est peut-être déjà plus à jour.
@@ -571,17 +880,18 @@
     }
 
     el.view.innerHTML =
-      '<header class="ad-detail-header"><div><h2>Facturation</h2>' +
-      '<p class="ad-hint">Paiement en ligne des suppléments, factures émises et montants encore dus, toutes galeries confondues.</p>' +
+      '<header class="ad-detail-header"><div><h2>' + L("Facturation", "Billing") + "</h2>" +
+      '<p class="ad-hint">' + L("Paiement en ligne des suppléments, factures émises et montants encore dus, toutes galeries confondues.",
+        "Online payment for extras, invoices issued and amounts still due, across all galleries.") + "</p>" +
       "</div></header>" +
-      '<section class="ad-stripe"><div class="ad-section-header"><h3>Paiement en ligne</h3></div>' +
+      '<section class="ad-stripe"><div class="ad-section-header"><h3>' + L("Paiement en ligne", "Online payment") + "</h3></div>" +
       stripeStatusHtml(photographer) +
       "</section>" +
-      '<section><div class="ad-section-header"><h3>Suppléments dus</h3></div>' +
+      '<section><div class="ad-section-header"><h3>' + L("Suppléments dus", "Extras due") + "</h3></div>" +
       dueSummaryHtml(galleriesData.galleries) +
       "</section>" +
-      '<section><div class="ad-section-header"><h3>Historique des factures</h3>' +
-      (invoicesData.invoices.length ? "<p class=\"ad-hint\">" + formatEuros(invoicesData.totalCents) + " au total</p>" : "") +
+      '<section><div class="ad-section-header"><h3>' + L("Historique des factures", "Invoice history") + "</h3>" +
+      (invoicesData.invoices.length ? "<p class=\"ad-hint\">" + formatEuros(invoicesData.totalCents) + L(" au total", " in total") + "</p>" : "") +
       "</div>" +
       invoiceRowsHtml(invoicesData.invoices) +
       "</section>";
@@ -596,14 +906,14 @@
     if (connectBtn) {
       connectBtn.addEventListener("click", async function () {
         connectBtn.disabled = true;
-        connectBtn.textContent = "Connexion…";
+        connectBtn.textContent = L("Connexion…", "Connecting…");
         try {
           var result = await api("POST", "/stripe/connect");
           window.location.href = result.url;
         } catch (err) {
           toast(err.message, true);
           connectBtn.disabled = false;
-          connectBtn.textContent = "Connecter Stripe";
+          connectBtn.textContent = L("Connecter Stripe", "Connect Stripe");
         }
       });
     }
@@ -630,7 +940,7 @@
   async function renderSettings(skipHash) {
     if (!skipHash && location.hash !== "#/parametres") history.pushState(null, "", "#/parametres");
     setActiveTab("settings");
-    el.view.innerHTML = '<p class="ad-loading">Chargement…</p>';
+    el.view.innerHTML = '<p class="ad-loading">' + L("Chargement…", "Loading…") + "</p>";
 
     var data;
     try {
@@ -642,111 +952,141 @@
     var photographer = data.photographer;
 
     el.view.innerHTML =
-      '<header class="ad-detail-header"><div><h2>Paramètres</h2>' +
-      '<p class="ad-hint">Studio, présentation par défaut de vos futures galeries, coordonnées fiscales et connexion.</p>' +
+      '<header class="ad-detail-header"><div><h2>' + L("Paramètres", "Settings") + "</h2>" +
+      '<p class="ad-hint">' + L("Studio, présentation par défaut de vos futures galeries, coordonnées fiscales et connexion.",
+        "Studio, default look for your future galleries, billing details and sign-in.") + "</p>" +
       "</div></header>" +
+
+      '<section><div class="ad-section-header"><h3>' + L("Langue de l'espace photographe", "Dashboard language") + "</h3></div>" +
+      '<p class="ad-hint">' + L("Votre tableau de bord et les e-mails que vous recevez. La langue vue par chaque client se règle galerie par galerie.",
+        "Your dashboard and the emails you receive. The language each client sees is set gallery by gallery.") + "</p>" +
+      '<label class="ad-field"><span>' + L("Langue", "Language") + '</span><select id="ad-ui-language">' +
+      '<option value="fr"' + (photographer.uiLanguage !== "en" ? " selected" : "") + ">Français</option>" +
+      '<option value="en"' + (photographer.uiLanguage === "en" ? " selected" : "") + ">English</option></select></label>" +
+      "</section>" +
 
       '<section><div class="ad-section-header"><h3>Studio</h3></div>' +
       '<form id="ad-studio-form">' +
-      '<label class="ad-field"><span>Nom du studio</span>' +
-      '<input type="text" name="studioName" value="' + esc(photographer.studioName) + '" placeholder="Mon Studio" /></label>' +
-      '<button type="submit" class="ad-btn ad-btn-primary" id="ad-studio-save">Enregistrer</button>' +
+      '<label class="ad-field"><span>' + L("Nom du studio", "Studio name") + "</span>" +
+      '<input type="text" name="studioName" value="' + esc(photographer.studioName) + '" placeholder="' + L("Mon Studio", "My Studio") + '" /></label>' +
+      '<button type="submit" class="ad-btn ad-btn-primary" id="ad-studio-save">' + L("Enregistrer", "Save") + "</button>" +
       "</form></section>" +
 
-      '<section><div class="ad-section-header"><h3>Votre identité</h3></div>' +
-      '<p class="ad-hint">Jamais affichée à vos clients — contrairement au nom du studio ci-dessus.</p>' +
+      '<section><div class="ad-section-header"><h3>' + L("Votre identité", "Your identity") + "</h3></div>" +
+      '<p class="ad-hint">' + L("Jamais affichée à vos clients — contrairement au nom du studio ci-dessus.", "Never shown to your clients — unlike the studio name above.") + "</p>" +
       '<form id="ad-name-form" class="ad-field-row">' +
-      '<label class="ad-field"><span>Prénom</span>' +
-      '<input type="text" name="firstName" value="' + esc(photographer.firstName) + '" placeholder="Christine" /></label>' +
-      '<label class="ad-field"><span>Nom</span>' +
-      '<input type="text" name="lastName" value="' + esc(photographer.lastName) + '" placeholder="Fagnant" /></label>' +
-      '<button type="submit" class="ad-btn ad-btn-primary" id="ad-name-save">Enregistrer</button>' +
+      '<label class="ad-field"><span>' + L("Prénom", "First name") + "</span>" +
+      '<input type="text" name="firstName" value="' + esc(photographer.firstName) + '" placeholder="' + L("Christine", "Emma") + '" /></label>' +
+      '<label class="ad-field"><span>' + L("Nom", "Last name") + "</span>" +
+      '<input type="text" name="lastName" value="' + esc(photographer.lastName) + '" placeholder="' + L("Fagnant", "Collins") + '" /></label>' +
+      '<button type="submit" class="ad-btn ad-btn-primary" id="ad-name-save">' + L("Enregistrer", "Save") + "</button>" +
       "</form></section>" +
 
-      '<section><div class="ad-section-header"><h3>Présentation par défaut</h3></div>' +
-      '<p class="ad-hint">Proposée à la création d\'une nouvelle galerie — modifiable au cas par cas ensuite, comme pour n\'importe quelle galerie déjà créée.</p>' +
+      '<section><div class="ad-section-header"><h3>' + L("Présentation par défaut", "Default look") + "</h3></div>" +
+      '<p class="ad-hint">' + L("Proposée à la création d'une nouvelle galerie — modifiable au cas par cas ensuite, comme pour n'importe quelle galerie déjà créée.",
+        "Suggested when you create a new gallery — you can still change it gallery by gallery afterwards.") + "</p>" +
       '<div class="ad-layout-options" id="ad-default-layout-options">' +
       layoutOptionsHtml({ layout: photographer.defaultLayout }) +
       "</div>" +
-      '<h4 class="ad-sc-subhead">Style par défaut</h4>' +
-      '<p class="ad-hint">Survolez un style pour l\'apercevoir ; il sera proposé à chaque nouvelle galerie.</p>' +
+      '<h4 class="ad-sc-subhead">' + L("Style par défaut", "Default style") + "</h4>" +
+      '<p class="ad-hint">' + L("Survolez un style pour l'apercevoir ; il sera proposé à chaque nouvelle galerie.", "Hover a style to preview it; it will be suggested for every new gallery.") + "</p>" +
       '<div class="ad-style-cards" id="ad-default-style-cards">' + styleCardsHtml(photographer.defaultTheme || "classique", "", "") + "</div>" +
       "</section>" +
 
-      '<section><div class="ad-section-header"><h3>Adresse de votre studio</h3></div>' +
-      '<p class="ad-hint">Vos clients ouvrent leurs galeries à une adresse à votre nom — <strong>votre-studio.' + esc(state.config.studioDomain || "holypixx.com") + '</strong> — plutôt que sur le site de la plateforme. Lettres minuscules, chiffres et tirets, 3 à 30 caractères. Laissez vide pour revenir au site principal.</p>' +
-      '<form id="ad-subdomain-form"><label class="ad-field"><span>Sous-domaine</span>' +
-      '<div class="ad-subdomain-row"><input type="text" name="subdomain" value="' + esc(photographer.subdomain || "") + '" placeholder="votre-studio" autocapitalize="off" autocomplete="off" spellcheck="false" maxlength="30" />' +
+      '<section><div class="ad-section-header"><h3>' + L("Adresse de votre studio", "Your studio's address") + "</h3></div>" +
+      '<p class="ad-hint">' + L("Vos clients ouvrent leurs galeries à une adresse à votre nom — <strong>votre-studio.", "Your clients open their galleries at an address in your name — <strong>your-studio.") + esc(state.config.studioDomain || "holypixx.com") + "</strong>" +
+      L(" — plutôt que sur le site de la plateforme. Lettres minuscules, chiffres et tirets, 3 à 30 caractères. Laissez vide pour revenir au site principal.",
+        " — rather than on the platform's site. Lowercase letters, digits and hyphens, 3 to 30 characters. Leave empty to go back to the main site.") + "</p>" +
+      '<form id="ad-subdomain-form"><label class="ad-field"><span>' + L("Sous-domaine", "Subdomain") + "</span>" +
+      '<div class="ad-subdomain-row"><input type="text" name="subdomain" value="' + esc(photographer.subdomain || "") + '" placeholder="' + L("votre-studio", "your-studio") + '" autocapitalize="off" autocomplete="off" spellcheck="false" maxlength="30" />' +
       '<span class="ad-subdomain-suffix">.' + esc(state.config.studioDomain || "holypixx.com") + "</span></div></label>" +
       '<p class="ad-hint" id="ad-subdomain-current">' +
       (photographer.subdomain
-        ? "Vos liens de galerie commencent par <strong>https://" + esc(photographer.subdomain) + "." + esc(state.config.studioDomain || "holypixx.com") + "/</strong>."
-        : "Aucun sous-domaine pour l'instant : vos liens pointent vers le site principal.") +
+        ? L("Vos liens de galerie commencent par <strong>https://", "Your gallery links start with <strong>https://") + esc(photographer.subdomain) + "." + esc(state.config.studioDomain || "holypixx.com") + "/</strong>."
+        : L("Aucun sous-domaine pour l'instant : vos liens pointent vers le site principal.", "No subdomain yet: your links point to the main site.")) +
       "</p>" +
-      '<button type="submit" class="ad-btn ad-btn-primary" id="ad-subdomain-save">Enregistrer</button>' +
+      '<button type="submit" class="ad-btn ad-btn-primary" id="ad-subdomain-save">' + L("Enregistrer", "Save") + "</button>" +
       "</form></section>" +
 
-      '<section><div class="ad-section-header"><h3>Relances automatiques</h3></div>' +
-      '<p class="ad-hint">Tant qu\'un client n\'a pas cliqué « Valider ma sélection », il reçoit un rappel à 7 jours puis à 2 jours de l\'expiration de sa galerie (s\'il a un e-mail renseigné), et vous en recevez un à 2 jours. Rien n\'est envoyé pour une galerie sans date d\'expiration.</p>' +
+      '<section><div class="ad-section-header"><h3>' + L("Relances automatiques", "Automatic reminders") + "</h3></div>" +
+      '<p class="ad-hint">' + L("Tant qu'un client n'a pas cliqué « Valider ma sélection », il reçoit un rappel à 7 jours puis à 2 jours de l'expiration de sa galerie (s'il a un e-mail renseigné), et vous en recevez un à 2 jours. Rien n'est envoyé pour une galerie sans date d'expiration.",
+        "Until a client clicks “Confirm my selection”, they get a reminder 7 days and then 2 days before their gallery expires (if their email is filled in), and you get one 2 days before. Nothing is sent for a gallery with no expiry date.") + "</p>" +
       '<label class="ad-toggle"><input type="checkbox" id="ad-reminders-toggle"' + (photographer.remindersEnabled ? " checked" : "") + " />" +
-      "<span>Envoyer les relances automatiques</span></label>" +
+      "<span>" + L("Envoyer les relances automatiques", "Send automatic reminders") + "</span></label>" +
       "</section>" +
 
-      '<section><div class="ad-section-header"><h3>Coordonnées fiscales</h3></div>' +
-      '<p class="ad-hint">Ces informations apparaissent sur les factures émises pour vos clients.</p>' +
+      '<section><div class="ad-section-header"><h3>' + L("Coordonnées fiscales", "Billing details") + "</h3></div>" +
+      '<p class="ad-hint">' + L("Ces informations apparaissent sur les factures émises pour vos clients.", "These details appear on the invoices issued to your clients.") + "</p>" +
       '<form id="ad-billing-form">' +
-      '<label class="ad-field"><span>Raison sociale</span>' +
+      '<label class="ad-field"><span>' + L("Raison sociale", "Company name") + "</span>" +
       '<input type="text" name="companyName" value="' + esc(photographer.billingCompanyName) + '" placeholder="Little Dream Photos" /></label>' +
-      '<label class="ad-field"><span>Adresse</span>' +
-      '<textarea name="address" rows="3" placeholder="Rue…, code postal, ville, pays">' + esc(photographer.billingAddress) + "</textarea></label>" +
-      '<label class="ad-field"><span>Numéro de TVA</span>' +
+      '<label class="ad-field"><span>' + L("Adresse", "Address") + "</span>" +
+      '<textarea name="address" rows="3" placeholder="' + L("Rue…, code postal, ville, pays", "Street…, postcode, city, country") + '">' + esc(photographer.billingAddress) + "</textarea></label>" +
+      '<label class="ad-field"><span>' + L("Numéro de TVA", "VAT number") + "</span>" +
       '<input type="text" name="vatNumber" value="' + esc(photographer.billingVatNumber) + '" placeholder="BE0123456789" /></label>' +
-      '<button type="submit" class="ad-btn ad-btn-primary" id="ad-billing-save">Enregistrer</button>' +
+      '<button type="submit" class="ad-btn ad-btn-primary" id="ad-billing-save">' + L("Enregistrer", "Save") + "</button>" +
       "</form></section>" +
 
-      '<section><div class="ad-section-header"><h3>Adresse e-mail</h3></div>' +
-      '<p class="ad-hint">Adresse actuelle : <strong>' + esc(photographer.email) + '</strong>. La changer nécessite de confirmer la nouvelle adresse en ouvrant le lien reçu par e-mail — rien ne change avant ça.</p>' +
+      '<section><div class="ad-section-header"><h3>' + L("Adresse e-mail", "Email address") + "</h3></div>" +
+      '<p class="ad-hint">' + L("Adresse actuelle : <strong>", "Current address: <strong>") + esc(photographer.email) + "</strong>" +
+      L(". La changer nécessite de confirmer la nouvelle adresse en ouvrant le lien reçu par e-mail — rien ne change avant ça.",
+        ". Changing it requires confirming the new address by opening the link sent by email — nothing changes before that.") + "</p>" +
       '<form id="ad-email-form">' +
-      '<label class="ad-field"><span>Nouvelle adresse</span>' +
+      '<label class="ad-field"><span>' + L("Nouvelle adresse", "New address") + "</span>" +
       '<input type="email" name="newEmail" required autocomplete="username" /></label>' +
-      '<label class="ad-field"><span>Mot de passe actuel</span>' +
+      '<label class="ad-field"><span>' + L("Mot de passe actuel", "Current password") + "</span>" +
       '<input type="password" name="password" required autocomplete="current-password" /></label>' +
       '<p class="ad-error" id="ad-email-error" hidden></p>' +
       '<p class="ad-hint" id="ad-email-message" hidden></p>' +
-      '<button type="submit" class="ad-btn ad-btn-primary" id="ad-email-save">Envoyer le lien de confirmation</button>' +
+      '<button type="submit" class="ad-btn ad-btn-primary" id="ad-email-save">' + L("Envoyer le lien de confirmation", "Send the confirmation link") + "</button>" +
       "</form></section>" +
 
-      '<section><div class="ad-section-header"><h3>Mot de passe</h3></div>' +
+      '<section><div class="ad-section-header"><h3>' + L("Mot de passe", "Password") + "</h3></div>" +
       '<form id="ad-password-change-form">' +
-      '<label class="ad-field"><span>Mot de passe actuel</span>' +
+      '<label class="ad-field"><span>' + L("Mot de passe actuel", "Current password") + "</span>" +
       '<input type="password" name="currentPassword" required autocomplete="current-password" /></label>' +
-      '<label class="ad-field"><span>Nouveau mot de passe <em>(10 caractères minimum)</em></span>' +
+      '<label class="ad-field"><span>' + L("Nouveau mot de passe <em>(10 caractères minimum)</em>", "New password <em>(at least 10 characters)</em>") + "</span>" +
       '<input type="password" name="newPassword" required minlength="10" autocomplete="new-password" /></label>' +
       '<p class="ad-error" id="ad-password-change-error" hidden></p>' +
-      '<button type="submit" class="ad-btn ad-btn-primary" id="ad-password-change-save">Changer le mot de passe</button>' +
+      '<button type="submit" class="ad-btn ad-btn-primary" id="ad-password-change-save">' + L("Changer le mot de passe", "Change password") + "</button>" +
       "</form></section>" +
 
-      '<section class="ad-mydata"><div class="ad-section-header"><h3>Mes données</h3></div>' +
-      '<p class="ad-hint">Toutes les données de votre compte (galeries, sélections de vos clients, paiements, commandes, journaux) dans un fichier, ' +
-      'conformément au RGPD. Voir la <a href="https://www.holypixx.com/confidentialite.html" target="_blank" rel="noopener">politique de confidentialité</a>.</p>' +
-      '<a class="ad-btn" href="/local/account/export" download>Exporter mes données</a>' +
-      '<details class="ad-danger-zone"><summary>Supprimer mon compte</summary>' +
-      '<p class="ad-hint">Suppression <strong>définitive et immédiate</strong> de votre compte, de toutes vos galeries, photos, fichiers livrés et des données de vos clients. ' +
-      "Téléchargez d'abord vos factures et l'export ci-dessus : rien ne pourra être récupéré. Pensez aussi à déconnecter Stripe et Prodigi de leur côté si vous ne les utilisez plus.</p>" +
+      '<section class="ad-mydata"><div class="ad-section-header"><h3>' + L("Mes données", "My data") + "</h3></div>" +
+      '<p class="ad-hint">' + L("Toutes les données de votre compte (galeries, sélections de vos clients, paiements, commandes, journaux) dans un fichier, conformément au RGPD. Voir la ",
+        "All your account data (galleries, your clients' selections, payments, orders, logs) in one file, as required by the GDPR. See the ") +
+      '<a href="https://www.holypixx.com/confidentialite.html" target="_blank" rel="noopener">' + L("politique de confidentialité", "privacy policy (in French)") + "</a>.</p>" +
+      '<a class="ad-btn" href="/local/account/export" download>' + L("Exporter mes données", "Export my data") + "</a>" +
+      '<details class="ad-danger-zone"><summary>' + L("Supprimer mon compte", "Delete my account") + "</summary>" +
+      '<p class="ad-hint">' + L("Suppression <strong>définitive et immédiate</strong> de votre compte, de toutes vos galeries, photos, fichiers livrés et des données de vos clients. Téléchargez d'abord vos factures et l'export ci-dessus : rien ne pourra être récupéré. Pensez aussi à déconnecter Stripe et Prodigi de leur côté si vous ne les utilisez plus.",
+        "<strong>Permanent and immediate</strong> deletion of your account, all your galleries, photos, delivered files and your clients' data. Download your invoices and the export above first: nothing can be recovered. Also remember to disconnect Stripe and Prodigi on their side if you no longer use them.") + "</p>" +
       '<form id="ad-delete-account-form">' +
-      '<label class="ad-field"><span>Mot de passe</span><input type="password" name="password" required autocomplete="current-password" /></label>' +
-      '<label class="ad-field"><span>Tapez SUPPRIMER pour confirmer</span><input type="text" name="confirm" required autocomplete="off" /></label>' +
+      '<label class="ad-field"><span>' + L("Mot de passe", "Password") + '</span><input type="password" name="password" required autocomplete="current-password" /></label>' +
+      '<label class="ad-field"><span>' + L("Tapez SUPPRIMER pour confirmer", "Type DELETE to confirm") + '</span><input type="text" name="confirm" required autocomplete="off" /></label>' +
       '<p class="ad-error" id="ad-delete-account-error" hidden></p>' +
-      '<button type="submit" class="ad-btn ad-btn-danger" id="ad-delete-account-submit">Supprimer définitivement mon compte</button>' +
+      '<button type="submit" class="ad-btn ad-btn-danger" id="ad-delete-account-submit">' + L("Supprimer définitivement mon compte", "Permanently delete my account") + "</button>" +
       "</form></details></section>";
+
+    document.getElementById("ad-ui-language").addEventListener("change", async function (event) {
+      var select = event.target;
+      try {
+        var result = await api("POST", "/account/language", { language: select.value });
+        if (state.me) state.me.uiLanguage = result.language;
+        setLanguage(result.language, true);
+        if (el.account && state.me) el.account.textContent = el.account.title = (state.me.studioName || state.me.email) + L(" · Galeries protégées", " · Protected galleries");
+        renderSettings(true);
+        toast(L("Langue enregistrée.", "Language saved."));
+      } catch (err) {
+        toast(err.message, true);
+      }
+    });
 
     document.getElementById("ad-delete-account-form").addEventListener("submit", async function (event) {
       event.preventDefault();
       var form = event.target;
       var errorBox = document.getElementById("ad-delete-account-error");
       errorBox.hidden = true;
-      if (form.confirm.value.trim() !== "SUPPRIMER") {
-        errorBox.textContent = "Tapez SUPPRIMER en majuscules pour confirmer.";
+      if (form.confirm.value.trim() !== L("SUPPRIMER", "DELETE")) {
+        errorBox.textContent = L("Tapez SUPPRIMER en majuscules pour confirmer.", "Type DELETE in capitals to confirm.");
         errorBox.hidden = false;
         return;
       }
@@ -754,7 +1094,8 @@
       btn.disabled = true;
       try {
         var result = await api("POST", "/account/delete", { password: form.password.value, confirm: "SUPPRIMER" });
-        toast("Compte supprimé (" + result.deletedGalleries + " galerie" + (result.deletedGalleries > 1 ? "s" : "") + "). Au revoir !");
+        toast(L("Compte supprimé (" + result.deletedGalleries + " galerie" + (result.deletedGalleries > 1 ? "s" : "") + "). Au revoir !",
+          "Account deleted (" + result.deletedGalleries + " galler" + (result.deletedGalleries === 1 ? "y" : "ies") + "). Goodbye!"));
         showLogin();
       } catch (err) {
         errorBox.textContent = err.message;
@@ -771,8 +1112,8 @@
       try {
         var studioName = form.studioName.value.trim();
         await api("POST", "/account", { studioName: studioName });
-        toast("Nom du studio enregistré.");
-        if (el.account) el.account.textContent = el.account.title = (studioName || photographer.email) + " · Galeries protégées";
+        toast(L("Nom du studio enregistré.", "Studio name saved."));
+        if (el.account) el.account.textContent = el.account.title = (studioName || photographer.email) + L(" · Galeries protégées", " · Protected galleries");
       } catch (err) {
         toast(err.message, true);
       } finally {
@@ -790,7 +1131,7 @@
           firstName: form.firstName.value.trim(),
           lastName: form.lastName.value.trim(),
         });
-        toast("Identité enregistrée.");
+        toast(L("Identité enregistrée.", "Identity saved."));
       } catch (err) {
         toast(err.message, true);
       } finally {
@@ -805,7 +1146,7 @@
       btn.disabled = true;
       try {
         var result = await api("POST", "/account/subdomain", { subdomain: form.subdomain.value.trim().toLowerCase() });
-        toast(result.subdomain ? "Adresse du studio enregistrée." : "Sous-domaine retiré.");
+        toast(result.subdomain ? L("Adresse du studio enregistrée.", "Studio address saved.") : L("Sous-domaine retiré.", "Subdomain removed."));
         renderSettings(true);
       } catch (err) {
         toast(err.message, true);
@@ -818,7 +1159,7 @@
       var box = event.target;
       try {
         await api("POST", "/account/reminders", { enabled: box.checked });
-        toast(box.checked ? "Relances automatiques activées." : "Relances automatiques désactivées.");
+        toast(box.checked ? L("Relances automatiques activées.", "Automatic reminders on.") : L("Relances automatiques désactivées.", "Automatic reminders off."));
       } catch (err) {
         box.checked = !box.checked;
         toast(err.message, true);
@@ -837,7 +1178,7 @@
       try {
         await api("POST", "/account/defaults", { defaultTheme: card.getAttribute("data-style") });
         if (state.me) state.me.defaultTheme = card.getAttribute("data-style");
-        toast("Style par défaut : " + galleryStyleOf(card.getAttribute("data-style")).label + ".");
+        toast(L("Style par défaut : ", "Default style: ") + galleryStyleOf(card.getAttribute("data-style")).label + ".");
         renderSettings(true);
       } catch (err) {
         toast(err.message, true);
@@ -849,7 +1190,7 @@
         var layout = btn.getAttribute("data-layout");
         try {
           await api("POST", "/account/defaults", { defaultLayout: layout });
-          toast("Présentation par défaut mise à jour.");
+          toast(L("Présentation par défaut mise à jour.", "Default look updated."));
           renderSettings(true);
         } catch (err) {
           toast(err.message, true);
@@ -868,7 +1209,7 @@
           address: form.address.value.trim(),
           vatNumber: form.vatNumber.value.trim(),
         });
-        toast("Coordonnées de facturation enregistrées.");
+        toast(L("Coordonnées de facturation enregistrées.", "Billing details saved."));
       } catch (err) {
         toast(err.message, true);
       } finally {
@@ -885,11 +1226,12 @@
       errorBox.hidden = true;
       messageBox.hidden = true;
       btn.disabled = true;
-      btn.textContent = "Envoi…";
+      btn.textContent = L("Envoi…", "Sending…");
       try {
         var newEmail = form.newEmail.value.trim();
         await api("POST", "/account/email", { newEmail: newEmail, password: form.password.value });
-        messageBox.textContent = "Un lien de confirmation a été envoyé à " + newEmail + ". Ouvrez-le pour finaliser le changement — rien ne change avant ça.";
+        messageBox.textContent = L("Un lien de confirmation a été envoyé à " + newEmail + ". Ouvrez-le pour finaliser le changement — rien ne change avant ça.",
+          "A confirmation link was sent to " + newEmail + ". Open it to complete the change — nothing changes before that.");
         messageBox.hidden = false;
         form.reset();
       } catch (err) {
@@ -897,7 +1239,7 @@
         errorBox.hidden = false;
       } finally {
         btn.disabled = false;
-        btn.textContent = "Envoyer le lien de confirmation";
+        btn.textContent = L("Envoyer le lien de confirmation", "Send the confirmation link");
       }
     });
 
@@ -913,7 +1255,7 @@
           currentPassword: form.currentPassword.value,
           newPassword: form.newPassword.value,
         });
-        toast("Mot de passe changé.");
+        toast(L("Mot de passe changé.", "Password changed."));
         form.reset();
       } catch (err) {
         errorBox.textContent = err.message;
@@ -936,40 +1278,56 @@
   // Stripe ; changer de formule, de carte ou résilier, par le portail Stripe.
 
   function euros(cents) {
-    return formatEuros(cents).replace(",00", "");
+    return formatEuros(cents).replace(",00", "").replace(/\.00$/, "");
+  }
+
+  // Formules en anglais (nom et accroche), d'après leur clé.
+  var PLANS_EN = {
+    free: ["Free", "To try it: 3 active galleries, full protection, proofing, HD delivery."],
+    essentiel: ["Essentials", "25 active galleries, the print shop and extras paid online."],
+    pro: ["Pro", "Unlimited galleries, online booking and contracts, sales campaigns, and galleries in your name (your-studio.holypixx.com)."],
+    scolaire: ["School", "For photographers who only do school photos: you only pay on what you sell."],
+    studio: ["Studio", "Everything in Pro, plus schools, nurseries and clubs, with no commission."],
+  };
+  function planLabel(plan) {
+    return LANG === "en" && PLANS_EN[plan.key] ? PLANS_EN[plan.key][0] : plan.label;
+  }
+  function planPitch(plan) {
+    return LANG === "en" && PLANS_EN[plan.key] ? PLANS_EN[plan.key][1] : plan.pitch;
   }
 
   // Prix affiché d'une formule (HTML) : mensuel ou annuel, et prix
   // Fondateurs barrant le prix normal quand l'offre s'applique.
   function planPriceHtml(plan, interval, founder) {
     if (plan.noSubscription) {
-      return "Sans abonnement" + '<span class="ad-plan-price-note">' + esc(String(plan.schoolFeePercent).replace(".", ",")) + " % sur les ventes scolaires, frais bancaires compris</span>";
+      return L("Sans abonnement", "No subscription") + '<span class="ad-plan-price-note">' + esc(L(String(plan.schoolFeePercent).replace(".", ",") + " %", plan.schoolFeePercent + "%")) +
+        L(" sur les ventes scolaires, frais bancaires compris", " of school sales, bank fees included") + "</span>";
     }
-    if (!plan.priceCents) return "Gratuit";
+    if (!plan.priceCents) return L("Gratuit", "Free");
     // Studio : paiement annuel seulement (la photo scolaire est saisonnière).
     if (plan.yearlyOnly) {
       if (founder && plan.founderYearlyCents) {
-        return "<s>" + esc(euros(plan.yearlyCents)) + "</s> " + esc(euros(plan.founderYearlyCents)) + " / an" +
-          '<span class="ad-plan-price-note">la 1re année, puis ' + esc(euros(plan.yearlyCents)) + " / an</span>";
+        return "<s>" + esc(euros(plan.yearlyCents)) + "</s> " + esc(euros(plan.founderYearlyCents)) + L(" / an", " / year") +
+          '<span class="ad-plan-price-note">' + L("la 1re année, puis ", "the first year, then ") + esc(euros(plan.yearlyCents)) + L(" / an", " / year") + "</span>";
       }
-      return esc(euros(plan.yearlyCents)) + " / an" +
-        '<span class="ad-plan-price-note">soit ' + esc(euros(Math.round(plan.yearlyCents / 12))) + " / mois, paiement annuel</span>";
+      return esc(euros(plan.yearlyCents)) + L(" / an", " / year") +
+        '<span class="ad-plan-price-note">' + L("soit ", "that's ") + esc(euros(Math.round(plan.yearlyCents / 12))) + L(" / mois, paiement annuel", " / month, paid yearly") + "</span>";
     }
     var yearly = interval === "year";
     var normal = yearly ? plan.yearlyCents : plan.priceCents;
-    var unit = yearly ? " / an" : " / mois";
+    var unit = yearly ? L(" / an", " / year") : L(" / mois", " / month");
     if (founder && plan.founderCents) {
       var reduced = yearly ? plan.founderYearlyCents : plan.founderCents;
       return "<s>" + esc(euros(normal)) + "</s> " + esc(euros(reduced)) + esc(unit) +
-        '<span class="ad-plan-price-note">la 1re année, puis ' + esc(euros(normal)) + esc(unit) + "</span>";
+        '<span class="ad-plan-price-note">' + L("la 1re année, puis ", "the first year, then ") + esc(euros(normal)) + esc(unit) + "</span>";
     }
     return esc(euros(normal)) + esc(unit) +
-      (yearly ? '<span class="ad-plan-price-note">soit ' + esc(euros(Math.round(normal / 12))) + " / mois, 2 mois offerts</span>" : "");
+      (yearly ? '<span class="ad-plan-price-note">' + L("soit ", "that's ") + esc(euros(Math.round(normal / 12))) + L(" / mois, 2 mois offerts", " / month, 2 months free") + "</span>" : "");
   }
 
   // Compatibilité : prix mensuel en texte (ailleurs dans l'admin).
   function planPrice(plan) {
-    return plan.priceCents ? euros(plan.priceCents) + " / mois" : "Gratuit";
+    return plan.priceCents ? euros(plan.priceCents) + L(" / mois", " / month") : L("Gratuit", "Free");
   }
 
   /* ---------- Portfolio : mini-site public du photographe ---------- */
@@ -1446,10 +1804,10 @@
   // « 5 Go », « 200 Go », « 1 To » — mêmes unités que storage.js.
   function formatStorage(bytes) {
     var n = Math.max(0, Number(bytes) || 0);
-    var fmt = function (v, unit) { return v.toLocaleString("fr-FR", { maximumFractionDigits: v < 10 ? 1 : 0 }) + " " + unit; };
-    if (n >= 1e12) return fmt(n / 1e12, "To");
-    if (n >= 1e9) return fmt(n / 1e9, "Go");
-    return fmt(n / 1e6, "Mo");
+    var fmt = function (v, unit) { return v.toLocaleString(locale(), { maximumFractionDigits: v < 10 ? 1 : 0 }) + " " + unit; };
+    if (n >= 1e12) return fmt(n / 1e12, L("To", "TB"));
+    if (n >= 1e9) return fmt(n / 1e9, L("Go", "GB"));
+    return fmt(n / 1e6, L("Mo", "MB"));
   }
 
   // Jauge d'espace utilisé : la couleur ne porte jamais seule l'information,
@@ -1459,27 +1817,28 @@
     var unlimited = storage.quotaBytes === null;
     var ratio = unlimited ? 0 : Math.min(1, storage.usedBytes / storage.quotaBytes);
     var level = ratio >= 0.95 ? " ad-gauge-full" : ratio >= 0.8 ? " ad-gauge-warn" : "";
-    return '<div class="ad-storage"><p class="ad-hint">Stockage</p>' +
-      '<p class="ad-plan-usage" id="ad-storage-text">' + esc(storage.usedLabel) + (unlimited ? " (illimité)" : " sur " + esc(storage.quotaLabel)) + "</p>" +
-      (unlimited ? "" : '<div class="ad-gauge' + level + '" role="meter" aria-label="Espace de stockage utilisé" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' +
+    var gb = function (label) { return LANG === "en" ? String(label || "").replace(/ Go$/, " GB").replace(/ Mo$/, " MB").replace(/ To$/, " TB").replace(",", ".") : label; };
+    return '<div class="ad-storage"><p class="ad-hint">' + L("Stockage", "Storage") + "</p>" +
+      '<p class="ad-plan-usage" id="ad-storage-text">' + esc(gb(storage.usedLabel)) + (unlimited ? L(" (illimité)", " (unlimited)") : L(" sur ", " of ") + esc(gb(storage.quotaLabel))) + "</p>" +
+      (unlimited ? "" : '<div class="ad-gauge' + level + '" role="meter" aria-label="' + L("Espace de stockage utilisé", "Storage used") + '" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' +
         Math.round(ratio * 100) + '"><span style="width:' + (ratio * 100).toFixed(1) + '%"></span></div>') +
-      (ratio >= 0.8 && !unlimited ? '<p class="ad-hint ad-gauge-note">' + (ratio >= 1 ? "Espace plein : les nouveaux envois sont refusés." : "Bientôt plein.") +
-        " Supprimez d'anciennes galeries ou livraisons, ou passez à la formule supérieure.</p>" : "") +
+      (ratio >= 0.8 && !unlimited ? '<p class="ad-hint ad-gauge-note">' + (ratio >= 1 ? L("Espace plein : les nouveaux envois sont refusés.", "Storage full: new uploads are refused.") : L("Bientôt plein.", "Almost full.")) +
+        L(" Supprimez d'anciennes galeries ou livraisons, ou passez à la formule supérieure.", " Delete old galleries or deliveries, or move up a plan.") + "</p>" : "") +
       "</div>";
   }
 
   function planFeaturesHtml(plan, schoolOpen) {
     var items = [
-      plan.maxActiveGalleries === null ? "Galeries actives illimitées" : plan.maxActiveGalleries + " galeries actives",
-      plan.storageBytes ? formatStorage(plan.storageBytes) + " de stockage" : "",
-      "Protection, sélection, musique et livraison HD",
-      (plan.features.shop ? "✓ " : "— ") + "Boutique de tirages",
-      (plan.features.extras ? "✓ " : "— ") + "Suppléments payés en ligne, factures",
-      (plan.features.campaigns ? "✓ " : "— ") + "Campagnes de vente (promotions, relances)",
-      (plan.features.subdomain ? "✓ " : "— ") + "Vos galeries à votre nom",
-      (plan.features.booking ? "✓ " : "— ") + "Réservation en ligne avec acompte",
-      (plan.features.contracts ? "✓ " : "— ") + "Devis et contrats signés en ligne",
-      plan.features.school && schoolOpen ? "✓ Écoles, crèches et clubs" + (plan.schoolFeePercent ? " (" + String(plan.schoolFeePercent).replace(".", ",") + " % des ventes scolaires)" : ", sans commission") : "",
+      plan.maxActiveGalleries === null ? L("Galeries actives illimitées", "Unlimited active galleries") : plan.maxActiveGalleries + L(" galeries actives", " active galleries"),
+      plan.storageBytes ? formatStorage(plan.storageBytes) + L(" de stockage", " of storage") : "",
+      L("Protection, sélection, musique et livraison HD", "Protection, proofing, music and HD delivery"),
+      (plan.features.shop ? "✓ " : "— ") + L("Boutique de tirages", "Print shop"),
+      (plan.features.extras ? "✓ " : "— ") + L("Suppléments payés en ligne, factures", "Extras paid online, invoices"),
+      (plan.features.campaigns ? "✓ " : "— ") + L("Campagnes de vente (promotions, relances)", "Sales campaigns (promotions, reminders)"),
+      (plan.features.subdomain ? "✓ " : "— ") + L("Vos galeries à votre nom", "Galleries in your name"),
+      (plan.features.booking ? "✓ " : "— ") + L("Réservation en ligne avec acompte", "Online booking with deposit"),
+      (plan.features.contracts ? "✓ " : "— ") + L("Devis et contrats signés en ligne", "Quotes and contracts signed online"),
+      plan.features.school && schoolOpen ? L("✓ Écoles, crèches et clubs", "✓ Schools, nurseries and clubs") + (plan.schoolFeePercent ? L(" (" + String(plan.schoolFeePercent).replace(".", ",") + " % des ventes scolaires)", " (" + plan.schoolFeePercent + "% of school sales)") : L(", sans commission", ", no commission")) : "",
     ];
     return '<ul class="ad-plan-features">' + items.filter(Boolean).map(function (t) { return "<li>" + esc(t) + "</li>"; }).join("") + "</ul>";
   }
@@ -1492,7 +1851,7 @@
     if (!skipHash && location.hash.indexOf("#/abonnement") !== 0) history.pushState(null, "", "#/abonnement");
     if (returned) history.replaceState(null, "", "#/abonnement");
     setActiveTab("subscription");
-    el.view.innerHTML = '<p class="ad-loading">Chargement…</p>';
+    el.view.innerHTML = '<p class="ad-loading">' + L("Chargement…", "Loading…") + "</p>";
 
     var data;
     try {
@@ -1514,16 +1873,17 @@
 
     var current = data.plan;
     var status = "";
-    var billing = data.interval === "year" ? "Facturation annuelle. " : "";
-    if (data.owner) status = "Compte propriétaire : toutes les fonctionnalités sont incluses.";
-    else if (current.key !== "free" && data.cancelAtPeriodEnd && data.renewsAt) status = "Résiliation programmée : votre formule reste active jusqu'au " + formatDate(data.renewsAt) + ".";
-    else if (current.key !== "free" && data.status === "past_due") status = "Le dernier prélèvement a échoué : mettez à jour votre carte depuis « Gérer mon abonnement ».";
-    else if (current.key !== "free" && data.status === "trialing" && data.renewsAt) status = "Essai gratuit jusqu'au " + formatDate(data.renewsAt) + ", puis premier prélèvement automatique (résiliable avant, sans frais).";
-    else if (current.key !== "free" && data.renewsAt) status = billing + "Prochain renouvellement le " + formatDate(data.renewsAt) + ".";
-    if (data.isFounder && current.key !== "free" && !data.owner) status += " Tarif Fondateurs la première année.";
+    var billing = data.interval === "year" ? L("Facturation annuelle. ", "Billed yearly. ") : "";
+    if (data.owner) status = L("Compte propriétaire : toutes les fonctionnalités sont incluses.", "Owner account: every feature is included.");
+    else if (current.key !== "free" && data.cancelAtPeriodEnd && data.renewsAt) status = L("Résiliation programmée : votre formule reste active jusqu'au ", "Cancellation scheduled: your plan stays active until ") + formatDate(data.renewsAt) + ".";
+    else if (current.key !== "free" && data.status === "past_due") status = L("Le dernier prélèvement a échoué : mettez à jour votre carte depuis « Gérer mon abonnement ».", "The last payment failed: update your card from “Manage my subscription”.");
+    else if (current.key !== "free" && data.status === "trialing" && data.renewsAt) status = L("Essai gratuit jusqu'au " + formatDate(data.renewsAt) + ", puis premier prélèvement automatique (résiliable avant, sans frais).",
+      "Free trial until " + formatDate(data.renewsAt) + ", then the first automatic payment (cancel before then at no cost).");
+    else if (current.key !== "free" && data.renewsAt) status = billing + L("Prochain renouvellement le ", "Next renewal on ") + formatDate(data.renewsAt) + ".";
+    if (data.isFounder && current.key !== "free" && !data.owner) status += L(" Tarif Fondateurs la première année.", " Founders' price for the first year.");
     var usage = current.maxActiveGalleries === null
-      ? data.usage.activeGalleries + " galerie" + (data.usage.activeGalleries > 1 ? "s" : "") + " active" + (data.usage.activeGalleries > 1 ? "s" : "")
-      : data.usage.activeGalleries + " / " + current.maxActiveGalleries + " galeries actives";
+      ? data.usage.activeGalleries + L(" galerie" + (data.usage.activeGalleries > 1 ? "s" : "") + " active" + (data.usage.activeGalleries > 1 ? "s" : ""), " active galler" + (data.usage.activeGalleries === 1 ? "y" : "ies"))
+      : data.usage.activeGalleries + " / " + current.maxActiveGalleries + L(" galeries actives", " active galleries");
 
     var interval = data.interval === "year" && current.key !== "free" ? "year" : subscriptionInterval;
     if (!data.plans.some(function (p) { return p.yearlyCents; })) interval = "month";
@@ -1533,26 +1893,25 @@
         var isCurrent = plan.key === current.key;
         var action;
         if (isCurrent) {
-          action = '<span class="ad-badge ad-badge-selected">✓ Votre formule</span>' +
-            (plan.noSubscription && !data.owner ? ' <button type="button" class="ad-link-btn" data-scolaire="off">Revenir à Découverte</button>' : "");
+          action = '<span class="ad-badge ad-badge-selected">' + L("✓ Votre formule", "✓ Your plan") + "</span>" +
+            (plan.noSubscription && !data.owner ? ' <button type="button" class="ad-link-btn" data-scolaire="off">' + L("Revenir à Découverte", "Back to Free") + "</button>" : "");
         } else if (data.owner) action = "";
         else if (plan.noSubscription) {
           action = current.key === "free"
-            ? '<button type="button" class="ad-btn ad-btn-primary" data-scolaire="on">Activer, sans abonnement</button>'
-            : '<p class="ad-hint">Disponible une fois votre abonnement actuel résilié.</p>';
+            ? '<button type="button" class="ad-btn ad-btn-primary" data-scolaire="on">' + L("Activer, sans abonnement", "Turn on, no subscription") + "</button>"
+            : '<p class="ad-hint">' + L("Disponible une fois votre abonnement actuel résilié.", "Available once your current subscription is cancelled.") + "</p>";
         }
-        else if (data.canManage && current.key !== "scolaire") action = '<button type="button" class="ad-btn" data-portal>Changer de formule</button>';
-        else if (data.canManage) action = '<button type="button" class="ad-btn" data-portal>Changer de formule</button>';
+        else if (data.canManage) action = '<button type="button" class="ad-btn" data-portal>' + L("Changer de formule", "Change plan") + "</button>";
         else if (plan.key === "free") action = "";
         else action = '<button type="button" class="ad-btn ad-btn-primary" data-subscribe="' + esc(plan.key) + '"' + (data.stripeConfigured ? "" : " disabled") + ">" +
-          (data.trialAvailable ? "Essayer " + data.trialDays + " jours gratuitement" : "Choisir " + esc(plan.label)) + "</button>" +
-          (data.trialAvailable ? '<p class="ad-hint ad-plan-trial">Aucun prélèvement pendant l\'essai ; résiliable avant la fin, sans frais.</p>' : "");
+          (data.trialAvailable ? L("Essayer " + data.trialDays + " jours gratuitement", "Try free for " + data.trialDays + " days") : L("Choisir ", "Choose ") + esc(planLabel(plan))) + "</button>" +
+          (data.trialAvailable ? '<p class="ad-hint ad-plan-trial">' + L("Aucun prélèvement pendant l'essai ; résiliable avant la fin, sans frais.", "No charge during the trial; cancel before it ends at no cost.") + "</p>" : "");
         var planFounder = plan.key === "studio" ? studioFounder && data.studioFounders && data.studioFounders.remaining > 0 : founder;
         return (
           '<article class="ad-plan' + (isCurrent ? " ad-plan-current" : "") + (plan.key === "pro" || plan.key === "studio" ? " ad-plan-featured" : "") + '">' +
-          "<h3>" + esc(plan.label) + "</h3>" +
+          "<h3>" + esc(planLabel(plan)) + "</h3>" +
           '<p class="ad-plan-price">' + planPriceHtml(plan, interval, planFounder) + "</p>" +
-          '<p class="ad-hint">' + esc(plan.pitch) + "</p>" +
+          '<p class="ad-hint">' + esc(planPitch(plan)) + "</p>" +
           planFeaturesHtml(plan, data.schoolOpen) + action + "</article>"
         );
     }
@@ -1562,45 +1921,50 @@
       var galleries = data.plans.filter(function (p) { return !p.schoolPlan; });
       var school = data.plans.filter(function (p) { return p.schoolPlan; });
       return galleries.map(planCardHtml).join("") +
-        (school.length ? '<h3 class="ad-plans-group">Avec les écoles, crèches et clubs</h3>' + school.map(planCardHtml).join("") : "");
+        (school.length ? '<h3 class="ad-plans-group">' + L("Avec les écoles, crèches et clubs", "With schools, nurseries and clubs") + "</h3>" + school.map(planCardHtml).join("") : "");
     }
     // Bascule annuelle seulement si le Worker connaît les prix annuels.
     var intervalSwitch = (current.key === "free" || current.key === "scolaire") && !data.owner && data.plans.some(function (p) { return p.yearlyCents; })
-      ? '<div class="ad-seg ad-interval" role="group" aria-label="Période de facturation">' +
-        '<button type="button" class="ad-seg-btn" data-interval="month" aria-pressed="' + (interval === "month") + '">Mensuel</button>' +
-        '<button type="button" class="ad-seg-btn" data-interval="year" aria-pressed="' + (interval === "year") + '">Annuel · 2 mois offerts</button></div>'
+      ? '<div class="ad-seg ad-interval" role="group" aria-label="' + L("Période de facturation", "Billing period") + '">' +
+        '<button type="button" class="ad-seg-btn" data-interval="month" aria-pressed="' + (interval === "month") + '">' + L("Mensuel", "Monthly") + "</button>" +
+        '<button type="button" class="ad-seg-btn" data-interval="year" aria-pressed="' + (interval === "year") + '">' + L("Annuel · 2 mois offerts", "Yearly · 2 months free") + "</button></div>"
       : "";
     var founderBanner = founder && data.founders.remaining > 0
-      ? '<p class="ad-banner ad-founders">🎉 <strong>Offre Fondateurs</strong> : plus que ' + data.founders.remaining + " place" + (data.founders.remaining > 1 ? "s" : "") +
-        ". Essentiel à " + esc(euros(data.plans[1].founderCents)) + " et Pro à " + esc(euros(data.plans[2].founderCents)) + " par mois pendant toute la première année, puis le prix normal.</p>"
+      ? '<p class="ad-banner ad-founders">' + L("🎉 <strong>Offre Fondateurs</strong> : plus que " + data.founders.remaining + " place" + (data.founders.remaining > 1 ? "s" : "") +
+        ". Essentiel à " + esc(euros(data.plans[1].founderCents)) + " et Pro à " + esc(euros(data.plans[2].founderCents)) + " par mois pendant toute la première année, puis le prix normal.",
+        "🎉 <strong>Founders' offer</strong>: only " + data.founders.remaining + " spot" + (data.founders.remaining > 1 ? "s" : "") +
+        " left. Essentials at " + esc(euros(data.plans[1].founderCents)) + " and Pro at " + esc(euros(data.plans[2].founderCents)) + " a month for the whole first year, then the normal price.") + "</p>"
       : "";
     var studioPlan = data.plans.find(function (p) { return p.key === "studio"; });
     if (studioPlan && studioFounder && data.studioFounders && data.studioFounders.remaining > 0) {
-      founderBanner += '<p class="ad-banner ad-founders">🎓 <strong>Fondateurs Studio</strong> : plus que ' + data.studioFounders.remaining + " place" +
-        (data.studioFounders.remaining > 1 ? "s" : "") + ". " + esc(euros(studioPlan.founderYearlyCents)) + " la première année au lieu de " +
-        esc(euros(studioPlan.yearlyCents)) + ".</p>";
+      founderBanner += '<p class="ad-banner ad-founders">' + L("🎓 <strong>Fondateurs Studio</strong> : plus que " + data.studioFounders.remaining + " place" +
+        (data.studioFounders.remaining > 1 ? "s" : "") + ". " + esc(euros(studioPlan.founderYearlyCents)) + " la première année au lieu de " + esc(euros(studioPlan.yearlyCents)) + ".",
+        "🎓 <strong>Studio founders</strong>: only " + data.studioFounders.remaining + " spot" + (data.studioFounders.remaining > 1 ? "s" : "") + " left. " +
+        esc(euros(studioPlan.founderYearlyCents)) + " the first year instead of " + esc(euros(studioPlan.yearlyCents)) + ".") + "</p>";
     }
 
     el.view.innerHTML =
-      '<header class="ad-detail-header"><div><h2>Abonnement</h2>' +
-      '<p class="ad-hint">Votre formule Holypixx. Sans engagement : résiliable à tout moment, effet à la fin de la période payée.</p>' +
+      '<header class="ad-detail-header"><div><h2>' + L("Abonnement", "Subscription") + "</h2>" +
+      '<p class="ad-hint">' + L("Votre formule Holypixx. Sans engagement : résiliable à tout moment, effet à la fin de la période payée.",
+        "Your Holypixx plan. No commitment: cancel any time, effective at the end of the paid period.") + "</p>" +
       "</div></header>" +
       (returned ? '<p class="ad-banner' + (returned[1] === "merci" ? "" : " ad-banner-muted") + '">' +
-        (returned[1] === "merci" ? "Merci ! Votre abonnement est enregistré." : "Paiement annulé : votre formule n'a pas changé.") + "</p>" : "") +
-      '<section class="ad-plan-summary"><div><p class="ad-hint">Formule actuelle</p><p class="ad-plan-name">' + esc(current.label) + "</p>" +
+        (returned[1] === "merci" ? L("Merci ! Votre abonnement est enregistré.", "Thank you! Your subscription is active.") : L("Paiement annulé : votre formule n'a pas changé.", "Payment cancelled: your plan hasn't changed.")) + "</p>" : "") +
+      '<section class="ad-plan-summary"><div><p class="ad-hint">' + L("Formule actuelle", "Current plan") + '</p><p class="ad-plan-name">' + esc(planLabel(current)) + "</p>" +
       (status ? '<p class="ad-hint">' + esc(status) + "</p>" : "") + "</div>" +
-      '<div><p class="ad-hint">Utilisation</p><p class="ad-plan-usage">' + esc(usage) + "</p></div>" +
+      '<div><p class="ad-hint">' + L("Utilisation", "Usage") + '</p><p class="ad-plan-usage">' + esc(usage) + "</p></div>" +
       storageGaugeHtml(data.usage.storage) +
-      (data.canManage ? '<button type="button" class="ad-btn" data-portal>Gérer mon abonnement</button>' : "") +
+      (data.canManage ? '<button type="button" class="ad-btn" data-portal>' + L("Gérer mon abonnement", "Manage my subscription") + "</button>" : "") +
       "</section>" +
-      (data.stripeConfigured || data.owner ? "" : '<p class="ad-hint">Le paiement des abonnements n\'est pas encore ouvert sur la plateforme.</p>') +
+      (data.stripeConfigured || data.owner ? "" : '<p class="ad-hint">' + L("Le paiement des abonnements n'est pas encore ouvert sur la plateforme.", "Subscription payments aren't open on the platform yet.") + "</p>") +
       founderBanner + intervalSwitch +
       '<div class="ad-plans" id="ad-plans">' + cardsHtml() + "</div>" +
       '<section class="ad-referral" id="ad-referral" hidden></section>' +
-      '<p class="ad-hint">Prix TTC. Les fichiers HD livrés et les fichiers d\'impression d\'une galerie expirée depuis ' +
-      ((data.usage.storage && data.usage.storage.purgeAfterExpiryDays) || 90) + " jours sont effacés automatiquement, avec un e-mail de rappel 14 jours avant ; les photos de la galerie restent. " +
-      'Paiement sécurisé par Stripe ; factures disponibles dans « Gérer mon abonnement ». ' +
-      'Voir les <a href="https://www.holypixx.com/conditions" target="_blank" rel="noopener">conditions d\'utilisation</a>.</p>';
+      '<p class="ad-hint">' + L("Prix TTC. Les fichiers HD livrés et les fichiers d'impression d'une galerie expirée depuis ", "Prices include VAT. Delivered HD files and print files of a gallery that expired ") +
+      ((data.usage.storage && data.usage.storage.purgeAfterExpiryDays) || 90) +
+      L(" jours sont effacés automatiquement, avec un e-mail de rappel 14 jours avant ; les photos de la galerie restent. Paiement sécurisé par Stripe ; factures disponibles dans « Gérer mon abonnement ». Voir les ",
+        " days ago are deleted automatically, with a reminder email 14 days before; the gallery's photos stay. Secure payment by Stripe; invoices in “Manage my subscription”. See the ") +
+      '<a href="https://www.holypixx.com/conditions" target="_blank" rel="noopener">' + L("conditions d'utilisation", "terms of service (in French)") + "</a>.</p>";
 
     function wireSubscribe() {
       el.view.querySelectorAll("[data-subscribe]").forEach(function (btn) {
@@ -1622,7 +1986,7 @@
           btn.disabled = true;
           try {
             await api("POST", "/subscription/scolaire", { on: btn.getAttribute("data-scolaire") === "on" });
-            toast(btn.getAttribute("data-scolaire") === "on" ? "Formule Scolaire activée." : "Retour à la formule Découverte.");
+            toast(btn.getAttribute("data-scolaire") === "on" ? L("Formule Scolaire activée.", "School plan on.") : L("Retour à la formule Découverte.", "Back to the Free plan."));
             renderSubscription(true);
           } catch (err) {
             toast(err.message, true);
@@ -1680,45 +2044,53 @@
     }
     var left = card.perCard - card.stamps;
     var progress = card.stamps
-      ? "Encore " + left + " confrère" + (left > 1 ? "s" : "") + " abonné" + (left > 1 ? "s" : "") + " pour un mois offert."
-      : "Trois confrères abonnés, un mois offert.";
+      ? L("Encore " + left + " confrère" + (left > 1 ? "s" : "") + " abonné" + (left > 1 ? "s" : "") + " pour un mois offert.",
+          left + " more subscribed photographer" + (left > 1 ? "s" : "") + " for a free month.")
+      : L("Trois confrères abonnés, un mois offert.", "Three subscribed photographers, one free month.");
     var rewards = [];
-    if (card.granted) rewards.push(card.granted + " mois offert" + (card.granted > 1 ? "s" : "") + (card.grantedThisYear ? " (dont " + card.grantedThisYear + " ces douze derniers mois)" : ""));
+    if (card.granted) rewards.push(L(card.granted + " mois offert" + (card.granted > 1 ? "s" : "") + (card.grantedThisYear ? " (dont " + card.grantedThisYear + " ces douze derniers mois)" : ""),
+      card.granted + " free month" + (card.granted > 1 ? "s" : "") + (card.grantedThisYear ? " (" + card.grantedThisYear + " in the last twelve months)" : "")));
     if (card.waiting) {
-      rewards.push(card.waiting + " en attente" + (card.room === 0 && card.nextFreeAt
-        ? " : plafond de " + ref.maxPerYear + " mois par an atteint, crédité le " + formatDate(card.nextFreeAt)
-        : " : crédité dès que vous avez un abonnement payant"));
+      rewards.push(card.waiting + L(" en attente", " pending") + (card.room === 0 && card.nextFreeAt
+        ? L(" : plafond de " + ref.maxPerYear + " mois par an atteint, crédité le ", ": yearly cap of " + ref.maxPerYear + " months reached, credited on ") + formatDate(card.nextFreeAt)
+        : L(" : crédité dès que vous avez un abonnement payant", ": credited as soon as you have a paid subscription")));
     }
-    var message = "Je gère mes galeries clients avec Holypixx : photos protégées, sélection, tirages et réservation en ligne. " +
-      "Avec mon lien, tu as −" + ref.discountPercent + " % sur ton mois suivant dès ton abonnement : " + ref.link;
+    var message = L("Je gère mes galeries clients avec Holypixx : photos protégées, sélection, tirages et réservation en ligne. " +
+      "Avec mon lien, tu as −" + ref.discountPercent + " % sur ton mois suivant dès ton abonnement : ",
+      "I run my client galleries with Holypixx: protected photos, proofing, prints and online booking. " +
+      "With my link, you get " + ref.discountPercent + "% off your following month once you subscribe: ") + ref.link;
     var filleuls = ref.filleuls.length
       ? '<ul class="ad-ref-list">' + ref.filleuls.map(function (f) {
           return "<li><span>" + esc(f.name) + '</span><span class="ad-hint">' +
-            (f.paid ? '<span class="ad-ref-ok">Abonné · case gagnée</span>' : "Inscrit le " + esc(formatDate(f.since)) + ", pas encore abonné") + "</span></li>";
+            (f.paid ? '<span class="ad-ref-ok">' + L("Abonné · case gagnée", "Subscribed · stamp earned") + "</span>"
+              : L("Inscrit le ", "Signed up on ") + esc(formatDate(f.since)) + L(", pas encore abonné", ", not subscribed yet")) + "</span></li>";
         }).join("") + "</ul>"
-      : '<p class="ad-hint">Aucun confrère parrainé pour l\'instant.</p>';
+      : '<p class="ad-hint">' + L("Aucun confrère parrainé pour l'instant.", "No referred photographers yet.") + "</p>";
     box.innerHTML =
-      '<div class="ad-section-header"><h3>Parrainez un confrère</h3></div>' +
-      (ref.referredBy ? '<p class="ad-banner ad-banner-muted">Parrainé par <strong>' + esc(ref.referredBy.name) + "</strong> : " +
-        (ref.referredBy.rewarded ? "votre −" + ref.discountPercent + " % est déduit de votre prochaine facture" + (ref.referredBy.creditCents ? " (" + esc(euros(ref.referredBy.creditCents)) + ")" : "") + "."
-          : "−" + ref.discountPercent + " % sur votre mois suivant, dès votre premier paiement.") + "</p>" : "") +
+      '<div class="ad-section-header"><h3>' + L("Parrainez un confrère", "Refer a fellow photographer") + "</h3></div>" +
+      (ref.referredBy ? '<p class="ad-banner ad-banner-muted">' + L("Parrainé par <strong>", "Referred by <strong>") + esc(ref.referredBy.name) + "</strong>" + L(" : ", ": ") +
+        (ref.referredBy.rewarded ? L("votre −" + ref.discountPercent + " % est déduit de votre prochaine facture", "your " + ref.discountPercent + "% off is deducted from your next invoice") + (ref.referredBy.creditCents ? " (" + esc(euros(ref.referredBy.creditCents)) + ")" : "") + "."
+          : L("−" + ref.discountPercent + " % sur votre mois suivant, dès votre premier paiement.", ref.discountPercent + "% off your following month, from your first payment.")) + "</p>" : "") +
       '<div class="ad-ref-grid">' +
-      '<div class="ad-ref-card" role="img" aria-label="Carte de fidélité : ' + card.stamps + " case" + (card.stamps > 1 ? "s" : "") + " sur " + card.perCard + '">' +
-      '<p class="ad-ref-card-title">Votre carte de parrain</p>' +
+      '<div class="ad-ref-card" role="img" aria-label="' + L("Carte de fidélité : " + card.stamps + " case" + (card.stamps > 1 ? "s" : "") + " sur " + card.perCard,
+        "Loyalty card: " + card.stamps + " stamp" + (card.stamps === 1 ? "" : "s") + " of " + card.perCard) + '">' +
+      '<p class="ad-ref-card-title">' + L("Votre carte de parrain", "Your referral card") + "</p>" +
       '<div class="ad-ref-stamps">' + stamps + "</div>" +
-      '<p class="ad-ref-card-gift">= 1 mois offert</p>' +
+      '<p class="ad-ref-card-gift">' + L("= 1 mois offert", "= 1 free month") + "</p>" +
       "</div>" +
       '<div class="ad-ref-side">' +
       "<p>" + esc(progress) + "</p>" +
       (rewards.length ? '<p class="ad-hint">' + esc(rewards.join(" · ")) + "</p>" : "") +
-      '<p class="ad-hint">Votre confrère a −' + ref.discountPercent + " % sur son mois suivant dès son premier paiement, et vous gagnez une case. " +
-      "Trois cases, un mois offert, " + ref.maxPerYear + " au plus par an. Les mois offerts sont déduits de vos prochaines factures.</p>" +
-      '<label class="ad-field"><span>Votre lien</span><div class="ad-copy-row"><input type="text" id="ad-ref-link" readonly value="' + esc(ref.link) + '" />' +
-      '<button type="button" class="ad-btn" data-copy="ad-ref-link">Copier</button></div></label>' +
-      '<label class="ad-field"><span>Message prêt à envoyer</span><textarea id="ad-ref-message" rows="4" readonly>' + esc(message) + "</textarea></label>" +
-      '<button type="button" class="ad-btn" data-copy="ad-ref-message">Copier le message</button>' +
+      '<p class="ad-hint">' + L("Votre confrère a −" + ref.discountPercent + " % sur son mois suivant dès son premier paiement, et vous gagnez une case. " +
+        "Trois cases, un mois offert, " + ref.maxPerYear + " au plus par an. Les mois offerts sont déduits de vos prochaines factures.",
+        "The photographer you refer gets " + ref.discountPercent + "% off their following month from their first payment, and you earn a stamp. " +
+        "Three stamps, one free month, at most " + ref.maxPerYear + " a year. Free months are deducted from your next invoices.") + "</p>" +
+      '<label class="ad-field"><span>' + L("Votre lien", "Your link") + '</span><div class="ad-copy-row"><input type="text" id="ad-ref-link" readonly value="' + esc(ref.link) + '" />' +
+      '<button type="button" class="ad-btn" data-copy="ad-ref-link">' + L("Copier", "Copy") + "</button></div></label>" +
+      '<label class="ad-field"><span>' + L("Message prêt à envoyer", "Ready-to-send message") + '</span><textarea id="ad-ref-message" rows="4" readonly>' + esc(message) + "</textarea></label>" +
+      '<button type="button" class="ad-btn" data-copy="ad-ref-message">' + L("Copier le message", "Copy the message") + "</button>" +
       "</div></div>" +
-      '<h4 class="ad-ref-heading">Vos filleuls</h4>' + filleuls;
+      '<h4 class="ad-ref-heading">' + L("Vos filleuls", "Your referrals") + "</h4>" + filleuls;
     box.hidden = false;
   }
 
@@ -1728,42 +2100,46 @@
   // admin-server calcule leur CRC-32 (nécessaire au ZIP du Worker).
 
   function formatBytes(bytes) {
-    if (bytes >= 1024 * 1024 * 1024) return (bytes / (1024 * 1024 * 1024)).toFixed(1).replace(".", ",") + " Go";
-    if (bytes >= 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1).replace(".", ",") + " Mo";
-    return Math.max(1, Math.round(bytes / 1024)) + " Ko";
+    var dec = function (v) { var t = v.toFixed(1); return LANG === "en" ? t : t.replace(".", ","); };
+    if (bytes >= 1024 * 1024 * 1024) return dec(bytes / (1024 * 1024 * 1024)) + L(" Go", " GB");
+    if (bytes >= 1024 * 1024) return dec(bytes / (1024 * 1024)) + L(" Mo", " MB");
+    return Math.max(1, Math.round(bytes / 1024)) + L(" Ko", " KB");
   }
 
   function deliverySectionHtml(gallery) {
     var d = gallery.delivery || { open: false, files: [], totalBytes: 0 };
     var n = d.files.length;
     var status = d.open
-      ? '<span class="ad-badge ad-badge-selected">✓ Livraison ouverte</span> depuis le ' + esc(formatDate(d.openedAt)) +
-        (d.notifiedAt ? " · client prévenu par e-mail le " + esc(formatDate(d.notifiedAt)) : "")
-      : '<span class="ad-hint">Pas encore ouverte : le client ne voit rien tant que vous ne l\'ouvrez pas.</span>';
+      ? '<span class="ad-badge ad-badge-selected">' + L("✓ Livraison ouverte", "✓ Delivery open") + "</span>" + L(" depuis le ", " since ") + esc(formatDate(d.openedAt)) +
+        (d.notifiedAt ? L(" · client prévenu par e-mail le ", " · client emailed on ") + esc(formatDate(d.notifiedAt)) : "")
+      : '<span class="ad-hint">' + L("Pas encore ouverte : le client ne voit rien tant que vous ne l'ouvrez pas.", "Not open yet: your client sees nothing until you open it.") + "</span>";
     var rows = d.files.map(function (f) {
       return (
         '<li data-delivery-file="' + esc(f.id) + '"><span class="ad-delivery-name">' + esc(f.name) + "</span>" +
         '<span class="ad-hint">' + esc(formatBytes(f.size)) + "</span>" +
-        '<button type="button" class="ad-delivery-remove" data-remove-delivery="' + esc(f.id) + '" aria-label="Retirer ' + esc(f.name) + '">&times;</button></li>'
+        '<button type="button" class="ad-delivery-remove" data-remove-delivery="' + esc(f.id) + '" aria-label="' + L("Retirer ", "Remove ") + esc(f.name) + '">&times;</button></li>'
       );
     }).join("");
     var notify = gallery.client_email
-      ? '<label class="ad-check"><input type="checkbox" id="ad-delivery-notify" checked /> Prévenir le client par e-mail (' + esc(gallery.client_email) + ")</label>"
-      : '<p class="ad-hint">Aucun e-mail client renseigné : pensez à prévenir votre client vous-même.</p>';
+      ? '<label class="ad-check"><input type="checkbox" id="ad-delivery-notify" checked /> ' + L("Prévenir le client par e-mail (", "Email the client (") + esc(gallery.client_email) + ")</label>"
+      : '<p class="ad-hint">' + L("Aucun e-mail client renseigné : pensez à prévenir votre client vous-même.", "No client email on file: remember to let your client know yourself.") + "</p>";
     return (
       '<section class="ad-delivery">' +
-      '<div class="ad-section-header"><h3>Livraison des photos définitives</h3></div>' +
-      '<p class="ad-hint">Déposez ici les photos finales, en haute définition et sans filigrane (JPEG, PNG, TIFF… 80 Mo maximum chacune). ' +
-      "Une fois la livraison ouverte, le client les télécharge depuis sa galerie, une par une ou toutes d'un coup (ZIP). " +
-      "Ces fichiers sont effacés 90 jours après l'expiration de la galerie (e-mail de rappel 14 jours avant) : prolongez-la pour les garder.</p>" +
+      '<div class="ad-section-header"><h3>' + L("Livraison des photos définitives", "Final photo delivery") + "</h3></div>" +
+      '<p class="ad-hint">' + L("Déposez ici les photos finales, en haute définition et sans filigrane (JPEG, PNG, TIFF… 80 Mo maximum chacune). " +
+        "Une fois la livraison ouverte, le client les télécharge depuis sa galerie, une par une ou toutes d'un coup (ZIP). " +
+        "Ces fichiers sont effacés 90 jours après l'expiration de la galerie (e-mail de rappel 14 jours avant) : prolongez-la pour les garder.",
+        "Upload the final photos here, in high resolution and without watermark (JPEG, PNG, TIFF… 80 MB max each). " +
+        "Once delivery is open, your client downloads them from their gallery, one by one or all at once (ZIP). " +
+        "These files are deleted 90 days after the gallery expires (reminder email 14 days before): extend it to keep them.") + "</p>" +
       '<p class="ad-delivery-status">' + status + "</p>" +
-      '<div class="ad-bg-custom"><label class="ad-btn">Ajouter des photos' +
+      '<div class="ad-bg-custom"><label class="ad-btn">' + L("Ajouter des photos", "Add photos") +
       '<input type="file" id="ad-delivery-input" accept="image/jpeg,image/png,image/tiff,image/webp,.heic,.tif,.tiff" multiple hidden /></label>' +
-      '<span class="ad-hint" id="ad-delivery-progress">' + (n ? n + " photo" + (n > 1 ? "s" : "") + " · " + esc(formatBytes(d.totalBytes)) : "Aucune photo déposée.") + "</span></div>" +
+      '<span class="ad-hint" id="ad-delivery-progress">' + (n ? n + (n === 1 ? " photo" : " photos") + " · " + esc(formatBytes(d.totalBytes)) : L("Aucune photo déposée.", "No photos uploaded.")) + "</span></div>" +
       (n ? '<ul class="ad-delivery-list">' + rows + "</ul>" : "") +
       (d.open
-        ? '<button type="button" class="ad-btn" id="ad-delivery-close">Fermer la livraison</button>'
-        : (n ? notify + '<button type="button" class="ad-btn ad-btn-primary" id="ad-delivery-open">Ouvrir la livraison au client</button>' : "")) +
+        ? '<button type="button" class="ad-btn" id="ad-delivery-close">' + L("Fermer la livraison", "Close delivery") + "</button>"
+        : (n ? notify + '<button type="button" class="ad-btn ad-btn-primary" id="ad-delivery-open">' + L("Ouvrir la livraison au client", "Open delivery to the client") + "</button>" : "")) +
       "</section>"
     );
   }
@@ -1778,7 +2154,7 @@
       var progress = document.getElementById("ad-delivery-progress");
       var failed = [];
       for (var i = 0; i < files.length; i++) {
-        progress.textContent = "Envoi " + (i + 1) + " / " + files.length + " : " + files[i].name + "…";
+        progress.textContent = L("Envoi ", "Uploading ") + (i + 1) + " / " + files.length + " : " + files[i].name + "…";
         try {
           var response = await fetch("/local/galleries/" + encodeURIComponent(slug) + "/delivery/files?name=" + encodeURIComponent(files[i].name), {
             method: "POST",
@@ -1786,13 +2162,14 @@
             body: files[i],
           });
           var result = await response.json().catch(function () { return {}; });
-          if (!response.ok) throw new Error(result.error || "Échec de l'envoi");
+          if (!response.ok) throw new Error(serverText(result.error) || L("Échec de l'envoi", "Upload failed"));
         } catch (err) {
           failed.push(files[i].name + " (" + err.message + ")");
         }
       }
-      if (failed.length) toast("Non envoyées : " + failed.join(", "), true);
-      else toast(files.length + " photo" + (files.length > 1 ? "s" : "") + " ajoutée" + (files.length > 1 ? "s" : "") + " à la livraison.");
+      if (failed.length) toast(L("Non envoyées : ", "Not uploaded: ") + failed.join(", "), true);
+      else toast(L(files.length + " photo" + (files.length > 1 ? "s" : "") + " ajoutée" + (files.length > 1 ? "s" : "") + " à la livraison.",
+        files.length + (files.length === 1 ? " photo" : " photos") + " added to the delivery."));
       renderDetail(slug, true);
     });
     document.querySelectorAll("[data-remove-delivery]").forEach(function (btn) {
@@ -1810,10 +2187,11 @@
       openBtn.addEventListener("click", function () {
         var notifyBox = document.getElementById("ad-delivery-notify");
         var notify = Boolean(notifyBox && notifyBox.checked);
-        confirmAction("Ouvrir la livraison ? Le client pourra télécharger ces photos en haute définition, sans filigrane." + (notify ? " Il sera prévenu par e-mail." : ""), async function () {
+        confirmAction(L("Ouvrir la livraison ? Le client pourra télécharger ces photos en haute définition, sans filigrane." + (notify ? " Il sera prévenu par e-mail." : ""),
+          "Open delivery? Your client will be able to download these photos in high resolution, without watermark." + (notify ? " They'll get an email." : "")), async function () {
           try {
             var result = await api("POST", "/galleries/" + encodeURIComponent(slug) + "/delivery", { open: true, notify: notify });
-            toast(result.notified ? "Livraison ouverte, client prévenu par e-mail." : "Livraison ouverte.");
+            toast(result.notified ? L("Livraison ouverte, client prévenu par e-mail.", "Delivery open, client emailed.") : L("Livraison ouverte.", "Delivery open."));
             renderDetail(slug, true);
           } catch (err) {
             toast(err.message, true);
@@ -1826,7 +2204,7 @@
       closeBtn.addEventListener("click", async function () {
         try {
           await api("POST", "/galleries/" + encodeURIComponent(slug) + "/delivery", { open: false });
-          toast("Livraison fermée : le client ne peut plus télécharger.");
+          toast(L("Livraison fermée : le client ne peut plus télécharger.", "Delivery closed: your client can no longer download."));
           renderDetail(slug, true);
         } catch (err) {
           toast(err.message, true);
@@ -1846,6 +2224,13 @@
     douce: "Douce", joyeuse: "Joyeuse", romantique: "Romantique", piano: "Piano",
     acoustique: "Acoustique", cinematique: "Cinématique", enfance: "Enfance",
   };
+  var MUSIC_MOODS_EN = {
+    douce: "Gentle", joyeuse: "Joyful", romantique: "Romantic", piano: "Piano",
+    acoustique: "Acoustic", cinematique: "Cinematic", enfance: "Childhood",
+  };
+  function moodLabel(t) {
+    return LANG === "en" ? MUSIC_MOODS_EN[t.mood] || t.moodLabel || t.mood : t.moodLabel || t.mood;
+  }
 
   function formatDuration(seconds) {
     if (!seconds) return "";
@@ -1872,7 +2257,7 @@
     }
     trackPreview.id = trackId;
     trackPreview.audio.src = state.config.api + "/api/music-library/" + encodeURIComponent(trackId);
-    trackPreview.audio.play().catch(function () { toast("Lecture impossible dans ce navigateur.", true); });
+    trackPreview.audio.play().catch(function () { toast(L("Lecture impossible dans ce navigateur.", "Playback isn't possible in this browser."), true); });
     reflectTrackPreview();
   }
 
@@ -1886,30 +2271,30 @@
     if (!library.tracks.length) {
       return '<p class="ad-hint">' + (mode === "manage"
         ? "La bibliothèque est vide : ajoutez un premier morceau ci-dessus."
-        : "La bibliothèque est encore vide — elle se remplit depuis l'onglet Admin de la plateforme.") + "</p>";
+        : L("La bibliothèque est encore vide — elle se remplit depuis l'onglet Admin de la plateforme.", "The library is still empty — it fills up from the platform's Admin tab.")) + "</p>";
     }
     var moods = {};
-    library.tracks.forEach(function (t) { moods[t.mood] = t.moodLabel || t.mood; });
+    library.tracks.forEach(function (t) { moods[t.mood] = moodLabel(t); });
     var chips = Object.keys(moods).length > 1
-      ? '<div class="ad-music-moods" role="group" aria-label="Ambiance">' +
-        '<button type="button" class="ad-chip ad-chip-active" data-mood-filter="">Toutes</button>' +
+      ? '<div class="ad-music-moods" role="group" aria-label="' + L("Ambiance", "Mood") + '">' +
+        '<button type="button" class="ad-chip ad-chip-active" data-mood-filter="">' + L("Toutes", "All") + "</button>" +
         Object.keys(moods).map(function (m) {
           return '<button type="button" class="ad-chip" data-mood-filter="' + esc(m) + '">' + esc(moods[m]) + "</button>";
         }).join("") + "</div>"
       : "";
     var items = library.tracks.map(function (t) {
-      var meta = [t.artist, t.moodLabel, formatDuration(t.durationSeconds)].filter(Boolean).map(esc).join(" · ");
+      var meta = [t.artist, moodLabel(t), formatDuration(t.durationSeconds)].filter(Boolean).map(esc).join(" · ");
       var action;
       if (mode === "manage") {
         action = '<button type="button" class="ad-btn ad-btn-small ad-btn-danger" data-remove-track="' + esc(t.id) + '">Retirer</button>';
       } else if (t.id === currentId) {
-        action = '<span class="ad-badge ad-badge-selected">✓ Choisie</span>';
+        action = '<span class="ad-badge ad-badge-selected">' + L("✓ Choisie", "✓ Chosen") + "</span>";
       } else {
-        action = '<button type="button" class="ad-btn ad-btn-small" data-pick-track="' + esc(t.id) + '">Choisir</button>';
+        action = '<button type="button" class="ad-btn ad-btn-small" data-pick-track="' + esc(t.id) + '">' + L("Choisir", "Choose") + "</button>";
       }
       return (
         '<li class="ad-track' + (t.id === currentId ? " ad-track-current" : "") + '" data-mood="' + esc(t.mood) + '">' +
-        '<button type="button" class="ad-track-play" data-preview="' + esc(t.id) + '" aria-pressed="false" aria-label="Écouter « ' + esc(t.title) + ' »">▶</button>' +
+        '<button type="button" class="ad-track-play" data-preview="' + esc(t.id) + '" aria-pressed="false" aria-label="' + L("Écouter « " + esc(t.title) + " »", "Listen to “" + esc(t.title) + "”") + '">▶</button>' +
         '<div class="ad-track-info"><strong>' + esc(t.title) + "</strong><span>" + meta + "</span>" +
         (mode === "manage" && t.credit ? '<span class="ad-track-credit">Crédit : ' + esc(t.credit) + "</span>" : "") +
         "</div>" + action + "</li>"
@@ -1938,39 +2323,43 @@
   function musicSectionHtml(gallery) {
     var m = gallery.music || { source: gallery.music_name ? "file" : "none", name: gallery.music_name };
     var current;
-    if (m.source === "library" && m.track) current = "Morceau de la bibliothèque : <strong>" + esc(m.track.title) + "</strong>" + (m.track.artist ? " — " + esc(m.track.artist) : "");
-    else if (m.source === "link") current = "Lecteur <strong>" + esc(m.providerLabel || "intégré") + "</strong> affiché dans la galerie";
-    else if (m.source === "file") current = "Fichier MP3 : <strong>" + esc(m.name) + "</strong>";
-    else current = '<span class="ad-hint">Aucune musique pour cette galerie.</span>';
+    if (m.source === "library" && m.track) current = L("Morceau de la bibliothèque : <strong>", "Library track: <strong>") + esc(m.track.title) + "</strong>" + (m.track.artist ? " — " + esc(m.track.artist) : "");
+    else if (m.source === "link") current = L("Lecteur <strong>" + esc(m.providerLabel || "intégré") + "</strong> affiché dans la galerie", "<strong>" + esc(m.providerLabel || "Embedded") + "</strong> player shown in the gallery");
+    else if (m.source === "file") current = L("Fichier MP3 : <strong>", "MP3 file: <strong>") + esc(m.name) + "</strong>";
+    else current = '<span class="ad-hint">' + L("Aucune musique pour cette galerie.", "No music for this gallery.") + "</span>";
     var tab = m.source === "link" ? "link" : m.source === "file" ? "file" : "library";
     var tabButton = function (key, label) {
       return '<button type="button" class="ad-music-tab' + (key === tab ? " ad-music-tab-active" : "") + '" data-music-tab="' + key + '" aria-pressed="' + (key === tab) + '">' + label + "</button>";
     };
     return (
       '<section class="ad-music">' +
-      '<div class="ad-section-header"><h3>Musique d\'ambiance</h3></div>' +
-      '<p class="ad-hint">Lancée automatiquement en mise en page « Défilement », proposée en pause dans les autres — le client garde toujours la main.</p>' +
+      '<div class="ad-section-header"><h3>' + L("Musique d'ambiance", "Background music") + "</h3></div>" +
+      '<p class="ad-hint">' + L("Lancée automatiquement en mise en page « Défilement », proposée en pause dans les autres — le client garde toujours la main.",
+        "Starts automatically in the “Scroll” layout, offered paused in the others — your client always stays in control.") + "</p>" +
       '<p class="ad-music-state" id="ad-music-state">' + current + "</p>" +
       '<div class="ad-music-tabs">' +
-      tabButton("library", "Bibliothèque") + tabButton("link", "Spotify, Deezer, YouTube…") + tabButton("file", "Mon fichier MP3") +
+      tabButton("library", L("Bibliothèque", "Library")) + tabButton("link", "Spotify, Deezer, YouTube…") + tabButton("file", L("Mon fichier MP3", "My MP3 file")) +
       "</div>" +
       '<div class="ad-music-pane" data-music-pane="library"' + (tab === "library" ? "" : " hidden") + ">" +
-      '<p class="ad-hint">Morceaux libres de droits, utilisables sans souci pour un usage professionnel. Écoutez, puis choisissez.</p>' +
-      '<div id="ad-music-library"><p class="ad-hint">Chargement de la bibliothèque…</p></div>' +
+      '<p class="ad-hint">' + L("Morceaux libres de droits, utilisables sans souci pour un usage professionnel. Écoutez, puis choisissez.",
+        "Royalty-free tracks, safe for professional use. Listen, then choose.") + "</p>" +
+      '<div id="ad-music-library"><p class="ad-hint">' + L("Chargement de la bibliothèque…", "Loading the library…") + "</p></div>" +
       "</div>" +
       '<div class="ad-music-pane" data-music-pane="link"' + (tab === "link" ? "" : " hidden") + ">" +
-      '<p class="ad-hint">Collez le lien d\'un morceau ou d\'une playlist (Partager → Copier le lien). Le lecteur officiel s\'affiche discrètement dans la galerie et le client lance lui-même la lecture. ' +
-      "Avec Spotify, un client sans compte Spotify n'entend qu'un extrait de 30 secondes ; YouTube, SoundCloud et Deezer jouent le morceau en entier.</p>" +
+      '<p class="ad-hint">' + L("Collez le lien d'un morceau ou d'une playlist (Partager → Copier le lien). Le lecteur officiel s'affiche discrètement dans la galerie et le client lance lui-même la lecture. " +
+        "Avec Spotify, un client sans compte Spotify n'entend qu'un extrait de 30 secondes ; YouTube, SoundCloud et Deezer jouent le morceau en entier.",
+        "Paste the link to a track or playlist (Share → Copy link). The official player sits discreetly in the gallery and your client starts it themselves. " +
+        "With Spotify, a client without a Spotify account only hears a 30-second preview; YouTube, SoundCloud and Deezer play the whole track.") + "</p>" +
       '<div class="ad-music-link"><input type="url" id="ad-music-link-input" placeholder="https://open.spotify.com/playlist/…" autocomplete="off" />' +
-      '<button type="button" class="ad-btn ad-btn-primary" id="ad-music-link-save">Enregistrer</button></div>' +
+      '<button type="button" class="ad-btn ad-btn-primary" id="ad-music-link-save">' + L("Enregistrer", "Save") + "</button></div>" +
       "</div>" +
       '<div class="ad-music-pane" data-music-pane="file"' + (tab === "file" ? "" : " hidden") + ">" +
-      '<p class="ad-hint">Un morceau dont vous avez les droits (MP3, 15 Mo maximum), joué en boucle.</p>' +
+      '<p class="ad-hint">' + L("Un morceau dont vous avez les droits (MP3, 15 Mo maximum), joué en boucle.", "A track you hold the rights to (MP3, 15 MB max), played on a loop.") + "</p>" +
       '<div class="ad-bg-custom">' +
-      '<label class="ad-btn">' + (m.source === "file" ? "Remplacer le MP3" : "Importer un MP3") +
+      '<label class="ad-btn">' + (m.source === "file" ? L("Remplacer le MP3", "Replace the MP3") : L("Importer un MP3", "Upload an MP3")) +
       '<input type="file" id="ad-music-file-input" accept="audio/mpeg,.mp3" hidden /></label>' +
       "</div></div>" +
-      (m.source !== "none" ? '<p><button type="button" class="ad-btn" id="ad-music-remove">Retirer la musique</button></p>' : "") +
+      (m.source !== "none" ? '<p><button type="button" class="ad-btn" id="ad-music-remove">' + L("Retirer la musique", "Remove the music") + "</button></p>" : "") +
       "</section>"
     );
   }
@@ -2003,8 +2392,8 @@
     }
     document.getElementById("ad-music-link-save").addEventListener("click", function () {
       var url = document.getElementById("ad-music-link-input").value.trim();
-      if (!url) return toast("Collez d'abord un lien.", true);
-      choose({ source: "link", url: url }, "Lecteur enregistré : il s'affichera dans la galerie.");
+      if (!url) return toast(L("Collez d'abord un lien.", "Paste a link first."), true);
+      choose({ source: "link", url: url }, L("Lecteur enregistré : il s'affichera dans la galerie.", "Player saved: it will show in the gallery."));
     });
 
     var box = document.getElementById("ad-music-library");
@@ -2016,11 +2405,11 @@
       wireTrackList(box);
       box.querySelectorAll("[data-pick-track]").forEach(function (btn) {
         btn.addEventListener("click", function () {
-          choose({ source: "library", trackId: btn.getAttribute("data-pick-track") }, "Musique choisie pour cette galerie.");
+          choose({ source: "library", trackId: btn.getAttribute("data-pick-track") }, L("Musique choisie pour cette galerie.", "Music chosen for this gallery."));
         });
       });
     } catch (err) {
-      if (document.body.contains(box)) box.innerHTML = '<p class="ad-hint">Bibliothèque indisponible : ' + esc(err.message) + "</p>";
+      if (document.body.contains(box)) box.innerHTML = '<p class="ad-hint">' + L("Bibliothèque indisponible : ", "Library unavailable: ") + esc(err.message) + "</p>";
     }
   }
 
@@ -2089,7 +2478,7 @@
         });
       });
     } catch (err) {
-      if (document.body.contains(box)) box.innerHTML = '<p class="ad-hint">Bibliothèque indisponible : ' + esc(err.message) + "</p>";
+      if (document.body.contains(box)) box.innerHTML = '<p class="ad-hint">' + L("Bibliothèque indisponible : ", "Library unavailable: ") + esc(err.message) + "</p>";
     }
   }
 
@@ -2521,23 +2910,40 @@
     return ((cents || 0) / 100).toFixed(2);
   }
 
+  // Statut d'une commande de tirages, dans la langue de l'espace.
+  var ORDER_STATUS_EN = {
+    pending_payment: "Awaiting payment", paid: "Paid", submitted: "Sent to the lab", in_production: "In production",
+    shipped: "Shipped", cancelled: "Cancelled", failed: "To resubmit",
+  };
+  function orderStatusLabel(o) {
+    return LANG === "en" ? ORDER_STATUS_EN[o.status] || o.statusLabel : o.statusLabel;
+  }
+
+  // Libellé des frais de paiement (« 2 % + 0,30 € ») à l'anglaise.
+  function feeText(label) {
+    if (LANG !== "en") return label;
+    if (label === "aucun") return "none";
+    return String(label || "").replace(/(\d+(?:,\d+)?) %/g, function (m, n) { return n.replace(",", ".") + "%"; })
+      .replace(/(\d+),(\d+) €/g, "€$1.$2");
+  }
+
   function printOrdersTableHtml(orders, withGallery) {
-    if (!orders || !orders.length) return '<p class="ad-hint" id="ad-print-orders-empty">Aucune commande de tirages pour l\'instant.</p>';
+    if (!orders || !orders.length) return '<p class="ad-hint" id="ad-print-orders-empty">' + L("Aucune commande de tirages pour l'instant.", "No print orders yet.") + "</p>";
     var rows = orders.map(function (o) {
       var count = o.lines.reduce(function (n, l) { return n + l.copies; }, 0);
-      var detail = o.lines.map(function (l) { return l.copies + " × " + l.label + " (photo n° " + l.photoNumber + ")"; }).join(", ");
+      var detail = o.lines.map(function (l) { return l.copies + " × " + l.label + L(" (photo n° ", " (photo no. ") + l.photoNumber + ")"; }).join(", ");
       return (
         '<tr data-order-id="' + esc(o.id) + '">' +
         "<td>" + esc(formatDateTime(o.paidAt || o.createdAt)) + "</td>" +
         (withGallery ? '<td><button type="button" class="ad-link-btn" data-slug="' + esc(o.gallerySlug) + '">' + esc(o.galleryTitle) + "</button></td>" : "") +
         "<td>" + esc(o.recipient.name || "") + '<br /><span class="ad-hint">' + esc(o.clientEmail) + "</span></td>" +
-        '<td title="' + esc(detail) + '">' + count + " article" + (count > 1 ? "s" : "") + "</td>" +
+        '<td title="' + esc(detail) + '">' + count + L(" article" + (count > 1 ? "s" : ""), count === 1 ? " item" : " items") + "</td>" +
         "<td>" + formatEuros(o.totalCents) + "</td>" +
-        '<td><span class="ad-badge ' + (ORDER_STATUS_CLS[o.status] || "") + '">' + esc(o.statusLabel) + "</span>" +
+        '<td><span class="ad-badge ' + (ORDER_STATUS_CLS[o.status] || "") + '">' + esc(orderStatusLabel(o)) + "</span>" +
         (o.error ? '<br /><span class="ad-hint ad-order-error">' + esc(o.error) + "</span>" : "") + "</td>" +
-        "<td>" + (o.trackingUrl ? '<a href="' + esc(o.trackingUrl) + '" target="_blank" rel="noopener">Suivi</a>' : "—") +
+        "<td>" + (o.trackingUrl ? '<a href="' + esc(o.trackingUrl) + '" target="_blank" rel="noopener">' + L("Suivi", "Tracking") + "</a>" : "—") +
         (o.status === "failed" || o.status === "paid"
-          ? ' <button type="button" class="ad-btn ad-btn-small" data-resubmit="' + esc(o.id) + '">Relancer au labo</button>'
+          ? ' <button type="button" class="ad-btn ad-btn-small" data-resubmit="' + esc(o.id) + '">' + L("Relancer au labo", "Resubmit to the lab") + "</button>"
           : "") +
         "</td>" +
         "</tr>"
@@ -2545,7 +2951,7 @@
     });
     return (
       '<div class="ad-table-wrap"><table class="ad-table" id="ad-print-orders"><thead><tr>' +
-      "<th>Quand</th>" + (withGallery ? "<th>Galerie</th>" : "") + "<th>Client</th><th>Articles</th><th>Total</th><th>Statut</th><th>Expédition</th>" +
+      "<th>" + L("Quand", "When") + "</th>" + (withGallery ? "<th>" + L("Galerie", "Gallery") + "</th>" : "") + "<th>Client</th><th>" + L("Articles", "Items") + "</th><th>Total</th><th>" + L("Statut", "Status") + "</th><th>" + L("Expédition", "Shipping") + "</th>" +
       "</tr></thead><tbody>" + rows.join("") + "</tbody></table></div>"
     );
   }
@@ -2556,8 +2962,8 @@
         btn.disabled = true;
         try {
           var result = await api("POST", "/print-orders/" + encodeURIComponent(btn.getAttribute("data-resubmit")) + "/submit");
-          if (result.ok) toast("Commande transmise au laboratoire.");
-          else toast("Le laboratoire a encore refusé la commande : " + (result.error || "raison inconnue"), true);
+          if (result.ok) toast(L("Commande transmise au laboratoire.", "Order sent to the lab."));
+          else toast(L("Le laboratoire a encore refusé la commande : ", "The lab rejected the order again: ") + (result.error || L("raison inconnue", "unknown reason")), true);
           onDone();
         } catch (err) {
           toast(err.message, true);
@@ -2572,18 +2978,22 @@
     var printable = photos.filter(function (p) { return Number(p.has_original) === 1; }).length;
     var on = Boolean(data.gallery.shop_enabled);
     return (
-      '<section class="ad-gallery-shop"><div class="ad-section-header"><h3>Boutique de tirages</h3></div>' +
-      '<p class="ad-hint">Le client commande tirages, toiles ou cadres depuis sa galerie ; le paiement arrive sur votre compte Stripe et la commande part automatiquement au laboratoire Prodigi. Réglages et formats dans l\'onglet <button type="button" class="ad-link-btn" id="ad-goto-shop">Boutique</button>.</p>' +
+      '<section class="ad-gallery-shop"><div class="ad-section-header"><h3>' + L("Boutique de tirages", "Print shop") + "</h3></div>" +
+      '<p class="ad-hint">' + L("Le client commande tirages, toiles ou cadres depuis sa galerie ; le paiement arrive sur votre compte Stripe et la commande part automatiquement au laboratoire Prodigi. Réglages et formats dans l'onglet ",
+        "Your client orders prints, canvases or frames from their gallery; the payment goes to your Stripe account and the order goes to the Prodigi lab automatically. Settings and formats in the ") +
+      '<button type="button" class="ad-link-btn" id="ad-goto-shop">' + L("Boutique", "Shop") + "</button>" + L(".", " tab.") + "</p>" +
       '<label class="ad-toggle"><input type="checkbox" id="ad-gallery-shop-toggle"' + (on ? " checked" : "") + " />" +
-      "<span>Proposer des tirages sur cette galerie</span></label>" +
-      '<p class="ad-hint" id="ad-shop-printable">' + printable + " photo" + (printable > 1 ? "s" : "") + " sur " + photos.length +
-      " disponible" + (printable > 1 ? "s" : "") + " en tirage. " +
+      "<span>" + L("Proposer des tirages sur cette galerie", "Offer prints on this gallery") + "</span></label>" +
+      '<p class="ad-hint" id="ad-shop-printable">' + L(printable + " photo" + (printable > 1 ? "s" : "") + " sur " + photos.length + " disponible" + (printable > 1 ? "s" : "") + " en tirage. ",
+        printable + " of " + photos.length + " photo" + (photos.length === 1 ? "" : "s") + " available as prints. ") +
       (on
-        ? "Les photos importées tant que la boutique est ouverte gardent un fichier d'impression en pleine définition (jamais montré au client) ; réimportez les plus anciennes pour les proposer aussi."
-        : "Ouvrez la boutique avant d'importer les photos : seules celles importées ensuite pourront être commandées.") +
+        ? L("Les photos importées tant que la boutique est ouverte gardent un fichier d'impression en pleine définition (jamais montré au client) ; réimportez les plus anciennes pour les proposer aussi.",
+          "Photos uploaded while the shop is open keep a full-resolution print file (never shown to the client); re-upload older ones to offer them too.")
+        : L("Ouvrez la boutique avant d'importer les photos : seules celles importées ensuite pourront être commandées.",
+          "Open the shop before uploading the photos: only those uploaded afterwards can be ordered.")) +
       "</p>" +
       (on ? promoBlockHtml(data.gallery) : "") +
-      "<h4>Commandes de cette galerie</h4>" +
+      "<h4>" + L("Commandes de cette galerie", "Orders from this gallery") + "</h4>" +
       printOrdersTableHtml(data.printOrders, false) +
       "</section>"
     );
@@ -2593,33 +3003,35 @@
   function promoBlockHtml(gallery) {
     var sales = gallery.sales || { promo: null, percents: [10, 15, 20, 25, 30, 40, 50], cart: null };
     var promo = sales.promo;
-    var html = '<div class="ad-promo"><h4>Promotion sur les tirages</h4>';
+    var html = '<div class="ad-promo"><h4>' + L("Promotion sur les tirages", "Print promotion") + "</h4>";
     if (sales.enabled === false) {
       // Campagnes réservées à Pro : une promotion déjà lancée peut être arrêtée.
-      html += '<p class="ad-banner ad-banner-muted">Promotions à durée limitée et relances des paniers oubliés : les campagnes de vente sont incluses dans la formule Pro. ' +
-        '<button type="button" class="ad-link-btn" data-goto-plans>Voir les formules</button></p>';
-      if (promo) html += '<div class="ad-promo-actions"><button type="button" class="ad-btn" id="ad-promo-stop">Arrêter la promotion</button></div>';
+      html += '<p class="ad-banner ad-banner-muted">' + L("Promotions à durée limitée et relances des paniers oubliés : les campagnes de vente sont incluses dans la formule Pro. ",
+        "Limited-time promotions and abandoned-cart reminders: sales campaigns are part of the Pro plan. ") +
+        '<button type="button" class="ad-link-btn" data-goto-plans>' + L("Voir les formules", "See the plans") + "</button></p>";
+      if (promo) html += '<div class="ad-promo-actions"><button type="button" class="ad-btn" id="ad-promo-stop">' + L("Arrêter la promotion", "Stop the promotion") + "</button></div>";
       return html + "</div>";
     }
     if (promo) {
-      html += '<p class="ad-promo-on"><strong>−' + promo.percent + " %</strong> sur tous les tirages jusqu'au " + esc(formatDate(promo.endsAt)) +
-        (promo.sentAt ? ' · <span class="ad-hint">annoncée au client le ' + esc(formatDate(promo.sentAt)) + "</span>" : "") + "</p>" +
+      html += '<p class="ad-promo-on"><strong>' + L("−" + promo.percent + " %", promo.percent + "% off") + "</strong>" + L(" sur tous les tirages jusqu'au ", " all prints until ") + esc(formatDate(promo.endsAt)) +
+        (promo.sentAt ? ' · <span class="ad-hint">' + L("annoncée au client le ", "announced to the client on ") + esc(formatDate(promo.sentAt)) + "</span>" : "") + "</p>" +
         '<div class="ad-promo-actions">' +
-        (!promo.sentAt && gallery.client_email ? '<button type="button" class="ad-btn ad-btn-primary" id="ad-promo-send">Annoncer au client par e-mail</button>' : "") +
-        '<button type="button" class="ad-btn" id="ad-promo-stop">Arrêter la promotion</button></div>';
+        (!promo.sentAt && gallery.client_email ? '<button type="button" class="ad-btn ad-btn-primary" id="ad-promo-send">' + L("Annoncer au client par e-mail", "Announce it to the client by email") + "</button>" : "") +
+        '<button type="button" class="ad-btn" id="ad-promo-stop">' + L("Arrêter la promotion", "Stop the promotion") + "</button></div>";
     } else {
       var defaultEnd = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
-      html += '<p class="ad-hint">Une remise sur tous les tirages de cette galerie, pour une durée limitée : prix barrés chez le client, ' +
-        "remise appliquée au paiement. Jamais en dessous de votre coût labo.</p>" +
-        '<div class="ad-promo-form"><label class="ad-field"><span>Remise</span><select id="ad-promo-percent">' +
-        sales.percents.map(function (p) { return '<option value="' + p + '"' + (p === 20 ? " selected" : "") + ">−" + p + " %</option>"; }).join("") +
-        '</select></label><label class="ad-field"><span>Jusqu\'au (inclus)</span><input type="date" id="ad-promo-end" value="' + defaultEnd + '" /></label>' +
-        '<button type="button" class="ad-btn ad-btn-primary" id="ad-promo-start">Lancer la promotion</button></div>';
+      html += '<p class="ad-hint">' + L("Une remise sur tous les tirages de cette galerie, pour une durée limitée : prix barrés chez le client, remise appliquée au paiement. Jamais en dessous de votre coût labo.",
+        "A discount on every print in this gallery, for a limited time: struck-through prices for the client, discount applied at payment. Never below your lab cost.") + "</p>" +
+        '<div class="ad-promo-form"><label class="ad-field"><span>' + L("Remise", "Discount") + '</span><select id="ad-promo-percent">' +
+        sales.percents.map(function (p) { return '<option value="' + p + '"' + (p === 20 ? " selected" : "") + ">" + L("−" + p + " %", p + "% off") + "</option>"; }).join("") +
+        '</select></label><label class="ad-field"><span>' + L("Jusqu'au (inclus)", "Until (inclusive)") + '</span><input type="date" id="ad-promo-end" value="' + defaultEnd + '" /></label>' +
+        '<button type="button" class="ad-btn ad-btn-primary" id="ad-promo-start">' + L("Lancer la promotion", "Start the promotion") + "</button></div>";
     }
     if (sales.cart) {
-      html += '<p class="ad-hint">Panier en cours chez le client : <strong>' + sales.cart.items + " article" + (sales.cart.items > 1 ? "s" : "") +
-        "</strong> (mis à jour le " + esc(formatDate(sales.cart.updatedAt)) + ")" +
-        (sales.cart.remindedAt ? " · rappel envoyé le " + esc(formatDate(sales.cart.remindedAt)) : " · un rappel partira par e-mail après 24 h sans commande") + ".</p>";
+      html += '<p class="ad-hint">' + L("Panier en cours chez le client : <strong>" + sales.cart.items + " article" + (sales.cart.items > 1 ? "s" : ""),
+        "Client's cart in progress: <strong>" + sales.cart.items + (sales.cart.items === 1 ? " item" : " items")) +
+        "</strong>" + L(" (mis à jour le ", " (updated on ") + esc(formatDate(sales.cart.updatedAt)) + ")" +
+        (sales.cart.remindedAt ? L(" · rappel envoyé le ", " · reminder sent on ") + esc(formatDate(sales.cart.remindedAt)) : L(" · un rappel partira par e-mail après 24 h sans commande", " · a reminder email goes out after 24 h without an order")) + ".</p>";
     }
     return html + "</div>";
   }
@@ -2638,7 +3050,7 @@
           await api("POST", "/galleries/" + encodeURIComponent(slug) + "/promo", {
             percent: Number(document.getElementById("ad-promo-percent").value), endsAt: endsAt,
           });
-          toast("Promotion lancée : les prix remisés s'affichent chez le client.");
+          toast(L("Promotion lancée : les prix remisés s'affichent chez le client.", "Promotion started: the discounted prices show for the client."));
           renderDetail(slug, true);
         } catch (err) {
           toast(err.message, true);
@@ -2650,7 +3062,7 @@
       stop.addEventListener("click", async function () {
         try {
           await api("POST", "/galleries/" + encodeURIComponent(slug) + "/promo", { percent: 0 });
-          toast("Promotion arrêtée.");
+          toast(L("Promotion arrêtée.", "Promotion stopped."));
           renderDetail(slug, true);
         } catch (err) {
           toast(err.message, true);
@@ -2663,7 +3075,7 @@
         send.disabled = true;
         try {
           await api("POST", "/galleries/" + encodeURIComponent(slug) + "/promo/send");
-          toast("Promotion annoncée au client par e-mail.");
+          toast(L("Promotion annoncée au client par e-mail.", "Promotion announced to the client by email."));
           renderDetail(slug, true);
         } catch (err) {
           toast(err.message, true);
@@ -2681,14 +3093,14 @@
     return (
       '<tr data-product-id="' + esc(p.id) + '" data-cost="' + cost + '">' +
       "<td><strong>" + esc(p.label) + "</strong>" +
-      (p.fromCatalogue ? "" : '<br /><span class="ad-hint">Réf. ' + esc(p.sku) + (Object.keys(p.attributes || {}).length ? " " + esc(JSON.stringify(p.attributes)) : "") + "</span>") +
+      (p.fromCatalogue ? "" : '<br /><span class="ad-hint">' + L("Réf. ", "Ref. ") + esc(p.sku) + (Object.keys(p.attributes || {}).length ? " " + esc(JSON.stringify(p.attributes)) : "") + "</span>") +
       "</td>" +
-      '<td class="ad-cost-cell" id="ad-quote-' + esc(p.id) + '">' + (cost ? formatEuros(cost) : '<span class="ad-hint">à estimer</span>') + "</td>" +
-      '<td><input type="text" class="ad-input ad-input-price" data-field="price" value="' + eurosInput(p.priceCents) + '" inputmode="decimal" aria-label="Prix pour le client" /></td>' +
+      '<td class="ad-cost-cell" id="ad-quote-' + esc(p.id) + '">' + (cost ? formatEuros(cost) : '<span class="ad-hint">' + L("à estimer", "to estimate") + "</span>") + "</td>" +
+      '<td><input type="text" class="ad-input ad-input-price" data-field="price" value="' + eurosInput(p.priceCents) + '" inputmode="decimal" aria-label="' + L("Prix pour le client", "Client price") + '" /></td>' +
       '<td class="ad-margin-cell">' + (cost ? marginHtml(netMarginFor(p.priceCents, cost)) : "—") + "</td>" +
-      '<td><input type="checkbox" data-field="active"' + (p.active ? " checked" : "") + ' aria-label="Proposé aux clients" /></td>' +
-      '<td class="ad-row-actions"><button type="button" class="ad-btn ad-btn-small" data-save-product>Enregistrer</button>' +
-      ' <button type="button" class="ad-btn ad-btn-small ad-btn-danger" data-delete-product>Supprimer</button></td>' +
+      '<td><input type="checkbox" data-field="active"' + (p.active ? " checked" : "") + ' aria-label="' + L("Proposé aux clients", "Offered to clients") + '" /></td>' +
+      '<td class="ad-row-actions"><button type="button" class="ad-btn ad-btn-small" data-save-product>' + L("Enregistrer", "Save") + "</button>" +
+      ' <button type="button" class="ad-btn ad-btn-small ad-btn-danger" data-delete-product>' + L("Supprimer", "Delete") + "</button></td>" +
       "</tr>"
     );
   }
@@ -2717,7 +3129,8 @@
   }
 
   function productsTableHtml(products) {
-    if (!products.length) return '<p class="ad-hint" id="ad-shop-no-products">Aucun produit pour l\'instant : ajoutez-en avec les menus ci-dessus, ou en un clic avec « Ajouter les formats suggérés ».</p>';
+    if (!products.length) return '<p class="ad-hint" id="ad-shop-no-products">' + L("Aucun produit pour l'instant : ajoutez-en avec les menus ci-dessus, ou en un clic avec « Ajouter les formats suggérés ».",
+      "No products yet: add some with the menus above, or in one click with “Add the suggested formats”.") + "</p>";
     var groups = {};
     var order = [];
     products.forEach(function (p) {
@@ -2726,7 +3139,7 @@
     });
     return (
       '<div class="ad-table-wrap"><table class="ad-table ad-shop-products" id="ad-shop-products"><thead><tr>' +
-      "<th>Produit</th><th>Coût labo</th><th>Prix client (€)</th><th>Votre marge</th><th>Actif</th><th></th>" +
+      "<th>" + L("Produit", "Product") + "</th><th>" + L("Coût labo", "Lab cost") + "</th><th>" + L("Prix client (€)", "Client price (€)") + "</th><th>" + L("Votre marge", "Your margin") + "</th><th>" + L("Actif", "Active") + "</th><th></th>" +
       "</tr></thead><tbody>" +
       order.map(function (category) {
         return '<tr class="ad-cat-row"><th colspan="6">' + esc(category) + "</th></tr>" + groups[category].map(productRowHtml).join("");
@@ -2742,24 +3155,24 @@
     // Worker pas encore mis à jour (ancienne version sans catalogue) : on
     // le dit plutôt que d'afficher des menus vides.
     if (!catalogue || !catalogue.length) {
-      return '<p class="ad-hint" id="ad-shop-picker">Les menus d\'ajout apparaîtront dès que le serveur de la galerie (Worker) sera mis à jour.</p>';
+      return '<p class="ad-hint" id="ad-shop-picker">' + L("Les menus d'ajout apparaîtront dès que le serveur de la galerie (Worker) sera mis à jour.", "The add menus will appear once the gallery server (Worker) is updated.") + "</p>";
     }
     return (
       '<div class="ad-picker" id="ad-shop-picker">' +
       '<div class="ad-picker-grid">' +
-      '<label class="ad-field"><span>Catégorie</span><select id="ad-pick-category">' +
+      '<label class="ad-field"><span>' + L("Catégorie", "Category") + '</span><select id="ad-pick-category">' +
       catalogue.map(function (c) { return '<option value="' + esc(c.key) + '">' + esc(c.label) + "</option>"; }).join("") +
       "</select></label>" +
-      '<label class="ad-field"><span>Produit</span><select id="ad-pick-product"></select></label>' +
-      '<label class="ad-field"><span>Format</span><select id="ad-pick-size"></select></label>' +
-      '<label class="ad-field" id="ad-pick-option-wrap"><span id="ad-pick-option-label">Finition</span><select id="ad-pick-option"></select></label>' +
+      '<label class="ad-field"><span>' + L("Produit", "Product") + '</span><select id="ad-pick-product"></select></label>' +
+      '<label class="ad-field"><span>' + L("Format", "Size") + '</span><select id="ad-pick-size"></select></label>' +
+      '<label class="ad-field" id="ad-pick-option-wrap"><span id="ad-pick-option-label">' + L("Finition", "Finish") + '</span><select id="ad-pick-option"></select></label>' +
       "</div>" +
       '<p class="ad-hint" id="ad-pick-description"></p>' +
-      '<p class="ad-pick-cost" id="ad-pick-cost">' + (connected ? "—" : "Enregistrez d'abord votre clé Prodigi (plus haut) pour voir le coût de chaque produit.") + "</p>" +
+      '<p class="ad-pick-cost" id="ad-pick-cost">' + (connected ? "—" : L("Enregistrez d'abord votre clé Prodigi (plus haut) pour voir le coût de chaque produit.", "Save your Prodigi key first (above) to see the cost of each product.")) + "</p>" +
       '<div class="ad-picker-price">' +
-      '<label class="ad-field"><span>Votre marge (€)</span><input type="text" id="ad-pick-margin" inputmode="decimal" placeholder="Ex. 10" /></label>' +
-      '<div class="ad-pick-total"><span>Prix pour le client</span><strong id="ad-pick-price">—</strong></div>' +
-      '<button type="button" class="ad-btn ad-btn-primary" id="ad-pick-add" disabled>Ajouter à ma boutique</button>' +
+      '<label class="ad-field"><span>' + L("Votre marge (€)", "Your margin (€)") + '</span><input type="text" id="ad-pick-margin" inputmode="decimal" placeholder="' + L("Ex. 10", "e.g. 10") + '" /></label>' +
+      '<div class="ad-pick-total"><span>' + L("Prix pour le client", "Client price") + '</span><strong id="ad-pick-price">—</strong></div>' +
+      '<button type="button" class="ad-btn ad-btn-primary" id="ad-pick-add" disabled>' + L("Ajouter à ma boutique", "Add to my shop") + "</button>" +
       "</div></div>"
     );
   }
@@ -2790,7 +3203,7 @@
       if (!connected || !$("ad-pick-size").value) return;
       var seq = ++pick.seq;
       var product = findProduct();
-      $("ad-pick-cost").textContent = "Demande du coût au laboratoire…";
+      $("ad-pick-cost").textContent = L("Demande du coût au laboratoire…", "Asking the lab for the cost…");
       try {
         var q = await api("POST", "/shop/quote-item", {
           product: product.key,
@@ -2800,14 +3213,14 @@
         });
         if (seq !== pick.seq || !$("ad-pick-cost")) return; // un autre choix a été fait entre-temps, ou l'onglet a été quitté
         if (!q.available) {
-          $("ad-pick-cost").innerHTML = '<span class="ad-order-error">Indisponible chez le labo dans cette version : ' + esc(q.error || "") + "</span>";
+          $("ad-pick-cost").innerHTML = '<span class="ad-order-error">' + L("Indisponible chez le labo dans cette version : ", "Not available from the lab in this version: ") + esc(q.error || "") + "</span>";
           return;
         }
         pick.costCents = q.itemsCents;
         pick.shipCents = q.shippingCents;
         $("ad-pick-cost").innerHTML =
-          "Coût labo : <strong>" + formatEuros(q.itemsCents) + "</strong> le produit" +
-          ' <span class="ad-hint">(+ ' + formatEuros(q.shippingCents) + " de livraison pour une commande d'un article, couverte par vos frais de port)</span>";
+          L("Coût labo : <strong>", "Lab cost: <strong>") + formatEuros(q.itemsCents) + "</strong>" + L(" le produit", " per item") +
+          ' <span class="ad-hint">(+ ' + formatEuros(q.shippingCents) + L(" de livraison pour une commande d'un article, couverte par vos frais de port)", " shipping for a one-item order, covered by your shipping fee)") + "</span>";
         if (!$("ad-pick-margin").value) $("ad-pick-margin").value = eurosInput(Math.max(500, Math.ceil(q.itemsCents / 100) * 100));
         refreshPrice();
       } catch (err) {
@@ -2865,7 +3278,7 @@
         pick.seq++; // annule un devis encore en route pour l'ancien choix
         pick.costCents = null;
         refreshPrice();
-        $("ad-pick-cost").textContent = "Vérification des formats proposés par le labo…";
+        $("ad-pick-cost").textContent = L("Vérification des formats proposés par le labo…", "Checking the sizes offered by the lab…");
       }
       var sizeSelect = $("ad-pick-size");
       var sizes = await availabilityFor(product);
@@ -2878,7 +3291,7 @@
         var offered = all.filter(function (s) { return !sizes[s.value] || sizes[s.value].available; });
         $("ad-pick-size").innerHTML = options(offered);
         if (!offered.length) {
-          $("ad-pick-cost").innerHTML = '<span class="ad-order-error">Le labo ne propose aucun format de ce produit pour une livraison dans ce pays.</span>';
+          $("ad-pick-cost").innerHTML = '<span class="ad-order-error">' + L("Le labo ne propose aucun format de ce produit pour une livraison dans ce pays.", "The lab offers no size of this product for delivery to this country.") + "</span>";
           return;
         }
       }
@@ -2914,7 +3327,7 @@
           costCents: pick.costCents,
           shipCostCents: pick.shipCents,
         });
-        toast("Produit ajouté à votre boutique.");
+        toast(L("Produit ajouté à votre boutique.", "Product added to your shop."));
         onAdded();
       } catch (err) {
         toast(err.message, true);
@@ -2927,7 +3340,7 @@
   async function renderShop(skipHash) {
     if (!skipHash && location.hash !== "#/boutique") history.pushState(null, "", "#/boutique");
     setActiveTab("shop");
-    el.view.innerHTML = '<p class="ad-loading">Chargement…</p>';
+    el.view.innerHTML = '<p class="ad-loading">' + L("Chargement…", "Loading…") + "</p>";
 
     var data, ordersData;
     try {
@@ -2945,74 +3358,82 @@
       return '<option value="' + code + '"' + (code === "BE" ? " selected" : "") + ">" + esc(data.countries[code]) + "</option>";
     }).join("");
 
-    data.products.forEach(function (p) { if (!p.category) p.category = "Mes produits"; });
+    data.products.forEach(function (p) { if (!p.category) p.category = L("Mes produits", "My products"); });
     var maxShip = data.products.reduce(function (m, p) { return Math.max(m, p.shipCostCents || 0); }, 0);
 
     el.view.innerHTML =
-      '<header class="ad-detail-header"><div><h2>Boutique de tirages</h2>' +
-      '<p class="ad-hint">Vos clients commandent tirages, toiles et cadres directement depuis leur galerie. Le paiement arrive sur votre compte Stripe, la commande part automatiquement chez <strong>Prodigi</strong>, qui imprime et expédie. Prodigi vous facture son prix ; la différence avec votre prix de vente est votre marge.</p>' +
+      '<header class="ad-detail-header"><div><h2>' + L("Boutique de tirages", "Print shop") + "</h2>" +
+      '<p class="ad-hint">' + L("Vos clients commandent tirages, toiles et cadres directement depuis leur galerie. Le paiement arrive sur votre compte Stripe, la commande part automatiquement chez <strong>Prodigi</strong>, qui imprime et expédie. Prodigi vous facture son prix ; la différence avec votre prix de vente est votre marge.",
+        "Your clients order prints, canvases and frames right from their gallery. The payment goes to your Stripe account, the order goes automatically to <strong>Prodigi</strong>, which prints and ships. Prodigi bills you its price; the difference with your selling price is your margin.") + "</p>" +
       "</div></header>" +
 
-      '<section><div class="ad-section-header"><h3>Avant d\'ouvrir la boutique</h3></div>' +
+      '<section><div class="ad-section-header"><h3>' + L("Avant d'ouvrir la boutique", "Before opening the shop") + "</h3></div>" +
       '<ul class="ad-shop-steps" id="ad-shop-steps">' +
-      check(s.connected, "Clé d'API Prodigi enregistrée" + (s.connected ? " (" + esc(s.keyHint) + ", " + (s.environment === "live" ? "production" : "mode test") + ")" : "")) +
-      check(s.stripeReady, 'Paiement en ligne Stripe actif — <button type="button" class="ad-link-btn" id="ad-goto-billing">onglet Facturation</button>') +
-      check(activeCount > 0, "Au moins un format proposé (" + activeCount + " actif" + (activeCount > 1 ? "s" : "") + ")") +
-      check(false, "Puis, sur chaque galerie : « Proposer des tirages sur cette galerie »") +
+      check(s.connected, L("Clé d'API Prodigi enregistrée", "Prodigi API key saved") + (s.connected ? " (" + esc(s.keyHint) + ", " + (s.environment === "live" ? "production" : L("mode test", "test mode")) + ")" : "")) +
+      check(s.stripeReady, L("Paiement en ligne Stripe actif — ", "Stripe online payment active — ") + '<button type="button" class="ad-link-btn" id="ad-goto-billing">' + L("onglet Facturation", "Billing tab") + "</button>") +
+      check(activeCount > 0, L("Au moins un format proposé (" + activeCount + " actif" + (activeCount > 1 ? "s" : "") + ")", "At least one format offered (" + activeCount + " active)")) +
+      check(false, L("Puis, sur chaque galerie : « Proposer des tirages sur cette galerie »", "Then, on each gallery: “Offer prints on this gallery”")) +
       "</ul></section>" +
 
-      '<section><div class="ad-section-header"><h3>Compte Prodigi</h3></div>' +
+      '<section><div class="ad-section-header"><h3>' + L("Compte Prodigi", "Prodigi account") + "</h3></div>" +
       '<ol class="ad-owner-steps">' +
-      '<li>Créez un compte gratuit sur <a href="https://dashboard.prodigi.com/register" target="_blank" rel="noopener">dashboard.prodigi.com</a>.</li>' +
-      "<li>Commencez en <strong>mode test</strong> avec la clé <em>Sandbox</em> : elle figure dans l'e-mail de bienvenue de Prodigi, ou sur le tableau de bord de test <a href=\"https://sandbox-beta-dashboard.pwinty.com\" target=\"_blank\" rel=\"noopener\">sandbox-beta-dashboard.pwinty.com</a> (mêmes identifiants) → Settings → Integrations → API. Rien n'est imprimé ni facturé.</li>" +
-      "<li>Attention : la clé affichée sur dashboard.prodigi.com est la clé <em>Live</em>, refusée en mode test. Quand tout est prêt, ajoutez un moyen de paiement chez Prodigi, collez cette clé Live et passez en production.</li>" +
+      "<li>" + L("Créez un compte gratuit sur ", "Create a free account on ") + '<a href="https://dashboard.prodigi.com/register" target="_blank" rel="noopener">dashboard.prodigi.com</a>.</li>' +
+      "<li>" + L("Commencez en <strong>mode test</strong> avec la clé <em>Sandbox</em> : elle figure dans l'e-mail de bienvenue de Prodigi, ou sur le tableau de bord de test ",
+        "Start in <strong>test mode</strong> with the <em>Sandbox</em> key: it's in Prodigi's welcome email, or on the test dashboard ") +
+      '<a href="https://sandbox-beta-dashboard.pwinty.com" target="_blank" rel="noopener">sandbox-beta-dashboard.pwinty.com</a>' +
+      L(" (mêmes identifiants) → Settings → Integrations → API. Rien n'est imprimé ni facturé.", " (same credentials) → Settings → Integrations → API. Nothing is printed or billed.") + "</li>" +
+      "<li>" + L("Attention : la clé affichée sur dashboard.prodigi.com est la clé <em>Live</em>, refusée en mode test. Quand tout est prêt, ajoutez un moyen de paiement chez Prodigi, collez cette clé Live et passez en production.",
+        "Careful: the key shown on dashboard.prodigi.com is the <em>Live</em> key, refused in test mode. When everything is ready, add a payment method at Prodigi, paste that Live key and switch to production.") + "</li>" +
       "</ol>" +
       '<form id="ad-shop-settings">' +
-      '<label class="ad-field"><span>Clé d\'API Prodigi</span>' +
+      '<label class="ad-field"><span>' + L("Clé d'API Prodigi", "Prodigi API key") + "</span>" +
       '<input type="password" name="apiKey" autocomplete="off" placeholder="' +
-      (s.connected ? "Clé enregistrée (" + esc(s.keyHint) + ") — laissez vide pour la garder" : "Collez votre clé d'API Prodigi") + '" /></label>' +
+      (s.connected ? L("Clé enregistrée (" + esc(s.keyHint) + ") — laissez vide pour la garder", "Key saved (" + esc(s.keyHint) + ") — leave empty to keep it") : L("Collez votre clé d'API Prodigi", "Paste your Prodigi API key")) + '" /></label>' +
       '<div class="ad-field-row">' +
-      '<label class="ad-field"><span>Environnement</span><select name="environment">' +
-      '<option value="sandbox"' + (s.environment !== "live" ? " selected" : "") + ">Test (sandbox) — rien n'est imprimé</option>" +
-      '<option value="live"' + (s.environment === "live" ? " selected" : "") + ">Production — commandes réelles</option>" +
+      '<label class="ad-field"><span>' + L("Environnement", "Environment") + '</span><select name="environment">' +
+      '<option value="sandbox"' + (s.environment !== "live" ? " selected" : "") + ">" + L("Test (sandbox) — rien n'est imprimé", "Test (sandbox) — nothing is printed") + "</option>" +
+      '<option value="live"' + (s.environment === "live" ? " selected" : "") + ">" + L("Production — commandes réelles", "Production — real orders") + "</option>" +
       "</select></label>" +
-      '<label class="ad-field"><span>Frais de port facturés au client — Europe (€)</span>' +
+      '<label class="ad-field"><span>' + L("Frais de port facturés au client — Europe (€)", "Shipping charged to the client — Europe (€)") + "</span>" +
       '<input type="text" name="shipping" inputmode="decimal" value="' + eurosInput(s.shippingCents) + '" /></label>' +
       "</div>" +
-      '<label class="ad-field"><span>Frais de port hors d\'Europe (€) <em>(laisser vide pour ne livrer qu\'en Europe)</em></span>' +
-      '<input type="text" name="shippingWorld" inputmode="decimal" placeholder="ex. 14,90" value="' +
+      '<label class="ad-field"><span>' + L("Frais de port hors d'Europe (€) <em>(laisser vide pour ne livrer qu'en Europe)</em>", "Shipping outside Europe (€) <em>(leave empty to ship within Europe only)</em>") + "</span>" +
+      '<input type="text" name="shippingWorld" inputmode="decimal" placeholder="' + L("ex. 14,90", "e.g. 14.90") + '" value="' +
       (s.shippingWorldCents === null || s.shippingWorldCents === undefined ? "" : eurosInput(s.shippingWorldCents)) + '" /></label>' +
-      '<p class="ad-hint">États-Unis, Canada, Australie, Nouvelle-Zélande, Japon, Singapour, Hong Kong, Corée du Sud, Émirats : Prodigi imprime sur place ou au plus près. Comparez le coût de livraison en choisissant un de ces pays ci-dessous avant de fixer ce forfait.</p>' +
-      '<button type="submit" class="ad-btn ad-btn-primary" id="ad-shop-settings-save">Enregistrer</button>' +
-      (s.connected ? ' <button type="button" class="ad-btn" id="ad-shop-clear-key">Retirer la clé</button>' : "") +
+      '<p class="ad-hint">' + L("États-Unis, Canada, Australie, Nouvelle-Zélande, Japon, Singapour, Hong Kong, Corée du Sud, Émirats : Prodigi imprime sur place ou au plus près. Comparez le coût de livraison en choisissant un de ces pays ci-dessous avant de fixer ce forfait.",
+        "United States, Canada, Australia, New Zealand, Japan, Singapore, Hong Kong, South Korea, UAE: Prodigi prints locally or as close as possible. Check the shipping cost by choosing one of these countries below before setting this rate.") + "</p>" +
+      '<button type="submit" class="ad-btn ad-btn-primary" id="ad-shop-settings-save">' + L("Enregistrer", "Save") + "</button>" +
+      (s.connected ? ' <button type="button" class="ad-btn" id="ad-shop-clear-key">' + L("Retirer la clé", "Remove the key") + "</button>" : "") +
       "</form></section>" +
 
-      '<section><div class="ad-section-header"><h3>Ajouter un produit</h3>' +
-      '<button type="button" class="ad-btn" id="ad-shop-suggested">Ajouter les formats suggérés</button></div>' +
-      '<p class="ad-hint">Choisissez dans les menus : le coût réel chez Prodigi s\'affiche aussitôt, vous indiquez votre marge, le prix client se calcule tout seul. Le labo recadre la photo au format choisi.</p>' +
-      '<div class="ad-shop-quote-bar"><label>Coûts calculés pour une livraison en <select id="ad-shop-country">' + countryOptions + "</select></label></div>" +
+      '<section><div class="ad-section-header"><h3>' + L("Ajouter un produit", "Add a product") + "</h3>" +
+      '<button type="button" class="ad-btn" id="ad-shop-suggested">' + L("Ajouter les formats suggérés", "Add the suggested formats") + "</button></div>" +
+      '<p class="ad-hint">' + L("Choisissez dans les menus : le coût réel chez Prodigi s'affiche aussitôt, vous indiquez votre marge, le prix client se calcule tout seul. Le labo recadre la photo au format choisi.",
+        "Choose from the menus: Prodigi's real cost shows right away, you enter your margin, the client price is worked out for you. The lab crops the photo to the chosen size.") + "</p>" +
+      '<div class="ad-shop-quote-bar"><label>' + L("Coûts calculés pour une livraison en ", "Costs calculated for delivery to ") + '<select id="ad-shop-country">' + countryOptions + "</select></label></div>" +
       pickerHtml(data.catalogue, s.connected) +
       "</section>" +
 
-      '<section><div class="ad-section-header"><h3>Mes produits</h3>' +
-      '<button type="button" class="ad-btn" id="ad-shop-quote"' + (s.connected && data.products.length ? "" : " disabled") + ">Mettre à jour les coûts labo</button></div>" +
-      '<p class="ad-hint">Prix TTC payé par le client. Votre marge = prix client − coût du produit chez le labo' +
-      (s.paymentFee && s.paymentFee.label !== "aucun" ? " − frais de paiement (" + esc(s.paymentFee.label) + ", comptés comme si le produit était commandé seul)" : "") +
-      " ; la livraison est couverte à part par vos frais de port (" + formatEuros(s.shippingCents) + " par commande)." +
-      (maxShip ? " Dernier devis : le labo facture jusqu'à " + formatEuros(maxShip) + " de livraison pour un article." : "") + "</p>" +
+      '<section><div class="ad-section-header"><h3>' + L("Mes produits", "My products") + "</h3>" +
+      '<button type="button" class="ad-btn" id="ad-shop-quote"' + (s.connected && data.products.length ? "" : " disabled") + ">" + L("Mettre à jour les coûts labo", "Update lab costs") + "</button></div>" +
+      '<p class="ad-hint">' + L("Prix TTC payé par le client. Votre marge = prix client − coût du produit chez le labo", "Price paid by the client, VAT included. Your margin = client price − the lab's product cost") +
+      (s.paymentFee && s.paymentFee.label !== "aucun" ? L(" − frais de paiement (", " − payment fees (") + esc(feeText(s.paymentFee.label)) + L(", comptés comme si le produit était commandé seul)", ", counted as if the product were ordered alone)") : "") +
+      L(" ; la livraison est couverte à part par vos frais de port (", "; shipping is covered separately by your shipping fee (") + formatEuros(s.shippingCents) + L(" par commande).", " per order).") +
+      (maxShip ? L(" Dernier devis : le labo facture jusqu'à ", " Latest quote: the lab charges up to ") + formatEuros(maxShip) + L(" de livraison pour un article.", " shipping for one item.") : "") + "</p>" +
       productsTableHtml(data.products) +
-      '<details class="ad-advanced"><summary>Mode avancé : ajouter une référence Prodigi hors catalogue</summary>' +
-      '<p class="ad-hint">Pour un produit absent des menus : sa référence (SKU) et ses options sont celles du <a href="https://www.prodigi.com/products/" target="_blank" rel="noopener">catalogue Prodigi</a>.</p>' +
+      '<details class="ad-advanced"><summary>' + L("Mode avancé : ajouter une référence Prodigi hors catalogue", "Advanced: add a Prodigi reference outside the catalogue") + "</summary>" +
+      '<p class="ad-hint">' + L("Pour un produit absent des menus : sa référence (SKU) et ses options sont celles du ", "For a product missing from the menus: its reference (SKU) and options are those of the ") +
+      '<a href="https://www.prodigi.com/products/" target="_blank" rel="noopener">' + L("catalogue Prodigi", "Prodigi catalogue") + "</a>.</p>" +
       '<div class="ad-advanced-grid" id="ad-shop-new">' +
-      '<label class="ad-field"><span>Libellé</span><input type="text" class="ad-input" data-field="label" placeholder="Ex. Tirage 13 × 18 cm" maxlength="100" /></label>' +
-      '<label class="ad-field"><span>Référence (SKU)</span><input type="text" class="ad-input ad-input-mono" data-field="sku" placeholder="GLOBAL-PHO-5x7" maxlength="80" /></label>' +
+      '<label class="ad-field"><span>' + L("Libellé", "Label") + '</span><input type="text" class="ad-input" data-field="label" placeholder="' + L("Ex. Tirage 13 × 18 cm", "e.g. 5 × 7 in print") + '" maxlength="100" /></label>' +
+      '<label class="ad-field"><span>' + L("Référence (SKU)", "Reference (SKU)") + '</span><input type="text" class="ad-input ad-input-mono" data-field="sku" placeholder="GLOBAL-PHO-5x7" maxlength="80" /></label>' +
       '<label class="ad-field"><span>Options (JSON)</span><input type="text" class="ad-input ad-input-mono" data-field="attributes" placeholder="{}" /></label>' +
-      '<label class="ad-field"><span>Prix client (€)</span><input type="text" class="ad-input ad-input-price" data-field="price" placeholder="9.00" inputmode="decimal" /></label>' +
-      '<button type="button" class="ad-btn ad-btn-primary" id="ad-shop-add">Ajouter</button>' +
+      '<label class="ad-field"><span>' + L("Prix client (€)", "Client price (€)") + '</span><input type="text" class="ad-input ad-input-price" data-field="price" placeholder="9.00" inputmode="decimal" /></label>' +
+      '<button type="button" class="ad-btn ad-btn-primary" id="ad-shop-add">' + L("Ajouter", "Add") + "</button>" +
       "</div></details>" +
       "</section>" +
 
-      '<section><div class="ad-section-header"><h3>Commandes</h3></div>' +
+      '<section><div class="ad-section-header"><h3>' + L("Commandes", "Orders") + "</h3></div>" +
       printOrdersTableHtml(ordersData.orders, true) +
       "</section>";
 
@@ -3022,9 +3443,9 @@
       event.preventDefault();
       var form = event.target;
       var shipping = centsFromEuros(form.shipping.value);
-      if (isNaN(shipping) || shipping < 0) return toast("Frais de port invalides.", true);
+      if (isNaN(shipping) || shipping < 0) return toast(L("Frais de port invalides.", "Invalid shipping fee."), true);
       var shippingWorld = form.shippingWorld.value.trim() ? centsFromEuros(form.shippingWorld.value) : null;
-      if (shippingWorld !== null && (isNaN(shippingWorld) || shippingWorld < 0)) return toast("Frais de port hors Europe invalides.", true);
+      if (shippingWorld !== null && (isNaN(shippingWorld) || shippingWorld < 0)) return toast(L("Frais de port hors Europe invalides.", "Invalid shipping fee outside Europe."), true);
       try {
         await api("POST", "/shop/settings", {
           apiKey: form.apiKey.value.trim(),
@@ -3032,7 +3453,7 @@
           shippingCents: shipping,
           shippingWorldCents: shippingWorld,
         });
-        toast("Réglages de la boutique enregistrés.");
+        toast(L("Réglages de la boutique enregistrés.", "Shop settings saved."));
         renderShop(true);
       } catch (err) {
         toast(err.message, true);
@@ -3042,10 +3463,10 @@
     var clearKey = document.getElementById("ad-shop-clear-key");
     if (clearKey) {
       clearKey.addEventListener("click", function () {
-        confirmAction("Retirer la clé Prodigi ? La boutique sera fermée sur toutes vos galeries tant qu'aucune clé n'est enregistrée.", async function () {
+        confirmAction(L("Retirer la clé Prodigi ? La boutique sera fermée sur toutes vos galeries tant qu'aucune clé n'est enregistrée.", "Remove the Prodigi key? The shop will be closed on all your galleries until a key is saved."), async function () {
           try {
             await api("POST", "/shop/settings", { clearKey: true, environment: s.environment, shippingCents: s.shippingCents });
-            toast("Clé Prodigi retirée.");
+            toast(L("Clé Prodigi retirée.", "Prodigi key removed."));
             renderShop(true);
           } catch (err) {
             toast(err.message, true);
@@ -3057,7 +3478,7 @@
     document.getElementById("ad-shop-suggested").addEventListener("click", async function () {
       try {
         var result = await api("POST", "/shop/products/suggested");
-        toast(result.added ? result.added + " format(s) ajouté(s) — vérifiez les prix." : "Tous les formats suggérés sont déjà là.");
+        toast(result.added ? result.added + L(" format(s) ajouté(s) — vérifiez les prix.", " format(s) added — check the prices.") : L("Tous les formats suggérés sont déjà là.", "All the suggested formats are already there."));
         renderShop(true);
       } catch (err) {
         toast(err.message, true);
@@ -3074,12 +3495,12 @@
         try {
           attributes = JSON.parse(get("attributes") || "{}");
         } catch (e) {
-          throw new Error("Options : JSON invalide (ex. {\"finish\": \"lustre\"})");
+          throw new Error(L("Options : JSON invalide (ex. {\"finish\": \"lustre\"})", "Options: invalid JSON (e.g. {\"finish\": \"lustre\"})"));
         }
         var price = centsFromEuros(get("price"));
-        if (isNaN(price)) throw new Error("Prix invalide.");
+        if (isNaN(price)) throw new Error(L("Prix invalide.", "Invalid price."));
         await api("POST", "/shop/products", { label: get("label"), sku: get("sku"), attributes: attributes, priceCents: price });
-        toast("Produit ajouté.");
+        toast(L("Produit ajouté.", "Product added."));
         renderShop(true);
       } catch (err) {
         toast(err.message, true);
@@ -3101,23 +3522,23 @@
         var id = row.getAttribute("data-product-id");
         if (event.target.closest("[data-save-product]")) {
           var price = centsFromEuros(row.querySelector('[data-field="price"]').value);
-          if (isNaN(price)) return toast("Prix invalide.", true);
+          if (isNaN(price)) return toast(L("Prix invalide.", "Invalid price."), true);
           try {
             await api("PUT", "/shop/products/" + encodeURIComponent(id), {
               priceCents: price,
               active: row.querySelector('[data-field="active"]').checked,
             });
-            toast("Produit enregistré.");
+            toast(L("Produit enregistré.", "Product saved."));
             renderShop(true);
           } catch (err) {
             toast(err.message, true);
           }
         }
         if (event.target.closest("[data-delete-product]")) {
-          confirmAction("Retirer ce produit de votre boutique ? Les commandes déjà passées ne changent pas.", async function () {
+          confirmAction(L("Retirer ce produit de votre boutique ? Les commandes déjà passées ne changent pas.", "Remove this product from your shop? Orders already placed don't change."), async function () {
             try {
               await api("DELETE", "/shop/products/" + encodeURIComponent(id));
-              toast("Produit retiré.");
+              toast(L("Produit retiré.", "Product removed."));
               renderShop(true);
             } catch (err) {
               toast(err.message, true);
@@ -3130,7 +3551,7 @@
     document.getElementById("ad-shop-quote").addEventListener("click", async function () {
       var btn = this;
       btn.disabled = true;
-      btn.textContent = "Mise à jour…";
+      btn.textContent = L("Mise à jour…", "Updating…");
       try {
         var result = await api("POST", "/shop/quote", { countryCode: document.getElementById("ad-shop-country").value });
         result.quotes.forEach(function (q) {
@@ -3142,16 +3563,16 @@
             row.querySelector(".ad-margin-cell").textContent = "—";
           } else {
             row.setAttribute("data-cost", q.itemsCents);
-            cell.innerHTML = formatEuros(q.itemsCents) + '<br /><span class="ad-hint">+ ' + formatEuros(q.shippingCents) + " livraison</span>";
+            cell.innerHTML = formatEuros(q.itemsCents) + '<br /><span class="ad-hint">+ ' + formatEuros(q.shippingCents) + L(" livraison", " shipping") + "</span>";
             row.querySelector(".ad-margin-cell").innerHTML = marginHtml(q.marginCents);
           }
         });
-        toast("Coûts labo mis à jour.");
+        toast(L("Coûts labo mis à jour.", "Lab costs updated."));
       } catch (err) {
         toast(err.message, true);
       } finally {
         btn.disabled = false;
-        btn.textContent = "Mettre à jour les coûts labo";
+        btn.textContent = L("Mettre à jour les coûts labo", "Update lab costs");
       }
     });
 
@@ -3168,47 +3589,47 @@
     if (data.status === "match") {
       return (
         '<div class="ad-detect-result ad-detect-match">' +
-        '<p class="ad-detect-badge ad-detect-badge-ok">✓ Origine identifiée</p>' +
+        '<p class="ad-detect-badge ad-detect-badge-ok">' + L("✓ Origine identifiée", "✓ Source identified") + "</p>" +
         "<h3>" + esc(data.gallery.title) + "</h3>" +
         (data.gallery.clientName ? "<p>" + esc(data.gallery.clientName) + "</p>" : "") +
-        '<p class="ad-hint">Photo n° ' + (data.photo.position + 1) +
-        " · fiabilité : signal/bruit " + data.snr.toFixed(2) + ", " + data.matchingBits + "/32 bits concordants</p>" +
+        '<p class="ad-hint">' + L("Photo n° ", "Photo no. ") + (data.photo.position + 1) +
+        L(" · fiabilité : signal/bruit ", " · reliability: signal/noise ") + data.snr.toFixed(2) + ", " + data.matchingBits + L("/32 bits concordants", "/32 matching bits") + "</p>" +
         "</div>"
       );
     }
     if (data.status === "no-match") {
       return (
         '<div class="ad-detect-result">' +
-        '<p class="ad-detect-badge">Aucune correspondance fiable</p>' +
-        '<p class="ad-hint">Cette image ne semble pas venir de vos galeries, ou a été trop dégradée pour l\'affirmer avec certitude ' +
-        "(signal/bruit " + data.snr.toFixed(2) + ", " + data.matchingBits + "/32 bits — seuils : " +
-        data.thresholds.snr + " et " + data.thresholds.bits + "/32).</p>" +
+        '<p class="ad-detect-badge">' + L("Aucune correspondance fiable", "No reliable match") + "</p>" +
+        '<p class="ad-hint">' + L("Cette image ne semble pas venir de vos galeries, ou a été trop dégradée pour l'affirmer avec certitude ",
+          "This image doesn't seem to come from your galleries, or is too degraded to say for sure ") +
+        L("(signal/bruit ", "(signal/noise ") + data.snr.toFixed(2) + ", " + data.matchingBits + L("/32 bits — seuils : ", "/32 bits — thresholds: ") +
+        data.thresholds.snr + L(" et ", " and ") + data.thresholds.bits + "/32).</p>" +
         "</div>"
       );
     }
     if (data.status === "too-small") {
       return (
-        '<div class="ad-detect-result"><p class="ad-detect-badge">Image trop petite</p>' +
-        '<p class="ad-hint">Elle ne peut pas porter une empreinte lisible.</p></div>'
+        '<div class="ad-detect-result"><p class="ad-detect-badge">' + L("Image trop petite", "Image too small") + "</p>" +
+        '<p class="ad-hint">' + L("Elle ne peut pas porter une empreinte lisible.", "It can't carry a readable fingerprint.") + "</p></div>"
       );
     }
     if (data.status === "no-prints") {
-      return '<div class="ad-detect-result"><p class="ad-hint">Aucune de vos photos n’a encore d’empreinte enregistrée.</p></div>';
+      return '<div class="ad-detect-result"><p class="ad-hint">' + L("Aucune de vos photos n’a encore d’empreinte enregistrée.", "None of your photos has a recorded fingerprint yet.") + "</p></div>";
     }
-    return '<div class="ad-detect-result"><p class="ad-hint">Résultat inattendu.</p></div>';
+    return '<div class="ad-detect-result"><p class="ad-hint">' + L("Résultat inattendu.", "Unexpected result.") + "</p></div>";
   }
 
   function renderDetect(skipHash) {
     if (!skipHash && location.hash !== "#/detect") history.pushState(null, "", "#/detect");
     el.view.innerHTML =
-      '<button type="button" class="ad-back" id="ad-detect-back">&larr; Toutes les galeries</button>' +
-      '<header class="ad-detail-header"><div><h2>Vérifier une photo</h2>' +
-      '<p class="ad-hint">Une image retrouvée ailleurs (réseaux sociaux, un site…) vous semble provenir de l’une de vos ' +
-      "galeries ? Déposez-la ici : elle est comparée aux empreintes invisibles de toutes vos photos, sans jamais quitter " +
-      "votre ordinateur.</p></div></header>" +
+      '<button type="button" class="ad-back" id="ad-detect-back">' + L("&larr; Toutes les galeries", "&larr; All galleries") + "</button>" +
+      '<header class="ad-detail-header"><div><h2>' + L("Vérifier une photo", "Check a photo") + "</h2>" +
+      '<p class="ad-hint">' + L("Une image retrouvée ailleurs (réseaux sociaux, un site…) vous semble provenir de l’une de vos galeries ? Déposez-la ici : elle est comparée aux empreintes invisibles de toutes vos photos, sans jamais quitter votre ordinateur.",
+        "Found an image elsewhere (social media, a website…) that looks like it came from one of your galleries? Drop it here: it's compared with the invisible fingerprints of all your photos, without ever leaving your computer.") + "</p></div></header>" +
       '<section class="ad-dropzone" id="ad-detect-dropzone">' +
-      "<p><strong>Glissez une photo ici</strong>, ou</p>" +
-      '<label class="ad-btn ad-btn-primary">Choisir un fichier<input type="file" id="ad-detect-file-input" accept="image/*" hidden /></label>' +
+      "<p>" + L("<strong>Glissez une photo ici</strong>, ou", "<strong>Drag a photo here</strong>, or") + "</p>" +
+      '<label class="ad-btn ad-btn-primary">' + L("Choisir un fichier", "Choose a file") + '<input type="file" id="ad-detect-file-input" accept="image/*" hidden /></label>' +
       "</section>" +
       '<div id="ad-detect-result"></div>';
 
@@ -3220,16 +3641,16 @@
     var dropzone = document.getElementById("ad-detect-dropzone");
 
     async function analyze(file) {
-      resultBox.innerHTML = '<p class="ad-loading">Analyse en cours…</p>';
+      resultBox.innerHTML = '<p class="ad-loading">' + L("Analyse en cours…", "Analysing…") + "</p>";
       var form = new FormData();
       form.append("file", file, file.name);
       try {
         var response = await fetch("/local/detect", { method: "POST", body: form });
         var data = await response.json().catch(function () { return {}; });
-        if (!response.ok) throw new Error(data.error || "Échec de l'analyse");
+        if (!response.ok) throw new Error(serverText(data.error) || L("Échec de l'analyse", "Analysis failed"));
         resultBox.innerHTML = detectResultHtml(data);
       } catch (err) {
-        resultBox.innerHTML = '<div class="ad-error-panel"><h2>Analyse impossible</h2><p>' + esc(err.message) + "</p></div>";
+        resultBox.innerHTML = '<div class="ad-error-panel"><h2>' + L("Analyse impossible", "Analysis not possible") + "</h2><p>" + esc(err.message) + "</p></div>";
       }
     }
 
@@ -3269,6 +3690,10 @@
   }
 
   var TAG_LABELS = { green: "Validée", yellow: "À retoucher", red: "À écarter" };
+  var TAG_LABELS_EN = { green: "Approved", yellow: "To retouch", red: "Set aside" };
+  function tagLabel(tag) {
+    return (LANG === "en" ? TAG_LABELS_EN : TAG_LABELS)[tag] || "";
+  }
 
   function marksOf(photo) {
     return Array.isArray(photo.marks) ? photo.marks : [];
@@ -3289,7 +3714,7 @@
     return (
       '<p class="ad-tag-legend" id="ad-tag-legend">' +
       ["green", "yellow", "red"].map(function (tag) {
-        return '<span class="ad-tag-legend-' + tag + '">' + counts[tag] + " " + TAG_LABELS[tag].toLowerCase() + (counts[tag] > 1 && tag !== "yellow" && tag !== "red" ? "s" : "") + "</span>";
+        return '<span class="ad-tag-legend-' + tag + '">' + counts[tag] + " " + tagLabel(tag).toLowerCase() + (LANG !== "en" && counts[tag] > 1 && tag !== "yellow" && tag !== "red" ? "s" : "") + "</span>";
       }).join("") +
       "</p>"
     );
@@ -3310,22 +3735,22 @@
     var pins = marks.map(function (m, i) {
       return '<span class="ad-pin" style="left:' + (Number(m.x) * 100).toFixed(2) + "%;top:" + (Number(m.y) * 100).toFixed(2) + '%" title="' + esc(m.note || "") + '"><span>' + (i + 1) + "</span></span>";
     }).join("");
-    document.getElementById("ad-photo-modal-title").textContent = "Photo n° " + (photo.position + 1);
+    document.getElementById("ad-photo-modal-title").textContent = L("Photo n° ", "Photo no. ") + (photo.position + 1);
     body.innerHTML =
       '<div class="ad-photo-meta">' +
-      (isSelected(photo) ? '<span class="ad-badge ad-badge-selected">♥ Sélectionnée</span>' : "") +
-      (photo.tag ? '<span class="ad-badge ad-badge-tag-' + photo.tag + '">' + TAG_LABELS[photo.tag] + "</span>" : "") +
+      (isSelected(photo) ? '<span class="ad-badge ad-badge-selected">' + L("♥ Sélectionnée", "♥ Selected") + "</span>" : "") +
+      (photo.tag ? '<span class="ad-badge ad-badge-tag-' + photo.tag + '">' + tagLabel(photo.tag) + "</span>" : "") +
       "<span>" + photo.width + " × " + photo.height + "</span>" +
       "</div>" +
       '<div class="ad-photo-large" style="aspect-ratio:' + photo.width + "/" + photo.height +
       ";grid-template-columns:repeat(" + photo.cols + ",1fr);grid-template-rows:repeat(" + photo.rows + ',1fr)">' +
       cells + '<div class="ad-photo-large-pins">' + pins + "</div></div>" +
-      (hasComment(photo) ? "<p><strong>Remarque :</strong> « " + esc(photo.comment.trim()) + " »</p>" : "") +
+      (hasComment(photo) ? "<p><strong>" + L("Remarque :", "Note:") + "</strong> " + L("« " + esc(photo.comment.trim()) + " »", "“" + esc(photo.comment.trim()) + "”") + "</p>" : "") +
       (marks.length
         ? '<ol class="ad-photo-notes" id="ad-photo-notes">' +
-          marks.map(function (m) { return "<li>" + (m.note ? esc(m.note) : "<em>Sans note</em>") + "</li>"; }).join("") +
+          marks.map(function (m) { return "<li>" + (m.note ? esc(m.note) : "<em>" + L("Sans note", "No note") + "</em>") + "</li>"; }).join("") +
           "</ol>"
-        : '<p class="ad-hint">Aucun repère posé par le client sur cette photo.</p>');
+        : '<p class="ad-hint">' + L("Aucun repère posé par le client sur cette photo.", "The client placed no markers on this photo.") + "</p>");
     openModal("ad-photo-modal");
   }
 
@@ -3357,19 +3782,19 @@
     var isCover = Boolean(presentation && presentation.coverPhotoId === photo.id);
     return (
       '<div class="ad-photo' + (selected ? " ad-photo-selected" : "") + '" data-photo-id="' + esc(photo.id) + '">' +
-      '<div class="ad-photo-frame" title="' + esc(photo.source_name ? photo.source_name + " — voir en grand" : "Voir en grand") + '" style="aspect-ratio:' + photo.width + "/" + photo.height +
+      '<div class="ad-photo-frame" title="' + esc(photo.source_name ? photo.source_name + L(" — voir en grand", " — view large") : L("Voir en grand", "View large")) + '" style="aspect-ratio:' + photo.width + "/" + photo.height +
       ";grid-template-columns:repeat(" + cols + ",1fr);grid-template-rows:repeat(" + rows + ',1fr)">' +
       cells +
-      '<span class="ad-photo-dims">n° ' + (photo.position + 1) + " · " + photo.width + "×" + photo.height + "</span>" +
-      (selected ? '<span class="ad-photo-heart" title="Sélectionnée par le client">♥</span>' : "") +
+      '<span class="ad-photo-dims">' + L("n° ", "no. ") + (photo.position + 1) + " · " + photo.width + "×" + photo.height + "</span>" +
+      (selected ? '<span class="ad-photo-heart" title="' + L("Sélectionnée par le client", "Selected by the client") + '">♥</span>' : "") +
       (commented ? '<span class="ad-photo-comment" title="' + esc(photo.comment) + '">💬</span>' : "") +
-      (photo.tag && TAG_LABELS[photo.tag]
-        ? '<span class="ad-photo-tag ad-photo-tag-' + photo.tag + '" title="' + TAG_LABELS[photo.tag] + '"></span>'
+      (photo.tag && tagLabel(photo.tag)
+        ? '<span class="ad-photo-tag ad-photo-tag-' + photo.tag + '" title="' + tagLabel(photo.tag) + '"></span>'
         : "") +
-      (markCount ? '<span class="ad-photo-marks" title="' + markCount + " repère" + (markCount > 1 ? "s" : "") + ' annoté(s)">📍 ' + markCount + "</span>" : "") +
+      (markCount ? '<span class="ad-photo-marks" title="' + L(markCount + " repère" + (markCount > 1 ? "s" : "") + " annoté(s)", markCount + " annotated marker" + (markCount === 1 ? "" : "s")) + '">📍 ' + markCount + "</span>" : "") +
       "</div>" +
-      '<button type="button" class="ad-photo-cover' + (isCover ? " ad-photo-cover-on" : "") + '" title="' + (isCover ? "Photo de couverture" : "Choisir comme photo de couverture") + '" aria-label="' + (isCover ? "Photo de couverture" : "Choisir comme photo de couverture") + '" aria-pressed="' + isCover + '">★</button>' +
-      '<button type="button" class="ad-photo-remove" title="Supprimer cette photo" aria-label="Supprimer cette photo">&times;</button>' +
+      '<button type="button" class="ad-photo-cover' + (isCover ? " ad-photo-cover-on" : "") + '" title="' + (isCover ? L("Photo de couverture", "Cover photo") : L("Choisir comme photo de couverture", "Use as cover photo")) + '" aria-label="' + (isCover ? L("Photo de couverture", "Cover photo") : L("Choisir comme photo de couverture", "Use as cover photo")) + '" aria-pressed="' + isCover + '">★</button>' +
+      '<button type="button" class="ad-photo-remove" title="' + L("Supprimer cette photo", "Delete this photo") + '" aria-label="' + L("Supprimer cette photo", "Delete this photo") + '">&times;</button>' +
       "</div>"
     );
   }
@@ -3394,20 +3819,24 @@
   // Ces raisons précises sont celles qui déclenchent une alerte par e-mail
   // au photographe (voir worker/src/viewer.js) : on le signale ici.
   var EMAIL_ALERT_REASONS = new Set(["impr-ecran", "capture-macos", "absence-breve"]);
+  var CAPTURE_REASON_LABELS_EN = {
+    "impr-ecran": "Print Screen key", "capture-macos": "Screenshot shortcut (macOS)", "enregistrer": "Save attempt",
+    "perte-focus": "Window switch", "onglet-masque": "Tab moved to the background", "absence-breve": "Very brief absence (likely screenshot)",
+  };
 
   function logRow(entry, photosById) {
     var label = EVENT_LABELS[entry.event] || entry.event;
     if (entry.event === "capture_suspected" && EMAIL_ALERT_REASONS.has(entry.detail)) {
-      label = "🔔 " + label + " (e-mail envoyé)";
+      label = "🔔 " + label + L(" (e-mail envoyé)", " (email sent)");
     }
     var cls = /failed|expired|capture/.test(entry.event) ? "ad-log-warn" : "";
     var detail = entry.detail || "";
     if (PHOTO_ID_EVENTS.has(entry.event) && photosById[detail]) {
-      detail = "Photo n° " + (photosById[detail].position + 1);
+      detail = L("Photo n° ", "Photo no. ") + (photosById[detail].position + 1);
     } else if (CAPTURE_EVENTS.has(entry.event)) {
-      detail = CAPTURE_REASON_LABELS[detail] || detail;
+      detail = (LANG === "en" ? CAPTURE_REASON_LABELS_EN[detail] : CAPTURE_REASON_LABELS[detail]) || detail;
       if (entry.photo_id && photosById[entry.photo_id]) {
-        detail += (detail ? " — " : "") + "Photo n° " + (photosById[entry.photo_id].position + 1);
+        detail += (detail ? " — " : "") + L("Photo n° ", "Photo no. ") + (photosById[entry.photo_id].position + 1);
       }
     }
     return (
@@ -3434,33 +3863,34 @@
   }
 
   function formatEuros(cents) {
-    return ((cents || 0) / 100).toLocaleString("fr-BE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
+    var amount = ((cents || 0) / 100).toLocaleString(locale(), { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return LANG === "en" ? "€" + amount : amount + " €";
   }
 
   function quotaSummaryHtml(gallery) {
     if (gallery.included_photos === null || gallery.included_photos === undefined) {
-      return '<p class="ad-hint">Aucun forfait défini pour l\'instant — les coups de cœur du client ne déclenchent aucun supplément.</p>';
+      return '<p class="ad-hint">' + L("Aucun forfait défini pour l'instant — les coups de cœur du client ne déclenchent aucun supplément.", "No package set yet — the client's favourites don't trigger any extras.") + "</p>";
     }
     var selected = gallery.selected_count || 0;
     var included = gallery.included_photos;
     var extra = gallery.extra_count || 0;
     var due = gallery.due_extra_count || 0;
     var paid = gallery.paid_extra_count || 0;
-    var withinQuota = '<p class="ad-quota-count">' + selected + ' / ' + included + ' photo' + (included > 1 ? "s" : "") + ' incluse' + (included > 1 ? "s" : "") + '</p>';
+    var withinQuota = '<p class="ad-quota-count">' + selected + " / " + included + L(" photo" + (included > 1 ? "s" : "") + " incluse" + (included > 1 ? "s" : ""), (included === 1 ? " photo" : " photos") + " included") + "</p>";
     if (extra <= 0) return withinQuota;
 
     var html = withinQuota;
     if (due > 0) {
       html +=
         '<p class="ad-quota-due">' +
-        "+" + due + " supplément" + (due > 1 ? "s" : "") + " × " + formatEuros(gallery.extra_photo_price_cents) +
-        " = <strong>" + formatEuros(gallery.due_total_cents) + " à régler</strong>" +
+        "+" + due + L(" supplément" + (due > 1 ? "s" : ""), due === 1 ? " extra" : " extras") + " × " + formatEuros(gallery.extra_photo_price_cents) +
+        " = <strong>" + formatEuros(gallery.due_total_cents) + L(" à régler", " due") + "</strong>" +
         "</p>";
     }
     if (paid > 0) {
       html +=
-        '<p class="ad-quota-paid">✓ ' + paid + " supplément" + (paid > 1 ? "s" : "") +
-        " déjà réglé" + (paid > 1 ? "s" : "") + " en ligne</p>";
+        '<p class="ad-quota-paid">✓ ' + paid + L(" supplément" + (paid > 1 ? "s" : "") + " déjà réglé" + (paid > 1 ? "s" : "") + " en ligne",
+          (paid === 1 ? " extra" : " extras") + " already paid online") + "</p>";
     }
     return html;
   }
@@ -3468,19 +3898,19 @@
   function paymentsHistoryHtml(payments) {
     if (!payments || !payments.length) return "";
     var rows = payments.map(function (p) {
-      var statusLabel = p.status === "paid" ? "Réglé" : "En attente";
+      var statusLabel = p.status === "paid" ? L("Réglé", "Paid") : L("En attente", "Pending");
       var statusCls = p.status === "paid" ? "ad-badge-selected" : "";
       var invoiceCell = p.invoice_id
         ? '<a href="/local/invoices/' + encodeURIComponent(p.invoice_id) + '" target="_blank" rel="noopener">' +
           esc(p.invoice_number) + "</a>" +
-          (p.invoice_emailed_to ? ' <span class="ad-hint">(envoyée à ' + esc(p.invoice_emailed_to) + ")</span>" : "")
+          (p.invoice_emailed_to ? ' <span class="ad-hint">(' + L("envoyée à ", "sent to ") + esc(p.invoice_emailed_to) + ")</span>" : "")
         : "—";
       return (
         "<tr>" +
         "<td>" + esc(formatDateTime(p.paid_at || p.created_at)) + "</td>" +
-        "<td>" + (p.kind === "print" ? "Tirages" : p.extra_count + " photo" + (p.extra_count > 1 ? "s" : "")) + "</td>" +
+        "<td>" + (p.kind === "print" ? L("Tirages", "Prints") : p.extra_count + (p.extra_count === 1 ? " photo" : " photos")) + "</td>" +
         "<td>" + formatEuros(p.amount_cents) +
-        (p.fee_cents ? '<br><span class="ad-hint">dont ' + formatEuros(p.fee_cents) + " de frais de paiement</span>" : "") + "</td>" +
+        (p.fee_cents ? '<br><span class="ad-hint">' + L("dont " + formatEuros(p.fee_cents) + " de frais de paiement", "incl. " + formatEuros(p.fee_cents) + " payment fees") + "</span>" : "") + "</td>" +
         "<td><span class=\"ad-badge " + statusCls + "\">" + statusLabel + "</span></td>" +
         "<td>" + invoiceCell + "</td>" +
         "</tr>"
@@ -3488,7 +3918,7 @@
     });
     return (
       '<div class="ad-table-wrap"><table class="ad-table"><thead><tr>' +
-      "<th>Quand</th><th>Objet</th><th>Montant</th><th>Statut</th><th>Facture</th>" +
+      "<th>" + L("Quand", "When") + "</th><th>" + L("Objet", "For") + "</th><th>" + L("Montant", "Amount") + "</th><th>" + L("Statut", "Status") + "</th><th>" + L("Facture", "Invoice") + "</th>" +
       "</tr></thead><tbody>" + rows.join("") + "</tbody></table></div>"
     );
   }
@@ -3549,9 +3979,9 @@
     return '<span class="ad-tile-thumb" style="grid-template-columns:repeat(' + cols + ",1fr);grid-template-rows:repeat(" + rows + ',1fr)">' + cells + "</span>";
   }
   function fontOptionsHtml(keys, current, styleKey, part) {
-    var groups = { serif: "Avec empattements", sans: "Sans empattements", script: "Manuscrites" };
+    var groups = LANG === "en" ? { serif: "Serif", sans: "Sans serif", script: "Handwritten" } : { serif: "Avec empattements", sans: "Sans empattements", script: "Manuscrites" };
     var themeFont = galleryStyleOf(styleKey).fonts[part];
-    var html = '<option value="">Celle du style (' + esc(GALLERY_FONTS[themeFont][0]) + ")</option>";
+    var html = '<option value="">' + L("Celle du style (", "The style's (") + esc(GALLERY_FONTS[themeFont][0]) + ")</option>";
     Object.keys(groups).forEach(function (g) {
       var inGroup = keys.filter(function (k) { return GALLERY_FONTS[k][3] === g; });
       if (!inGroup.length) return;
@@ -3585,13 +4015,13 @@
       pop.innerHTML =
         '<div class="ad-style-pop-page ad-style-' + s.key + '"' + styleVarsAttr(s, c.titleFont, c.bodyFont) + ">" +
         '<div class="ad-style-pop-head">' +
-        '<span class="ad-style-pop-eyebrow">' + esc(c.studio || "Votre studio") + "</span>" +
+        '<span class="ad-style-pop-eyebrow">' + esc(c.studio || L("Votre studio", "Your studio")) + "</span>" +
         '<span class="ad-style-pop-title">' + esc(c.title || "Léa & Tom") + "</span>" +
         (c.client ? '<span class="ad-style-pop-sub">Galerie de ' + esc(c.client) + "</span>" : "") +
-        '<span class="ad-style-pop-intro">' + esc(c.intro || "Merci pour ces beaux moments partagés. Choisissez vos photos préférées en cliquant sur le cœur.") + "</span>" +
+        '<span class="ad-style-pop-intro">' + esc(c.intro || L("Merci pour ces beaux moments partagés. Choisissez vos photos préférées en cliquant sur le cœur.", "Thank you for these lovely moments together. Choose your favourite photos by clicking the heart.")) + "</span>" +
         "</div>" +
         '<div class="ad-style-pop-grid' + (photos.length ? "" : " ad-style-pop-grid-empty") + '">' + thumbs + "</div></div>" +
-        '<p class="ad-style-pop-cap"><strong>' + esc(s.label) + "</strong> · idéal pour " + esc(s.ideal.toLowerCase()) + "</p>";
+        '<p class="ad-style-pop-cap"><strong>' + esc(s.label) + "</strong>" + L(" · idéal pour ", " · ideal for ") + esc(s.ideal.toLowerCase()) + "</p>";
       pop.hidden = false;
       var r = card.getBoundingClientRect();
       var w = pop.offsetWidth;
@@ -3624,41 +4054,44 @@
     var cover = data.photos.filter(function (x) { return x.id === p.coverPhotoId; })[0];
     var mode = p.headerVideo ? "video" : (cover ? "cover" : "none");
     return '<section class="ad-style-section" id="ad-style-section">' +
-      '<div class="ad-section-header"><h3>Style de la galerie</h3></div>' +
-      '<p class="ad-hint">Survolez un style pour le voir avec vos photos, cliquez pour l\'appliquer. Votre client le découvre à sa prochaine visite.</p>' +
+      '<div class="ad-section-header"><h3>' + L("Style de la galerie", "Gallery style") + "</h3></div>" +
+      '<p class="ad-hint">' + L("Survolez un style pour le voir avec vos photos, cliquez pour l'appliquer. Votre client le découvre à sa prochaine visite.",
+        "Hover a style to see it with your photos, click to apply it. Your client sees it on their next visit.") + "</p>" +
       '<div class="ad-style-cards" id="ad-style-cards">' + styleCardsHtml(p.theme, p.titleFont, p.bodyFont) + "</div>" +
       '<div class="ad-style-fonts">' +
-      '<label class="ad-field"><span>Police des titres</span><select id="ad-title-font">' + fontOptionsHtml(TITLE_FONT_KEYS, p.titleFont, p.theme, 0) + "</select></label>" +
-      '<label class="ad-field"><span>Police du texte d\'accompagnement</span><select id="ad-body-font">' + fontOptionsHtml(BODY_FONT_KEYS, p.bodyFont, p.theme, 1) + "</select></label>" +
+      '<label class="ad-field"><span>' + L("Police des titres", "Heading font") + '</span><select id="ad-title-font">' + fontOptionsHtml(TITLE_FONT_KEYS, p.titleFont, p.theme, 0) + "</select></label>" +
+      '<label class="ad-field"><span>' + L("Police du texte d'accompagnement", "Welcome text font") + '</span><select id="ad-body-font">' + fontOptionsHtml(BODY_FONT_KEYS, p.bodyFont, p.theme, 1) + "</select></label>" +
       '<p class="ad-style-sample" id="ad-style-sample"' + styleVarsAttr(galleryStyleOf(p.theme), p.titleFont, p.bodyFont) + ">" +
       '<span class="ad-style-sample-title">' + esc(data.gallery.title) + "</span>" +
-      '<span class="ad-style-sample-body">' + esc(p.intro || "Merci pour ces beaux moments partagés : voici vos photos.") + "</span></p>" +
+      '<span class="ad-style-sample-body">' + esc(p.intro || L("Merci pour ces beaux moments partagés : voici vos photos.", "Thank you for these lovely moments together: here are your photos.")) + "</span></p>" +
       "</div>" +
       '<form id="ad-presentation-form" class="ad-presentation-form" novalidate>' +
-      '<label class="ad-field"><span>Texte d\'accompagnement <em>(facultatif, sous le titre)</em></span>' +
-      '<textarea name="intro" rows="3" maxlength="600" placeholder="Merci pour cette belle journée ! Voici vos photos : choisissez vos préférées en cliquant sur le cœur.">' + esc(p.intro) + "</textarea></label>" +
+      '<label class="ad-field"><span>' + L("Texte d'accompagnement <em>(facultatif, sous le titre)</em>", "Welcome text <em>(optional, under the title)</em>") + "</span>" +
+      '<textarea name="intro" rows="3" maxlength="600" placeholder="' + L("Merci pour cette belle journée ! Voici vos photos : choisissez vos préférées en cliquant sur le cœur.", "Thank you for a wonderful day! Here are your photos: choose your favourites by clicking the heart.") + '">' + esc(p.intro) + "</textarea></label>" +
       '<div class="ad-style-header">' +
-      '<span class="ad-style-header-title">En-tête de la galerie</span>' +
-      '<div class="ad-seg" role="group" aria-label="En-tête de la galerie">' +
-      '<button type="button" class="ad-seg-btn" data-header-mode="none" aria-pressed="' + (mode === "none") + '">Sans</button>' +
-      '<button type="button" class="ad-seg-btn" data-header-mode="cover" aria-pressed="' + (mode === "cover") + '">Photo de couverture</button>' +
-      '<button type="button" class="ad-seg-btn" data-header-mode="video" aria-pressed="' + (mode === "video") + '">Vidéo</button></div>' +
+      '<span class="ad-style-header-title">' + L("En-tête de la galerie", "Gallery header") + "</span>" +
+      '<div class="ad-seg" role="group" aria-label="' + L("En-tête de la galerie", "Gallery header") + '">' +
+      '<button type="button" class="ad-seg-btn" data-header-mode="none" aria-pressed="' + (mode === "none") + '">' + L("Sans", "None") + "</button>" +
+      '<button type="button" class="ad-seg-btn" data-header-mode="cover" aria-pressed="' + (mode === "cover") + '">' + L("Photo de couverture", "Cover photo") + "</button>" +
+      '<button type="button" class="ad-seg-btn" data-header-mode="video" aria-pressed="' + (mode === "video") + '">' + L("Vidéo", "Video") + "</button></div>" +
       '<div class="ad-style-cover" data-header-panel="cover"' + (mode === "cover" ? "" : " hidden") + ">" +
       (cover ? '<span class="ad-style-cover-thumb" style="aspect-ratio:' + cover.width + "/" + cover.height + '">' + tileThumbHtml(cover) + "</span>" : "") +
-      '<span class="ad-hint">' + (cover ? "La photo n° " + (cover.position + 1) + " ouvre la galerie, en grand. " : "") +
-      "Pour en choisir une autre, cliquez sur l'étoile ★ d'une photo ci-dessous." + (data.photos.length && !cover ? " Sans choix, la première photo sera utilisée." : "") + "</span></div>" +
+      '<span class="ad-hint">' + (cover ? L("La photo n° " + (cover.position + 1) + " ouvre la galerie, en grand. ", "Photo no. " + (cover.position + 1) + " opens the gallery, large. ") : "") +
+      L("Pour en choisir une autre, cliquez sur l'étoile ★ d'une photo ci-dessous.", "To pick another one, click the ★ star on a photo below.") +
+      (data.photos.length && !cover ? L(" Sans choix, la première photo sera utilisée.", " If you don't choose, the first photo is used.") : "") + "</span></div>" +
       '<div data-header-panel="video"' + (mode === "video" ? "" : " hidden") + ">" +
-      '<label class="ad-field"><span>Lien de la vidéo <em>(YouTube ou Vimeo)</em></span><input name="headerVideo" inputmode="url" placeholder="https://vimeo.com/… ou https://youtu.be/…" value="' + esc(p.headerVideo) + '" /></label>' +
-      '<p class="ad-hint">Le film du mariage, la bande-annonce de la séance… en tête de galerie. Une vidéo non répertoriée fonctionne aussi.</p></div>' +
+      '<label class="ad-field"><span>' + L("Lien de la vidéo <em>(YouTube ou Vimeo)</em>", "Video link <em>(YouTube or Vimeo)</em>") + '</span><input name="headerVideo" inputmode="url" placeholder="' + L("https://vimeo.com/… ou https://youtu.be/…", "https://vimeo.com/… or https://youtu.be/…") + '" value="' + esc(p.headerVideo) + '" /></label>' +
+      '<p class="ad-hint">' + L("Le film du mariage, la bande-annonce de la séance… en tête de galerie. Une vidéo non répertoriée fonctionne aussi.", "The wedding film, the session trailer… at the top of the gallery. An unlisted video works too.") + "</p></div>" +
       "</div>" +
-      '<div class="ad-sc-actions"><button type="submit" class="ad-btn ad-btn-primary">Enregistrer le texte et l\'en-tête</button></div>' +
+      '<div class="ad-sc-actions"><button type="submit" class="ad-btn ad-btn-primary">' + L("Enregistrer le texte et l'en-tête", "Save the text and header") + "</button></div>" +
       "</form>" +
       '<div class="ad-style-header ad-language">' +
-      '<span class="ad-style-header-title">Langue pour votre client</span>' +
-      '<div class="ad-seg" role="group" aria-label="Langue pour votre client">' +
+      '<span class="ad-style-header-title">' + L("Langue pour votre client", "Language for your client") + "</span>" +
+      '<div class="ad-seg" role="group" aria-label="' + L("Langue pour votre client", "Language for your client") + '">' +
       '<button type="button" class="ad-seg-btn" data-language="fr" aria-pressed="' + (p.language !== "en") + '">Français</button>' +
       '<button type="button" class="ad-seg-btn" data-language="en" aria-pressed="' + (p.language === "en") + '">English</button></div>' +
-      '<p class="ad-hint">La page de la galerie, les e-mails que reçoit votre client (relances, livraison, commandes de tirages), la boutique et ses factures. Votre texte d\'accompagnement s\'affiche tel que vous l\'écrivez.</p>' +
+      '<p class="ad-hint">' + L("La page de la galerie, les e-mails que reçoit votre client (relances, livraison, commandes de tirages), la boutique et ses factures. Votre texte d'accompagnement s'affiche tel que vous l'écrivez.",
+        "The gallery page, the emails your client receives (reminders, delivery, print orders), the shop and its invoices. Your welcome text shows exactly as you write it.") + "</p>" +
       "</div></section>";
   }
 
@@ -3692,7 +4125,7 @@
       if (!card || card.classList.contains("ad-style-card-active")) return;
       hidePreview();
       var theme = card.getAttribute("data-style");
-      if (await save({ theme: theme }, "Style « " + galleryStyleOf(theme).label + " » appliqué.")) renderDetail(slug, true);
+      if (await save({ theme: theme }, L("Style « " + galleryStyleOf(theme).label + " » appliqué.", "“" + galleryStyleOf(theme).label + "” style applied."))) renderDetail(slug, true);
     });
     var syncSample = function () {
       var sample = document.getElementById("ad-style-sample");
@@ -3701,10 +4134,10 @@
       sample.setAttribute("style", fresh.firstChild.getAttribute("style"));
       sample.toggleAttribute("data-script", fresh.firstChild.hasAttribute("data-script"));
     };
-    titleSelect.addEventListener("change", function () { syncSample(); save({ titleFont: titleSelect.value }, "Police des titres enregistrée."); });
-    bodySelect.addEventListener("change", function () { syncSample(); save({ bodyFont: bodySelect.value }, "Police du texte enregistrée."); });
+    titleSelect.addEventListener("change", function () { syncSample(); save({ titleFont: titleSelect.value }, L("Police des titres enregistrée.", "Heading font saved.")); });
+    bodySelect.addEventListener("change", function () { syncSample(); save({ bodyFont: bodySelect.value }, L("Police du texte enregistrée.", "Text font saved.")); });
     form.elements.intro.addEventListener("input", function () {
-      document.querySelector("#ad-style-sample .ad-style-sample-body").textContent = form.elements.intro.value.trim() || "Merci pour ces beaux moments partagés : voici vos photos.";
+      document.querySelector("#ad-style-sample .ad-style-sample-body").textContent = form.elements.intro.value.trim() || L("Merci pour ces beaux moments partagés : voici vos photos.", "Thank you for these lovely moments together: here are your photos.");
     });
     var mode = form.querySelector('[data-header-mode][aria-pressed="true"]').getAttribute("data-header-mode");
     form.querySelectorAll("[data-header-mode]").forEach(function (btn) {
@@ -3719,7 +4152,7 @@
       btn.addEventListener("click", async function () {
         if (btn.getAttribute("aria-pressed") === "true") return;
         var language = btn.getAttribute("data-language");
-        if (await save({ language: language }, language === "en" ? "Galerie en anglais pour votre client." : "Galerie en français pour votre client.")) {
+        if (await save({ language: language }, language === "en" ? L("Galerie en anglais pour votre client.", "Gallery in English for your client.") : L("Galerie en français pour votre client.", "Gallery in French for your client."))) {
           document.querySelectorAll("#ad-style-section [data-language]").forEach(function (b) { b.setAttribute("aria-pressed", String(b === btn)); });
           p.language = language;
         }
@@ -3734,10 +4167,10 @@
         if (!p.coverPhotoId && data.photos.length) fields.coverPhotoId = data.photos[0].id;
       }
       if (mode === "video") {
-        if (!form.elements.headerVideo.value.trim()) { toast("Collez le lien de la vidéo (YouTube ou Vimeo).", true); return; }
+        if (!form.elements.headerVideo.value.trim()) { toast(L("Collez le lien de la vidéo (YouTube ou Vimeo).", "Paste the video link (YouTube or Vimeo)."), true); return; }
         fields.headerVideo = form.elements.headerVideo.value;
       }
-      if (await save(fields, "Texte et en-tête enregistrés.")) renderDetail(slug, true);
+      if (await save(fields, L("Texte et en-tête enregistrés.", "Text and header saved."))) renderDetail(slug, true);
     });
   }
 
@@ -3759,7 +4192,7 @@
     var hash = "#/g/" + encodeURIComponent(slug);
     if (!skipHash && location.hash !== hash) history.pushState(null, "", hash);
     setActiveTab("galleries");
-    el.view.innerHTML = '<p class="ad-loading">Chargement…</p>';
+    el.view.innerHTML = '<p class="ad-loading">' + L("Chargement…", "Loading…") + "</p>";
     var data;
     try {
       data = await api("GET", "/galleries/" + encodeURIComponent(slug));
@@ -3776,74 +4209,77 @@
 
     var status = galleryStatus(data.gallery);
     el.view.innerHTML =
-      '<button type="button" class="ad-back" id="ad-back">&larr; Toutes les galeries</button>' +
+      '<button type="button" class="ad-back" id="ad-back">' + L("&larr; Toutes les galeries", "&larr; All galleries") + "</button>" +
       '<header class="ad-detail-header">' +
       "<div>" +
       "<h2>" + esc(data.gallery.title) + "</h2>" +
       '<p class="ad-card-sub">' + (data.gallery.client_name ? clLink(data.gallery.client_name, data.gallery.client_email) + " · " : "") + esc(data.gallery.slug) + "</p>" +
       (data.gallery.selection_done_at
-        ? '<p class="ad-validated" id="ad-selection-validated">✓ Sélection validée par le client le ' + formatDateTime(data.gallery.selection_done_at) + "</p>"
-        : '<p class="ad-hint" id="ad-selection-pending">Sélection pas encore validée par le client' +
+        ? '<p class="ad-validated" id="ad-selection-validated">' + L("✓ Sélection validée par le client le ", "✓ Selection confirmed by the client on ") + formatDateTime(data.gallery.selection_done_at) + "</p>"
+        : '<p class="ad-hint" id="ad-selection-pending">' + L("Sélection pas encore validée par le client", "Selection not yet confirmed by the client") +
           (data.gallery.expires_at
-            ? " — relances automatiques à J-7 et J-2 de l\'expiration" +
-              (data.gallery.client_email ? "" : " (aucun e-mail client renseigné : seule la relance qui vous est destinée à J-2 partira)")
-            : " — sans date d\'expiration, aucune relance automatique ne part") +
+            ? L(" — relances automatiques à J-7 et J-2 de l'expiration", " — automatic reminders 7 and 2 days before expiry") +
+              (data.gallery.client_email ? "" : L(" (aucun e-mail client renseigné : seule la relance qui vous est destinée à J-2 partira)", " (no client email on file: only your own reminder 2 days before will go out)"))
+            : L(" — sans date d'expiration, aucune relance automatique ne part", " — with no expiry date, no automatic reminder goes out")) +
           ".</p>") +
       "</div>" +
       (status.label ? '<span class="ad-badge ' + status.cls + '">' + esc(status.label) + "</span>" : "") +
       "</header>" +
       '<section class="ad-share">' +
-      '<label class="ad-field"><span>Lien</span><div class="ad-copy-row">' +
+      '<label class="ad-field"><span>' + L("Lien", "Link") + '</span><div class="ad-copy-row">' +
       '<input type="text" readonly value="' + esc(data.link) + '" id="ad-detail-link" />' +
-      '<button type="button" class="ad-btn" data-copy="ad-detail-link">Copier</button>' +
+      '<button type="button" class="ad-btn" data-copy="ad-detail-link">' + L("Copier", "Copy") + "</button>" +
       "</div></label>" +
-      '<p class="ad-hint">Le mot de passe n\'est plus récupérable ici : il n\'a été affiché qu\'à la création. ' +
-      '<button type="button" class="ad-link-btn" id="ad-new-password">Générer un nouveau mot de passe</button></p>' +
+      '<p class="ad-hint">' + L("Le mot de passe n'est plus récupérable ici : il n'a été affiché qu'à la création. ", "The password can't be retrieved here: it was only shown when the gallery was created. ") +
+      '<button type="button" class="ad-link-btn" id="ad-new-password">' + L("Générer un nouveau mot de passe", "Generate a new password") + "</button></p>" +
       "</section>" +
       '<section class="ad-quota">' +
-      '<div class="ad-section-header"><h3>Forfait et suppléments</h3></div>' +
-      '<p class="ad-hint">Le nombre de photos déjà payées par le client, et le prix de chaque photo au-delà. Calculé automatiquement à partir de ses coups de cœur — réglable en ligne par le client une fois votre compte Stripe actif (écran Facturation).' +
-      (data.gallery.extras_online === false ? " Le paiement en ligne des suppléments est inclus à partir de la formule Essentiel : d'ici là, le montant dû s'affiche et se règle directement avec vous." : "") + "</p>" +
+      '<div class="ad-section-header"><h3>' + L("Forfait et suppléments", "Package and extras") + "</h3></div>" +
+      '<p class="ad-hint">' + L("Le nombre de photos déjà payées par le client, et le prix de chaque photo au-delà. Calculé automatiquement à partir de ses coups de cœur — réglable en ligne par le client une fois votre compte Stripe actif (écran Facturation).",
+        "The number of photos the client has already paid for, and the price of each photo beyond that. Worked out automatically from their favourites — payable online by the client once your Stripe account is active (Billing screen).") +
+      (data.gallery.extras_online === false ? L(" Le paiement en ligne des suppléments est inclus à partir de la formule Essentiel : d'ici là, le montant dû s'affiche et se règle directement avec vous.",
+        " Online payment for extras comes with the Essentials plan: until then, the amount due is shown and settled directly with you.") : "") + "</p>" +
       '<form class="ad-field-row" id="ad-quota-form">' +
-      '<label class="ad-field"><span>Photos incluses</span>' +
-      '<input type="number" name="includedPhotos" min="0" step="1" placeholder="aucun forfait" value="' +
+      '<label class="ad-field"><span>' + L("Photos incluses", "Photos included") + "</span>" +
+      '<input type="number" name="includedPhotos" min="0" step="1" placeholder="' + L("aucun forfait", "no package") + '" value="' +
       (data.gallery.included_photos === null || data.gallery.included_photos === undefined ? "" : data.gallery.included_photos) + '" /></label>' +
-      '<label class="ad-field"><span>Prix du supplément (par photo, en €)</span>' +
+      '<label class="ad-field"><span>' + L("Prix du supplément (par photo, en €)", "Extra photo price (per photo, in €)") + "</span>" +
       '<input type="number" name="extraPhotoPrice" min="0" step="0.01" value="' +
       ((data.gallery.extra_photo_price_cents || 0) / 100) + '" /></label>' +
-      '<button type="submit" class="ad-btn ad-btn-primary" id="ad-quota-save">Enregistrer</button>' +
+      '<button type="submit" class="ad-btn ad-btn-primary" id="ad-quota-save">' + L("Enregistrer", "Save") + "</button>" +
       "</form>" +
       '<div id="ad-quota-summary">' + quotaSummaryHtml(data.gallery) + "</div>" +
       (data.payments && data.payments.length
-        ? '<h4 class="ad-payments-heading">Historique des paiements</h4>' + paymentsHistoryHtml(data.payments)
+        ? '<h4 class="ad-payments-heading">' + L("Historique des paiements", "Payment history") + "</h4>" + paymentsHistoryHtml(data.payments)
         : "") +
       "</section>" +
       '<section class="ad-background">' +
-      '<div class="ad-section-header"><h3>Arrière-plan de l\'écran de connexion client</h3></div>' +
-      '<p class="ad-hint">Ce que voit le client avant même d\'entrer son mot de passe. Jamais une de ses photos — uniquement une couleur ou une image que vous importez vous-même.</p>' +
+      '<div class="ad-section-header"><h3>' + L("Arrière-plan de l'écran de connexion client", "Client sign-in screen background") + "</h3></div>" +
+      '<p class="ad-hint">' + L("Ce que voit le client avant même d'entrer son mot de passe. Jamais une de ses photos — uniquement une couleur ou une image que vous importez vous-même.",
+        "What your client sees before even entering their password. Never one of their photos — only a colour or an image you upload yourself.") + "</p>" +
       '<div class="ad-bg-swatches" id="ad-bg-swatches">' + backgroundSwatchesHtml(data.gallery) + "</div>" +
       '<div class="ad-bg-custom">' +
-      '<label class="ad-bg-color-label">Couleur personnalisée<input type="color" id="ad-bg-color-picker" value="' +
+      '<label class="ad-bg-color-label">' + L("Couleur personnalisée", "Custom colour") + '<input type="color" id="ad-bg-color-picker" value="' +
       esc(data.gallery.login_background_color || "#f7f2ec") + '" /></label>' +
-      '<label class="ad-btn">Importer une image<input type="file" id="ad-bg-file-input" accept="image/*" hidden /></label>' +
+      '<label class="ad-btn">' + L("Importer une image", "Upload an image") + '<input type="file" id="ad-bg-file-input" accept="image/*" hidden /></label>' +
       "</div>" +
       (data.gallery.login_background_type === "image"
-        ? '<img class="ad-bg-preview" alt="Arrière-plan actuel" src="' +
+        ? '<img class="ad-bg-preview" alt="' + L("Arrière-plan actuel", "Current background") + '" src="' +
           esc(state.config.api) + "/api/gallery/" + esc(data.gallery.slug) + "/background-image?t=" + Date.now() + '" />'
         : "") +
       "</section>" +
       presentationSectionHtml(data) +
       '<section class="ad-layout">' +
-      '<div class="ad-section-header"><h3>Mise en page de la galerie</h3></div>' +
-      '<p class="ad-hint">Comment les photos s\'affichent chez le client — à choisir selon le type de séance.</p>' +
+      '<div class="ad-section-header"><h3>' + L("Mise en page de la galerie", "Gallery layout") + "</h3></div>" +
+      '<p class="ad-hint">' + L("Comment les photos s'affichent chez le client — à choisir selon le type de séance.", "How the photos are shown to your client — choose it by type of session.") + "</p>" +
       '<div class="ad-layout-options" id="ad-layout-options">' + layoutOptionsHtml(data.gallery) + "</div>" +
       "</section>" +
       musicSectionHtml(data.gallery) +
       deliverySectionHtml(data.gallery) +
       gallerySectionShopHtml(data) +
       '<section class="ad-dropzone" id="ad-dropzone">' +
-      '<p><strong>Glissez vos photos ici</strong>, ou</p>' +
-      '<label class="ad-btn ad-btn-primary">Choisir des fichiers<input type="file" id="ad-file-input" accept="image/*" multiple hidden /></label>' +
+      "<p>" + L("<strong>Glissez vos photos ici</strong>, ou", "<strong>Drag your photos here</strong>, or") + "</p>" +
+      '<label class="ad-btn ad-btn-primary">' + L("Choisir des fichiers", "Choose files") + '<input type="file" id="ad-file-input" accept="image/*" multiple hidden /></label>' +
       '<div id="ad-upload-queue" class="ad-upload-queue"></div>' +
       "</section>" +
       '<section><div class="ad-section-header">' +
@@ -3851,28 +4287,28 @@
       '<div class="ad-photos-actions">' +
       (data.photos.some(isSelected)
         ? '<label class="ad-photos-filter"><input type="checkbox" id="ad-filter-selected" />' +
-          '<span>Afficher uniquement la sélection du client (' + data.photos.filter(isSelected).length + ")</span></label>"
+          "<span>" + L("Afficher uniquement la sélection du client (", "Show only the client's selection (") + data.photos.filter(isSelected).length + ")</span></label>"
         : "") +
       (data.photos.some(isSelected)
-        ? '<button type="button" class="ad-btn" id="ad-copy-lightroom" title="Noms de fichiers de la sélection, à coller dans le filtre de bibliothèque de Lightroom">Copier pour Lightroom</button>'
+        ? '<button type="button" class="ad-btn" id="ad-copy-lightroom" title="' + L("Noms de fichiers de la sélection, à coller dans le filtre de bibliothèque de Lightroom", "File names of the selection, to paste into Lightroom's library filter") + '">' + L("Copier pour Lightroom", "Copy for Lightroom") + "</button>"
         : "") +
       (data.photos.some(hasClientNotes)
-        ? '<button type="button" class="ad-btn" id="ad-copy-notes">Copier les notes du client</button>'
+        ? '<button type="button" class="ad-btn" id="ad-copy-notes">' + L("Copier les notes du client", "Copy the client's notes") + "</button>"
         : "") +
       "</div>" +
       "</div>" +
       tagLegendHtml(data.photos) +
       '<div class="ad-photos" id="ad-photos">' + data.photos.map(photoThumb).join("") + "</div>" +
       "</section>" +
-      '<section><h3>Journal d\'accès</h3>' +
+      "<section><h3>" + L("Journal d'accès", "Access log") + "</h3>" +
       (data.log.length
-        ? '<div class="ad-table-wrap"><table class="ad-table"><thead><tr><th>Quand</th><th>Évènement</th><th>Détail</th></tr></thead><tbody>' +
+        ? '<div class="ad-table-wrap"><table class="ad-table"><thead><tr><th>' + L("Quand", "When") + "</th><th>" + L("Évènement", "Event") + "</th><th>" + L("Détail", "Detail") + "</th></tr></thead><tbody>" +
           data.log.map(function (entry) { return logRow(entry, photosById); }).join("") + "</tbody></table></div>"
-        : '<p class="ad-hint">Aucun accès enregistré pour l\'instant.</p>') +
+        : '<p class="ad-hint">' + L("Aucun accès enregistré pour l'instant.", "No access recorded yet.") + "</p>") +
       "</section>" +
-      '<section class="ad-danger"><h3>Zone sensible</h3>' +
-      '<button type="button" class="ad-btn ad-btn-danger" id="ad-delete-gallery">Supprimer cette galerie</button>' +
-      '<p class="ad-hint">Supprime la galerie, ses photos et son journal — sans confirmation possible ensuite.</p>' +
+      '<section class="ad-danger"><h3>' + L("Zone sensible", "Danger zone") + "</h3>" +
+      '<button type="button" class="ad-btn ad-btn-danger" id="ad-delete-gallery">' + L("Supprimer cette galerie", "Delete this gallery") + "</button>" +
+      '<p class="ad-hint">' + L("Supprime la galerie, ses photos et son journal — sans confirmation possible ensuite.", "Deletes the gallery, its photos and its log — this can't be undone.") + "</p>" +
       "</section>";
 
     document.getElementById("ad-back").addEventListener("click", function () {
@@ -3891,15 +4327,18 @@
         var names = lightroomNames(chosen);
         var missing = chosen.length - names.length;
         if (!names.length) {
-          toast("Ces photos ont été envoyées avant que Holypixx garde le nom des fichiers : renvoyez-les pour pouvoir copier leurs noms.", true);
+          toast(L("Ces photos ont été envoyées avant que Holypixx garde le nom des fichiers : renvoyez-les pour pouvoir copier leurs noms.",
+            "These photos were uploaded before Holypixx kept file names: upload them again to copy their names."), true);
           return;
         }
         navigator.clipboard.writeText(names.join(", ")).then(function () {
-          toast(names.length + " nom" + (names.length > 1 ? "s" : "") + " copié" + (names.length > 1 ? "s" : "") +
+          toast(L(names.length + " nom" + (names.length > 1 ? "s" : "") + " copié" + (names.length > 1 ? "s" : "") +
             " : dans Lightroom, Bibliothèque › Texte › Nom de fichier › Contient, puis collez." +
-            (missing ? " (" + missing + " photo" + (missing > 1 ? "s" : "") + " sans nom de fichier, envoyée" + (missing > 1 ? "s" : "") + " plus tôt.)" : ""));
+            (missing ? " (" + missing + " photo" + (missing > 1 ? "s" : "") + " sans nom de fichier, envoyée" + (missing > 1 ? "s" : "") + " plus tôt.)" : ""),
+            names.length + " name" + (names.length === 1 ? "" : "s") + " copied: in Lightroom, Library › Text › Filename › Contains, then paste." +
+            (missing ? " (" + missing + " photo" + (missing === 1 ? "" : "s") + " without a file name, uploaded earlier.)" : "")));
         }).catch(function () {
-          toast("Impossible de copier les noms de fichiers.", true);
+          toast(L("Impossible de copier les noms de fichiers.", "Couldn't copy the file names."), true);
         });
       });
     }
@@ -3909,30 +4348,31 @@
         var selectedCount = data.photos.filter(isSelected).length;
         var noted = data.photos.filter(hasClientNotes);
         var lines = noted.map(function (p) {
-          var line = "Photo n° " + (p.position + 1) + (p.source_name ? " · " + p.source_name : "") + (isSelected(p) ? " (sélectionnée)" : "");
-          if (p.tag && TAG_LABELS[p.tag]) line += " [" + TAG_LABELS[p.tag] + "]";
-          if (hasComment(p)) line += " — « " + p.comment.trim() + " »";
+          var line = L("Photo n° ", "Photo no. ") + (p.position + 1) + (p.source_name ? " · " + p.source_name : "") + (isSelected(p) ? L(" (sélectionnée)", " (selected)") : "");
+          if (p.tag && tagLabel(p.tag)) line += " [" + tagLabel(p.tag) + "]";
+          if (hasComment(p)) line += L(" — « " + p.comment.trim() + " »", " — “" + p.comment.trim() + "”");
           marksOf(p).forEach(function (m, i) {
-            line += "\n    Repère " + (i + 1) + " (" + Math.round(Number(m.x) * 100) + " % / " + Math.round(Number(m.y) * 100) + " %)" + (m.note ? " : " + m.note : "");
+            line += "\n    " + L("Repère ", "Marker ") + (i + 1) + " (" + Math.round(Number(m.x) * 100) + L(" % / ", "% / ") + Math.round(Number(m.y) * 100) + L(" %)", "%)") + (m.note ? L(" : ", ": ") + m.note : "");
           });
           return line;
         });
         var text =
-          "Notes du client — " + data.gallery.title + " (" + data.gallery.slug + ")\n" +
-          selectedCount + " photo(s) sur " + data.photos.length + " sélectionnée(s)\n\n" +
+          L("Notes du client — ", "Client notes — ") + data.gallery.title + " (" + data.gallery.slug + ")\n" +
+          L(selectedCount + " photo(s) sur " + data.photos.length + " sélectionnée(s)", selectedCount + " of " + data.photos.length + " photo(s) selected") + "\n\n" +
           lines.join("\n");
         navigator.clipboard.writeText(text).then(function () {
-          toast("Notes copiées (" + noted.length + (noted.length > 1 ? " photos)." : " photo)."));
+          toast(L("Notes copiées (", "Notes copied (") + noted.length + (noted.length === 1 ? " photo)." : " photos)."));
         }).catch(function () {
-          toast("Impossible de copier les notes.", true);
+          toast(L("Impossible de copier les notes.", "Couldn't copy the notes."), true);
         });
       });
     }
     document.getElementById("ad-delete-gallery").addEventListener("click", function () {
-      confirmAction('Supprimer définitivement « ' + data.gallery.title + ' » et ses ' + data.photos.length + " photo(s) ?", async function () {
+      confirmAction(L("Supprimer définitivement « " + data.gallery.title + " » et ses " + data.photos.length + " photo(s) ?",
+        "Permanently delete “" + data.gallery.title + "” and its " + data.photos.length + " photo(s)?"), async function () {
         try {
           await api("DELETE", "/galleries/" + encodeURIComponent(slug));
-          toast("Galerie supprimée.");
+          toast(L("Galerie supprimée.", "Gallery deleted."));
           renderList();
         } catch (err) {
           toast(err.message, true);
@@ -3946,7 +4386,7 @@
       try {
         if (color) await api("POST", "/galleries/" + encodeURIComponent(slug) + "/background/color", { color: color });
         else await api("DELETE", "/galleries/" + encodeURIComponent(slug) + "/background");
-        toast("Arrière-plan mis à jour.");
+        toast(L("Arrière-plan mis à jour.", "Background updated."));
         renderDetail(slug, true);
       } catch (err) {
         toast(err.message, true);
@@ -3955,7 +4395,7 @@
     document.getElementById("ad-bg-color-picker").addEventListener("change", async function (event) {
       try {
         await api("POST", "/galleries/" + encodeURIComponent(slug) + "/background/color", { color: event.target.value });
-        toast("Arrière-plan mis à jour.");
+        toast(L("Arrière-plan mis à jour.", "Background updated."));
         renderDetail(slug, true);
       } catch (err) {
         toast(err.message, true);
@@ -3973,8 +4413,8 @@
           body: form,
         });
         var result = await response.json().catch(function () { return {}; });
-        if (!response.ok) throw new Error(result.error || "Échec de l'envoi");
-        toast("Arrière-plan mis à jour.");
+        if (!response.ok) throw new Error(serverText(result.error) || L("Échec de l'envoi", "Upload failed"));
+        toast(L("Arrière-plan mis à jour.", "Background updated."));
         renderDetail(slug, true);
       } catch (err) {
         toast(err.message, true);
@@ -3990,7 +4430,7 @@
           includedPhotos: form.includedPhotos.value.trim() || undefined,
           extraPhotoPrice: form.extraPhotoPrice.value.trim() || undefined,
         });
-        toast("Forfait mis à jour.");
+        toast(L("Forfait mis à jour.", "Package updated."));
         renderDetail(slug, true);
       } catch (err) {
         toast(err.message, true);
@@ -4005,7 +4445,7 @@
       var layout = btn.getAttribute("data-layout");
       try {
         await api("POST", "/galleries/" + encodeURIComponent(slug) + "/layout", { layout: layout });
-        toast("Mise en page mise à jour.");
+        toast(L("Mise en page mise à jour.", "Layout updated."));
         renderDetail(slug, true);
       } catch (err) {
         toast(err.message, true);
@@ -4016,7 +4456,7 @@
       event.target.value = "";
       if (!file) return;
       var stateBox = document.getElementById("ad-music-state");
-      stateBox.textContent = "Envoi de « " + file.name + " »…";
+      stateBox.textContent = L("Envoi de « " + file.name + " »…", "Uploading “" + file.name + "”…");
       var form = new FormData();
       form.append("file", file, file.name);
       try {
@@ -4025,8 +4465,8 @@
           body: form,
         });
         var result = await response.json().catch(function () { return {}; });
-        if (!response.ok) throw new Error(result.error || "Échec de l'envoi");
-        toast("Musique enregistrée.");
+        if (!response.ok) throw new Error(serverText(result.error) || L("Échec de l'envoi", "Upload failed"));
+        toast(L("Musique enregistrée.", "Music saved."));
         renderDetail(slug, true);
       } catch (err) {
         toast(err.message, true);
@@ -4041,7 +4481,7 @@
       shopToggle.addEventListener("change", async function () {
         try {
           await api("POST", "/galleries/" + encodeURIComponent(slug) + "/shop", { enabled: shopToggle.checked });
-          toast(shopToggle.checked ? "Boutique de tirages ouverte sur cette galerie." : "Boutique de tirages fermée sur cette galerie.");
+          toast(shopToggle.checked ? L("Boutique de tirages ouverte sur cette galerie.", "Print shop open on this gallery.") : L("Boutique de tirages fermée sur cette galerie.", "Print shop closed on this gallery."));
           renderDetail(slug, true);
         } catch (err) {
           shopToggle.checked = !shopToggle.checked;
@@ -4055,10 +4495,10 @@
     var musicRemove = document.getElementById("ad-music-remove");
     if (musicRemove) {
       musicRemove.addEventListener("click", function () {
-        confirmAction("Retirer la musique de cette galerie ?", async function () {
+        confirmAction(L("Retirer la musique de cette galerie ?", "Remove the music from this gallery?"), async function () {
           try {
             await api("DELETE", "/galleries/" + encodeURIComponent(slug) + "/music");
-            toast("Musique retirée.");
+            toast(L("Musique retirée.", "Music removed."));
             renderDetail(slug, true);
           } catch (err) {
             toast(err.message, true);
@@ -4067,7 +4507,7 @@
       });
     }
     document.getElementById("ad-new-password").addEventListener("click", function () {
-      confirmAction("Générer un nouveau mot de passe ? L'ancien cessera aussitôt de fonctionner.", async function () {
+      confirmAction(L("Générer un nouveau mot de passe ? L'ancien cessera aussitôt de fonctionner.", "Generate a new password? The old one stops working immediately."), async function () {
         try {
           var result = await api("POST", "/galleries/" + encodeURIComponent(slug) + "/password");
           document.getElementById("ad-password-value").value = result.password;
@@ -4099,8 +4539,8 @@
           .then(function () {
             var presentation = state.current.gallery.presentation || {};
             toast(presentation.headerVideo
-              ? "Photo de couverture choisie. La vidéo reste en tête tant qu'elle est renseignée (en-tête « Photo de couverture » pour l'afficher)."
-              : "Photo de couverture choisie : elle ouvre la galerie.");
+              ? L("Photo de couverture choisie. La vidéo reste en tête tant qu'elle est renseignée (en-tête « Photo de couverture » pour l'afficher).", "Cover photo chosen. The video stays at the top as long as it is set (choose the “Cover photo” header to show the photo).")
+              : L("Photo de couverture choisie : elle ouvre la galerie.", "Cover photo chosen: it now opens the gallery."));
             renderDetail(slug, true);
           })
           .catch(function (err) { toast(err.message, true); });
@@ -4110,11 +4550,11 @@
       if (!btn) return;
       var card = btn.closest(".ad-photo");
       var photoId = card.getAttribute("data-photo-id");
-      confirmAction("Supprimer cette photo de la galerie ?", async function () {
+      confirmAction(L("Supprimer cette photo de la galerie ?", "Remove this photo from the gallery?"), async function () {
         try {
           await api("DELETE", "/galleries/" + encodeURIComponent(slug) + "/photos/" + encodeURIComponent(photoId));
           card.remove();
-          toast("Photo supprimée.");
+          toast(L("Photo supprimée.", "Photo removed."));
         } catch (err) {
           toast(err.message, true);
         }
@@ -4169,7 +4609,7 @@
       row.innerHTML =
         '<span class="ad-upload-name">' + esc(file.name) + "</span>" +
         '<div class="ad-upload-bar"><div class="ad-upload-fill"></div></div>' +
-        '<span class="ad-upload-state">en attente</span>';
+        '<span class="ad-upload-state">' + L("en attente", "waiting") + '</span>';
       queue.appendChild(row);
       return { file: file, row: row, position: startPosition + index };
     });
@@ -4186,12 +4626,12 @@
     function next() {
       if (cursor >= items.length) return Promise.resolve();
       var item = items[cursor++];
-      fill(item.row, 0, "envoi…");
+      fill(item.row, 0, L("envoi…", "uploading…"));
       return uploadPhoto(slug, item.file, item.position, function (ratio) {
-        fill(item.row, ratio * 0.5, ratio < 1 ? "envoi…" : "traitement…");
+        fill(item.row, ratio * 0.5, ratio < 1 ? L("envoi…", "uploading…") : L("traitement…", "processing…"));
       })
         .then(function (result) {
-          fill(item.row, 1, "terminé");
+          fill(item.row, 1, L("terminé", "done"));
           item.row.classList.add("ad-upload-done");
           succeeded++;
           if (photosSection) photosSection.insertAdjacentHTML("beforeend", photoThumb(result.photo));
@@ -4200,7 +4640,7 @@
           }, 2500);
         })
         .catch(function (err) {
-          fill(item.row, 1, "échec");
+          fill(item.row, 1, L("échec", "failed"));
           item.row.classList.add("ad-upload-failed");
           item.row.title = err.message;
           failed++;
@@ -4211,8 +4651,8 @@
     var workers = [];
     for (var i = 0; i < UPLOAD_CONCURRENCY; i++) workers.push(next());
     Promise.all(workers).then(function () {
-      if (failed === 0) toast(succeeded + " photo(s) envoyée(s).");
-      else toast(succeeded + " envoyée(s), " + failed + " en échec — survolez la ligne pour le détail.", failed > 0);
+      if (failed === 0) toast(L(succeeded + " photo(s) envoyée(s).", succeeded + (succeeded === 1 ? " photo uploaded." : " photos uploaded.")));
+      else toast(L(succeeded + " envoyée(s), " + failed + " en échec — survolez la ligne pour le détail.", succeeded + " uploaded, " + failed + " failed — hover the row for details."), failed > 0);
       var photos = document.querySelectorAll("#ad-photos .ad-photo").length;
       var heading = document.getElementById("ad-photos-heading");
       if (heading) heading.textContent = "Photos (" + photos + ")";
@@ -4234,7 +4674,7 @@
     var submitBtn = document.getElementById("ad-create-submit");
     errorBox.hidden = true;
     submitBtn.disabled = true;
-    submitBtn.textContent = "Création…";
+    submitBtn.textContent = L("Création…", "Creating…");
 
     var payload = {
       title: form.title.value.trim(),
@@ -4262,7 +4702,7 @@
       errorBox.hidden = false;
     } finally {
       submitBtn.disabled = false;
-      submitBtn.textContent = "Créer la galerie";
+      submitBtn.textContent = L("Créer la galerie", "Create gallery");
     }
   });
 
@@ -4288,7 +4728,7 @@
     var submitBtn = document.getElementById("ad-signup-submit");
     errorBox.hidden = true;
     submitBtn.disabled = true;
-    submitBtn.textContent = "Création…";
+    submitBtn.textContent = L("Création…", "Creating…");
 
     try {
       var response = await fetch("/local/auth/signup", {
@@ -4302,10 +4742,11 @@
           lastName: form.lastName.value.trim(),
           acceptTerms: form.acceptTerms.checked,
           referralCode: referralCode(),
+          language: LANG,
         }),
       });
       var data = await response.json().catch(function () { return {}; });
-      if (!response.ok) throw new Error(data.error || "Inscription refusée");
+      if (!response.ok) throw new Error(serverText(data.error || "Inscription refusée"));
       try { localStorage.removeItem(REFERRAL_KEY); } catch (err) { /* rien à effacer */ }
       form.reset();
       showApp(data.photographer);
@@ -4315,7 +4756,7 @@
       errorBox.hidden = false;
     } finally {
       submitBtn.disabled = false;
-      submitBtn.textContent = "Créer mon compte";
+      submitBtn.textContent = L("Créer mon compte", "Create my account");
     }
   });
 
@@ -4326,7 +4767,7 @@
     var submitBtn = document.getElementById("ad-login-submit");
     errorBox.hidden = true;
     submitBtn.disabled = true;
-    submitBtn.textContent = "Connexion…";
+    submitBtn.textContent = L("Connexion…", "Signing in…");
 
     try {
       var response = await fetch("/local/auth/login", {
@@ -4335,7 +4776,7 @@
         body: JSON.stringify({ email: form.email.value.trim(), password: form.password.value }),
       });
       var data = await response.json().catch(function () { return {}; });
-      if (!response.ok) throw new Error(data.error || "Connexion refusée");
+      if (!response.ok) throw new Error(serverText(data.error || "Connexion refusée"));
       form.reset();
       showApp(data.photographer);
       bootstrap();
@@ -4344,7 +4785,7 @@
       errorBox.hidden = false;
     } finally {
       submitBtn.disabled = false;
-      submitBtn.textContent = "Se connecter";
+      submitBtn.textContent = L("Se connecter", "Sign in");
     }
   });
 
@@ -4354,7 +4795,7 @@
     var messageBox = document.getElementById("ad-forgot-message");
     var submitBtn = document.getElementById("ad-forgot-submit");
     submitBtn.disabled = true;
-    submitBtn.textContent = "Envoi…";
+    submitBtn.textContent = L("Envoi…", "Sending…");
 
     try {
       var response = await fetch("/local/auth/forgot-password", {
@@ -4365,15 +4806,15 @@
       var data = await response.json().catch(function () { return {}; });
       // Toujours le même message, que le compte existe ou non — c'est le
       // Worker qui applique cette règle, l'interface ne fait que la refléter.
-      messageBox.textContent = data.message || "Si un compte existe avec cette adresse, un lien vient d'être envoyé.";
+      messageBox.textContent = serverText(data.message || "Si un compte existe avec cette adresse, un lien vient d'être envoyé.");
       messageBox.hidden = false;
       form.reset();
     } catch (err) {
-      messageBox.textContent = "Connexion au serveur d'administration perdue.";
+      messageBox.textContent = L("Connexion au serveur d'administration perdue.", "Lost connection to the admin server.");
       messageBox.hidden = false;
     } finally {
       submitBtn.disabled = false;
-      submitBtn.textContent = "Recevoir un lien";
+      submitBtn.textContent = L("Recevoir un lien", "Send me a link");
     }
   });
 
@@ -4386,7 +4827,7 @@
     var submitBtn = document.getElementById("ad-reset-submit");
     errorBox.hidden = true;
     submitBtn.disabled = true;
-    submitBtn.textContent = "Validation…";
+    submitBtn.textContent = L("Validation…", "Saving…");
 
     try {
       var response = await fetch("/local/auth/reset-password", {
@@ -4395,7 +4836,7 @@
         body: JSON.stringify({ token: resetToken, password: form.password.value }),
       });
       var data = await response.json().catch(function () { return {}; });
-      if (!response.ok) throw new Error(data.error || "Réinitialisation refusée");
+      if (!response.ok) throw new Error(serverText(data.error || "Réinitialisation refusée"));
       form.reset();
       // Le lien ne doit plus jamais réapparaître dans l'URL (partagée,
       // mise en favori, historique du navigateur…) une fois utilisé.
@@ -4407,7 +4848,7 @@
       errorBox.hidden = false;
     } finally {
       submitBtn.disabled = false;
-      submitBtn.textContent = "Valider le nouveau mot de passe";
+      submitBtn.textContent = L("Valider le nouveau mot de passe", "Save new password");
     }
   });
 
@@ -7180,15 +7621,15 @@
         return response.json().then(function (data) {
           history.replaceState(null, "", location.pathname + location.hash);
           if (!response.ok) {
-            toast(data.error || "Lien de confirmation invalide ou expiré.", true);
+            toast(serverText(data.error || "Lien de confirmation invalide ou expiré."), true);
           } else {
-            toast("Nouvelle adresse confirmée : " + data.email);
+            toast(L("Nouvelle adresse confirmée : ", "New email address confirmed: ") + data.email);
           }
         });
       })
       .catch(function () {
         history.replaceState(null, "", location.pathname + location.hash);
-        toast("Connexion au serveur d'administration perdue.", true);
+        toast(L("Connexion au serveur d'administration perdue.", "Lost connection to the admin server."), true);
       });
   }
 
