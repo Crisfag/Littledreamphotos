@@ -442,6 +442,44 @@ sup { line-height: 0; }
 .closing p { color: var(--night-muted); max-width: 52ch; }
 .closing .btn { margin-top: 8px; }
 
+/* Page anglaise : le filigrane de démonstration en anglais. */
+html[lang="en"] .ph::after { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='90'%3E%3Ctext x='0' y='50' transform='rotate(-24 75 45)' font-family='Arial' font-size='13' fill='white' fill-opacity='.5'%3E%C2%A9 Your studio%3C/text%3E%3C/svg%3E"); }
+html[lang="en"] .lab-wm { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='170' height='100'%3E%3Ctext x='0' y='55' transform='rotate(-24 85 50)' font-family='Arial' font-size='15' fill='white' fill-opacity='.55'%3E%C2%A9 Your studio%3C/text%3E%3C/svg%3E"); }
+html[lang="en"] .sty-ph::after { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='130' height='80'%3E%3Ctext x='0' y='44' transform='rotate(-24 65 40)' font-family='Arial' font-size='11' fill='white' fill-opacity='.5'%3E%C2%A9 Your studio%3C/text%3E%3C/svg%3E"); }
+
+/* ---------- Liste d'attente (page anglaise, /en/) ---------- */
+
+.wl-form { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr) auto; gap: 10px; width: min(860px, 100%); margin-top: 10px; text-align: left; }
+.wl-field { display: grid; gap: 6px; }
+.wl-field span { font-size: .8rem; color: var(--night-muted); }
+.wl-form input, .wl-form select {
+  width: 100%; min-height: 52px; padding: 0 14px; border-radius: 12px; border: 1px solid var(--night-line);
+  background: var(--night-2); color: var(--night-text); font: inherit; font-size: 1rem;
+  transition: border-color .2s var(--ease), box-shadow .2s var(--ease);
+}
+.wl-form select { appearance: none; padding-right: 36px; background-image: linear-gradient(45deg, transparent 50%, var(--night-muted) 50%), linear-gradient(135deg, var(--night-muted) 50%, transparent 50%); background-position: calc(100% - 20px) 23px, calc(100% - 15px) 23px; background-size: 5px 5px; background-repeat: no-repeat; }
+.wl-form input::placeholder { color: #7d7d96; }
+.wl-form input:focus, .wl-form select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(59, 59, 246, .35); }
+.wl-form .btn { align-self: end; margin-top: 0; }
+.wl-form .btn[disabled] { opacity: .6; cursor: progress; }
+.wl-trap { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
+.wl-status { min-height: 1.6em; font-size: .95rem; }
+.wl-status.ok { color: #9be7b3; }
+.wl-status.err { color: #ffb4b6; }
+.closing .wl-fine { font-size: .88rem; }
+.closing .wl-fine a { color: var(--night-text); text-decoration: underline; text-decoration-color: var(--night-line); text-underline-offset: 3px; }
+.closing .wl-fine a:hover { text-decoration-color: currentColor; }
+.nav-lang { padding: 8px 10px; border-radius: 8px; font-size: .86rem; font-weight: 500; letter-spacing: .02em; color: var(--muted); }
+.nav-lang:hover { color: var(--ink); background: var(--mist); }
+@media (max-width: 900px) {
+  .wl-form { grid-template-columns: 1fr 1fr; }
+  .wl-form .wl-email { grid-column: 1 / -1; }
+  .wl-form .btn { grid-column: 1 / -1; }
+}
+@media (max-width: 480px) {
+  .wl-form { grid-template-columns: 1fr; }
+}
+
 /* ---------- Pied de page ---------- */
 
 .footer { padding: 40px 0 48px; background: var(--night); border-top: 1px solid var(--night-line); color: var(--night-muted); }

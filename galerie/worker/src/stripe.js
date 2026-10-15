@@ -118,7 +118,7 @@ export function retrieveAccount(env, accountId) {
 // `expiresAt` (facultatif, epoch secondes, 30 min à 24 h) : la session ne
 // peut plus être payée après — sert aux réservations, dont le créneau
 // n'est bloqué qu'un temps. `customerEmail` pré-remplit l'e-mail du payeur.
-export function createCheckoutSession(env, connectedAccountId, { label, unitAmountCents, quantity, successUrl, cancelUrl, metadata, applicationFeeCents = 0, expiresAt, customerEmail }) {
+export function createCheckoutSession(env, connectedAccountId, { label, unitAmountCents, quantity, successUrl, cancelUrl, metadata, applicationFeeCents = 0, expiresAt, customerEmail, locale }) {
   return stripeRequest(env, "POST", "/checkout/sessions", {
     mode: "payment",
     line_items: [{
@@ -143,6 +143,8 @@ export function createCheckoutSession(env, connectedAccountId, { label, unitAmou
     metadata,
     ...(expiresAt ? { expires_at: expiresAt } : {}),
     ...(customerEmail ? { customer_email: customerEmail } : {}),
+    // Page de paiement dans la langue de la galerie (sinon celle du navigateur).
+    ...(locale ? { locale } : {}),
   });
 }
 

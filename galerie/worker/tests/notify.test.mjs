@@ -7,6 +7,8 @@ import {
   buildCaptureAlertEmail, buildPasswordResetEmail, buildEmailChangeConfirmationEmail,
   buildClientReminderEmail, buildPhotographerReminderEmail, buildSelectionValidatedEmail,
   buildSchoolOrderConfirmationEmail,
+  buildInvoiceEmail, buildDeliveryReadyEmail, buildPrintOrderConfirmationEmail, buildPrintOrderShippedEmail,
+  buildPrintPromoEmail, buildCartReminderEmail, buildFavoritesPrintEmail,
 } from "../src/notify.js";
 
 const checks = [];
@@ -161,6 +163,33 @@ check("commande scolaire : détail par enfant, total, livraison à l'école et l
       atSchool.html.includes("remises à vos enfants") && atSchool.html.includes("https://www.holypixx.com/ecole") && !atSchool.html.includes("Tom <b>"));
 check("commande scolaire à domicile : frais de port, pas de lien de téléchargement",
       atHome.text.includes("Livraison à domicile : 6,90") && atHome.html.includes("adresse indiquée") && !atHome.html.includes("/ecole"));
+
+/* ---------- Galeries en anglais ---------- */
+
+const enReminder = buildClientReminderEmail({ lang: "en", studioName: "Studio Test", galleryTitle: "Smith <wedding>", clientName: "Anna", daysLeft: 2, selectedCount: 3, galleryUrl: "https://www.holypixx.com/galerie.html?g=smith" });
+check("relance en anglais : objet, bouton, langue du document, titre échappé",
+      enReminder.subject === "Your gallery “Smith <wedding>” closes in 2 days" && enReminder.html.includes('lang="en"') &&
+      enReminder.html.includes("View my gallery") && enReminder.html.includes("Smith &lt;wedding&gt;") &&
+      enReminder.html.includes("for another 2 days") && enReminder.html.includes("protected galleries for photographers") &&
+      !/[àéèç]/.test(enReminder.text), enReminder.text);
+const enLines = [{ copies: 2, label: "Photo print 8 × 10 in (20 × 25 cm)", photoNumber: 4, lineCents: 3000 }];
+const enOrder = buildPrintOrderConfirmationEmail({ lang: "en", galleryTitle: "Smith", recipientName: "Anna", lines: enLines, shippingCents: 1490, totalCents: 4490, invoiceNumber: "2026-0007" });
+check("commande de tirages en anglais : montants en euros à l'anglaise, n° de facture",
+      enOrder.subject.startsWith("Your print order is confirmed") && enOrder.text.includes("Shipping: €14.90") &&
+      enOrder.text.includes("Total paid: €44.90") && enOrder.html.includes("invoice no. 2026-0007"), enOrder.text);
+const enMails = [
+  buildInvoiceEmail({ lang: "en", galleryTitle: "Smith", number: "2026-0007", amountCents: 1500 }),
+  buildDeliveryReadyEmail({ lang: "en", galleryTitle: "Smith", clientName: "", count: 12, galleryUrl: "https://x" }),
+  buildPrintOrderShippedEmail({ lang: "en", galleryTitle: "Smith", recipientName: "", trackingUrl: "https://track" }),
+  buildPrintPromoEmail({ lang: "en", galleryTitle: "Smith", clientName: "", percent: 20, endsAt: 1790000000, favoritesCount: 2, galleryUrl: "https://x" }),
+  buildCartReminderEmail({ lang: "en", galleryTitle: "Smith", clientName: "", items: [{ copies: 1, label: "Poster A3" }], promo: null, galleryUrl: "https://x" }),
+  buildFavoritesPrintEmail({ lang: "en", galleryTitle: "Smith", clientName: "", favoritesCount: 2, promo: { percent: 15, endsAt: 1790000000 }, galleryUrl: "https://x" }),
+];
+check("tous les e-mails client existent en anglais, sans reste de français",
+      enMails.every((m) => m.html.includes('lang="en"') && !/[àéèç«]|Votre|vos photos/.test(m.subject + m.text)),
+      enMails.map((m) => m.subject).join(" | "));
+check("sans langue précisée, les e-mails restent en français",
+      buildDeliveryReadyEmail({ galleryTitle: "Smith", clientName: "", count: 2, galleryUrl: "" }).subject === "Vos photos « Smith » sont prêtes");
 
 const failed = checks.filter((c) => !c.ok);
 console.log(failed.length ? `\n${failed.length} vérification(s) en échec.` : `\n${checks.length} vérifications, toutes passent.`);

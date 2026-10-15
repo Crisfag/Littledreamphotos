@@ -506,13 +506,16 @@ async function handleCheckout(request, env, slug) {
   let session;
   try {
     session = await createCheckoutSession(env, photographer.stripe_account_id, {
-      label: `${outstanding} photo${outstanding > 1 ? "s" : ""} supplémentaire${outstanding > 1 ? "s" : ""} — ${gallery.title}`,
+      label: gallery.language === "en"
+        ? `${outstanding} additional photo${outstanding > 1 ? "s" : ""} — ${gallery.title}`
+        : `${outstanding} photo${outstanding > 1 ? "s" : ""} supplémentaire${outstanding > 1 ? "s" : ""} — ${gallery.title}`,
       unitAmountCents: gallery.extra_photo_price_cents || 0,
       quantity: outstanding,
       successUrl,
       cancelUrl,
       metadata: { gallery_id: gallery.id, gallery_slug: slug, payment_id: paymentId },
       applicationFeeCents: feeCents,
+      locale: gallery.language === "en" ? "en" : undefined,
     });
   } catch (err) {
     console.error("Échec de la création de la session Stripe :", err);
@@ -654,8 +657,9 @@ async function handleBackground(env, slug) {
     return json({ type: "color", color: "" });
   }
   // Le style et les polices habillent aussi l'écran de mot de passe.
-  const { theme, titleFont, bodyFont } = presentationForClient(gallery, new Set());
-  return json({ type: gallery.login_background_type, color: gallery.login_background_color, theme, titleFont, bodyFont });
+  // La langue aussi : l'écran de mot de passe s'affiche déjà dans la bonne.
+  const { theme, titleFont, bodyFont, language } = presentationForClient(gallery, new Set());
+  return json({ type: gallery.login_background_type, color: gallery.login_background_color, theme, titleFont, bodyFont, language });
 }
 
 // Non trouvée dans les mêmes conditions que ci-dessus (galerie inconnue,

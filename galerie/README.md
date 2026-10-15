@@ -710,7 +710,12 @@ Le tableau de bord s'organise en trois onglets, chacun avec son propre lien
 - **Onglet Boutique** : la liste de ce qui manque avant d'ouvrir la
   boutique (clé Prodigi, paiement Stripe actif, au moins un produit), la clé
   d'API Prodigi (mode test « sandbox » où rien n'est imprimé, puis
-  production) et les frais de port facturés au client. Ajouter un produit
+  production) et les frais de port facturés au client : un forfait pour
+  l'Europe, et un forfait **hors d'Europe** facultatif (vide = livraison en
+  Europe seulement ; renseigné, le client peut aussi se faire livrer aux
+  États-Unis, au Canada, en Australie, en Nouvelle-Zélande, au Japon, à
+  Singapour, à Hong Kong, en Corée du Sud et aux Émirats — Prodigi imprime
+  sur place ou au plus près, voir `worker/src/prodigi.js`). Ajouter un produit
   se fait **en menus déroulants** : catégorie (tirages photo, tirages d'art
   & posters dont Hahnemühle Photo Rag, toiles, cadres, plexiglas &
   aluminium, objets & cadeaux — panneau photo, mug, coussin —, cartes de
@@ -1094,6 +1099,36 @@ cd worker
 npx wrangler d1 execute galerie-protegee --remote --file=migrations/2026-10-contrats.sql
 npm run deploy
 ```
+
+### Galerie en anglais pour le client
+
+`worker/src/i18n.js`. Chaque galerie a sa langue (`galleries.language`,
+`fr` par défaut) : menu « Langue pour votre client » à la création, et
+bascule Français / English dans la section Style de la galerie. En anglais :
+l'écran de mot de passe (avant même la connexion), toute la page de la
+galerie et la visionneuse, les messages d'erreur, la boutique (formats du
+catalogue en pouces et centimètres, pays traduits, page de paiement Stripe
+en anglais), la facture PDF (intitulés anglais, mention légale de franchise
+gardée en français et traduite) et tous les e-mails que reçoit le client
+(relances, livraison, promotion, panier, commande et expédition de
+tirages). Un libellé de format que le photographe a réécrit lui-même, son
+texte d'accompagnement et les e-mails qu'il reçoit restent tels quels. Les
+prix restent en euros. Migration :
+`worker/migrations/2026-10-langue-international.sql`.
+
+### Page d'accueil en anglais et liste d'attente
+
+`web/en/index.html` (servie sur `/en/`, liée à la page française par
+`hreflang` et un bouton FR / EN) : la même vitrine en anglais, sans le
+chapitre scolaire, avec une **liste d'attente « Holypixx in English »** à la
+place de l'inscription (l'espace photographe n'existe encore qu'en
+français ; un lien « Start today in French » reste proposé). Le formulaire
+envoie e-mail, pays et spécialité à `POST /api/public/waitlist`
+(`worker/src/waitlist.js`) : même réponse qu'une adresse soit nouvelle ou
+déjà inscrite, champ piège contre les robots. L'onglet **Admin** de la
+propriétaire affiche l'effectif, la répartition par pays et par spécialité,
+et permet de retirer une adresse sur demande. Migration :
+`worker/migrations/2026-10-liste-attente.sql`.
 
 ### Parrainage entre photographes
 
@@ -1770,6 +1805,7 @@ node tests/comments.test.mjs          # commentaires client, autonome (crée sa 
 node tests/marks.test.mjs             # codes couleur + repères client, autonome (crée sa propre galerie)
 node tests/subdomain.test.mjs         # sous-domaine par studio, autonome (PUBLIC_SITE_ORIGIN=http://localhost:8000 dans worker/.dev.vars)
 node tests/shop.test.mjs              # boutique de tirages côté client, autonome (PRODIGI_API_BASE=http://127.0.0.1:8790/v4.0 dans worker/.dev.vars)
+node tests/english.test.mjs           # galerie client en anglais : mot de passe, galerie, visionneuse, boutique, port hors d'Europe, autonome
 node tests/schoolshop.test.mjs        # commande des photos scolaires (gamme, panier famille, suivi, production), autonome
 node tests/schoolreminders.test.mjs   # rappels de commande aux familles, autonome (npm run dev:local -- --test-scheduled)
 node tests/schoollab.test.mjs         # lots, planches et envoi à un faux BePhoto, autonome (BEPHOTO_API_BASE et BEPHOTO_PREVIEW_BASE=http://127.0.0.1:8791 dans worker/.dev.vars)

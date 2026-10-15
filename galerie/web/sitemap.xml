@@ -1,8 +1,19 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1" xmlns:xhtml="http://www.w3.org/1999/xhtml">
   <url>
     <loc>https://www.holypixx.com/</loc>
-    <lastmod>2026-10-14</lastmod>
+    <lastmod>2026-10-15</lastmod>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://www.holypixx.com/" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.holypixx.com/en/" />
+    <image:image>
+      <image:loc>https://www.holypixx.com/assets/og-holypixx.jpg</image:loc>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://www.holypixx.com/en/</loc>
+    <lastmod>2026-10-15</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.holypixx.com/en/" />
+    <xhtml:link rel="alternate" hreflang="fr" href="https://www.holypixx.com/" />
     <image:image>
       <image:loc>https://www.holypixx.com/assets/og-holypixx.jpg</image:loc>
     </image:image>

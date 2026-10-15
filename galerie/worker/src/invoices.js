@@ -59,7 +59,24 @@ const ROSE = rgb(0.725, 0.541, 0.478);
 
 // Fonction pure (aucun accès réseau ni D1) : le contenu du PDF ne dépend que
 // de ce qu'on lui passe, ce qui la rend directement testable.
+// Libellés de la facture. Galerie en anglais : intitulés anglais, mentions
+// légales belges gardées en français et suivies de leur traduction.
+const INVOICE_TEXT = {
+  fr: {
+    number: "Facture n°", issuedBy: "Émise par", vat: "TVA", to: "Destinataire", client: "Client",
+    description: "Description", net: "Montant HT", gross: "Total TTC", paid: "Total réglé",
+    exemptTranslation: [], paidOnline: "Réglé en ligne (carte, Bancontact ou Apple Pay) via Stripe.", date: "fr-BE",
+  },
+  en: {
+    number: "Invoice no.", issuedBy: "Issued by", vat: "VAT", to: "Billed to", client: "Client",
+    description: "Description", net: "Net amount", gross: "Total incl. VAT", paid: "Total paid",
+    exemptTranslation: ["(Small business VAT exemption scheme: VAT not applicable, article 56bis of the Belgian VAT Code.)"],
+    paidOnline: "Paid online (card, Bancontact or Apple Pay) via Stripe.", date: "en-GB",
+  },
+};
+
 export async function buildInvoicePdf(data) {
+  const t = INVOICE_TEXT[data.lang === "en" ? "en" : "fr"];
   const doc = await PDFDocument.create();
   const page = doc.addPage([A4_WIDTH, A4_HEIGHT]);
   const font = await doc.embedFont(StandardFonts.Helvetica);
@@ -76,12 +93,12 @@ export async function buildInvoicePdf(data) {
   }
 
   text("Holypixx", left, { size: 20, bold: true, color: ROSE });
-  text(`Facture n° ${data.number}`, right - 170, { size: 12, bold: true });
+  text(`${t.number} ${data.number}`, right - 170, { size: 12, bold: true });
   y -= 16;
-  text(new Date(data.issuedAt * 1000).toLocaleDateString("fr-BE"), right - 170, { size: 10, color: MUTED });
+  text(new Date(data.issuedAt * 1000).toLocaleDateString(t.date), right - 170, { size: 10, color: MUTED });
   y -= 40;
 
-  text("Émise par", left, { size: 9, color: MUTED });
+  text(t.issuedBy, left, { size: 9, color: MUTED });
   y -= 14;
   text(data.seller.name || "—", left, { size: 11, bold: true });
   y -= 14;
@@ -90,20 +107,20 @@ export async function buildInvoicePdf(data) {
     y -= 13;
   }
   if (data.seller.vatNumber) {
-    text(`TVA : ${data.seller.vatNumber}`, left, { size: 10 });
+    text(`${t.vat} : ${data.seller.vatNumber}`, left, { size: 10 });
     y -= 13;
   }
   y -= 20;
 
-  text("Destinataire", left, { size: 9, color: MUTED });
+  text(t.to, left, { size: 9, color: MUTED });
   y -= 14;
-  text(data.clientName || "Client", left, { size: 11, bold: true });
+  text(data.clientName || t.client, left, { size: 11, bold: true });
   y -= 30;
 
-  text("Description", left, { size: 9, color: MUTED });
-  text("Montant HT", right - 230, { size: 9, color: MUTED });
-  text("TVA", right - 130, { size: 9, color: MUTED });
-  text("Total TTC", right - 60, { size: 9, color: MUTED });
+  text(t.description, left, { size: 9, color: MUTED });
+  text(t.net, right - 230, { size: 9, color: MUTED });
+  text(t.vat, right - 130, { size: 9, color: MUTED });
+  text(t.gross, right - 60, { size: 9, color: MUTED });
   y -= 6;
   line();
   y -= 20;
@@ -120,7 +137,7 @@ export async function buildInvoicePdf(data) {
   line();
   y -= 24;
 
-  text("Total réglé", right - 170, { size: 12, bold: true });
+  text(t.paid, right - 170, { size: 12, bold: true });
   text(formatEuros(data.amountCents), right - 60, { size: 12, bold: true });
   y -= 40;
 
@@ -128,10 +145,14 @@ export async function buildInvoicePdf(data) {
     text("Petite entreprise soumise au régime de la franchise de taxe.", left, { size: 9, color: MUTED });
     y -= 12;
     text("TVA non applicable, article 56bis du Code de la TVA.", left, { size: 9, color: MUTED });
+    for (const translation of t.exemptTranslation) {
+      y -= 12;
+      text(translation, left, { size: 9, color: MUTED });
+    }
     y -= 20;
   }
 
-  text("Réglé en ligne (carte, Bancontact ou Apple Pay) via Stripe.", left, { size: 9, color: MUTED });
+  text(t.paidOnline, left, { size: 9, color: MUTED });
 
   return doc.save();
 }
@@ -148,13 +169,17 @@ export async function createInvoiceForPayment(env, { payment, gallery, photograp
   const issuedAt = Math.floor(Date.now() / 1000);
   const sellerName = photographer.billing_company_name || photographer.studio_name;
   const extraCount = payment.extra_count;
+  const lang = gallery.language === "en" ? "en" : "fr";
 
   const pdfBytes = await buildInvoicePdf({
     number,
     issuedAt,
     seller: { name: sellerName, address: photographer.billing_address, vatNumber: photographer.billing_vat_number },
-    clientName: clientName || gallery.client_name || "Client",
-    description: description || `${extraCount} photo${extraCount > 1 ? "s" : ""} supplémentaire${extraCount > 1 ? "s" : ""} — ${gallery.title}`,
+    lang,
+    clientName: clientName || gallery.client_name || INVOICE_TEXT[lang].client,
+    description: description || (lang === "en"
+      ? `${extraCount} additional photo${extraCount > 1 ? "s" : ""} — ${gallery.title}`
+      : `${extraCount} photo${extraCount > 1 ? "s" : ""} supplémentaire${extraCount > 1 ? "s" : ""} — ${gallery.title}`),
     details: details || [],
     amountCents: payment.amount_cents,
     netCents,

@@ -1187,6 +1187,18 @@ async function handleApi(req, res, url) {
     }
   }
 
+  // /local/owner/waitlist — liste d'attente « Holypixx in English » (lecture,
+  // retrait d'une adresse), revérifiée par le Worker.
+  if (parts.length === 2 && parts[0] === "owner" && parts[1] === "waitlist" && (req.method === "GET" || req.method === "DELETE")) {
+    try {
+      let payload;
+      if (req.method === "DELETE") payload = JSON.parse((await readBody(req, 10000)).toString() || "{}");
+      return json(res, 200, await client.request(req.method, "/api/owner/waitlist", payload));
+    } catch (err) {
+      return relayError(res, err, "Impossible de lire la liste d'attente");
+    }
+  }
+
   // GET /local/music-library — bibliothèque musicale commune.
   if (parts.length === 1 && parts[0] === "music-library" && req.method === "GET") {
     try {
@@ -1265,6 +1277,7 @@ async function handleApi(req, res, url) {
           password, watermarkText, expiresAt,
           includedPhotos: body.includedPhotos, extraPhotoPrice: body.extraPhotoPrice,
           theme: body.theme ? String(body.theme) : undefined,
+          language: body.language === "en" ? "en" : undefined,
         });
         return json(res, 201, { id: created.id, slug, password, link: await linkFor(client, slug) });
       } catch (err) {
@@ -1480,7 +1493,7 @@ async function handleApi(req, res, url) {
   // d'accompagnement, photo de couverture, vidéo d'en-tête.
   if (parts.length === 3 && parts[2] === "presentation" && req.method === "POST") {
     const body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
-    const allowed = ["theme", "titleFont", "bodyFont", "intro", "coverPhotoId", "headerVideo"];
+    const allowed = ["theme", "titleFont", "bodyFont", "intro", "coverPhotoId", "headerVideo", "language"];
     const fields = {};
     for (const key of allowed) if (body[key] !== undefined) fields[key] = body[key];
     try {

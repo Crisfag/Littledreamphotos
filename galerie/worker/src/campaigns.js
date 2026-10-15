@@ -15,6 +15,8 @@
 
 import { json, fail } from "./http.js";
 import { sendPrintPromo, sendCartReminder, sendFavoritesPrint } from "./notify.js";
+import { languageOf } from "./i18n.js";
+import { productLabelFor } from "./printCatalogue.js";
 import { galleryUrlFor } from "./reminders.js";
 import { hasFeature } from "./subscription.js";
 
@@ -94,6 +96,7 @@ export async function sendPromoToClient(env, gallery, studioName) {
   const favorites = await env.DB.prepare("SELECT COUNT(*) AS n FROM photos WHERE gallery_id = ? AND selected = 1").bind(gallery.id).first();
   await env.DB.prepare("UPDATE galleries SET promo_sent_at = ? WHERE id = ?").bind(nowSeconds(), gallery.id).run();
   await sendPrintPromo(env, {
+    lang: languageOf(gallery.language),
     to: gallery.client_email,
     studioName,
     galleryTitle: gallery.title,
@@ -202,11 +205,13 @@ export async function runSalesReminders(env, shopState, options = {}) {
     if (!marked.meta || marked.meta.changes === 0) continue;
     const lines = parseJson(row.lines, []);
     const products = new Map(state.products.map((p) => [p.id, p]));
+    const lang = languageOf(gallery.language);
     const items = lines
       .filter((l) => products.has(l.productId))
-      .map((l) => ({ label: products.get(l.productId).label, copies: l.copies }));
+      .map((l) => ({ label: productLabelFor(products.get(l.productId), lang), copies: l.copies }));
     if (!items.length) continue;
     await sendCartReminder(env, {
+      lang,
       to: gallery.client_email,
       studioName: row.studio_name_p,
       galleryTitle: gallery.title,
@@ -240,6 +245,7 @@ export async function runSalesReminders(env, shopState, options = {}) {
       .run();
     if (!inserted.meta || inserted.meta.changes === 0) continue;
     await sendFavoritesPrint(env, {
+      lang: languageOf(gallery.language),
       to: gallery.client_email,
       studioName: gallery.studio_name_p,
       galleryTitle: gallery.title,
