@@ -80,6 +80,77 @@
     drawn: {},
   };
 
+  /* ---------- Langue (choisie par le photographe, galerie par galerie) ---------- */
+
+  var LANG = "fr";
+
+  // L("Bonjour", "Hello") : le texte dans la langue de la galerie.
+  function L(fr, en) {
+    return LANG === "en" ? en : fr;
+  }
+
+  function locale() {
+    return LANG === "en" ? "en-GB" : "fr-BE";
+  }
+
+  function plural(count, one, many) {
+    return count > 1 ? many : one;
+  }
+
+  function SESSION_EXPIRED() {
+    return L("Votre session a expiré. Saisissez à nouveau le mot de passe.", "Your session has expired. Please enter the password again.");
+  }
+
+  // Messages d'erreur du serveur (rédigés en français) : leur traduction
+  // quand elle est connue, sinon un message générique.
+  var SERVER_EN = {
+    "Mot de passe incorrect.": "Incorrect password.",
+    "Trop de tentatives. Réessayez dans quelques minutes.": "Too many attempts. Please try again in a few minutes.",
+    "Cette galerie a expiré. Contactez votre photographe.": "This gallery has expired. Please contact your photographer.",
+    "Cette galerie a expiré.": "This gallery has expired.",
+    "Le nom du destinataire est requis": "The recipient's name is required",
+    "Une adresse e-mail valide est requise": "A valid email address is required",
+    "L'adresse de livraison est requise": "The delivery address is required",
+    "Le code postal est requis": "The postcode is required",
+    "La ville est requise": "The city is required",
+    "Pays de livraison non proposé": "We don't deliver to this country",
+    "Le panier est vide": "Your cart is empty",
+    "Une des photos du panier n'existe plus": "One of the photos in your cart is no longer available",
+    "Une des photos du panier n'est pas disponible en tirage": "One of the photos in your cart can't be printed",
+    "Un des formats du panier n'est plus proposé": "One of the formats in your cart is no longer offered",
+    "Rien à régler pour le moment": "Nothing to pay for now",
+    "Le paiement en ligne n'est pas encore activé pour cette galerie": "Online payment isn't enabled for this gallery yet",
+    "Le paiement en ligne n'est pas encore activé": "Online payment isn't enabled yet",
+    "Stripe a refusé la demande de paiement": "The payment couldn't start. Please try again in a moment.",
+    "La boutique de tirages n'est pas ouverte sur cette galerie": "The print shop isn't open on this gallery",
+  };
+
+  function serverText(message, fallbackEn) {
+    if (LANG !== "en") return message;
+    return SERVER_EN[message] || fallbackEn;
+  }
+
+  // Textes fixes de la page (galerie.html) : data-en, data-en-html,
+  // data-en-label, data-en-title, data-en-placeholder.
+  function setLanguage(lang) {
+    if (lang !== "en" || LANG === "en") return;
+    LANG = "en";
+    document.documentElement.lang = "en";
+    document.title = "Your private gallery — Holypixx";
+    Array.prototype.forEach.call(document.querySelectorAll("[data-en]"), function (node) {
+      node.textContent = node.getAttribute("data-en");
+    });
+    Array.prototype.forEach.call(document.querySelectorAll("[data-en-html]"), function (node) {
+      node.innerHTML = node.getAttribute("data-en-html");
+    });
+    [["data-en-label", "aria-label"], ["data-en-title", "title"], ["data-en-placeholder", "placeholder"]].forEach(function (pair) {
+      Array.prototype.forEach.call(document.querySelectorAll("[" + pair[0] + "]"), function (node) {
+        node.setAttribute(pair[1], node.getAttribute(pair[0]));
+      });
+    });
+    Object.keys(TAG_LABELS_EN).forEach(function (key) { TAG_LABELS[key] = TAG_LABELS_EN[key]; });
+  }
+
   var el = {};
   var heartButtons = {}; // photoId -> bouton cœur de la grille, pour une mise à jour directe
   var gridCanvases = {}; // photoId -> vignette peinte dans la grille (source des aperçus produits)
@@ -107,7 +178,7 @@
   }
 
   function heartLabel(selected) {
-    return selected ? "Retirer des favoris" : "Ajouter aux favoris";
+    return selected ? L("Retirer des favoris", "Remove from favourites") : L("Ajouter aux favoris", "Add to favourites");
   }
 
   function paintHeart(button, selected) {
@@ -118,7 +189,8 @@
   }
 
   function formatEuros(cents) {
-    return ((cents || 0) / 100).toLocaleString("fr-BE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
+    var amount = ((cents || 0) / 100).toLocaleString(locale(), { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return LANG === "en" ? "€" + amount : amount + " €";
   }
 
   // Forfait : nombre de photos déjà payées par le client, au-delà duquel un
@@ -138,13 +210,16 @@
     var extra = Math.max(0, count - included);
     var paid = (state.gallery && state.gallery.paidExtraCount) || 0;
     var due = Math.max(0, extra - paid);
-    var text = count + " / " + included + " photo" + (included > 1 ? "s" : "") + " incluse" + (included > 1 ? "s" : "");
+    var text = count + " / " + included + " " + L(
+      "photo" + (included > 1 ? "s" : "") + " incluse" + (included > 1 ? "s" : ""),
+      plural(included, "photo", "photos") + " included"
+    );
     if (due > 0) {
       text +=
-        " — +" + due + " supplément" + (due > 1 ? "s" : "") +
+        " — +" + due + " " + L("supplément" + (due > 1 ? "s" : ""), plural(due, "extra", "extras")) +
         " (" + formatEuros(due * (state.gallery.extraPhotoPriceCents || 0)) + ")";
     } else if (extra > 0) {
-      text += " — supplément réglé ✓";
+      text += L(" — supplément réglé ✓", " — extras paid ✓");
     }
     el.toolbarQuota.textContent = text;
     el.toolbarQuota.classList.toggle("gp-toolbar-quota-due", due > 0);
@@ -168,7 +243,7 @@
     if (!invoice) return;
 
     el.invoiceButton.disabled = true;
-    el.invoiceButton.textContent = "Téléchargement…";
+    el.invoiceButton.textContent = L("Téléchargement…", "Downloading…");
 
     fetch(apiUrl("/invoice/" + invoice.id), { headers: authHeaders() })
       .then(function (response) {
@@ -180,7 +255,7 @@
         var url = URL.createObjectURL(blob);
         var link = document.createElement("a");
         link.href = url;
-        link.download = "facture-" + invoice.number + ".pdf";
+        link.download = L("facture-", "invoice-") + invoice.number + ".pdf";
         document.body.appendChild(link);
         link.click();
         link.remove();
@@ -188,13 +263,13 @@
           URL.revokeObjectURL(url);
         }, 1000);
         el.invoiceButton.disabled = false;
-        el.invoiceButton.textContent = "Télécharger ma facture";
+        el.invoiceButton.textContent = L("Télécharger ma facture", "Download my invoice");
       })
       .catch(function (err) {
         el.invoiceButton.disabled = false;
-        el.invoiceButton.textContent = "Télécharger ma facture";
+        el.invoiceButton.textContent = L("Télécharger ma facture", "Download my invoice");
         if (err.message === "session") {
-          sessionLost("Votre session a expiré. Saisissez à nouveau le mot de passe.");
+          sessionLost(SESSION_EXPIRED());
         }
       });
   }
@@ -205,7 +280,7 @@
   function payForSupplement() {
     if (!el.payButton) return;
     el.payButton.disabled = true;
-    el.payButton.textContent = "Redirection…";
+    el.payButton.textContent = L("Redirection…", "Redirecting…");
     if (el.payError) el.payError.hidden = true;
 
     var here = window.location.href;
@@ -222,7 +297,7 @@
       .then(function (response) {
         if (response.status === 401) throw new Error("session");
         return response.json().then(function (data) {
-          if (!response.ok) throw new Error(data.error || "Le paiement n'a pas pu démarrer.");
+          if (!response.ok) throw new Error(serverText(data.error || "", "The payment couldn't start.") || L("Le paiement n'a pas pu démarrer.", "The payment couldn't start."));
           return data;
         });
       })
@@ -231,13 +306,13 @@
       })
       .catch(function (err) {
         if (err.message === "session") {
-          sessionLost("Votre session a expiré. Saisissez à nouveau le mot de passe.");
+          sessionLost(SESSION_EXPIRED());
           return;
         }
         el.payButton.disabled = false;
-        el.payButton.textContent = "Régler le supplément";
+        el.payButton.textContent = L("Régler le supplément", "Pay the extra");
         if (el.payError) {
-          el.payError.textContent = err.message || "Le paiement n'a pas pu démarrer. Réessayez dans un instant.";
+          el.payError.textContent = err.message || L("Le paiement n'a pas pu démarrer. Réessayez dans un instant.", "The payment couldn't start. Please try again in a moment.");
           el.payError.hidden = false;
         }
       });
@@ -247,8 +322,8 @@
     var count = selectedCount();
     if (el.selectionCount) {
       el.selectionCount.textContent =
-        count === 0 ? "Aucune photo sélectionnée pour l'instant"
-          : count + (count > 1 ? " photos sélectionnées" : " photo sélectionnée");
+        count === 0 ? L("Aucune photo sélectionnée pour l'instant", "No photos selected yet")
+          : count + L(count > 1 ? " photos sélectionnées" : " photo sélectionnée", count > 1 ? " photos selected" : " photo selected");
     }
     updateQuotaUI(count);
     if (el.filterEmpty) {
@@ -261,7 +336,7 @@
   /* ---------- « Valider ma sélection » ---------- */
 
   function formatDateTime(ts) {
-    return new Date(ts * 1000).toLocaleString("fr-FR", { dateStyle: "long", timeStyle: "short" });
+    return new Date(ts * 1000).toLocaleString(LANG === "en" ? "en-GB" : "fr-FR", { dateStyle: "long", timeStyle: "short" });
   }
 
   // Le bouton reste disponible après validation (le client peut changer
@@ -273,13 +348,16 @@
     el.validate.disabled = count === 0 || state.validating;
     el.validateBlock.classList.toggle("gp-validate-done", Boolean(doneAt));
     if (doneAt) {
-      el.validate.textContent = "Valider à nouveau ma sélection";
-      el.validateStatus.textContent = "Sélection validée le " + formatDateTime(doneAt) + ". Vous pouvez encore la modifier et la valider à nouveau.";
+      el.validate.textContent = L("Valider à nouveau ma sélection", "Confirm my selection again");
+      el.validateStatus.textContent = L(
+        "Sélection validée le " + formatDateTime(doneAt) + ". Vous pouvez encore la modifier et la valider à nouveau.",
+        "Selection confirmed on " + formatDateTime(doneAt) + ". You can still change it and confirm it again."
+      );
     } else {
-      el.validate.textContent = "Valider ma sélection";
+      el.validate.textContent = L("Valider ma sélection", "Confirm my selection");
       el.validateStatus.textContent = count === 0
-        ? "Cochez d'abord vos coups de cœur."
-        : "Quand votre choix est fait, prévenez-moi d'un clic.";
+        ? L("Cochez d'abord vos coups de cœur.", "Heart your favourites first.")
+        : L("Quand votre choix est fait, prévenez-moi d'un clic.", "When you've made your choice, let me know in one click.");
     }
   }
 
@@ -287,7 +365,7 @@
     if (!state.gallery || state.validating) return;
     state.validating = true;
     updateValidateUI(selectedCount());
-    el.validateStatus.textContent = "Envoi…";
+    el.validateStatus.textContent = L("Envoi…", "Sending…");
     fetch(apiUrl("/validate"), {
       method: "POST",
       headers: Object.assign({ "content-type": "application/json" }, authHeaders()),
@@ -307,9 +385,9 @@
         state.validating = false;
         updateValidateUI(selectedCount());
         if (err.message === "session") {
-          sessionLost("Votre session a expiré. Saisissez à nouveau le mot de passe.");
+          sessionLost(SESSION_EXPIRED());
         } else {
-          el.validateStatus.textContent = "Impossible d'envoyer la validation pour l'instant. Réessayez dans un instant.";
+          el.validateStatus.textContent = L("Impossible d'envoyer la validation pour l'instant. Réessayez dans un instant.", "Couldn't send your confirmation right now. Please try again in a moment.");
         }
       });
   }
@@ -338,7 +416,7 @@
         photo.selected = !next;
         reflectSelection(photo);
         if (err.message === "session") {
-          sessionLost("Votre session a expiré. Saisissez à nouveau le mot de passe.");
+          sessionLost(SESSION_EXPIRED());
         }
       });
   }
@@ -379,7 +457,7 @@
   }
 
   function saveComment(photo, value) {
-    setCommentStatus("Enregistrement…");
+    setCommentStatus(L("Enregistrement…", "Saving…"));
     fetch(apiUrl("/comment"), {
       method: "POST",
       headers: Object.assign({ "content-type": "application/json" }, authHeaders()),
@@ -398,15 +476,15 @@
         if (el.commentInput && currentViewerPhoto() === photo && el.commentInput.value !== data.comment) {
           el.commentInput.value = data.comment;
         }
-        setCommentStatus("Enregistré");
+        setCommentStatus(L("Enregistré", "Saved"));
         setTimeout(function () {
-          if (el.commentStatus && el.commentStatus.textContent === "Enregistré") setCommentStatus("");
+          if (el.commentStatus && el.commentStatus.textContent === L("Enregistré", "Saved")) setCommentStatus("");
         }, 1800);
       })
       .catch(function (err) {
-        setCommentStatus("Échec de l'enregistrement — réessayez");
+        setCommentStatus(L("Échec de l'enregistrement — réessayez", "Couldn't save — please try again"));
         if (err.message === "session") {
-          sessionLost("Votre session a expiré. Saisissez à nouveau le mot de passe.");
+          sessionLost(SESSION_EXPIRED());
         }
       });
   }
@@ -459,6 +537,7 @@
   /* ---------- Codes couleur (validée / à retoucher / à écarter) ---------- */
 
   var TAG_LABELS = { green: "Validée", yellow: "À retoucher", red: "À écarter" };
+  var TAG_LABELS_EN = { green: "Approved", yellow: "To retouch", red: "Set aside" };
 
   // Répercute le code couleur d'une photo sur la pastille de la grille et
   // sur les trois boutons de la visionneuse (si c'est la photo affichée).
@@ -497,7 +576,7 @@
         photo.tag = previous;
         reflectTag(photo);
         if (err.message === "session") {
-          sessionLost("Votre session a expiré. Saisissez à nouveau le mot de passe.");
+          sessionLost(SESSION_EXPIRED());
         }
       });
   }
@@ -543,8 +622,8 @@
       pin.className = "gp-pin" + (pinState.editing === index ? " gp-pin-active" : "");
       pin.style.left = (mark.x * 100).toFixed(2) + "%";
       pin.style.top = (mark.y * 100).toFixed(2) + "%";
-      pin.setAttribute("aria-label", "Repère " + (index + 1) + (mark.note ? " : " + mark.note : ""));
-      pin.title = mark.note || "Repère " + (index + 1);
+      pin.setAttribute("aria-label", L("Repère ", "Marker ") + (index + 1) + (mark.note ? L(" : ", ": ") + mark.note : ""));
+      pin.title = mark.note || L("Repère ", "Marker ") + (index + 1);
       var label = document.createElement("span");
       label.textContent = String(index + 1);
       pin.appendChild(label);
@@ -570,7 +649,7 @@
     pinState.editing = index;
     pinState.isNew = isNew;
     var mark = marksOf(photo)[index];
-    el.pinEditorTitle.textContent = "Repère " + (index + 1) + " — que faut-il signaler ici ?";
+    el.pinEditorTitle.textContent = L("Repère " + (index + 1) + " — que faut-il signaler ici ?", "Marker " + (index + 1) + " — what should we look at here?");
     el.pinNote.value = mark.note || "";
     el.pinEditor.hidden = false;
     if (el.commentPanel) el.commentPanel.hidden = true;
@@ -609,7 +688,7 @@
         photo.marks = previous;
         reflectMarks(photo);
         if (err.message === "session") {
-          sessionLost("Votre session a expiré. Saisissez à nouveau le mot de passe.");
+          sessionLost(SESSION_EXPIRED());
         }
       });
   }
@@ -869,6 +948,16 @@
     }, 0);
   }
 
+  // Forfait de port du pays choisi : Europe, ou hors d'Europe.
+  function shippingForCountry(code) {
+    var info = state.gallery.shop;
+    var countries = info.countries || [];
+    for (var i = 0; i < countries.length; i++) {
+      if (countries[i].code === code && countries[i].zone === "world") return info.shippingWorldCents || 0;
+    }
+    return info.shippingCents || 0;
+  }
+
   function updateCartUI() {
     if (el.cartCount) el.cartCount.textContent = "(" + cartCount() + ")";
   }
@@ -883,7 +972,10 @@
     saveCart();
     updateCartUI();
     var n = cartCount();
-    el.printStatus.textContent = "Ajouté ✓ — " + n + " article" + (n > 1 ? "s" : "") + " dans « Mes tirages »";
+    el.printStatus.textContent = L(
+      "Ajouté ✓ — " + n + " article" + (n > 1 ? "s" : "") + " dans « Mes tirages »",
+      "Added ✓ — " + n + " " + plural(n, "item", "items") + " in “My prints”"
+    );
   }
 
   function showPrintPreview(photo, product, li) {
@@ -924,7 +1016,7 @@
       var add = document.createElement("button");
       add.type = "button";
       add.className = "gp-print-add";
-      add.textContent = "Ajouter";
+      add.textContent = L("Ajouter", "Add");
       add.addEventListener("click", function () { addToCart(photo, product); });
       li.appendChild(label);
       li.appendChild(price);
@@ -971,10 +1063,10 @@
       what.textContent = product.label;
       var which = document.createElement("span");
       which.className = "gp-cart-photo";
-      which.textContent = "Photo n° " + (state.photos.indexOf(photo) + 1);
+      which.textContent = L("Photo n° ", "Photo no. ") + (state.photos.indexOf(photo) + 1);
       what.appendChild(which);
       var qty = document.createElement("select");
-      qty.setAttribute("aria-label", "Quantité");
+      qty.setAttribute("aria-label", L("Quantité", "Quantity"));
       for (var q = 1; q <= 10; q++) {
         var opt = document.createElement("option");
         opt.value = String(q);
@@ -993,7 +1085,7 @@
       var remove = document.createElement("button");
       remove.type = "button";
       remove.className = "gp-cart-remove";
-      remove.setAttribute("aria-label", "Retirer");
+      remove.setAttribute("aria-label", L("Retirer", "Remove"));
       remove.textContent = "×";
       remove.addEventListener("click", function () {
         shop.cart.splice(index, 1);
@@ -1012,11 +1104,11 @@
     el.cartForm.hidden = empty;
     el.cartTotals.hidden = empty;
     var items = cartItemsCents();
-    var shipping = state.gallery.shop.shippingCents || 0;
+    var shipping = shippingForCountry(el.cartCountry.value);
     el.cartItems.textContent = formatEuros(items);
-    el.cartShipping.textContent = shipping ? formatEuros(shipping) : "offerte";
+    el.cartShipping.textContent = shipping ? formatEuros(shipping) : L("offerte", "free");
     el.cartTotal.textContent = formatEuros(items + shipping);
-    el.cartPay.textContent = "Payer " + formatEuros(items + shipping);
+    el.cartPay.textContent = L("Payer ", "Pay ") + formatEuros(items + shipping);
   }
 
   function openCart() {
@@ -1039,7 +1131,7 @@
     var form = el.cartForm;
     el.cartError.hidden = true;
     el.cartPay.disabled = true;
-    el.cartPay.textContent = "Redirection vers le paiement…";
+    el.cartPay.textContent = L("Redirection vers le paiement…", "Redirecting to payment…");
     var here = window.location.href.replace(/[?&]tirages=[^&]*/, "");
     var returnUrl = here + (here.indexOf("?") === -1 ? "?" : "&");
     fetch(apiUrl("/print-order"), {
@@ -1058,7 +1150,7 @@
       .then(function (response) {
         if (response.status === 401) throw new Error("session");
         return response.json().then(function (data) {
-          if (!response.ok) throw new Error(data.error || "La commande n'a pas pu démarrer.");
+          if (!response.ok) throw new Error(serverText(data.error || "", "Please check your details and try again.") || L("La commande n'a pas pu démarrer.", "The order couldn't start."));
           return data;
         });
       })
@@ -1069,12 +1161,12 @@
       .catch(function (err) {
         if (err.message === "session") {
           closeCart();
-          sessionLost("Votre session a expiré. Saisissez à nouveau le mot de passe.");
+          sessionLost(SESSION_EXPIRED());
           return;
         }
         el.cartPay.disabled = false;
         renderCart();
-        el.cartError.textContent = err.message || "La commande n'a pas pu démarrer. Réessayez dans un instant.";
+        el.cartError.textContent = err.message || L("La commande n'a pas pu démarrer. Réessayez dans un instant.", "The order couldn't start. Please try again in a moment.");
         el.cartError.hidden = false;
       });
   }
@@ -1087,14 +1179,15 @@
     orders.forEach(function (o) {
       var li = document.createElement("li");
       li.textContent =
-        "Commande du " + new Date(o.createdAt * 1000).toLocaleDateString("fr-BE", { day: "numeric", month: "long" }) +
-        " — " + o.count + " tirage" + (o.count > 1 ? "s" : "") + " — " + o.statusLabel + (o.trackingUrl ? " ·" : "");
+        L("Commande du ", "Order of ") + new Date(o.createdAt * 1000).toLocaleDateString(locale(), { day: "numeric", month: "long" }) +
+        " — " + o.count + " " + L("tirage" + (o.count > 1 ? "s" : ""), plural(o.count, "print", "prints")) +
+        " — " + o.statusLabel + (o.trackingUrl ? " ·" : "");
       if (o.trackingUrl) {
         var a = document.createElement("a");
         a.href = o.trackingUrl;
         a.target = "_blank";
         a.rel = "noopener";
-        a.textContent = "Suivre le colis";
+        a.textContent = L("Suivre le colis", "Track the parcel");
         li.appendChild(a);
       }
       el.printOrders.appendChild(li);
@@ -1116,18 +1209,26 @@
     if (el.shopPromo) {
       el.shopPromo.hidden = !promo;
       if (promo) {
-        var until = new Date(promo.endsAt * 1000).toLocaleDateString("fr-FR", { day: "numeric", month: "long" });
-        el.shopPromo.textContent = "−" + promo.percent + " % sur tous les tirages jusqu'au " + until;
+        var until = new Date(promo.endsAt * 1000).toLocaleDateString(LANG === "en" ? "en-GB" : "fr-FR", { day: "numeric", month: "long" });
+        el.shopPromo.textContent = L(
+          "−" + promo.percent + " % sur tous les tirages jusqu'au " + until,
+          promo.percent + "% off all prints until " + until
+        );
       }
     }
     renderPrintOrders();
     if (open) {
-      var countries = state.gallery.shop.countries || {};
+      // Pays livrés (dans la langue de la galerie) ; présélection : celui
+      // du navigateur s'il est livré, sinon la Belgique.
+      var countries = state.gallery.shop.countries || [];
+      var region = (String(navigator.language || "").split("-")[1] || "").toUpperCase();
+      var preferred = countries.some(function (c) { return c.code === region; }) ? region : "BE";
       el.cartCountry.innerHTML = "";
-      Object.keys(countries).forEach(function (code) {
+      countries.forEach(function (country) {
         var opt = document.createElement("option");
-        opt.value = code;
-        opt.textContent = countries[code];
+        opt.value = country.code;
+        opt.textContent = country.name;
+        if (country.code === preferred) opt.selected = true;
         el.cartCountry.appendChild(opt);
       });
       loadCart();
@@ -1142,9 +1243,15 @@
       shop.cart = [];
       saveCart();
       updateCartUI();
-      showShopBanner("Merci ! Votre commande de tirages est confirmée : un e-mail récapitulatif vous a été envoyé, puis un autre avec le suivi dès l'expédition.");
+      showShopBanner(L(
+        "Merci ! Votre commande de tirages est confirmée : un e-mail récapitulatif vous a été envoyé, puis un autre avec le suivi dès l'expédition.",
+        "Thank you! Your print order is confirmed: a summary email is on its way, and another one with tracking will follow as soon as it ships."
+      ));
     } else if (result === "annule") {
-      showShopBanner("Paiement annulé — votre panier est conservé, vous pouvez le reprendre quand vous voulez.", true);
+      showShopBanner(L(
+        "Paiement annulé — votre panier est conservé, vous pouvez le reprendre quand vous voulez.",
+        "Payment cancelled — your cart is saved, you can pick it up whenever you like."
+      ), true);
     }
     if (result) {
       var url = window.location.href.replace(/([?&])tirages=[^&]*&?/, "$1").replace(/[?&]$/, "");
@@ -1158,14 +1265,17 @@
   // jeton de session) : rien n'est préparé tant que le client ne clique pas.
 
   function formatBytes(bytes) {
-    if (bytes >= 1024 * 1024 * 1024) return (bytes / (1024 * 1024 * 1024)).toFixed(1).replace(".", ",") + " Go";
-    if (bytes >= 1024 * 1024) return Math.round(bytes / (1024 * 1024)) + " Mo";
-    return Math.max(1, Math.round(bytes / 1024)) + " Ko";
+    if (bytes >= 1024 * 1024 * 1024) {
+      var gb = (bytes / (1024 * 1024 * 1024)).toFixed(1);
+      return L(gb.replace(".", ",") + " Go", gb + " GB");
+    }
+    if (bytes >= 1024 * 1024) return Math.round(bytes / (1024 * 1024)) + L(" Mo", " MB");
+    return Math.max(1, Math.round(bytes / 1024)) + L(" Ko", " KB");
   }
 
   function startDownload(fileId, button) {
     if (button) button.disabled = true;
-    el.deliveryStatus.textContent = fileId ? "Préparation du téléchargement…" : "Préparation du fichier ZIP…";
+    el.deliveryStatus.textContent = fileId ? L("Préparation du téléchargement…", "Preparing the download…") : L("Préparation du fichier ZIP…", "Preparing the ZIP file…");
     return fetch(apiUrl("/delivery/link"), {
       method: "POST",
       headers: Object.assign({ "content-type": "application/json" }, authHeaders()),
@@ -1173,7 +1283,7 @@
     })
       .then(function (response) {
         if (response.status === 401) throw new Error("session");
-        if (!response.ok) throw new Error("Téléchargement impossible pour le moment.");
+        if (!response.ok) throw new Error(L("Téléchargement impossible pour le moment.", "Download unavailable right now."));
         return response.json();
       })
       .then(function (data) {
@@ -1184,11 +1294,11 @@
         link.click();
         link.remove();
         el.deliveryStatus.textContent = fileId
-          ? "Téléchargement lancé."
-          : "Téléchargement lancé — selon la taille, il peut prendre quelques minutes.";
+          ? L("Téléchargement lancé.", "Download started.")
+          : L("Téléchargement lancé — selon la taille, il peut prendre quelques minutes.", "Download started — depending on the size, it may take a few minutes.");
       })
       .catch(function (err) {
-        if (err.message === "session") return sessionLost("Votre session a expiré. Saisissez à nouveau le mot de passe.");
+        if (err.message === "session") return sessionLost(SESSION_EXPIRED());
         el.deliveryStatus.textContent = err.message;
       })
       .then(function () {
@@ -1204,8 +1314,8 @@
       return;
     }
     var n = d.files.length;
-    el.deliverySummary.textContent = n + " photo" + (n > 1 ? "s" : "") + " en haute définition, sans filigrane · " + formatBytes(d.totalBytes);
-    el.deliveryZip.textContent = n > 1 ? "Tout télécharger (" + formatBytes(d.totalBytes) + ")" : "Télécharger";
+    el.deliverySummary.textContent = n + " photo" + (n > 1 ? "s" : "") + L(" en haute définition, sans filigrane · ", " in high resolution, no watermark · ") + formatBytes(d.totalBytes);
+    el.deliveryZip.textContent = n > 1 ? L("Tout télécharger (", "Download all (") + formatBytes(d.totalBytes) + ")" : L("Télécharger", "Download");
     el.deliveryStatus.textContent = "";
     el.deliveryList.innerHTML = "";
     d.files.forEach(function (file) {
@@ -1218,7 +1328,7 @@
       var button = document.createElement("button");
       button.type = "button";
       button.className = "gp-delivery-one";
-      button.textContent = "Télécharger";
+      button.textContent = L("Télécharger", "Download");
       button.addEventListener("click", function () { startDownload(file.id, button); });
       li.appendChild(name);
       li.appendChild(size);
@@ -1261,7 +1371,7 @@
   function setMusicUI(playing) {
     if (!el.music) return;
     el.music.setAttribute("aria-pressed", playing ? "true" : "false");
-    if (el.musicLabel) el.musicLabel.textContent = playing ? "Musique en lecture" : "Lancer la musique";
+    if (el.musicLabel) el.musicLabel.textContent = playing ? L("Musique en lecture", "Music playing") : L("Lancer la musique", "Play music");
   }
 
   function startMusic() {
@@ -1318,7 +1428,7 @@
     if (!el.musicPlayerFrame.firstChild) {
       var frame = document.createElement("iframe");
       frame.src = m.embedUrl;
-      frame.title = "Lecteur " + (m.providerLabel || "de musique");
+      frame.title = L("Lecteur " + (m.providerLabel || "de musique"), (m.providerLabel || "Music") + " player");
       frame.setAttribute("allow", "autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture");
       frame.setAttribute("loading", "lazy");
       frame.setAttribute("referrerpolicy", "strict-origin-when-cross-origin");
@@ -1360,8 +1470,8 @@
     if (embed) {
       if (music.audio) music.audio.pause();
       el.music.hidden = false;
-      if (el.musicLabel) el.musicLabel.textContent = "Écouter la musique · " + (embed.providerLabel || "lecteur");
-      if (el.musicPlayerTitle) el.musicPlayerTitle.textContent = "Musique · " + (embed.providerLabel || "");
+      if (el.musicLabel) el.musicLabel.textContent = L("Écouter la musique · ", "Listen to the music · ") + (embed.providerLabel || L("lecteur", "player"));
+      if (el.musicPlayerTitle) el.musicPlayerTitle.textContent = L("Musique · ", "Music · ") + (embed.providerLabel || "");
       reflectEmbedUI();
       return;
     }
@@ -1372,7 +1482,7 @@
     }
     var info = state.gallery.music || {};
     if (el.musicCredit && info.title) {
-      el.musicCredit.textContent = "« " + info.title + " »" + (info.artist ? " — " + info.artist : "") + (info.credit ? " · " + info.credit : "");
+      el.musicCredit.textContent = L("« " + info.title + " »", "“" + info.title + "”") + (info.artist ? " — " + info.artist : "") + (info.credit ? " · " + info.credit : "");
       el.musicCredit.hidden = false;
     }
     if (!music.audio) {
@@ -1511,7 +1621,7 @@
           if (err.message === "session") {
             failed = true;
             queue.length = 0;
-            sessionLost("Votre session a expiré. Saisissez à nouveau le mot de passe.");
+            sessionLost(SESSION_EXPIRED());
           }
         })
         .then(next);
@@ -1577,15 +1687,15 @@
     if (g.headerVideo) {
       var frame = document.createElement("div");
       frame.className = "gp-hero-video" + (cover ? " gp-hero-video-poster" : "");
-      if (cover) frame.appendChild(coverCanvas(cover, "Affiche du film"));
+      if (cover) frame.appendChild(coverCanvas(cover, L("Affiche du film", "Film poster")));
       var play = document.createElement("button");
       play.type = "button";
       play.className = "gp-hero-play";
-      play.innerHTML = '<span class="gp-hero-play-icon" aria-hidden="true"></span><span>Voir le film</span>';
+      play.innerHTML = '<span class="gp-hero-play-icon" aria-hidden="true"></span><span>' + L("Voir le film", "Watch the film") + "</span>";
       play.addEventListener("click", function () {
         var iframe = document.createElement("iframe");
         iframe.src = g.headerVideo + (g.headerVideo.indexOf("?") === -1 ? "?" : "&") + "autoplay=1";
-        iframe.title = "Film de la séance";
+        iframe.title = L("Film de la séance", "Session film");
         iframe.allow = "autoplay; fullscreen; picture-in-picture; encrypted-media";
         iframe.setAttribute("allowfullscreen", "");
         iframe.referrerPolicy = "strict-origin-when-cross-origin";
@@ -1599,7 +1709,7 @@
     } else if (cover) {
       var box = document.createElement("div");
       box.className = "gp-hero-cover";
-      box.appendChild(coverCanvas(cover, "Photo de couverture"));
+      box.appendChild(coverCanvas(cover, L("Photo de couverture", "Cover photo")));
       el.hero.appendChild(box);
     }
     el.hero.hidden = !el.hero.firstChild;
@@ -1697,14 +1807,14 @@
       var canvas = document.createElement("canvas");
       canvas.className = "gp-canvas";
       canvas.setAttribute("role", "img");
-      canvas.setAttribute("aria-label", "Photo " + (index + 1) + " sur " + state.photos.length);
+      canvas.setAttribute("aria-label", "Photo " + (index + 1) + L(" sur ", " of ") + state.photos.length);
       figure.appendChild(canvas);
       gridCanvases[photo.id] = canvas;
 
       var button = document.createElement("button");
       button.type = "button";
       button.className = "gp-open";
-      button.setAttribute("aria-label", "Agrandir la photo " + (index + 1));
+      button.setAttribute("aria-label", L("Agrandir la photo ", "Enlarge photo ") + (index + 1));
       button.addEventListener("click", function () {
         openViewer(photo);
       });
@@ -1890,9 +2000,9 @@
       ctx.fillStyle = "#f7f2ec";
       ctx.font = "600 42px Helvetica, Arial, sans-serif";
       ctx.textAlign = "center";
-      ctx.fillText("Photographies protégées", canvas.width / 2, 290);
+      ctx.fillText(L("Photographies protégées", "Protected photographs"), canvas.width / 2, 290);
       ctx.font = "300 28px Helvetica, Arial, sans-serif";
-      ctx.fillText("Merci de ne pas les copier.", canvas.width / 2, 350);
+      ctx.fillText(L("Merci de ne pas les copier.", "Please don't copy them."), canvas.width / 2, 350);
       canvas.toBlob(function (blob) {
         if (!blob) return;
         navigator.clipboard
@@ -1999,7 +2109,7 @@
   function login(password) {
     el.error.hidden = true;
     el.submit.disabled = true;
-    el.submit.textContent = "Ouverture…";
+    el.submit.textContent = L("Ouverture…", "Opening…");
 
     return fetch(apiUrl("/login"), {
       method: "POST",
@@ -2012,10 +2122,11 @@
         });
       })
       .then(function (result) {
-        if (!result.ok) throw new Error(result.data.error || "Accès refusé");
+        if (!result.ok) throw new Error(serverText(result.data.error || "", "Access denied") || L("Accès refusé", "Access denied"));
         state.token = result.data.token;
         state.gallery = result.data.gallery;
         state.photos = result.data.photos;
+        setLanguage(state.gallery.language);
 
         el.title.textContent = state.gallery.title;
         if (state.gallery.studioName) {
@@ -2023,7 +2134,7 @@
           for (var e = 0; e < eyebrows.length; e++) eyebrows[e].textContent = state.gallery.studioName;
         }
         el.subtitle.textContent = state.gallery.clientName
-          ? "Galerie de " + state.gallery.clientName
+          ? L("Galerie de ", "Gallery of ") + state.gallery.clientName
           : "";
         el.grid.setAttribute("data-layout", LAYOUTS[state.gallery.layout] ? state.gallery.layout : "grille");
         applyStyle(state.gallery.theme, state.gallery.titleFont, state.gallery.bodyFont);
@@ -2031,8 +2142,8 @@
         if (state.gallery.expiresAt) {
           var date = new Date(state.gallery.expiresAt * 1000);
           el.expiry.textContent =
-            "Accès valable jusqu'au " +
-            date.toLocaleDateString("fr-BE", { day: "numeric", month: "long", year: "numeric" });
+            L("Accès valable jusqu'au ", "Access open until ") +
+            date.toLocaleDateString(locale(), { day: "numeric", month: "long", year: "numeric" });
           el.expiry.hidden = false;
         }
 
@@ -2049,16 +2160,16 @@
 
         // La session expire : on prévient avant que les tuiles cessent d'arriver.
         setTimeout(function () {
-          if (state.token) sessionLost("Votre session a expiré. Saisissez à nouveau le mot de passe.");
+          if (state.token) sessionLost(SESSION_EXPIRED());
         }, Math.max(60, (result.data.expiresIn || 7200) - 30) * 1000);
       })
       .catch(function (err) {
-        el.error.textContent = err.message || "Accès refusé";
+        el.error.textContent = err.message || L("Accès refusé", "Access denied");
         el.error.hidden = false;
       })
       .then(function () {
         el.submit.disabled = false;
-        el.submit.textContent = "Voir mes photos";
+        el.submit.textContent = L("Voir mes photos", "See my photos");
       });
   }
 
@@ -2081,6 +2192,7 @@
       })
       .then(function (data) {
         if (!data || !el.login) return;
+        setLanguage(data.language);
         if (data.theme) applyStyle(data.theme, data.titleFont, data.bodyFont);
         if (data.type === "image") {
           el.login.style.backgroundImage =
@@ -2269,6 +2381,7 @@
       });
     }
     if (el.cartForm) el.cartForm.addEventListener("submit", submitCart);
+    if (el.cartCountry) el.cartCountry.addEventListener("change", renderCart);
 
     installGuards();
     el.password.focus();

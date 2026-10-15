@@ -12,6 +12,7 @@ import { markSchoolOrderPaid } from "./schoolshop.js";
 import { markBookingPaid } from "./booking.js";
 import { markContractPaid } from "./contracts.js";
 import { sendInvoiceEmail } from "./notify.js";
+import { languageOf } from "./i18n.js";
 
 // Message montré au photographe : la raison donnée par Stripe (jamais une
 // clé, Stripe n'en renvoie pas), avec la marche à suivre pour les refus
@@ -232,6 +233,7 @@ async function issueInvoice(env, stripeCheckoutSessionId) {
         .bind(gallery.client_email, invoice.id)
         .run();
       await sendInvoiceEmail(env, {
+        lang: languageOf(gallery.language),
         to: gallery.client_email,
         galleryTitle: gallery.title,
         number: invoice.number,

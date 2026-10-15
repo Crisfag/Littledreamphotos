@@ -31,21 +31,21 @@
   <main class="gp-shell" id="gp-login">
     <section class="gp-card">
       <p class="gp-eyebrow">Holypixx</p>
-      <h1>Votre galerie privée</h1>
-      <p class="gp-lede">
+      <h1 data-en="Your private gallery">Votre galerie privée</h1>
+      <p class="gp-lede" data-en="Enter the password you were given to see your photos.">
         Saisissez le mot de passe que je vous ai transmis pour découvrir
         vos photos.
       </p>
       <form id="gp-form" autocomplete="off">
         <label class="gp-field">
-          <span>Mot de passe</span>
+          <span data-en="Password">Mot de passe</span>
           <input type="password" id="gp-password" name="password"
                  autocomplete="current-password" required />
         </label>
         <p class="gp-error" id="gp-error" hidden></p>
-        <button type="submit" class="gp-btn" id="gp-submit">Voir mes photos</button>
+        <button type="submit" class="gp-btn" id="gp-submit" data-en="See my photos">Voir mes photos</button>
       </form>
-      <p class="gp-privacy-note">
+      <p class="gp-privacy-note" data-en-html="To protect the photos, your visit to the gallery is logged (your IP address is never stored in plain text). &lt;a href=&quot;https://www.holypixx.com/confidentialite&quot; target=&quot;_blank&quot; rel=&quot;noopener&quot;&gt;Privacy&lt;/a&gt;">
         Pour protéger les photos, votre visite de la galerie est journalisée
         (adresse IP jamais conservée en clair).
         <a href="https://www.holypixx.com/confidentialite" target="_blank" rel="noopener">Confidentialité</a>
@@ -56,8 +56,8 @@
   <!-- ============ Lien incomplet ============ -->
   <main class="gp-shell" id="gp-missing" hidden>
     <section class="gp-card">
-      <h1>Lien incomplet</h1>
-      <p class="gp-lede">
+      <h1 data-en="Incomplete link">Lien incomplet</h1>
+      <p class="gp-lede" data-en-html="This link doesn't point to a gallery. Use the full link you received — it looks like &lt;code&gt;…/galerie.html?g=your-session&lt;/code&gt;.">
         Ce lien ne désigne aucune galerie. Utilisez le lien complet reçu par
         message — il ressemble à <code>…/galerie.html?g=votre-seance</code>.
       </p>
@@ -70,13 +70,13 @@
     <section class="gp-hero" id="gp-hero" hidden></section>
     <header class="gp-header">
       <p class="gp-eyebrow">Holypixx</p>
-      <h1 id="gp-title">Votre galerie</h1>
+      <h1 id="gp-title" data-en="Your gallery">Votre galerie</h1>
       <p class="gp-subtitle" id="gp-subtitle"></p>
       <p class="gp-intro" id="gp-intro" hidden></p>
       <p class="gp-expiry" id="gp-expiry" hidden></p>
       <button type="button" class="gp-music" id="gp-music" hidden aria-pressed="false">
         <span class="gp-music-icon" aria-hidden="true">♪</span>
-        <span id="gp-music-label">Lancer la musique</span>
+        <span id="gp-music-label" data-en="Play music">Lancer la musique</span>
       </button>
       <p class="gp-music-credit" id="gp-music-credit" hidden></p>
     </header>
@@ -84,16 +84,16 @@
     <!-- Livraison des photos définitives, quand le photographe l'a ouverte. -->
     <section class="gp-delivery" id="gp-delivery" hidden aria-labelledby="gp-delivery-title">
       <div class="gp-delivery-main">
-        <p class="gp-delivery-eyebrow">Livraison</p>
-        <h2 id="gp-delivery-title">Vos photos sont prêtes</h2>
+        <p class="gp-delivery-eyebrow" data-en="Delivery">Livraison</p>
+        <h2 id="gp-delivery-title" data-en="Your photos are ready">Vos photos sont prêtes</h2>
         <p class="gp-delivery-summary" id="gp-delivery-summary"></p>
       </div>
       <div class="gp-delivery-actions">
-        <button type="button" class="gp-btn gp-delivery-zip" id="gp-delivery-zip">Tout télécharger</button>
+        <button type="button" class="gp-btn gp-delivery-zip" id="gp-delivery-zip" data-en="Download all">Tout télécharger</button>
         <p class="gp-delivery-status" id="gp-delivery-status" aria-live="polite"></p>
       </div>
       <details class="gp-delivery-files">
-        <summary>Télécharger une par une</summary>
+        <summary data-en="Download one by one">Télécharger une par une</summary>
         <ul id="gp-delivery-list"></ul>
       </details>
     </section>
@@ -104,7 +104,7 @@
       manière loyale de tracer des images.
     -->
     <aside class="gp-notice">
-      <p>
+      <p data-en-html="&lt;strong&gt;These photos are viewing proofs, not the final files.&lt;/strong&gt; They are deliberately low resolution, watermarked, and carry a fingerprint unique to your gallery that traces their origin if they are shared, edited or screenshotted. Please don't save, edit or share them — this is also part of our session terms. Your final files, in full quality and without watermark, will be delivered after your selection.">
         <strong>Ces photos sont des épreuves de visionnage, pas les fichiers définitifs.</strong>
         Elles sont volontairement en basse définition, filigranées, et
         portent une empreinte propre à votre galerie qui permet de
@@ -118,96 +118,98 @@
 
     <div class="gp-toolbar" id="gp-toolbar" hidden>
       <div>
-        <p class="gp-toolbar-count" id="gp-selection-count">Aucune photo sélectionnée pour l'instant</p>
+        <p class="gp-toolbar-count" id="gp-selection-count" data-en="No photos selected yet">Aucune photo sélectionnée pour l'instant</p>
         <p class="gp-toolbar-quota" id="gp-toolbar-quota" hidden></p>
-        <button type="button" class="gp-pay-btn" id="gp-pay-supplement" hidden>Régler le supplément</button>
+        <button type="button" class="gp-pay-btn" id="gp-pay-supplement" hidden data-en="Pay the extra">Régler le supplément</button>
         <p class="gp-pay-error" id="gp-pay-error" hidden></p>
-        <button type="button" class="gp-invoice-btn" id="gp-download-invoice" hidden>Télécharger ma facture</button>
+        <button type="button" class="gp-invoice-btn" id="gp-download-invoice" hidden data-en="Download my invoice">Télécharger ma facture</button>
         <div class="gp-shop-bar" id="gp-shop-bar" hidden>
-          <button type="button" class="gp-cart-btn" id="gp-cart-btn">Mes tirages <span id="gp-cart-count">(0)</span></button>
+          <button type="button" class="gp-cart-btn" id="gp-cart-btn"><span data-en="My prints">Mes tirages</span> <span id="gp-cart-count">(0)</span></button>
           <span class="gp-shop-promo" id="gp-shop-promo" hidden></span>
-          <span class="gp-shop-hint">Ouvrez une photo puis « Tirages ».</span>
+          <span class="gp-shop-hint" data-en="Open a photo, then “Prints”.">Ouvrez une photo puis « Tirages ».</span>
         </div>
         <ul class="gp-print-orders" id="gp-print-orders" hidden></ul>
         <div class="gp-validate" id="gp-validate-block" hidden>
-          <button type="button" class="gp-validate-btn" id="gp-validate">Valider ma sélection</button>
+          <button type="button" class="gp-validate-btn" id="gp-validate" data-en="Confirm my selection">Valider ma sélection</button>
           <p class="gp-validate-status" id="gp-validate-status" aria-live="polite"></p>
         </div>
       </div>
       <label class="gp-toolbar-filter">
         <input type="checkbox" id="gp-filter-selected" />
-        <span>Afficher uniquement ma sélection</span>
+        <span data-en="Show only my selection">Afficher uniquement ma sélection</span>
       </label>
     </div>
 
     <div class="gp-grid" id="gp-grid"></div>
-    <p class="gp-empty" id="gp-empty" hidden>Les photos de cette galerie arrivent bientôt.</p>
-    <p class="gp-empty" id="gp-filter-empty" hidden>
+    <p class="gp-empty" id="gp-empty" hidden data-en="The photos in this gallery are coming soon.">Les photos de cette galerie arrivent bientôt.</p>
+    <p class="gp-empty" id="gp-filter-empty" hidden data-en="You haven't selected anything yet — tap the heart on a photo to start.">
       Vous n'avez encore rien sélectionné — cliquez sur le cœur d'une photo pour commencer.
     </p>
 
     <footer class="gp-footer">
-      <p>Holypixx — toutes les images de cette page sont protégées par le droit d'auteur.</p>
+      <p data-en="Holypixx — every image on this page is protected by copyright.">Holypixx — toutes les images de cette page sont protégées par le droit d'auteur.</p>
       <p class="gp-footer-links">
-        <a href="https://www.holypixx.com/confidentialite" target="_blank" rel="noopener">Confidentialité</a>
-        <a href="https://www.holypixx.com/mentions-legales" target="_blank" rel="noopener">Mentions légales</a>
+        <a href="https://www.holypixx.com/confidentialite" target="_blank" rel="noopener" data-en="Privacy">Confidentialité</a>
+        <a href="https://www.holypixx.com/mentions-legales" target="_blank" rel="noopener" data-en="Legal notice">Mentions légales</a>
       </p>
     </footer>
   </div>
 
   <!-- ============ Visionneuse ============ -->
-  <div class="gp-viewer" id="gp-viewer" hidden role="dialog" aria-modal="true" aria-label="Photo agrandie">
-    <button type="button" class="gp-viewer-close" id="gp-close" aria-label="Fermer">&times;</button>
-    <button type="button" class="gp-viewer-nav gp-viewer-prev" id="gp-prev" aria-label="Photo précédente">&#8249;</button>
+  <div class="gp-viewer" id="gp-viewer" hidden role="dialog" aria-modal="true" aria-label="Photo agrandie" data-en-label="Enlarged photo">
+    <button type="button" class="gp-viewer-close" id="gp-close" aria-label="Fermer" data-en-label="Close">&times;</button>
+    <button type="button" class="gp-viewer-nav gp-viewer-prev" id="gp-prev" aria-label="Photo précédente" data-en-label="Previous photo">&#8249;</button>
     <div class="gp-viewer-stage">
       <div class="gp-viewer-frame" id="gp-viewer-frame">
-        <canvas id="gp-viewer-canvas" role="img" aria-label="Photo agrandie"></canvas>
+        <canvas id="gp-viewer-canvas" role="img" aria-label="Photo agrandie" data-en-label="Enlarged photo"></canvas>
         <!-- Repères annotés : calé en JS sur la boîte exacte du canvas -->
         <div class="gp-pins" id="gp-pins"></div>
       </div>
     </div>
     <div class="gp-print-panel" id="gp-print-panel" hidden>
-      <p class="gp-comment-label">Commander un tirage de cette photo</p>
+      <p class="gp-comment-label" data-en="Order a print of this photo">Commander un tirage de cette photo</p>
       <div class="gp-print-preview" id="gp-print-preview"></div>
       <ul class="gp-print-products" id="gp-print-products"></ul>
       <p class="gp-comment-status" id="gp-print-status" aria-live="polite"></p>
     </div>
     <div class="gp-pin-editor" id="gp-pin-editor" hidden>
-      <label class="gp-comment-label" for="gp-pin-note" id="gp-pin-editor-title">Repère</label>
+      <label class="gp-comment-label" for="gp-pin-note" id="gp-pin-editor-title" data-en="Marker">Repère</label>
       <textarea id="gp-pin-note" class="gp-comment-input" rows="2" maxlength="200"
-                placeholder="« Retirer ce reflet », « adoucir ici »…"></textarea>
+                placeholder="« Retirer ce reflet », « adoucir ici »…" data-en-placeholder="“Remove this reflection”, “soften here”…"></textarea>
       <div class="gp-pin-editor-actions">
-        <button type="button" class="gp-pin-btn gp-pin-btn-danger" id="gp-pin-delete">Supprimer</button>
+        <button type="button" class="gp-pin-btn gp-pin-btn-danger" id="gp-pin-delete" data-en="Delete">Supprimer</button>
         <span class="gp-pin-editor-spacer"></span>
-        <button type="button" class="gp-pin-btn" id="gp-pin-cancel">Annuler</button>
-        <button type="button" class="gp-pin-btn gp-pin-btn-primary" id="gp-pin-save">Enregistrer</button>
+        <button type="button" class="gp-pin-btn" id="gp-pin-cancel" data-en="Cancel">Annuler</button>
+        <button type="button" class="gp-pin-btn gp-pin-btn-primary" id="gp-pin-save" data-en="Save">Enregistrer</button>
       </div>
     </div>
-    <p class="gp-pin-hint" id="gp-pin-hint" hidden>Touchez la photo à l'endroit à signaler.</p>
-    <button type="button" class="gp-viewer-nav gp-viewer-next" id="gp-next" aria-label="Photo suivante">&#8250;</button>
+    <p class="gp-pin-hint" id="gp-pin-hint" hidden data-en="Tap the photo where you want to point something out.">Touchez la photo à l'endroit à signaler.</p>
+    <button type="button" class="gp-viewer-nav gp-viewer-next" id="gp-next" aria-label="Photo suivante" data-en-label="Next photo">&#8250;</button>
     <div class="gp-comment-panel" id="gp-comment-panel" hidden>
-      <label class="gp-comment-label" for="gp-comment-input">Une remarque sur cette photo ?</label>
+      <label class="gp-comment-label" for="gp-comment-input" data-en="A note about this photo?">Une remarque sur cette photo ?</label>
       <textarea id="gp-comment-input" class="gp-comment-input" rows="2" maxlength="500"
-                placeholder="« Celle-ci plutôt en noir et blanc », « peut-on la recadrer un peu ? »…"></textarea>
+                placeholder="« Celle-ci plutôt en noir et blanc », « peut-on la recadrer un peu ? »…" data-en-placeholder="“This one in black and white”, “could we crop it a little?”…"></textarea>
       <p class="gp-comment-status" id="gp-comment-status" aria-live="polite"></p>
     </div>
     <div class="gp-viewer-bar">
       <button type="button" class="gp-heart gp-viewer-heart" id="gp-viewer-heart"
               aria-label="Ajouter aux favoris" title="Ajouter aux favoris"></button>
       <button type="button" class="gp-comment-toggle" id="gp-comment-toggle"
-              aria-label="Laisser une remarque" title="Laisser une remarque" aria-expanded="false"></button>
-      <div class="gp-tags" role="group" aria-label="Code couleur">
+              aria-label="Laisser une remarque" title="Laisser une remarque" aria-expanded="false"
+              data-en-label="Leave a note" data-en-title="Leave a note"></button>
+      <div class="gp-tags" role="group" aria-label="Code couleur" data-en-label="Colour code">
         <button type="button" class="gp-tag gp-tag-green" data-tag="green" aria-pressed="false"
-                aria-label="Validée" title="Validée"></button>
+                aria-label="Validée" title="Validée" data-en-label="Approved" data-en-title="Approved"></button>
         <button type="button" class="gp-tag gp-tag-yellow" data-tag="yellow" aria-pressed="false"
-                aria-label="À retoucher" title="À retoucher"></button>
+                aria-label="À retoucher" title="À retoucher" data-en-label="To retouch" data-en-title="To retouch"></button>
         <button type="button" class="gp-tag gp-tag-red" data-tag="red" aria-pressed="false"
-                aria-label="À écarter" title="À écarter"></button>
+                aria-label="À écarter" title="À écarter" data-en-label="Set aside" data-en-title="Set aside"></button>
       </div>
       <button type="button" class="gp-print-toggle" id="gp-print-toggle" hidden aria-expanded="false"
-              title="Commander un tirage de cette photo">Tirages</button>
+              title="Commander un tirage de cette photo" data-en="Prints" data-en-title="Order a print of this photo">Tirages</button>
       <button type="button" class="gp-pin-toggle" id="gp-pin-toggle" aria-pressed="false"
-              aria-label="Placer un repère sur la photo" title="Placer un repère sur la photo"></button>
+              aria-label="Placer un repère sur la photo" title="Placer un repère sur la photo"
+              data-en-label="Place a marker on the photo" data-en-title="Place a marker on the photo"></button>
       <p class="gp-viewer-counter" id="gp-counter"></p>
     </div>
   </div>
@@ -215,48 +217,48 @@
   <!-- ============ Panier de tirages ============ -->
   <!-- Lecteur officiel (Spotify, Deezer, SoundCloud, YouTube) choisi par le
        photographe : chargé seulement quand le client l'ouvre. -->
-  <div class="gp-music-player" id="gp-music-player" hidden role="region" aria-label="Lecteur de musique">
+  <div class="gp-music-player" id="gp-music-player" hidden role="region" aria-label="Lecteur de musique" data-en-label="Music player">
     <div class="gp-music-player-bar">
-      <span id="gp-music-player-title">Musique</span>
-      <button type="button" class="gp-music-player-btn" id="gp-music-player-min" aria-label="Réduire le lecteur" title="Réduire (la musique continue)">–</button>
-      <button type="button" class="gp-music-player-btn" id="gp-music-player-close" aria-label="Fermer le lecteur" title="Fermer (arrête la musique)">&times;</button>
+      <span id="gp-music-player-title" data-en="Music">Musique</span>
+      <button type="button" class="gp-music-player-btn" id="gp-music-player-min" aria-label="Réduire le lecteur" title="Réduire (la musique continue)" data-en-label="Minimise the player" data-en-title="Minimise (the music keeps playing)">–</button>
+      <button type="button" class="gp-music-player-btn" id="gp-music-player-close" aria-label="Fermer le lecteur" title="Fermer (arrête la musique)" data-en-label="Close the player" data-en-title="Close (stops the music)">&times;</button>
     </div>
     <div class="gp-music-player-frame" id="gp-music-player-frame"></div>
   </div>
 
   <div class="gp-cart" id="gp-cart" hidden role="dialog" aria-modal="true" aria-labelledby="gp-cart-title">
     <div class="gp-cart-card">
-      <button type="button" class="gp-cart-close" id="gp-cart-close" aria-label="Fermer">&times;</button>
-      <h2 id="gp-cart-title">Mes tirages</h2>
+      <button type="button" class="gp-cart-close" id="gp-cart-close" aria-label="Fermer" data-en-label="Close">&times;</button>
+      <h2 id="gp-cart-title" data-en="My prints">Mes tirages</h2>
       <ul class="gp-cart-lines" id="gp-cart-lines"></ul>
-      <p class="gp-cart-empty" id="gp-cart-empty" hidden>Votre panier est vide — ouvrez une photo puis « Tirages ».</p>
+      <p class="gp-cart-empty" id="gp-cart-empty" hidden data-en="Your cart is empty — open a photo, then “Prints”.">Votre panier est vide — ouvrez une photo puis « Tirages ».</p>
       <dl class="gp-cart-totals" id="gp-cart-totals">
-        <dt>Tirages</dt><dd id="gp-cart-items">0,00 €</dd>
-        <dt>Livraison</dt><dd id="gp-cart-shipping">0,00 €</dd>
+        <dt data-en="Prints">Tirages</dt><dd id="gp-cart-items">0,00 €</dd>
+        <dt data-en="Shipping">Livraison</dt><dd id="gp-cart-shipping">0,00 €</dd>
         <dt class="gp-cart-total-label">Total</dt><dd class="gp-cart-total" id="gp-cart-total">0,00 €</dd>
       </dl>
       <form id="gp-cart-form" class="gp-cart-form" autocomplete="on">
-        <p class="gp-comment-label">Adresse de livraison</p>
-        <label class="gp-field"><span>Nom complet</span><input name="name" autocomplete="name" required maxlength="100" /></label>
-        <label class="gp-field"><span>E-mail (confirmation et suivi)</span><input name="email" type="email" autocomplete="email" required maxlength="200" /></label>
-        <label class="gp-field"><span>Adresse</span><input name="line1" autocomplete="address-line1" required maxlength="120" /></label>
-        <label class="gp-field"><span>Complément d'adresse <em>(facultatif)</em></span><input name="line2" autocomplete="address-line2" maxlength="120" /></label>
+        <p class="gp-comment-label" data-en="Delivery address">Adresse de livraison</p>
+        <label class="gp-field"><span data-en="Full name">Nom complet</span><input name="name" autocomplete="name" required maxlength="100" /></label>
+        <label class="gp-field"><span data-en="Email (confirmation and tracking)">E-mail (confirmation et suivi)</span><input name="email" type="email" autocomplete="email" required maxlength="200" /></label>
+        <label class="gp-field"><span data-en="Address">Adresse</span><input name="line1" autocomplete="address-line1" required maxlength="120" /></label>
+        <label class="gp-field"><span data-en-html="Address line 2 &lt;em&gt;(optional)&lt;/em&gt;">Complément d'adresse <em>(facultatif)</em></span><input name="line2" autocomplete="address-line2" maxlength="120" /></label>
         <div class="gp-field-row">
-          <label class="gp-field"><span>Code postal</span><input name="postalCode" autocomplete="postal-code" required maxlength="20" /></label>
-          <label class="gp-field"><span>Ville</span><input name="city" autocomplete="address-level2" required maxlength="80" /></label>
+          <label class="gp-field"><span data-en="Postcode / ZIP">Code postal</span><input name="postalCode" autocomplete="postal-code" required maxlength="20" /></label>
+          <label class="gp-field"><span data-en="City">Ville</span><input name="city" autocomplete="address-level2" required maxlength="80" /></label>
         </div>
-        <label class="gp-field"><span>Pays</span><select name="countryCode" id="gp-cart-country" autocomplete="country"></select></label>
+        <label class="gp-field"><span data-en="Country">Pays</span><select name="countryCode" id="gp-cart-country" autocomplete="country"></select></label>
         <p class="gp-error" id="gp-cart-error" hidden></p>
-        <button type="submit" class="gp-btn" id="gp-cart-pay">Payer</button>
-        <p class="gp-cart-note">Paiement sécurisé par Stripe. Vos tirages sont fabriqués par notre laboratoire partenaire et livrés chez vous ; la photo est recadrée au format choisi.</p>
+        <button type="submit" class="gp-btn" id="gp-cart-pay" data-en="Pay">Payer</button>
+        <p class="gp-cart-note" data-en="Secure payment by Stripe. Your prints are made by our partner lab and delivered to your door; the photo is cropped to the chosen format. Prices in euros: your bank converts them if needed.">Paiement sécurisé par Stripe. Vos tirages sont fabriqués par notre laboratoire partenaire et livrés chez vous ; la photo est recadrée au format choisi.</p>
       </form>
     </div>
   </div>
 
   <!-- ============ Voile de dissuasion ============ -->
   <div class="gp-veil" id="gp-veil" hidden aria-hidden="true">
-    <p>Photos masquées</p>
-    <span>Elles réapparaissent dès que vous revenez sur la page.</span>
+    <p data-en="Photos hidden">Photos masquées</p>
+    <span data-en="They come back as soon as you return to the page.">Elles réapparaissent dès que vous revenez sur la page.</span>
   </div>
 
   <script src="gallery.js"></script>

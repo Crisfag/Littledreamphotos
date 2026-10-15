@@ -2928,9 +2928,13 @@
       '<option value="sandbox"' + (s.environment !== "live" ? " selected" : "") + ">Test (sandbox) — rien n'est imprimé</option>" +
       '<option value="live"' + (s.environment === "live" ? " selected" : "") + ">Production — commandes réelles</option>" +
       "</select></label>" +
-      '<label class="ad-field"><span>Frais de port facturés au client (€)</span>' +
+      '<label class="ad-field"><span>Frais de port facturés au client — Europe (€)</span>' +
       '<input type="text" name="shipping" inputmode="decimal" value="' + eurosInput(s.shippingCents) + '" /></label>' +
       "</div>" +
+      '<label class="ad-field"><span>Frais de port hors d\'Europe (€) <em>(laisser vide pour ne livrer qu\'en Europe)</em></span>' +
+      '<input type="text" name="shippingWorld" inputmode="decimal" placeholder="ex. 14,90" value="' +
+      (s.shippingWorldCents === null || s.shippingWorldCents === undefined ? "" : eurosInput(s.shippingWorldCents)) + '" /></label>' +
+      '<p class="ad-hint">États-Unis, Canada, Australie, Nouvelle-Zélande, Japon, Singapour, Hong Kong, Corée du Sud, Émirats : Prodigi imprime sur place ou au plus près. Comparez le coût de livraison en choisissant un de ces pays ci-dessous avant de fixer ce forfait.</p>' +
       '<button type="submit" class="ad-btn ad-btn-primary" id="ad-shop-settings-save">Enregistrer</button>' +
       (s.connected ? ' <button type="button" class="ad-btn" id="ad-shop-clear-key">Retirer la clé</button>' : "") +
       "</form></section>" +
@@ -2971,11 +2975,14 @@
       var form = event.target;
       var shipping = centsFromEuros(form.shipping.value);
       if (isNaN(shipping) || shipping < 0) return toast("Frais de port invalides.", true);
+      var shippingWorld = form.shippingWorld.value.trim() ? centsFromEuros(form.shippingWorld.value) : null;
+      if (shippingWorld !== null && (isNaN(shippingWorld) || shippingWorld < 0)) return toast("Frais de port hors Europe invalides.", true);
       try {
         await api("POST", "/shop/settings", {
           apiKey: form.apiKey.value.trim(),
           environment: form.environment.value,
           shippingCents: shipping,
+          shippingWorldCents: shippingWorld,
         });
         toast("Réglages de la boutique enregistrés.");
         renderShop(true);
@@ -3597,7 +3604,14 @@
       '<p class="ad-hint">Le film du mariage, la bande-annonce de la séance… en tête de galerie. Une vidéo non répertoriée fonctionne aussi.</p></div>' +
       "</div>" +
       '<div class="ad-sc-actions"><button type="submit" class="ad-btn ad-btn-primary">Enregistrer le texte et l\'en-tête</button></div>' +
-      "</form></section>";
+      "</form>" +
+      '<div class="ad-style-header ad-language">' +
+      '<span class="ad-style-header-title">Langue pour votre client</span>' +
+      '<div class="ad-seg" role="group" aria-label="Langue pour votre client">' +
+      '<button type="button" class="ad-seg-btn" data-language="fr" aria-pressed="' + (p.language !== "en") + '">Français</button>' +
+      '<button type="button" class="ad-seg-btn" data-language="en" aria-pressed="' + (p.language === "en") + '">English</button></div>' +
+      '<p class="ad-hint">La page de la galerie, les e-mails que reçoit votre client (relances, livraison, commandes de tirages), la boutique et ses factures. Votre texte d\'accompagnement s\'affiche tel que vous l\'écrivez.</p>' +
+      "</div></section>";
   }
 
   // Branche la section « Style de la galerie » d'une galerie ouverte.
@@ -3651,6 +3665,16 @@
         form.querySelectorAll("[data-header-mode]").forEach(function (b) { b.setAttribute("aria-pressed", String(b === btn)); });
         form.querySelectorAll("[data-header-panel]").forEach(function (panel) { panel.hidden = panel.getAttribute("data-header-panel") !== mode; });
         if (mode === "video") form.elements.headerVideo.focus();
+      });
+    });
+    document.querySelectorAll("#ad-style-section [data-language]").forEach(function (btn) {
+      btn.addEventListener("click", async function () {
+        if (btn.getAttribute("aria-pressed") === "true") return;
+        var language = btn.getAttribute("data-language");
+        if (await save({ language: language }, language === "en" ? "Galerie en anglais pour votre client." : "Galerie en français pour votre client.")) {
+          document.querySelectorAll("#ad-style-section [data-language]").forEach(function (b) { b.setAttribute("aria-pressed", String(b === btn)); });
+          p.language = language;
+        }
       });
     });
     form.addEventListener("submit", async function (e) {
@@ -4174,6 +4198,7 @@
       includedPhotos: form.includedPhotos.value.trim() || undefined,
       extraPhotoPrice: form.extraPhotoPrice.value.trim() || undefined,
       theme: form.theme.value || undefined,
+      language: form.language.value === "en" ? "en" : undefined,
     };
 
     try {

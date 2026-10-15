@@ -1265,6 +1265,7 @@ async function handleApi(req, res, url) {
           password, watermarkText, expiresAt,
           includedPhotos: body.includedPhotos, extraPhotoPrice: body.extraPhotoPrice,
           theme: body.theme ? String(body.theme) : undefined,
+          language: body.language === "en" ? "en" : undefined,
         });
         return json(res, 201, { id: created.id, slug, password, link: await linkFor(client, slug) });
       } catch (err) {
@@ -1480,7 +1481,7 @@ async function handleApi(req, res, url) {
   // d'accompagnement, photo de couverture, vidéo d'en-tête.
   if (parts.length === 3 && parts[2] === "presentation" && req.method === "POST") {
     const body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
-    const allowed = ["theme", "titleFont", "bodyFont", "intro", "coverPhotoId", "headerVideo"];
+    const allowed = ["theme", "titleFont", "bodyFont", "intro", "coverPhotoId", "headerVideo", "language"];
     const fields = {};
     for (const key of allowed) if (body[key] !== undefined) fields[key] = body[key];
     try {

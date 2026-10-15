@@ -326,6 +326,55 @@ export function resolveSelection({ product: productKey, size, option }) {
   };
 }
 
+// Libellés anglais (galeries clientes en anglais, voir i18n.js) : les
+// formats en pouces d'abord, centimètres entre parenthèses.
+const PRODUCT_EN = {
+  "photo-ctype": "Photo print",
+  "art-fineart": "Fine art print (200 gsm matte paper)",
+  "art-photorag": "Hahnemühle Photo Rag fine art print",
+  "art-budget-poster": "Poster",
+  "canvas-stretched": "Stretched canvas",
+  "canvas-rolled": "Rolled canvas (unframed)",
+  "canvas-float": "Float-framed canvas",
+  "frame-classic-mount": "Classic frame with mount",
+  "frame-classic": "Classic frame",
+  "frame-box-mount": "Box frame with mount",
+  "frame-box": "Box frame",
+  "acrylic-panel": "Acrylic photo panel",
+  "metal-aluminium": "Aluminium photo print",
+  "gift-board": "Rigid photo board",
+  "gift-mug": "White ceramic mug",
+  "gift-cushion": "Faux suede cushion",
+  "card-matte": "Matte greeting card",
+  "card-gloss": "Gloss greeting card",
+};
+const OPTION_EN = {
+  lustre: "lustre", gloss: "gloss",
+  MirrorWrap: "mirrored edges", ImageWrap: "wrapped image", Black: "black edges", White: "white edges",
+  black: "black", white: "white", natural: "natural wood", brown: "brown",
+  "dark grey": "dark grey", "light grey": "light grey", gold: "antique gold", silver: "antique silver",
+};
+const SIZE_TEXT_EN = { A4: "A4 · 21 × 29.7 cm", A3: "A3 · 29.7 × 42 cm", A2: "A2 · 42 × 59.4 cm", "11oz": "11 oz" };
+
+function sizeLabelEn(product, size) {
+  if (product.sizeLabels?.[size]) return product.sizeLabels[size];
+  const m = /^(\d+)x(\d+)$/.exec(size);
+  if (m && SIZE_CM[size]) return `${m[1]} × ${m[2]} in (${SIZE_CM[size]} cm)`;
+  return SIZE_TEXT_EN[size] || size;
+}
+
+// Libellé d'un format de la boutique dans la langue de la galerie. Un
+// libellé que le photographe a réécrit lui-même est gardé tel quel.
+export function productLabelFor(row, lang) {
+  if (lang !== "en" || !row.catalog_ref) return row.label;
+  const [productKey, size, option] = String(row.catalog_ref).split("|");
+  const resolved = resolveSelection({ product: productKey, size, option: option || undefined });
+  if (resolved.error || resolved.label !== row.label) return row.label;
+  const { product } = findProduct(productKey);
+  const optionText = product.option ? OPTION_EN[resolved.attributes[product.option.attribute]] : "";
+  return `${PRODUCT_EN[product.key] || product.label} ${sizeLabelEn(product, size)}${optionText ? ` — ${optionText}` : ""}`;
+}
+
 // Début fixe du SKU (avant le format) : sert à reconnaître un produit
 // ajouté hors menus d'après sa seule référence.
 function skuPrefix(product) {

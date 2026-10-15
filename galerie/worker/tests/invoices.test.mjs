@@ -74,6 +74,13 @@ check("le PDF généré (franchise, sans coordonnées complètes) reste un PDF v
       pdfFranchise.length > 500 && Buffer.from(pdfFranchise.slice(0, 5)).toString() === "%PDF-",
       `${pdfFranchise.length} octets`);
 
+const enPdf = await buildInvoicePdf({
+  lang: "en", number: "2026-0008", issuedAt: 1790000000,
+  seller: { name: "Studio", address: "Rue 1\n1000 Bruxelles", vatNumber: "" }, clientName: "Anna Smith",
+  description: "2 additional photos — Smith", details: [], amountCents: 3000, netCents: 3000, vatCents: 0, vatRate: 0,
+});
+check("facture d'une galerie en anglais : un PDF valide", enPdf.length > 800 && String.fromCharCode(...enPdf.slice(0, 5)) === "%PDF-");
+
 const failed = checks.filter((c) => !c.ok);
 console.log(failed.length ? `\n${failed.length} vérification(s) en échec.` : `\n${checks.length} vérifications, toutes passent.`);
 process.exit(failed.length ? 1 : 0);

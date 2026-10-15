@@ -5,11 +5,11 @@
 //   node tests/prodigi.test.mjs
 
 import {
-  encryptApiKey, decryptApiKey, signFor, verifySignature, normalizeRecipient, buildOrderLines,
+  encryptApiKey, decryptApiKey, signFor, verifySignature, normalizeRecipient, buildOrderLines, shippingCentsFor, countriesForClient,
   buildOrderPayload, buildQuotePayload, costFromQuote, statusFromProdigiOrder, prodigiErrorMessage,
   prodigiBase, SUGGESTED_PRODUCTS, availabilityFromDetails,
 } from "../src/prodigi.js";
-import { CATALOGUE, resolveSelection, catalogueForAdmin, categoryLabelFor, sizingForSku, lookFor } from "../src/printCatalogue.js";
+import { CATALOGUE, resolveSelection, catalogueForAdmin, categoryLabelFor, sizingForSku, lookFor, productLabelFor } from "../src/printCatalogue.js";
 
 const checks = [];
 function check(label, ok, detail) {
@@ -49,7 +49,23 @@ check("une adresse complète est acceptée, nettoyée (espaces, casse)",
       JSON.stringify(r));
 check("un e-mail invalide est refusé", Boolean(normalizeRecipient({ ...goodRecipient, email: "pas-un-mail" }).error));
 check("une adresse sans ville est refusée", Boolean(normalizeRecipient({ ...goodRecipient, city: " " }).error));
-check("un pays non proposé est refusé", Boolean(normalizeRecipient({ ...goodRecipient, countryCode: "US" }).error));
+check("un pays non proposé est refusé", Boolean(normalizeRecipient({ ...goodRecipient, countryCode: "CN" }).error));
+
+// Zones de livraison : l'Europe au forfait habituel, le reste du monde
+// seulement une fois le forfait « hors Europe » renseigné.
+const closedWorld = { shop_shipping_cents: 690, shop_shipping_world_cents: null };
+const openWorld = { shop_shipping_cents: 690, shop_shipping_world_cents: 1490 };
+check("Europe : forfait habituel", shippingCentsFor(closedWorld, "DE") === 690 && shippingCentsFor(openWorld, "PL") === 690);
+check("hors d'Europe fermé tant que le forfait n'est pas fixé", shippingCentsFor(closedWorld, "US") === null);
+check("hors d'Europe : forfait dédié une fois ouvert", shippingCentsFor(openWorld, "US") === 1490 && shippingCentsFor(openWorld, "AU") === 1490);
+check("port offert hors d'Europe possible (0)", shippingCentsFor({ shop_shipping_world_cents: 0 }, "CA") === 0);
+check("pays inconnu : jamais livré", shippingCentsFor(openWorld, "CN") === null);
+const enCountries = countriesForClient(openWorld, "en");
+check("pays du client en anglais, triés, avec leur zone",
+      enCountries[0].name === "Australia" && enCountries.some((c) => c.code === "US" && c.name === "United States" && c.zone === "world"),
+      JSON.stringify(enCountries.slice(0, 3)));
+check("pays hors d'Europe absents tant que fermés", !countriesForClient(closedWorld, "fr").some((c) => c.zone === "world"));
+check("libellés français", countriesForClient(closedWorld, "fr").some((c) => c.code === "BE" && c.name === "Belgique"));
 
 const photosById = new Map([
   ["pho_a", { id: "pho_a", position: 0, has_original: 1 }],
@@ -221,6 +237,18 @@ check("un produit qui exige plusieurs images (recto, verso…) est écarté : la
 const plain = availabilityFromDetails(details({ attributes: {}, printAreas: { default: { required: true }, inside: { required: false } }, variants: [{ attributes: {}, shipsTo: ["BE"] }] }), { countryCode: "BE" });
 check("une zone facultative en plus n'empêche rien, et sans option rien n'est filtré", plain.available === true && plain.allowed === null, JSON.stringify(plain));
 check("une réponse sans fiche est considérée indisponible", availabilityFromDetails({}).available === false);
+
+// Libellés anglais des formats (galeries en anglais).
+const framed = resolveSelection({ product: "frame-classic", size: "12x16", option: "natural" });
+const print = resolveSelection({ product: "photo-ctype", size: "8x10" });
+check("format du catalogue traduit, pouces puis cm",
+      productLabelFor({ label: print.label, catalog_ref: print.ref }, "en") === "Photo print 8 × 10 in (20 × 25 cm) — lustre",
+      productLabelFor({ label: print.label, catalog_ref: print.ref }, "en"));
+check("option traduite (couleur du cadre)",
+      framed.error || productLabelFor({ label: framed.label, catalog_ref: framed.ref }, "en").endsWith("— natural wood"),
+      JSON.stringify(framed));
+check("libellé réécrit par le photographe gardé tel quel", productLabelFor({ label: "Mon beau tirage", catalog_ref: print.ref }, "en") === "Mon beau tirage");
+check("galerie en français : libellé d'origine", productLabelFor({ label: print.label, catalog_ref: print.ref }, "fr") === print.label);
 
 const failed = checks.filter((c) => !c.ok);
 console.log(failed.length ? `\n${failed.length} vérification(s) en échec.` : `\n${checks.length} vérifications, toutes passent.`);

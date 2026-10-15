@@ -55,10 +55,10 @@ function emailButton(url, label) {
 // Emballage commun : en-tête avec la marque, carte blanche pour le contenu,
 // pied de page. `bodyHtml` est déjà échappé par l'appelant — cette fonction
 // ne fait que le positionner.
-function emailShell({ preheader, bodyHtml }) {
+function emailShell({ preheader, bodyHtml, lang }) {
   return `
 <!doctype html>
-<html lang="fr">
+<html lang="${lang === "en" ? "en" : "fr"}">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -92,7 +92,7 @@ function emailShell({ preheader, bodyHtml }) {
             <tr>
               <td style="padding-top:22px;text-align:center;">
                 <p style="margin:0;font-family:${SANS};font-size:12px;color:${MUTED};">
-                  Holypixx — galeries protégées pour photographes
+                  ${lang === "en" ? "Holypixx — protected galleries for photographers" : "Holypixx — galeries protégées pour photographes"}
                 </p>
               </td>
             </tr>
@@ -237,7 +237,8 @@ function formatEuros(cents) {
 }
 
 // Fonction pure : facile à tester unitairement, sans accès réseau.
-export function buildInvoiceEmail({ galleryTitle, number, amountCents }) {
+export function buildInvoiceEmail({ galleryTitle, number, amountCents, lang }) {
+  if (lang === "en") return invoiceEmailEn({ galleryTitle, number, amountCents });
   const subject = `Votre facture ${number} — ${galleryTitle}`;
 
   const bodyHtml = [
@@ -262,6 +263,175 @@ export function buildInvoiceEmail({ galleryTitle, number, amountCents }) {
 // Encodage base64 par blocs : `String.fromCharCode(...bytes)` déborderait la
 // pile d'appels sur un fichier de plusieurs dizaines de Ko (peu probable ici,
 // une facture d'une page, mais autant rester correct dans tous les cas).
+/* ---------- Galeries en anglais (voir i18n.js) ----------
+   Même mise en page que les versions françaises ; seuls les textes
+   changent. Les e-mails au photographe restent en français. */
+
+function formatEurosEn(cents) {
+  return "€" + ((cents || 0) / 100).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function formatDayEn(ts) {
+  return new Date(ts * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "long", timeZone: "Europe/Brussels" });
+}
+
+function greetingEn(name, sentence) {
+  return name ? `${escapeHtml(name)}, ${sentence.charAt(0).toLowerCase()}${sentence.slice(1)}` : sentence;
+}
+
+function enMail(subject, bodyHtml, text) {
+  return { subject, html: emailShell({ preheader: subject, bodyHtml, lang: "en" }), text };
+}
+
+function invoiceEmailEn({ galleryTitle, number, amountCents }) {
+  const subject = `Your invoice ${number} — ${galleryTitle}`;
+  const bodyHtml = [
+    eyebrow("Invoice"),
+    heading(`Invoice ${escapeHtml(number)}`),
+    paragraph(`Thank you for your payment of <strong>${formatEurosEn(amountCents)}</strong> for “${escapeHtml(galleryTitle)}”.`),
+    paragraph("Your invoice is attached to this email (PDF).", { small: true }),
+  ].join("\n");
+  return { subject, html: emailShell({ preheader: `Invoice ${number} — ${galleryTitle}`, bodyHtml, lang: "en" }),
+    text: `Thank you for your payment of ${formatEurosEn(amountCents)} for "${galleryTitle}". Invoice ${number} attached.` };
+}
+
+function clientReminderEn({ studioName, galleryTitle, clientName, daysLeft, selectedCount, galleryUrl }) {
+  const when = daysLeft <= 1 ? "tomorrow" : `in ${daysLeft} days`;
+  const subject = `Your gallery “${galleryTitle}” closes ${when}`;
+  const selectionLine = selectedCount > 0
+    ? `You already have ${selectedCount} favourite${selectedCount > 1 ? "s" : ""} — all that's left is to confirm your choice with the “Confirm my selection” button at the top of the gallery.`
+    : "You haven't picked any photos yet: take a moment to browse them and heart your favourites, then confirm with the “Confirm my selection” button.";
+  const bodyHtml =
+    eyebrow(studioName || "Your gallery") +
+    heading(`Your gallery closes ${escapeHtml(when)}`) +
+    paragraph(greetingEn(clientName, `Your photos from “<strong>${escapeHtml(galleryTitle)}</strong>” stay online ${daysLeft <= 1 ? "until tomorrow" : `for another ${daysLeft} days`}.`)) +
+    paragraph(escapeHtml(selectionLine)) +
+    (galleryUrl ? emailButton(galleryUrl, "View my gallery") : "") +
+    paragraph("You're receiving this message because a selection is expected on this gallery. Once it's confirmed, you won't receive any more reminders.", { small: true });
+  const text = [`Your gallery “${galleryTitle}” closes ${when}.`, "", selectionLine, galleryUrl ? `\nView my gallery: ${galleryUrl}` : ""].join("\n");
+  return enMail(subject, bodyHtml, text);
+}
+
+function printLinesHtmlEn(lines) {
+  return `<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;margin:6px 0 16px;font-family:${SANS};font-size:14px;color:${CHARCOAL};">` +
+    lines.map((l) =>
+      `<tr><td style="padding:4px 0;">${l.copies} × ${escapeHtml(l.label)} <span style="color:${MUTED};">— photo no. ${l.photoNumber}</span></td>` +
+      `<td style="padding:4px 0;text-align:right;white-space:nowrap;">${formatEurosEn(l.lineCents)}</td></tr>`
+    ).join("") +
+    `</table>`;
+}
+
+function printOrderConfirmationEn({ studioName, galleryTitle, recipientName, lines, shippingCents, totalCents, invoiceNumber }) {
+  const subject = `Your print order is confirmed — ${galleryTitle}`;
+  const bodyHtml =
+    eyebrow(studioName || "Print order") +
+    heading("Thank you for your order!") +
+    paragraph(greetingEn(recipientName, `We've received your payment. Your prints from “<strong>${escapeHtml(galleryTitle)}</strong>” are going into production at our lab, then straight to your door.`)) +
+    printLinesHtmlEn(lines) +
+    paragraph(`Shipping: ${formatEurosEn(shippingCents)}<br /><strong>Total paid: ${formatEurosEn(totalCents)}</strong>`) +
+    paragraph(`You'll receive an email with the tracking link as soon as it ships.${invoiceNumber ? ` Your invoice no. ${escapeHtml(invoiceNumber)} is attached to this message.` : ""}`, { small: true });
+  const text = [
+    `Your print order for “${galleryTitle}” is confirmed.`,
+    "",
+    lines.map((l) => `- ${l.copies} × ${l.label} (photo no. ${l.photoNumber}): ${formatEurosEn(l.lineCents)}`).join("\n"),
+    `Shipping: ${formatEurosEn(shippingCents)}`,
+    `Total paid: ${formatEurosEn(totalCents)}`,
+    "",
+    "You'll receive an email with the tracking link as soon as it ships.",
+  ].join("\n");
+  return enMail(subject, bodyHtml, text);
+}
+
+function deliveryReadyEn({ studioName, galleryTitle, clientName, count, galleryUrl }) {
+  const subject = `Your photos “${galleryTitle}” are ready`;
+  const countText = `${count} photo${count > 1 ? "s" : ""}`;
+  const bodyHtml =
+    eyebrow(studioName || "Your photos") +
+    heading("Your photos are ready") +
+    paragraph(greetingEn(clientName, `Your final photos from “<strong>${escapeHtml(galleryTitle)}</strong>” are waiting for you: ${escapeHtml(countText)} in high resolution, to download one by one or all at once.`)) +
+    (galleryUrl ? emailButton(galleryUrl, "Download my photos") : "") +
+    paragraph("Sign in with your gallery's usual password. Remember to save your photos before the gallery closes.", { small: true });
+  const text = [
+    `Your final photos from “${galleryTitle}” are ready: ${countText} in high resolution.`,
+    galleryUrl ? `\nDownload my photos: ${galleryUrl}` : "",
+    "\nSign in with your gallery's usual password.",
+  ].join("\n");
+  return enMail(subject, bodyHtml, text);
+}
+
+function promoLineEn(promo) {
+  return promo ? `${promo.percent}% off all prints until ${formatDayEn(promo.endsAt)}` : "";
+}
+
+function printPromoEn({ studioName, galleryTitle, clientName, percent, endsAt, favoritesCount, galleryUrl }) {
+  const until = formatDayEn(endsAt);
+  const subject = `${percent}% off your prints until ${until}`;
+  const favorites = favoritesCount > 0
+    ? `Your ${favoritesCount} favourite${favoritesCount > 1 ? "s are" : " is"} ready for it: photo print, canvas, frame…`
+    : "Photo prints, canvases, frames: pick your favourites and have them delivered to your door.";
+  const bodyHtml =
+    eyebrow(studioName || "Your photos") +
+    heading(`${percent}% off your prints`) +
+    paragraph(greetingEn(clientName, `Until <strong>${escapeHtml(until)}</strong>, every print from your gallery “<strong>${escapeHtml(galleryTitle)}</strong>” is ${percent}% off.`)) +
+    paragraph(escapeHtml(favorites)) +
+    (galleryUrl ? emailButton(galleryUrl, "Choose my prints") : "") +
+    paragraph("Open a photo, then “Prints”: the discount is applied automatically. Delivered to your home.", { small: true });
+  const text = [
+    `Until ${until}, every print from your gallery “${galleryTitle}” is ${percent}% off.`,
+    favorites,
+    galleryUrl ? `\nChoose my prints: ${galleryUrl}` : "",
+  ].join("\n");
+  return enMail(subject, bodyHtml, text);
+}
+
+function cartReminderEn({ studioName, galleryTitle, clientName, items, promo, galleryUrl }) {
+  const count = items.reduce((n, i) => n + i.copies, 0);
+  const subject = `Your cart is waiting: ${count} print${count > 1 ? "s" : ""}`;
+  const list = items.map((i) => `${i.copies} × ${i.label}`);
+  const bodyHtml =
+    eyebrow(studioName || "Your prints") +
+    heading("Your cart is waiting") +
+    paragraph(greetingEn(clientName, `You put together a print order in your gallery “<strong>${escapeHtml(galleryTitle)}</strong>” without completing it:`)) +
+    `<ul style="margin:0 0 18px;padding-left:20px;color:#3a332e;font-size:15px;line-height:1.6;">${list.map((l) => `<li>${escapeHtml(l)}</li>`).join("")}</ul>` +
+    (promo ? paragraph(`<strong>${escapeHtml(promoLineEn(promo))}</strong>`) : "") +
+    (galleryUrl ? emailButton(galleryUrl, "Complete my order") : "") +
+    paragraph("Your cart is saved: just open your gallery, then “My prints”.", { small: true });
+  const text = [
+    `You put together a print order in your gallery “${galleryTitle}” without completing it:`,
+    ...list.map((l) => `- ${l}`),
+    promo ? `\n${promoLineEn(promo)}` : "",
+    galleryUrl ? `\nComplete my order: ${galleryUrl}` : "",
+  ].join("\n");
+  return enMail(subject, bodyHtml, text);
+}
+
+function favoritesPrintEn({ studioName, galleryTitle, clientName, favoritesCount, promo, galleryUrl }) {
+  const subject = "Your favourites deserve to be printed";
+  const bodyHtml =
+    eyebrow(studioName || "Your photos") +
+    heading("Why not print them?") +
+    paragraph(greetingEn(clientName, `You picked ${favoritesCount} favourite${favoritesCount > 1 ? "s" : ""} in “<strong>${escapeHtml(galleryTitle)}</strong>”. Photo print, canvas, frame or acrylic: your best photos deserve more than a screen.`)) +
+    (promo ? paragraph(`<strong>${escapeHtml(promoLineEn(promo))}</strong>`) : "") +
+    (galleryUrl ? emailButton(galleryUrl, "See the prints") : "") +
+    paragraph("Made by our partner lab and delivered to your door.", { small: true });
+  const text = [
+    `You picked ${favoritesCount} favourite${favoritesCount > 1 ? "s" : ""} in “${galleryTitle}”. Photo print, canvas, frame: your best photos deserve more than a screen.`,
+    promo ? promoLineEn(promo) : "",
+    galleryUrl ? `\nSee the prints: ${galleryUrl}` : "",
+  ].join("\n");
+  return enMail(subject, bodyHtml, text);
+}
+
+function printOrderShippedEn({ studioName, galleryTitle, recipientName, trackingUrl }) {
+  const subject = `Your prints are on their way — ${galleryTitle}`;
+  const bodyHtml =
+    eyebrow(studioName || "Print order") +
+    heading("Your prints are on their way") +
+    paragraph(greetingEn(recipientName, `Your prints from “<strong>${escapeHtml(galleryTitle)}</strong>” have just shipped.`)) +
+    (trackingUrl ? emailButton(trackingUrl, "Track my parcel") : paragraph("The carrier doesn't provide a tracking link for this shipment.", { small: true }));
+  return enMail(subject, bodyHtml, `Your prints from “${galleryTitle}” have just shipped.${trackingUrl ? `\n\nTracking: ${trackingUrl}` : ""}`);
+}
+
 function daysLabel(daysLeft) {
   if (daysLeft <= 1) return "demain";
   return `dans ${daysLeft} jours`;
@@ -269,7 +439,8 @@ function daysLabel(daysLeft) {
 
 // Relance au client : sa galerie expire bientôt et il n'a pas encore validé
 // sa sélection. Fonction pure, testée sans réseau.
-export function buildClientReminderEmail({ studioName, galleryTitle, clientName, daysLeft, selectedCount, galleryUrl }) {
+export function buildClientReminderEmail({ studioName, galleryTitle, clientName, daysLeft, selectedCount, galleryUrl, lang }) {
+  if (lang === "en") return clientReminderEn({ studioName, galleryTitle, clientName, daysLeft, selectedCount, galleryUrl });
   const when = daysLabel(daysLeft);
   const subject = `Votre galerie « ${galleryTitle} » se ferme ${when}`;
   const selectionLine = selectedCount > 0
@@ -339,7 +510,8 @@ function printLinesText(lines) {
 
 // Confirmation au client après paiement d'une commande de tirages (la
 // facture est jointe par l'appelant).
-export function buildPrintOrderConfirmationEmail({ studioName, galleryTitle, recipientName, lines, shippingCents, totalCents, invoiceNumber }) {
+export function buildPrintOrderConfirmationEmail({ studioName, galleryTitle, recipientName, lines, shippingCents, totalCents, invoiceNumber, lang }) {
+  if (lang === "en") return printOrderConfirmationEn({ studioName, galleryTitle, recipientName, lines, shippingCents, totalCents, invoiceNumber });
   const subject = `Votre commande de tirages est confirmée — ${galleryTitle}`;
   const bodyHtml =
     eyebrow(studioName || "Commande de tirages") +
@@ -454,7 +626,8 @@ export function buildPrintOrderPhotographerEmail({ galleryTitle, recipientName, 
 }
 
 // Au client : ses tirages sont expédiés.
-export function buildDeliveryReadyEmail({ studioName, galleryTitle, clientName, count, galleryUrl }) {
+export function buildDeliveryReadyEmail({ studioName, galleryTitle, clientName, count, galleryUrl, lang }) {
+  if (lang === "en") return deliveryReadyEn({ studioName, galleryTitle, clientName, count, galleryUrl });
   const subject = `Vos photos « ${galleryTitle} » sont prêtes`;
   const countText = `${count} photo${count > 1 ? "s" : ""}`;
   const bodyHtml =
@@ -479,7 +652,8 @@ function promoLine(promo) {
   return promo ? `−${promo.percent} % sur tous les tirages jusqu'au ${formatDay(promo.endsAt)}` : "";
 }
 
-export function buildPrintPromoEmail({ studioName, galleryTitle, clientName, percent, endsAt, favoritesCount, galleryUrl }) {
+export function buildPrintPromoEmail({ studioName, galleryTitle, clientName, percent, endsAt, favoritesCount, galleryUrl, lang }) {
+  if (lang === "en") return printPromoEn({ studioName, galleryTitle, clientName, percent, endsAt, favoritesCount, galleryUrl });
   const until = formatDay(endsAt);
   const subject = `−${percent} % sur vos tirages jusqu'au ${until}`;
   const favorites = favoritesCount > 0
@@ -500,7 +674,8 @@ export function buildPrintPromoEmail({ studioName, galleryTitle, clientName, per
   return { subject, html: emailShell({ preheader: subject, bodyHtml }), text };
 }
 
-export function buildCartReminderEmail({ studioName, galleryTitle, clientName, items, promo, galleryUrl }) {
+export function buildCartReminderEmail({ studioName, galleryTitle, clientName, items, promo, galleryUrl, lang }) {
+  if (lang === "en") return cartReminderEn({ studioName, galleryTitle, clientName, items, promo, galleryUrl });
   const count = items.reduce((n, i) => n + i.copies, 0);
   const subject = `Votre panier vous attend : ${count} tirage${count > 1 ? "s" : ""}`;
   const list = items.map((i) => `${i.copies} × ${i.label}`);
@@ -521,7 +696,8 @@ export function buildCartReminderEmail({ studioName, galleryTitle, clientName, i
   return { subject, html: emailShell({ preheader: subject, bodyHtml }), text };
 }
 
-export function buildFavoritesPrintEmail({ studioName, galleryTitle, clientName, favoritesCount, promo, galleryUrl }) {
+export function buildFavoritesPrintEmail({ studioName, galleryTitle, clientName, favoritesCount, promo, galleryUrl, lang }) {
+  if (lang === "en") return favoritesPrintEn({ studioName, galleryTitle, clientName, favoritesCount, promo, galleryUrl });
   const subject = "Vos coups de cœur méritent d'être imprimés";
   const bodyHtml =
     eyebrow(studioName || "Vos photos") +
@@ -538,7 +714,8 @@ export function buildFavoritesPrintEmail({ studioName, galleryTitle, clientName,
   return { subject, html: emailShell({ preheader: subject, bodyHtml }), text };
 }
 
-export function buildPrintOrderShippedEmail({ studioName, galleryTitle, recipientName, trackingUrl }) {
+export function buildPrintOrderShippedEmail({ studioName, galleryTitle, recipientName, trackingUrl, lang }) {
+  if (lang === "en") return printOrderShippedEn({ studioName, galleryTitle, recipientName, trackingUrl });
   const subject = `Vos tirages sont en route — ${galleryTitle}`;
   const bodyHtml =
     eyebrow(studioName || "Commande de tirages") +
@@ -893,11 +1070,11 @@ function bytesToBase64(bytes) {
   return btoa(binary);
 }
 
-export async function sendInvoiceEmail(env, { to, galleryTitle, number, amountCents, pdfBytes }) {
+export async function sendInvoiceEmail(env, { to, galleryTitle, number, amountCents, pdfBytes, lang }) {
   await sendEmail(env, {
     to,
-    ...buildInvoiceEmail({ galleryTitle, number, amountCents }),
-    attachments: [{ filename: `facture-${number}.pdf`, content: bytesToBase64(pdfBytes) }],
+    ...buildInvoiceEmail({ galleryTitle, number, amountCents, lang }),
+    attachments: [{ filename: `${lang === "en" ? "invoice" : "facture"}-${number}.pdf`, content: bytesToBase64(pdfBytes) }],
   });
 }
 
@@ -970,7 +1147,7 @@ export async function sendPrintOrderConfirmation(env, params) {
   await sendEmail(env, {
     to: params.to,
     ...buildPrintOrderConfirmationEmail(params),
-    ...(params.pdfBytes ? { attachments: [{ filename: `facture-${params.invoiceNumber}.pdf`, content: bytesToBase64(params.pdfBytes) }] } : {}),
+    ...(params.pdfBytes ? { attachments: [{ filename: `${params.lang === "en" ? "invoice" : "facture"}-${params.invoiceNumber}.pdf`, content: bytesToBase64(params.pdfBytes) }] } : {}),
   });
 }
 

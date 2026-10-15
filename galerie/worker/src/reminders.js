@@ -11,6 +11,7 @@
 // en service de la clé ne déclenche pas une rafale de vieux rappels.
 
 import { sendClientReminder, sendPhotographerReminder } from "./notify.js";
+import { languageOf } from "./i18n.js";
 
 const DAY = 86400;
 export const CLIENT_FIRST_DAYS = 7;
@@ -49,7 +50,7 @@ export async function runReminders(env, options = {}) {
   const horizon = now + CLIENT_FIRST_DAYS * DAY;
 
   const { results: galleries } = await env.DB.prepare(
-    `SELECT g.id, g.slug, g.title, g.client_name, g.client_email, g.expires_at,
+    `SELECT g.id, g.slug, g.title, g.client_name, g.client_email, g.expires_at, g.language,
             p.email AS photographer_email, p.studio_name,
             (SELECT COUNT(*) FROM photos ph WHERE ph.gallery_id = g.id AND ph.selected = 1) AS selected_count
      FROM galleries g JOIN photographers p ON p.id = g.photographer_id
@@ -91,6 +92,7 @@ export async function runReminders(env, options = {}) {
         sent.push({ galleryId: gallery.id, slug: gallery.slug, kind, to: gallery.photographer_email });
       } else {
         await sendClientReminder(env, {
+          lang: languageOf(gallery.language),
           to: gallery.client_email,
           studioName: gallery.studio_name,
           galleryTitle: gallery.title,

@@ -18,6 +18,7 @@ import { handleSchoolAdmin } from "./school.js";
 import { referralForAdmin } from "./referral.js";
 import { handleBookingAdmin, deleteBookingFiles } from "./booking.js";
 import { THEMES, themeOf, readPresentation, linkOfEmbed } from "./presentation.js";
+import { LANGUAGES, languageOf } from "./i18n.js";
 import { handleContractsAdmin } from "./contracts.js";
 import { handleClientsAdmin } from "./clients.js";
 import { setPromo, sendPromoToClient, promoForAdmin } from "./campaigns.js";
@@ -150,12 +151,14 @@ async function createGallery(request, env, photographerId) {
     .first();
   // Style : celui choisi dans le formulaire de création, sinon celui du compte.
   const theme = THEMES.includes(body.theme) ? body.theme : (THEMES.includes(photographer?.default_theme) ? photographer.default_theme : "");
+  // Langue vue par le client (page, e-mails, boutique) : français par défaut.
+  const language = LANGUAGES.includes(body.language) ? body.language : "fr";
 
   await env.DB.prepare(
     `INSERT INTO galleries
        (id, photographer_id, slug, title, client_name, client_email, password_hash, password_salt, watermark_text, expires_at,
-        included_photos, extra_photo_price_cents, layout, theme, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        included_photos, extra_photo_price_cents, layout, theme, language, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   )
     .bind(
       id,
@@ -172,6 +175,7 @@ async function createGallery(request, env, photographerId) {
       extraPhotoPriceCents,
       photographer?.default_layout || "grille",
       theme,
+      language,
       now()
     )
     .run();
@@ -259,6 +263,7 @@ async function getGallery(env, photographerId, slug) {
         intro: gallery.intro || "",
         coverPhotoId: gallery.cover_photo_id || "",
         headerVideo: linkOfEmbed(gallery.header_video),
+        language: languageOf(gallery.language),
       },
       music_name: gallery.music_name || "",
       music: await musicForAdmin(env, gallery),
@@ -818,6 +823,7 @@ export async function handleAdmin(request, env, ctx, path) {
           const photographer = await env.DB.prepare("SELECT studio_name FROM photographers WHERE id = ?").bind(photographerId).first();
           const { results } = await env.DB.prepare("SELECT COUNT(*) AS n FROM delivery_files WHERE gallery_id = ?").bind(g.id).all();
           await sendDeliveryReady(env, {
+            lang: languageOf(g.language),
             to: g.client_email,
             studioName: photographer?.studio_name || "",
             galleryTitle: g.title,

@@ -34,13 +34,60 @@ export const SUGGESTED_PRODUCTS = SUGGESTED_SELECTIONS.map((sel) => {
   return { label: resolved.label, sku: resolved.sku, attributes: resolved.attributes, ref: resolved.ref, priceCents: sel.priceCents };
 });
 
-// Pays de livraison proposés au client (Prodigi livre bien au-delà, mais
-// le forfait de port du photographe est pensé pour l'Europe proche).
-export const SHOP_COUNTRIES = {
-  BE: "Belgique", FR: "France", LU: "Luxembourg", NL: "Pays-Bas", DE: "Allemagne",
-  CH: "Suisse", AT: "Autriche", IT: "Italie", ES: "Espagne", PT: "Portugal",
-  IE: "Irlande", GB: "Royaume-Uni", DK: "Danemark", SE: "Suède",
+// Pays de livraison proposés au client, par zone ([français, anglais]).
+// Europe : le forfait de port habituel du photographe. Hors d'Europe :
+// Prodigi imprime aussi sur place (États-Unis, Canada, Australie…), mais
+// ces pays ne sont proposés qu'une fois que le photographe a fixé un
+// forfait « hors Europe » (shop_shipping_world_cents) — ses frais de port
+// ne sont jamais pris au dépourvu.
+export const EUROPE_COUNTRIES = {
+  BE: ["Belgique", "Belgium"], FR: ["France", "France"], LU: ["Luxembourg", "Luxembourg"],
+  NL: ["Pays-Bas", "Netherlands"], DE: ["Allemagne", "Germany"], CH: ["Suisse", "Switzerland"],
+  AT: ["Autriche", "Austria"], IT: ["Italie", "Italy"], ES: ["Espagne", "Spain"], PT: ["Portugal", "Portugal"],
+  IE: ["Irlande", "Ireland"], GB: ["Royaume-Uni", "United Kingdom"], DK: ["Danemark", "Denmark"],
+  SE: ["Suède", "Sweden"], NO: ["Norvège", "Norway"], FI: ["Finlande", "Finland"], PL: ["Pologne", "Poland"],
+  CZ: ["Tchéquie", "Czechia"], SK: ["Slovaquie", "Slovakia"], SI: ["Slovénie", "Slovenia"],
+  HU: ["Hongrie", "Hungary"], HR: ["Croatie", "Croatia"], GR: ["Grèce", "Greece"], RO: ["Roumanie", "Romania"],
+  BG: ["Bulgarie", "Bulgaria"], EE: ["Estonie", "Estonia"], LV: ["Lettonie", "Latvia"], LT: ["Lituanie", "Lithuania"],
 };
+export const WORLD_COUNTRIES = {
+  US: ["États-Unis", "United States"], CA: ["Canada", "Canada"], AU: ["Australie", "Australia"],
+  NZ: ["Nouvelle-Zélande", "New Zealand"], JP: ["Japon", "Japan"], SG: ["Singapour", "Singapore"],
+  HK: ["Hong Kong", "Hong Kong"], KR: ["Corée du Sud", "South Korea"], AE: ["Émirats arabes unis", "United Arab Emirates"],
+};
+
+// Tous les pays connus (devis de l'admin, validation d'une adresse).
+export const SHOP_COUNTRIES = Object.fromEntries(
+  Object.entries({ ...EUROPE_COUNTRIES, ...WORLD_COUNTRIES }).map(([code, names]) => [code, names[0]])
+);
+
+export function shippingZone(countryCode) {
+  if (EUROPE_COUNTRIES[countryCode]) return "europe";
+  if (WORLD_COUNTRIES[countryCode]) return "world";
+  return null;
+}
+
+// Livraison hors d'Europe ouverte par le photographe ?
+export function worldShippingOpen(photographer) {
+  return Number.isInteger(photographer?.shop_shipping_world_cents) && photographer.shop_shipping_world_cents >= 0;
+}
+
+// Forfait de port pour un pays ; null si ce pays n'est pas livré.
+export function shippingCentsFor(photographer, countryCode) {
+  const zone = shippingZone(countryCode);
+  if (zone === "europe") return photographer?.shop_shipping_cents || 0;
+  if (zone === "world" && worldShippingOpen(photographer)) return photographer.shop_shipping_world_cents;
+  return null;
+}
+
+// Pays proposés au client, dans sa langue, par ordre alphabétique.
+export function countriesForClient(photographer, lang) {
+  const index = lang === "en" ? 1 : 0;
+  const zones = worldShippingOpen(photographer) ? { ...EUROPE_COUNTRIES, ...WORLD_COUNTRIES } : EUROPE_COUNTRIES;
+  return Object.entries(zones)
+    .map(([code, names]) => ({ code, name: names[index], zone: shippingZone(code) }))
+    .sort((a, b) => a.name.localeCompare(b.name, lang));
+}
 
 export const MAX_ORDER_LINES = 20;
 export const MAX_COPIES = 10;
@@ -309,4 +356,14 @@ export const ORDER_STATUS_LABELS = {
   shipped: "Expédiée",
   cancelled: "Annulée",
   failed: "À relancer",
+};
+
+export const ORDER_STATUS_LABELS_EN = {
+  pending_payment: "Awaiting payment",
+  paid: "Paid",
+  submitted: "Sent to the lab",
+  in_production: "In production",
+  shipped: "Shipped",
+  cancelled: "Cancelled",
+  failed: "Being prepared",
 };

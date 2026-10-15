@@ -76,6 +76,10 @@ CREATE TABLE IF NOT EXISTS photographers (
   prodigi_api_key_enc  TEXT NOT NULL DEFAULT '',
   prodigi_environment  TEXT NOT NULL DEFAULT 'sandbox',
   shop_shipping_cents  INTEGER NOT NULL DEFAULT 0,
+  -- Livraison hors d'Europe (États-Unis, Canada, Australie…) : forfait de
+  -- port en centimes, ou NULL tant que le photographe ne l'a pas ouverte
+  -- (voir prodigi.js, WORLD_COUNTRIES).
+  shop_shipping_world_cents INTEGER,
   -- Compte BePhoto du photographe (labo des photos scolaires, schoollab.js) :
   -- l'API ne connaît que l'e-mail et le mot de passe du compte, chiffré
   -- comme la clé Prodigi ; le jeton de session obtenu est gardé (chiffré)
@@ -124,6 +128,9 @@ CREATE TABLE IF NOT EXISTS galleries (
   intro                  TEXT NOT NULL DEFAULT '',
   cover_photo_id         TEXT NOT NULL DEFAULT '',
   header_video           TEXT NOT NULL DEFAULT '',
+  -- Langue de la galerie côté client : page, e-mails, boutique, facture
+  -- ('fr' ou 'en', voir i18n.js).
+  language               TEXT NOT NULL DEFAULT 'fr',
   -- Forfait : nombre de photos incluses dans ce que le client a déjà payé.
   -- NULL = pas de forfait défini (comportement d'avant cette fonctionnalité :
   -- aucun supplément calculé, quel que soit le nombre de coups de cœur).

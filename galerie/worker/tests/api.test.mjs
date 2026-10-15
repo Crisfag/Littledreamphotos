@@ -2091,6 +2091,44 @@ const galleryNoOrder = await (await admin("GET", `/api/admin/galleries/${shopSlu
 check("une commande valide part vers le paiement Stripe — sans Stripe configuré, refus net et rien d'enregistré",
       orderNoStripe.status === 503 && galleryNoOrder.printOrders?.length === 0, `HTTP ${orderNoStripe.status}`);
 
+// Livraison hors d'Europe : fermée tant que le photographe n'a pas fixé de
+// forfait, puis proposée au client avec son propre port.
+const orderUS = await fetch(`${BASE}/api/gallery/${shopSlug}/print-order`, { method: "POST", headers: shopBearer, body: orderBody({ recipient: { ...RECIPIENT, countryCode: "US" } }) });
+check("hors d'Europe fermé : une adresse aux États-Unis est refusée (400) et le pays n'est pas proposé",
+      orderUS.status === 400 && !shopSession.gallery.shop.countries.some((c) => c.code === "US") &&
+      shopSession.gallery.shop.shippingWorldCents === null && shopSession.gallery.shop.countries.some((c) => c.code === "BE" && c.name === "Belgique"),
+      `HTTP ${orderUS.status}`);
+const badWorld = await admin("POST", "/api/admin/shop/settings", { environment: "sandbox", shippingCents: 590, shippingWorldCents: -5 });
+const worldSaved = await admin("POST", "/api/admin/shop/settings", { environment: "sandbox", shippingCents: 590, shippingWorldCents: 1490 });
+const worldShop = await (await admin("GET", "/api/admin/shop")).json();
+const worldSession = await shopLogin();
+const usCountry = worldSession.gallery?.shop?.countries?.find((c) => c.code === "US");
+check("le photographe ouvre la livraison hors d'Europe avec un forfait ; le client voit les pays et ce port",
+      badWorld.status === 400 && worldSaved.ok && worldShop.settings.shippingWorldCents === 1490 && worldShop.settings.shippingCents === 590 &&
+      usCountry?.zone === "world" && usCountry?.name === "États-Unis" && worldSession.gallery.shop.shippingWorldCents === 1490,
+      JSON.stringify(worldSession.gallery?.shop?.countries?.slice(0, 3)));
+
+// Galerie en anglais : page, libellés de la boutique, pays.
+const badLanguage = await admin("POST", `/api/admin/galleries/${shopSlug}/presentation`, { language: "de" });
+const toEnglish = await admin("POST", `/api/admin/galleries/${shopSlug}/presentation`, { language: "en" });
+const englishSession = await shopLogin();
+const englishBackground = await (await fetch(`${BASE}/api/gallery/${shopSlug}/background`)).json();
+const englishAdmin = await (await admin("GET", `/api/admin/galleries/${shopSlug}`)).json();
+const englishTirage = englishSession.gallery?.shop?.products?.find((p) => p.id === tirage.id);
+check("langue inconnue refusée (400) ; galerie passée en anglais : connexion, écran de mot de passe et fiche le disent",
+      badLanguage.status === 400 && toEnglish.ok && englishSession.gallery?.language === "en" &&
+      englishBackground.language === "en" && englishAdmin.gallery?.presentation?.language === "en");
+check("en anglais, les formats du catalogue et les pays sont traduits",
+      englishSession.gallery.shop.countries.some((c) => c.code === "US" && c.name === "United States") &&
+      englishSession.gallery.shop.countries.some((c) => c.code === "DE" && c.name === "Germany") &&
+      englishSession.gallery.shop.products.some((p) => /\bin \(\d+ × \d+ cm\)/.test(p.label)) &&
+      englishTirage && englishTirage.label !== tirage.label,
+      JSON.stringify(englishSession.gallery.shop.products.map((p) => p.label)));
+await admin("POST", `/api/admin/galleries/${shopSlug}/presentation`, { language: "fr" });
+const frenchAgain = await shopLogin();
+check("revenue en français, la galerie retrouve ses libellés d'origine", frenchAgain.gallery?.language === "fr" &&
+      frenchAgain.gallery.shop.products.find((p) => p.id === tirage.id)?.label === tirage.label);
+
 // Commande payée, posée comme le ferait le webhook Stripe.
 const shopGalleryId = galleryNoOrder.gallery.id;
 const nowS = Math.floor(Date.now() / 1000);

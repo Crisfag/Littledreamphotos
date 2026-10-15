@@ -79,6 +79,11 @@ check("chaque police est connue de la page et de l'admin (mêmes paramètres Goo
         return page && admin && page[1] === admin[1];
       }));
 
+check("langue : anglais ou français acceptés, le reste refusé",
+      readPresentation({ language: "en" }, new Set()).fields?.language === "en" && Boolean(readPresentation({ language: "de" }, new Set()).error));
+check("langue transmise au client, français par défaut",
+      presentationForClient({ language: "en" }, new Set()).language === "en" && presentationForClient({}, new Set()).language === "fr");
+
 const failed = checks.filter((c) => !c.ok).length;
 console.log(`\n${checks.length - failed}/${checks.length} vérifications réussies`);
 process.exit(failed ? 1 : 0);

@@ -17,12 +17,14 @@ import { originalKey, storageRefusal } from "./storage.js";
 import { createInvoiceForPayment, formatEuros } from "./invoices.js";
 import { sendPrintOrderConfirmation, sendPrintOrderPhotographer, sendPrintOrderShipped } from "./notify.js";
 import {
-  SUGGESTED_PRODUCTS, SHOP_COUNTRIES, ORDER_STATUS_LABELS,
+  SUGGESTED_PRODUCTS, SHOP_COUNTRIES, ORDER_STATUS_LABELS, ORDER_STATUS_LABELS_EN,
+  shippingCentsFor, countriesForClient, worldShippingOpen,
   encryptApiKey, decryptApiKey, signFor, verifySignature,
   normalizeRecipient, buildOrderLines, buildOrderPayload, buildQuotePayload,
   prodigiRequest, costFromQuote, statusFromProdigiOrder, availabilityFromDetails,
 } from "./prodigi.js";
-import { resolveSelection, catalogueForAdmin, categoryLabelFor, findProduct, skuFor, lookFor } from "./printCatalogue.js";
+import { resolveSelection, catalogueForAdmin, categoryLabelFor, findProduct, skuFor, lookFor, productLabelFor } from "./printCatalogue.js";
+import { languageOf, pick, plural } from "./i18n.js";
 
 const MAX_ORIGINAL_BYTES = 60 * 1024 * 1024;
 const MAX_PRODUCTS = 40;
@@ -117,6 +119,8 @@ async function getShop(env, photographerId) {
       keyHint: apiKey ? `…${apiKey.slice(-4)}` : "",
       environment: photographer.prodigi_environment === "live" ? "live" : "sandbox",
       shippingCents: photographer.shop_shipping_cents || 0,
+      // null = livraison hors d'Europe fermée.
+      shippingWorldCents: worldShippingOpen(photographer) ? photographer.shop_shipping_world_cents : null,
       stripeReady: Boolean(photographer.stripe_account_id) && Boolean(photographer.stripe_charges_enabled),
       // Frais de paiement retenus sur chaque commande (voir fees.js).
       paymentFee: feeRuleForAdmin(env, photographer),
@@ -136,8 +140,19 @@ async function updateShopSettings(request, env, photographerId) {
   const shipping = Number(body.shippingCents ?? 0);
   if (!Number.isInteger(shipping) || shipping < 0 || shipping > 100000) return fail(400, "Frais de port invalides");
 
+  // Hors d'Europe : vide ou null = fermé ; sinon un forfait comme ci-dessus.
+  let shippingWorld = null;
+  if (body.shippingWorldCents !== undefined && body.shippingWorldCents !== null && body.shippingWorldCents !== "") {
+    shippingWorld = Number(body.shippingWorldCents);
+    if (!Number.isInteger(shippingWorld) || shippingWorld < 0 || shippingWorld > 100000) return fail(400, "Frais de port hors Europe invalides");
+  }
+
   const updates = ["prodigi_environment = ?", "shop_shipping_cents = ?"];
   const values = [environment, shipping];
+  if (body.shippingWorldCents !== undefined) {
+    updates.push("shop_shipping_world_cents = ?");
+    values.push(shippingWorld);
+  }
   if (body.clearKey === true) {
     updates.push("prodigi_api_key_enc = ''");
   } else if (typeof body.apiKey === "string" && body.apiKey.trim()) {
@@ -499,23 +514,29 @@ export async function shopState(env, gallery) {
 // les commandes déjà payées de cette galerie, avec leur suivi.
 export async function shopForClient(env, gallery) {
   const state = await shopState(env, gallery);
+  const lang = languageOf(gallery.language);
   const orders = await listPrintOrders(env, { galleryId: gallery.id });
   const ordersOut = orders.map((o) => ({
     id: o.id,
     createdAt: o.createdAt,
     totalCents: o.totalCents,
     status: o.status,
-    statusLabel: o.status === "failed" ? "En préparation" : o.statusLabel,
+    statusLabel: lang === "en"
+      ? ORDER_STATUS_LABELS_EN[o.status] || o.status
+      : (o.status === "failed" ? "En préparation" : o.statusLabel),
     trackingUrl: o.trackingUrl,
     count: o.lines.reduce((n, l) => n + l.copies, 0),
   }));
   if (!state) return { shop: null, printOrders: ordersOut };
   return {
     shop: {
+      // Forfait Europe, et hors d'Europe si le photographe l'a ouvert
+      // (null sinon) ; chaque pays dit sa zone.
       shippingCents: state.photographer.shop_shipping_cents || 0,
-      countries: SHOP_COUNTRIES,
+      shippingWorldCents: worldShippingOpen(state.photographer) ? state.photographer.shop_shipping_world_cents : null,
+      countries: countriesForClient(state.photographer, lang),
       products: state.products.map((p) => ({
-        id: p.id, label: p.label, priceCents: p.price_cents, listPriceCents: p.list_price_cents, look: lookFor(p),
+        id: p.id, label: productLabelFor(p, lang), priceCents: p.price_cents, listPriceCents: p.list_price_cents, look: lookFor(p),
       })),
       promo: state.promo,
       savedCart: await savedCartFor(env, gallery.id),
@@ -537,17 +558,20 @@ export async function handlePrintOrder(request, env, gallery) {
   const normalized = normalizeRecipient(body.recipient);
   if (normalized.error) return fail(400, normalized.error);
   const recipient = normalized.recipient;
+  const shippingCents = shippingCentsFor(state.photographer, recipient.countryCode);
+  if (shippingCents === null) return fail(400, "Pays de livraison non proposé");
+  const lang = languageOf(gallery.language);
 
   const { results: photos } = await env.DB.prepare("SELECT id, position, has_original FROM photos WHERE gallery_id = ?")
     .bind(gallery.id)
     .all();
   const built = buildOrderLines(body.lines, {
     photosById: new Map(photos.map((p) => [p.id, p])),
-    productsById: new Map(state.products.map((p) => [p.id, p])),
+    // Libellés figés dans la langue de la galerie : ceux que le client a vus.
+    productsById: new Map(state.products.map((p) => [p.id, { ...p, label: productLabelFor(p, lang) }])),
   });
   if (built.error) return fail(400, built.error);
 
-  const shippingCents = state.photographer.shop_shipping_cents || 0;
   const totalCents = built.itemsCents + shippingCents;
   const feeCents = paymentFeeCents(env, state.photographer, totalCents);
   const paymentId = newId("pay");
@@ -557,13 +581,16 @@ export async function handlePrintOrder(request, env, gallery) {
   let session;
   try {
     session = await createCheckoutSession(env, state.photographer.stripe_account_id, {
-      label: `${count} tirage${count > 1 ? "s" : ""} — ${gallery.title}${shippingCents ? " (port compris)" : ""}`,
+      label: pick(lang,
+        `${count} tirage${count > 1 ? "s" : ""} — ${gallery.title}${shippingCents ? " (port compris)" : ""}`,
+        `${count} ${plural(count, "print", "prints")} — ${gallery.title}${shippingCents ? " (shipping included)" : ""}`),
       unitAmountCents: totalCents,
       quantity: 1,
       successUrl,
       cancelUrl,
       metadata: { gallery_id: gallery.id, payment_id: paymentId, print_order_id: orderId, kind: "print" },
       applicationFeeCents: feeCents,
+      locale: lang === "en" ? "en" : undefined,
     });
   } catch (err) {
     if (err.stripeNotConfigured) return fail(503, "Le paiement en ligne n'est pas encore activé");
@@ -666,6 +693,7 @@ export async function handlePrintPaymentConfirmed(env, payment, origin) {
   await clearCart(env, order.gallery_id);
   const lines = parseJson(order.items, []);
   const recipient = parseJson(order.recipient, {});
+  const lang = languageOf(gallery?.language);
 
   // 1. Le labo d'abord : c'est ce que le client a payé.
   const submission = await submitPrintOrder(env, order.id, origin);
@@ -679,10 +707,12 @@ export async function handlePrintPaymentConfirmed(env, payment, origin) {
       gallery,
       photographer,
       clientName: recipient.name,
-      description: `${count} tirage${count > 1 ? "s" : ""} — ${gallery.title}`,
+      description: pick(lang,
+        `${count} tirage${count > 1 ? "s" : ""} — ${gallery.title}`,
+        `${count} ${plural(count, "print", "prints")} — ${gallery.title}`),
       details: [
-        ...lines.map((l) => `${l.copies} × ${l.label} (photo n° ${l.photoNumber}) — ${formatEuros(l.lineCents)}`),
-        `Frais de port — ${formatEuros(order.shipping_cents)}`,
+        ...lines.map((l) => `${l.copies} × ${l.label} (${pick(lang, "photo n°", "photo no.")} ${l.photoNumber}) — ${formatEuros(l.lineCents)}`),
+        `${pick(lang, "Frais de port", "Shipping")} — ${formatEuros(order.shipping_cents)}`,
       ],
     });
     await env.DB.prepare("UPDATE invoices SET emailed_to = ? WHERE id = ?").bind(order.client_email, invoice.id).run();
@@ -693,6 +723,7 @@ export async function handlePrintPaymentConfirmed(env, payment, origin) {
   // 3. Les e-mails (au mieux, jamais bloquants).
   try {
     await sendPrintOrderConfirmation(env, {
+      lang,
       to: order.client_email,
       studioName: photographer?.studio_name,
       galleryTitle: gallery.title,
@@ -773,9 +804,10 @@ export async function handleProdigiCallback(request, env, orderId) {
     .run();
 
   if (mapped.status === "shipped" && order.status !== "shipped") {
-    const gallery = await env.DB.prepare("SELECT title FROM galleries WHERE id = ?").bind(order.gallery_id).first();
+    const gallery = await env.DB.prepare("SELECT title, language FROM galleries WHERE id = ?").bind(order.gallery_id).first();
     try {
       await sendPrintOrderShipped(env, {
+        lang: languageOf(gallery?.language),
         to: order.client_email,
         studioName: photographer?.studio_name,
         galleryTitle: gallery?.title || "",

@@ -5,6 +5,8 @@
 // Purement visuel : rien ici ne change la protection des photos (tuiles,
 // filigrane, empreinte).
 
+import { LANGUAGES, languageOf } from "./i18n.js";
+
 // Styles proposés. "" (classique) est l'apparence historique.
 export const THEMES = ["classique", "doux", "architectural", "moderne", "nuit", "editorial", "romantique", "boheme", "galerie"];
 
@@ -103,6 +105,10 @@ export function readPresentation(body, photoIds) {
     if (video.error) return { error: video.error };
     fields.header_video = video.embedUrl;
   }
+  if (body.language !== undefined) {
+    if (!LANGUAGES.includes(body.language)) return { error: "Langue inconnue" };
+    fields.language = body.language;
+  }
   return { fields };
 }
 
@@ -115,5 +121,6 @@ export function presentationForClient(gallery, photoIds) {
     intro: gallery.intro || "",
     coverPhotoId: gallery.cover_photo_id && photoIds.has(gallery.cover_photo_id) ? gallery.cover_photo_id : "",
     headerVideo: gallery.header_video || "",
+    language: languageOf(gallery.language),
   };
 }

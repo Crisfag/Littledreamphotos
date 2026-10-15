@@ -248,10 +248,19 @@
             <input type="number" name="extraPhotoPrice" min="0" step="0.01" placeholder="ex. 15" />
           </label>
         </div>
-        <label class="ad-field">
-          <span>Style de la galerie <em>(modifiable ensuite, avec aperçu)</em></span>
-          <select name="theme"></select>
-        </label>
+        <div class="ad-field-row">
+          <label class="ad-field">
+            <span>Style de la galerie <em>(modifiable ensuite, avec aperçu)</em></span>
+            <select name="theme"></select>
+          </label>
+          <label class="ad-field">
+            <span>Langue pour votre client</span>
+            <select name="language">
+              <option value="fr" selected>Français</option>
+              <option value="en">English</option>
+            </select>
+          </label>
+        </div>
         <p class="ad-error" id="ad-create-error" hidden></p>
         <div class="ad-modal-actions">
           <button type="button" class="ad-btn" data-close-modal>Annuler</button>
