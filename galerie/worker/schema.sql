@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS photographers (
   plan_interval  TEXT NOT NULL DEFAULT '',   -- 'month' ou 'year' (facturation de l'abonnement)
   trial_used_at  INTEGER,                    -- essai gratuit consommé (une fois par compte)
   founder_at     INTEGER,                    -- place prise dans l'offre Fondateurs
+  referral_code  TEXT NOT NULL DEFAULT '',   -- code de parrainage (src/referral.js), créé au premier affichage
   plan_started_at INTEGER,                   -- début de l'abonnement en cours (start_date Stripe)
   last_login_at  INTEGER,                    -- dernière connexion au tableau de bord
   founder_plan   TEXT NOT NULL DEFAULT '',   -- formule souscrite au prix Fondateurs (offre galeries ou Studio)
@@ -1060,3 +1061,32 @@ CREATE TABLE IF NOT EXISTS client_dates (
 );
 CREATE INDEX IF NOT EXISTS idx_client_dates_client ON client_dates(photographer_id, client_email);
 CREATE INDEX IF NOT EXISTS idx_client_dates_remind ON client_dates(remind);
+
+-- ---------------------------------------------------------------------
+-- Parrainage entre photographes (src/referral.js). Un filleul par compte
+-- créé avec un lien de parrainage ; converted_at : premier paiement du
+-- filleul (−50 % pour lui, une case pour son parrain). referral_rewards :
+-- un mois offert par carte de trois cases, crédité sur le solde Stripe du
+-- parrain (deux au plus sur douze mois glissants, sinon « waiting »).
+--   Base existante : migrations/2026-10-parrainage.sql
+-- ---------------------------------------------------------------------
+CREATE UNIQUE INDEX IF NOT EXISTS idx_photographers_referral_code ON photographers(referral_code) WHERE referral_code != '';
+CREATE TABLE IF NOT EXISTS referrals (
+  filleul_id           TEXT PRIMARY KEY,
+  parrain_id           TEXT NOT NULL,
+  created_at           INTEGER NOT NULL,
+  converted_at         INTEGER,
+  filleul_credit_cents INTEGER NOT NULL DEFAULT 0,
+  filleul_txn_id       TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_referrals_parrain ON referrals(parrain_id, converted_at);
+CREATE TABLE IF NOT EXISTS referral_rewards (
+  parrain_id    TEXT NOT NULL,
+  card          INTEGER NOT NULL,
+  status        TEXT NOT NULL DEFAULT 'waiting',
+  created_at    INTEGER NOT NULL,
+  granted_at    INTEGER,
+  amount_cents  INTEGER NOT NULL DEFAULT 0,
+  stripe_txn_id TEXT NOT NULL DEFAULT '',
+  PRIMARY KEY (parrain_id, card)
+);

@@ -27,6 +27,7 @@ import { handleContractPublic } from "./contracts.js";
 import { runClientReminders } from "./clients.js";
 import { runStoragePurge } from "./storage.js";
 import { plansForPublic } from "./subscription.js";
+import { publicReferral, runReferralRewards } from "./referral.js";
 import { shopState } from "./shop.js";
 import { studioSubdomainOf, handleStudioHost } from "./studio.js";
 import { handlePrintAsset, handleProdigiCallback } from "./shop.js";
@@ -99,6 +100,9 @@ export default {
       } else if (path === "/api/public/plans" && request.method === "GET") {
         // Formules, essai et places Fondateurs restantes (page d'accueil).
         response = await plansForPublic(env);
+      } else if (path.startsWith("/api/public/referral/") && request.method === "GET") {
+        // Lien de parrainage : le studio qui parraine (page d'accueil, inscription).
+        response = await publicReferral(env, decodeURIComponent(path.slice("/api/public/referral/".length)));
       } else if (path.startsWith("/api/portfolio/")) {
         // Mini-site public du photographe (lecture, photos, formulaire de contact).
         response = await handlePortfolioPublic(request, env, path);
@@ -174,6 +178,12 @@ export default {
     ctx.waitUntil(
       runStoragePurge(env).catch((err) => {
         console.error("Purge du stockage : échec :", err && err.stack ? err.stack : err);
+      })
+    );
+    // Parrainage : conversions manquées, mois offerts en attente.
+    ctx.waitUntil(
+      runReferralRewards(env).catch((err) => {
+        console.error("Parrainage : échec de la passe planifiée :", err && err.stack ? err.stack : err);
       })
     );
     // Réservations : rappel au client la veille de sa séance.

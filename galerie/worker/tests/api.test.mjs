@@ -4,6 +4,8 @@
 //   npm run dev:local
 //   node tests/api.test.mjs
 
+import { TERMS_VERSION } from "../src/privacy.js";
+
 const BASE = process.env.BASE || "http://127.0.0.1:8788";
 const SLUG = `essai-${Date.now().toString(36)}`;
 const RUN = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
@@ -1643,6 +1645,25 @@ const freeEmail = `gratuit-${RUN}@test.invalid`;
 const freeSignup = (await signup(freeEmail, "mot-de-passe-gratuit-1234")).data;
 const free = adminClient(freeSignup.token);
 const freeSub = await (await free("GET", "/api/admin/subscription")).json();
+
+// Parrainage : code et lien du compte, studio public, inscription avec le code.
+const referral = await (await free("GET", "/api/admin/subscription/referral")).json();
+const referralPublic = await fetch(`${BASE}/api/public/referral/${referral.code?.toLowerCase()}`);
+const referralPublicBody = await referralPublic.json().catch(() => ({}));
+const referralUnknown = await fetch(`${BASE}/api/public/referral/ZZZZZZZZ`);
+const filleulSignup = await (await fetch(`${BASE}/api/auth/signup`, {
+  method: "POST", headers: { "content-type": "application/json" },
+  body: JSON.stringify({ email: `filleul-${RUN}@test.invalid`, password: "mot-de-passe-filleul-1234", studioName: "Studio filleul", referralCode: referral.code }),
+})).json();
+const filleul = adminClient(filleulSignup.token);
+const afterReferral = await (await free("GET", "/api/admin/subscription/referral")).json();
+const filleulView = await (await filleul("GET", "/api/admin/subscription/referral")).json();
+check("parrainage : code et lien, studio public, inscription avec le code, filleul visible des deux côtés",
+      /^[A-Z2-9]{8}$/.test(referral.code || "") && referral.link?.endsWith(`?parrain=${referral.code}`) && referral.card?.perCard === 3 &&
+      referralPublic.ok && referralPublicBody.studio === "Studio de test" && referralPublicBody.discountPercent === 50 && referralUnknown.status === 404 &&
+      afterReferral.filleuls?.length === 1 && afterReferral.filleuls[0].name === "Studio filleul" && afterReferral.filleuls[0].paid === false &&
+      filleulView.referredBy?.name === "Studio de test" && filleulView.referredBy.rewarded === false && filleulView.code !== referral.code,
+      JSON.stringify({ referral, afterReferral: afterReferral.filleuls, filleulView: filleulView.referredBy }));
 // Scolaire et Studio s'ajoutent une fois le module photo de groupe ouvert (SCHOOL_LAUNCHED).
 const expectedPlans = freeSub.schoolOpen ? "free,essentiel,pro,scolaire,studio" : "free,essentiel,pro";
 check("un nouveau compte démarre en formule Découverte (gratuite), avec les formules proposées",
@@ -1734,7 +1755,7 @@ const exportData = await exportResponse.json();
 check("l'export contient le compte, ses galeries, photos et clients, et l'acceptation des conditions horodatée",
       exportResponse.ok && (exportResponse.headers.get("content-disposition") || "").includes("holypixx-mes-donnees-") &&
       exportData.account?.email === rgpdEmail && typeof exportData.account.terms_accepted_at === "number" &&
-      exportData.account.terms_version === "2026-10-06" &&
+      exportData.account.terms_version === TERMS_VERSION &&
       exportData.galleries?.[0]?.client_email === "famille-rgpd@test.invalid" && exportData.galleries[0].photos?.length === 1,
       JSON.stringify({ terms: exportData.account?.terms_accepted_at, g: exportData.galleries?.length }));
 check("l'export ne contient jamais de secret (empreintes de mot de passe, clé Prodigi chiffrée)",

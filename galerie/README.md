@@ -1095,6 +1095,33 @@ npx wrangler d1 execute galerie-protegee --remote --file=migrations/2026-10-cont
 npm run deploy
 ```
 
+### Parrainage entre photographes
+
+`worker/src/referral.js`. Onglet **Abonnement** : lien de parrainage
+(`https://www.holypixx.com/?parrain=CODE`, code de 8 caractères créé au
+premier affichage), message prêt à envoyer, carte de parrain et liste des
+filleuls.
+
+- **Inscription** : la page d'accueil garde le code (`localStorage`) et le
+  transmet au formulaire d'inscription (`#/inscription?parrain=CODE`), qui
+  affiche « … vous parraine ». Un code inconnu est ignoré ; on ne peut pas
+  se parrainer soi-même.
+- **Déclencheur** : le premier paiement du filleul (abonnement « active »,
+  après l'essai), vu par le webhook ou rattrapé par la passe quotidienne.
+  Rien à l'inscription.
+- **Filleul** : −50 % sur le mois suivant, crédit égal à la moitié d'un mois
+  de sa formule (Fondateurs compris ; en annuel, du prix mensuel normal).
+- **Parrain** : une case par filleul payant ; trois cases = un mois offert
+  (un mois de sa formule), deux au plus sur douze mois glissants. Au-delà,
+  ou sans abonnement payant, le mois offert attend (`referral_rewards`,
+  `waiting`) et la passe quotidienne le crédite dès que possible.
+- **Crédits** : solde client Stripe du compte plateforme
+  (`balance_transactions`), déduit tout seul de la facture suivante, même
+  avec un coupon (offre Fondateurs). Clé d'idempotence par récompense : un
+  crédit ne part jamais deux fois ; un crédit refusé est réessayé.
+- **Mise en service sur une base existante** :
+  `migrations/2026-10-parrainage.sql`. Conditions d'utilisation, article 7.
+
 ### Fiches clients et relances
 
 Onglet **Clients** (toutes les formules) : une fiche par adresse e-mail,
@@ -1760,6 +1787,7 @@ node tests/prodigi.test.mjs           # boutique de tirages (Prodigi), sans rés
 node tests/music.test.mjs             # liens Spotify / Deezer / SoundCloud / YouTube, sans réseau
 node tests/delivery.test.mjs          # ZIP de livraison (en-têtes, CRC, noms), sans réseau
 node tests/subscription.test.mjs      # formules d'abonnement et webhook Stripe, sans réseau
+node tests/referral.test.mjs          # parrainage : carte, plafond, crédits Stripe (SQLite + faux Stripe), sans réseau
 node tests/campaigns.test.mjs         # promotion, panier enregistré, e-mails de relance, sans réseau
 node tests/sales.test.mjs             # tableau de bord des ventes (mois, marge, classements), sans réseau
 node tests/portfolio.test.mjs         # règles du portfolio et e-mail de contact, sans réseau

@@ -14,7 +14,7 @@ import { eraseShopStatements } from "./schoolshop.js";
 
 // Version des conditions acceptées à l'inscription (date de publication des
 // pages legales du site, voir web/conditions.html).
-export const TERMS_VERSION = "2026-10-06";
+export const TERMS_VERSION = "2026-10-15";
 
 // Journaux d'accès aux galeries conservés 13 mois, puis effacés.
 export const ACCESS_LOG_RETENTION_SECONDS = 395 * 24 * 60 * 60;
@@ -115,6 +115,9 @@ export async function deleteAccount(request, env, photographerId, deleteGalleryF
       JOIN schools s ON s.id = y.school_id WHERE s.photographer_id = ?)`).bind(photographerId),
     env.DB.prepare("DELETE FROM school_years WHERE school_id IN (SELECT id FROM schools WHERE photographer_id = ?)").bind(photographerId),
     env.DB.prepare("DELETE FROM schools WHERE photographer_id = ?").bind(photographerId),
+    // Parrainage : ses liens de filleul et de parrain, ses mois offerts.
+    env.DB.prepare("DELETE FROM referrals WHERE filleul_id = ? OR parrain_id = ?").bind(photographerId, photographerId),
+    env.DB.prepare("DELETE FROM referral_rewards WHERE parrain_id = ?").bind(photographerId),
     env.DB.prepare("DELETE FROM photographers WHERE id = ?").bind(photographerId),
   ]);
   return json({ ok: true, deletedGalleries: galleries.length });

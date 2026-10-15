@@ -335,7 +335,7 @@ async function handleAuth(req, res, parts) {
       signupRes = await fetch(`${config.api}/api/auth/signup`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email, password, studioName, firstName, lastName, acceptTerms: true }),
+        body: JSON.stringify({ email, password, studioName, firstName, lastName, acceptTerms: true, referralCode: String(body.referralCode || "").slice(0, 20) }),
       });
     } catch {
       return json(res, 502, { error: "Worker injoignable" });
@@ -462,6 +462,17 @@ async function handleApi(req, res, url) {
   }
 
   if (parts[0] === "auth") return handleAuth(req, res, parts);
+
+  // GET /local/referral/<code> — le studio qui parraine, pour l'écran
+  // d'inscription (public : on n'a pas encore de compte).
+  if (parts.length === 2 && parts[0] === "referral" && req.method === "GET") {
+    try {
+      const r = await fetch(`${config.api}/api/public/referral/${encodeURIComponent(parts[1])}`);
+      return json(res, r.status, await r.json().catch(() => ({})));
+    } catch {
+      return json(res, 502, { error: "Worker injoignable" });
+    }
+  }
 
   // Tout ce qui suit agit au nom d'un compte : session obligatoire.
   const client = await requireSession(req, res);
@@ -968,6 +979,8 @@ async function handleApi(req, res, url) {
     const back = `${isSecureRequest(req) ? "https" : "http"}://${req.headers.host}/#/abonnement`;
     try {
       if (parts.length === 1 && req.method === "GET") return json(res, 200, await client.request("GET", "/api/admin/subscription"));
+      // Parrainage : lien, carte de fidélité, filleuls.
+      if (parts.length === 2 && parts[1] === "referral" && req.method === "GET") return json(res, 200, await client.request("GET", "/api/admin/subscription/referral"));
       if (parts.length === 2 && (parts[1] === "checkout" || parts[1] === "portal") && req.method === "POST") {
         const body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
         return json(res, 200, await client.request("POST", `/api/admin/subscription/${parts[1]}`, { plan: body.plan, interval: body.interval, returnUrl: back }));
