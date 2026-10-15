@@ -144,8 +144,35 @@
 
   function showLogin() {
     // Le bouton « Créer un compte » du site mène à #/inscription.
-    showLoginCard(location.hash === "#/inscription" ? "ad-signup-card" : "ad-login-card");
+    showLoginCard(location.hash.indexOf("#/inscription") === 0 ? "ad-signup-card" : "ad-login-card");
   }
+
+  // Lien de parrainage (holypixx.com/?parrain=CODE → #/inscription?parrain=CODE) :
+  // le code est gardé dans le navigateur le temps de s'inscrire.
+  var REFERRAL_KEY = "holypixx-parrain";
+  function referralCode() {
+    var match = /[?&]parrain=([A-Za-z0-9-]{6,20})/.exec(location.hash + "&" + location.search);
+    var code = match ? match[1].toUpperCase().replace(/[^A-Z0-9]/g, "") : "";
+    try {
+      if (code) localStorage.setItem(REFERRAL_KEY, code);
+      else code = localStorage.getItem(REFERRAL_KEY) || "";
+    } catch (err) { /* navigation privée : le code de l'adresse suffit */ }
+    return code;
+  }
+  async function showReferralBanner() {
+    var code = referralCode();
+    var banner = document.getElementById("ad-signup-referral");
+    if (!code || !banner) return;
+    try {
+      var response = await fetch("/local/referral/" + encodeURIComponent(code));
+      if (!response.ok) return;
+      var data = await response.json();
+      banner.innerHTML = "<strong>" + esc(data.studio) + "</strong> vous parraine : −" + Number(data.discountPercent) +
+        " % sur votre mois suivant, dès votre premier paiement.";
+      banner.hidden = false;
+    } catch (err) { /* sans bandeau, l'inscription garde le code */ }
+  }
+  showReferralBanner();
 
   function showApp(photographer) {
     el.login.hidden = true;
@@ -1569,6 +1596,7 @@
       (data.stripeConfigured || data.owner ? "" : '<p class="ad-hint">Le paiement des abonnements n\'est pas encore ouvert sur la plateforme.</p>') +
       founderBanner + intervalSwitch +
       '<div class="ad-plans" id="ad-plans">' + cardsHtml() + "</div>" +
+      '<section class="ad-referral" id="ad-referral" hidden></section>' +
       '<p class="ad-hint">Prix TTC. Les fichiers HD livrés et les fichiers d\'impression d\'une galerie expirée depuis ' +
       ((data.usage.storage && data.usage.storage.purgeAfterExpiryDays) || 90) + " jours sont effacés automatiquement, avec un e-mail de rappel 14 jours avant ; les photos de la galerie restent. " +
       'Paiement sécurisé par Stripe ; factures disponibles dans « Gérer mon abonnement ». ' +
@@ -1605,6 +1633,7 @@
     }
     wireSubscribe();
     wireScolaire();
+    renderReferral();
     el.view.querySelectorAll("[data-interval]").forEach(function (btn) {
       btn.addEventListener("click", function () {
         interval = subscriptionInterval = btn.getAttribute("data-interval");
@@ -1626,6 +1655,71 @@
         }
       });
     });
+  }
+
+  /* ---------- Parrainage : lien et carte de fidélité ---------- */
+  // Le confrère parrainé a −50 % sur son mois suivant dès son premier
+  // paiement ; chaque confrère abonné remplit une case de la carte, trois
+  // cases font un mois offert (deux au plus par an). Voir worker/src/referral.js.
+
+  async function renderReferral() {
+    var box = document.getElementById("ad-referral");
+    if (!box) return;
+    var ref;
+    try {
+      ref = await api("GET", "/subscription/referral");
+    } catch (err) {
+      return; // le reste de l'onglet reste utilisable
+    }
+    if (!document.body.contains(box)) return;
+    var card = ref.card;
+    var stamps = "";
+    for (var i = 0; i < card.perCard; i++) {
+      stamps += '<span class="ad-ref-stamp' + (i < card.stamps ? " on" : "") + '">' +
+        (i < card.stamps ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>' : "") + "</span>";
+    }
+    var left = card.perCard - card.stamps;
+    var progress = card.stamps
+      ? "Encore " + left + " confrère" + (left > 1 ? "s" : "") + " abonné" + (left > 1 ? "s" : "") + " pour un mois offert."
+      : "Trois confrères abonnés, un mois offert.";
+    var rewards = [];
+    if (card.granted) rewards.push(card.granted + " mois offert" + (card.granted > 1 ? "s" : "") + (card.grantedThisYear ? " (dont " + card.grantedThisYear + " ces douze derniers mois)" : ""));
+    if (card.waiting) {
+      rewards.push(card.waiting + " en attente" + (card.room === 0 && card.nextFreeAt
+        ? " : plafond de " + ref.maxPerYear + " mois par an atteint, crédité le " + formatDate(card.nextFreeAt)
+        : " : crédité dès que vous avez un abonnement payant"));
+    }
+    var message = "Je gère mes galeries clients avec Holypixx : photos protégées, sélection, tirages et réservation en ligne. " +
+      "Avec mon lien, tu as −" + ref.discountPercent + " % sur ton mois suivant dès ton abonnement : " + ref.link;
+    var filleuls = ref.filleuls.length
+      ? '<ul class="ad-ref-list">' + ref.filleuls.map(function (f) {
+          return "<li><span>" + esc(f.name) + '</span><span class="ad-hint">' +
+            (f.paid ? '<span class="ad-ref-ok">Abonné · case gagnée</span>' : "Inscrit le " + esc(formatDate(f.since)) + ", pas encore abonné") + "</span></li>";
+        }).join("") + "</ul>"
+      : '<p class="ad-hint">Aucun confrère parrainé pour l\'instant.</p>';
+    box.innerHTML =
+      '<div class="ad-section-header"><h3>Parrainez un confrère</h3></div>' +
+      (ref.referredBy ? '<p class="ad-banner ad-banner-muted">Parrainé par <strong>' + esc(ref.referredBy.name) + "</strong> : " +
+        (ref.referredBy.rewarded ? "votre −" + ref.discountPercent + " % est déduit de votre prochaine facture" + (ref.referredBy.creditCents ? " (" + esc(euros(ref.referredBy.creditCents)) + ")" : "") + "."
+          : "−" + ref.discountPercent + " % sur votre mois suivant, dès votre premier paiement.") + "</p>" : "") +
+      '<div class="ad-ref-grid">' +
+      '<div class="ad-ref-card" role="img" aria-label="Carte de fidélité : ' + card.stamps + " case" + (card.stamps > 1 ? "s" : "") + " sur " + card.perCard + '">' +
+      '<p class="ad-ref-card-title">Votre carte de parrain</p>' +
+      '<div class="ad-ref-stamps">' + stamps + "</div>" +
+      '<p class="ad-ref-card-gift">= 1 mois offert</p>' +
+      "</div>" +
+      '<div class="ad-ref-side">' +
+      "<p>" + esc(progress) + "</p>" +
+      (rewards.length ? '<p class="ad-hint">' + esc(rewards.join(" · ")) + "</p>" : "") +
+      '<p class="ad-hint">Votre confrère a −' + ref.discountPercent + " % sur son mois suivant dès son premier paiement, et vous gagnez une case. " +
+      "Trois cases, un mois offert, " + ref.maxPerYear + " au plus par an. Les mois offerts sont déduits de vos prochaines factures.</p>" +
+      '<label class="ad-field"><span>Votre lien</span><div class="ad-copy-row"><input type="text" id="ad-ref-link" readonly value="' + esc(ref.link) + '" />' +
+      '<button type="button" class="ad-btn" data-copy="ad-ref-link">Copier</button></div></label>' +
+      '<label class="ad-field"><span>Message prêt à envoyer</span><textarea id="ad-ref-message" rows="4" readonly>' + esc(message) + "</textarea></label>" +
+      '<button type="button" class="ad-btn" data-copy="ad-ref-message">Copier le message</button>' +
+      "</div></div>" +
+      '<h4 class="ad-ref-heading">Vos filleuls</h4>' + filleuls;
+    box.hidden = false;
   }
 
   /* ---------- Livraison des photos définitives ---------- */
@@ -4134,10 +4228,12 @@
           firstName: form.firstName.value.trim(),
           lastName: form.lastName.value.trim(),
           acceptTerms: form.acceptTerms.checked,
+          referralCode: referralCode(),
         }),
       });
       var data = await response.json().catch(function () { return {}; });
       if (!response.ok) throw new Error(data.error || "Inscription refusée");
+      try { localStorage.removeItem(REFERRAL_KEY); } catch (err) { /* rien à effacer */ }
       form.reset();
       showApp(data.photographer);
       bootstrap();

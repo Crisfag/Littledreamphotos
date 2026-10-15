@@ -5,6 +5,7 @@
 // client ne peut jamais être rejoué comme jeton d'administration, et
 // inversement, puisque les deux sont signés avec des clés différentes.
 
+import { recordReferral } from "./referral.js";
 import { json, fail } from "./http.js";
 import { TERMS_VERSION } from "./privacy.js";
 import { feeRuleForAdmin } from "./fees.js";
@@ -137,6 +138,9 @@ async function signup(request, env) {
     .bind(id, email, hash, salt, studioName, firstName, lastName, now(),
       body.acceptTerms === true ? now() : null, body.acceptTerms === true ? TERMS_VERSION : "")
     .run();
+
+  // Lien de parrainage : un code inconnu est ignoré, l'inscription aboutit.
+  if (body.referralCode) await recordReferral(env, id, body.referralCode).catch(() => false);
 
   const photographer = { id, email, studio_name: studioName, first_name: firstName, last_name: lastName };
   const token = await issueSession(env, photographer);

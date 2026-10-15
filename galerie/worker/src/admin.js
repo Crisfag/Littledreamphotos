@@ -15,6 +15,7 @@ import { sendDeliveryReady } from "./notify.js";
 import { exportAccount, deleteAccount } from "./privacy.js";
 import { galleryQuotaRefusal, subscriptionForAdmin, startSubscriptionCheckout, openBillingPortal, syncSubscription, setScolairePlan, hasFeature, featureRefusal } from "./subscription.js";
 import { handleSchoolAdmin } from "./school.js";
+import { referralForAdmin } from "./referral.js";
 import { handleBookingAdmin, deleteBookingFiles } from "./booking.js";
 import { THEMES, themeOf, readPresentation, linkOfEmbed } from "./presentation.js";
 import { handleContractsAdmin } from "./contracts.js";
@@ -930,6 +931,8 @@ export async function handleAdmin(request, env, ctx, path) {
     if (parts.length === 4 && parts[3] === "portal" && request.method === "POST") return openBillingPortal(request, env, photographer);
     if (parts.length === 4 && parts[3] === "sync" && request.method === "POST") return syncSubscription(request, env, photographer);
     if (parts.length === 4 && parts[3] === "scolaire" && request.method === "POST") return setScolairePlan(request, env, photographer);
+    // Parrainage : lien, carte de fidélité, filleuls (src/referral.js).
+    if (parts.length === 4 && parts[3] === "referral" && request.method === "GET") return json(await referralForAdmin(env, photographer));
   }
   // Droits RGPD : export de toutes les données du compte, suppression définitive.
   if (section === "account" && parts[3] === "export" && parts.length === 4 && request.method === "GET") {

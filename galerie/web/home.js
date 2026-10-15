@@ -12,8 +12,30 @@
   /* ---------- Liens et année ---------- */
 
   var admin = config.adminUrl || "#";
+  // Lien de parrainage (?parrain=CODE) : gardé dans le navigateur et transmis
+  // à l'inscription, qui crédite le −50 % au premier paiement.
+  var referral = "";
+  try {
+    var refMatch = /[?&]parrain=([A-Za-z0-9-]{6,20})/.exec(location.search);
+    referral = refMatch ? refMatch[1].toUpperCase().replace(/[^A-Z0-9]/g, "") : "";
+    if (referral) localStorage.setItem("holypixx-parrain", referral);
+    else referral = localStorage.getItem("holypixx-parrain") || "";
+  } catch (err) { /* navigation privée : seul le lien compte */ }
+  var signupUrl = admin + "#/inscription" + (referral ? "?parrain=" + encodeURIComponent(referral) : "");
   document.querySelectorAll("[data-admin]").forEach(function (a) { a.href = admin; });
-  document.querySelectorAll("[data-signup]").forEach(function (a) { a.href = admin + "#/inscription"; });
+  document.querySelectorAll("[data-signup]").forEach(function (a) { a.href = signupUrl; });
+  var referralNote = document.getElementById("referral-note");
+  if (referral && referralNote && config.api && window.fetch) {
+    fetch(String(config.api).replace(/\/+$/, "") + "/api/public/referral/" + encodeURIComponent(referral))
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (data) {
+        if (!data || !data.studio) return;
+        referralNote.querySelector("strong").textContent = data.studio;
+        referralNote.querySelector("[data-ref-percent]").textContent = String(Number(data.discountPercent) || 50);
+        referralNote.hidden = false;
+      })
+      .catch(function () { /* sans réponse, le lien garde le code */ });
+  }
   var year = document.getElementById("year");
   if (year) year.textContent = String(new Date().getFullYear());
 

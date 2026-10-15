@@ -35,7 +35,7 @@ function flatten(params, prefix, out) {
 // désignés par leur identifiant dans le corps de la requête (`account`,
 // `transfer_data.destination`, …), jamais par une charge agissant
 // directement sur leur compte — voir `createCheckoutSession`.
-async function stripeRequest(env, method, path, params) {
+async function stripeRequest(env, method, path, params, { idempotencyKey = "" } = {}) {
   if (!env.STRIPE_SECRET_KEY) {
     const err = new Error("STRIPE_SECRET_KEY n'est pas configurée");
     err.stripeNotConfigured = true;
@@ -48,6 +48,7 @@ async function stripeRequest(env, method, path, params) {
       authorization: `Bearer ${env.STRIPE_SECRET_KEY}`,
       "content-type": "application/x-www-form-urlencoded",
       "Stripe-Version": API_VERSION,
+      ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
     },
     body,
   });
@@ -211,6 +212,17 @@ export async function ensureCoupon(env, coupon) {
   } catch (err) {
     if (err.stripeCode !== "resource_already_exists") throw err;
   }
+}
+
+// Crédit sur le solde d'un client de la plateforme (parrainage) : Stripe le
+// déduit tout seul de ses prochaines factures d'abonnement. La clé
+// d'idempotence empêche de créditer deux fois la même récompense.
+export function creditCustomerBalance(env, customerId, { amountCents, description, idempotencyKey }) {
+  return stripeRequest(env, "POST", `/customers/${encodeURIComponent(customerId)}/balance_transactions`, {
+    amount: -Math.abs(Math.round(amountCents)),
+    currency: "eur",
+    description,
+  }, { idempotencyKey });
 }
 
 // Portail client Stripe : changer de carte, de formule, télécharger ses

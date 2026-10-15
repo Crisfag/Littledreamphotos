@@ -15,6 +15,7 @@
 import { json, fail } from "./http.js";
 import { createSubscriptionCheckout, createBillingPortalSession, ensureCoupon, retrieveCheckoutSession, searchPhotographerSubscriptions } from "./stripe.js";
 import { storageForAdmin } from "./storage.js";
+import { convertReferral, settleRewards } from "./referral.js";
 
 export const PLANS = {
   free: {
@@ -479,6 +480,20 @@ export async function openBillingPortal(request, env, photographer) {
 
 /* ---------- Webhook (évènements du compte plateforme) ---------- */
 
+// Parrainage : premier paiement d'un filleul (−50 % pour lui, une case pour
+// son parrain), et mois offerts en attente d'un parrain qui vient de
+// s'abonner. Ne fait jamais échouer le webhook : la passe quotidienne
+// rattrape ce qui n'a pas pu se faire ici.
+async function referralAfterPayment(env, photographerId) {
+  try {
+    await convertReferral(env, photographerId);
+    const waiting = await env.DB.prepare("SELECT 1 FROM referral_rewards WHERE parrain_id = ? AND status = 'waiting' LIMIT 1").bind(photographerId).first();
+    if (waiting) await settleRewards(env, photographerId);
+  } catch (err) {
+    console.error("Parrainage après paiement :", err && err.message ? err.message : err);
+  }
+}
+
 export function planKeyFromSubscription(subscription) {
   const fromMetadata = subscription?.metadata?.plan;
   if (PLANS[fromMetadata]) return fromMetadata;
@@ -512,6 +527,7 @@ export async function handleSubscriptionEvent(env, event) {
         .bind(planKey, trial ? "trialing" : "active", object.customer || "", object.subscription || "",
               trial ? 1 : 0, now(), founder ? 1 : 0, now(), now(), founder ? 1 : 0, planKey, photographerId)
         .run();
+      await referralAfterPayment(env, photographerId);
     }
     return true;
   }
@@ -546,6 +562,7 @@ export async function handleSubscriptionEvent(env, event) {
         interval, interval, !deleted && object.start_date ? 1 : 0, object.start_date || null, photographer.id
       )
       .run();
+    if (!deleted) await referralAfterPayment(env, photographer.id);
     return true;
   }
   return false;
