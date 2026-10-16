@@ -111,10 +111,18 @@ async function createGallery(request, env, photographerId) {
   if (!SLUG_RE.test(slug)) {
     return fail(400, "Slug invalide (minuscules, chiffres et tirets, 2 à 61 caractères)");
   }
-  // Nombre de galeries actives limité selon la formule (voir subscription.js).
+  // Galerie de démonstration (voir tools/lib/demo.mjs) : une au plus par
+  // compte, hors quota — sinon le nombre de galeries actives est limité
+  // selon la formule (voir subscription.js).
+  const demo = body.demo === true;
   const owner = await env.DB.prepare("SELECT * FROM photographers WHERE id = ?").bind(photographerId).first();
-  const quotaRefusal = await galleryQuotaRefusal(env, owner);
-  if (quotaRefusal) return quotaRefusal;
+  if (demo) {
+    const existingDemo = await env.DB.prepare("SELECT id FROM galleries WHERE photographer_id = ? AND demo = 1").bind(photographerId).first();
+    if (existingDemo) return fail(409, "Vous avez déjà une galerie de démonstration");
+  } else {
+    const quotaRefusal = await galleryQuotaRefusal(env, owner);
+    if (quotaRefusal) return quotaRefusal;
+  }
   const password = String(body.password || "");
   if (password.length < 8) return fail(400, "Mot de passe trop court (8 caractères minimum)");
 
@@ -157,8 +165,8 @@ async function createGallery(request, env, photographerId) {
   await env.DB.prepare(
     `INSERT INTO galleries
        (id, photographer_id, slug, title, client_name, client_email, password_hash, password_salt, watermark_text, expires_at,
-        included_photos, extra_photo_price_cents, layout, theme, language, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        included_photos, extra_photo_price_cents, layout, theme, language, demo, demo_password, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   )
     .bind(
       id,
@@ -176,6 +184,8 @@ async function createGallery(request, env, photographerId) {
       photographer?.default_layout || "grille",
       theme,
       language,
+      demo ? 1 : 0,
+      demo ? password : null,
       now()
     )
     .run();
@@ -186,7 +196,7 @@ async function createGallery(request, env, photographerId) {
 async function listGalleries(env, photographerId) {
   const { results } = await env.DB.prepare(
     `SELECT g.id, g.slug, g.title, g.client_name, g.expires_at, g.created_at,
-            g.included_photos, g.extra_photo_price_cents, g.selection_done_at,
+            g.included_photos, g.extra_photo_price_cents, g.selection_done_at, g.demo,
             (SELECT COUNT(*) FROM photos p WHERE p.gallery_id = g.id) AS photo_count,
             (SELECT COUNT(*) FROM photos p WHERE p.gallery_id = g.id AND p.selected = 1) AS selected_count,
             (SELECT COUNT(*) FROM photos p WHERE p.gallery_id = g.id AND p.comment != '') AS comment_count,
@@ -253,6 +263,10 @@ async function getGallery(env, photographerId, slug) {
       watermark_text: gallery.watermark_text,
       expires_at: gallery.expires_at,
       created_at: gallery.created_at,
+      demo: Boolean(gallery.demo),
+      // Montré au seul photographe, pour ouvrir sa démo comme un client ;
+      // absent de toute autre galerie (aucun mot de passe n'en sort jamais).
+      ...(gallery.demo ? { demo_password: gallery.demo_password || "" } : {}),
       login_background_type: gallery.login_background_type,
       login_background_color: gallery.login_background_color,
       layout: gallery.layout,
@@ -307,7 +321,9 @@ async function regeneratePassword(request, env, photographerId, slug) {
   if (password.length < 8) return fail(400, "Mot de passe trop court (8 caractères minimum)");
 
   const { hash, salt } = await hashPassword(password);
-  await env.DB.prepare("UPDATE galleries SET password_hash = ?, password_salt = ? WHERE id = ?")
+  // Nouveau mot de passe : celui de la démo, gardé pour l'affichage, ne
+  // vaut plus rien et disparaît.
+  await env.DB.prepare("UPDATE galleries SET password_hash = ?, password_salt = ?, demo_password = NULL WHERE id = ?")
     .bind(hash, salt, gallery.id)
     .run();
 
@@ -669,7 +685,7 @@ async function listInvoices(env, photographerId) {
 // l'onglet Facturation.
 async function getStats(env, photographerId) {
   const galleriesRow = await env.DB.prepare(
-    "SELECT COUNT(*) AS n FROM galleries WHERE photographer_id = ? AND kind != 'school'"
+    "SELECT COUNT(*) AS n FROM galleries WHERE photographer_id = ? AND kind != 'school' AND demo = 0"
   )
     .bind(photographerId)
     .first();
@@ -687,7 +703,7 @@ async function getStats(env, photographerId) {
     `SELECT g.included_photos, g.extra_photo_price_cents,
             (SELECT COUNT(*) FROM photos p WHERE p.gallery_id = g.id AND p.selected = 1) AS selected_count,
             (SELECT COALESCE(SUM(extra_count), 0) FROM payments WHERE payments.gallery_id = g.id AND payments.status = 'paid') AS paid_extra_count
-     FROM galleries g WHERE g.photographer_id = ?`
+     FROM galleries g WHERE g.photographer_id = ? AND g.demo = 0`
   )
     .bind(photographerId)
     .all();

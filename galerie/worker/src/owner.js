@@ -40,12 +40,12 @@ async function listPhotographers(env, photographerId) {
             p.stripe_charges_enabled, p.plan, p.plan_status, p.plan_interval, p.plan_renews_at,
             p.plan_cancel_at_period_end, p.plan_started_at, p.trial_used_at, p.founder_at,
             p.stripe_customer_id, p.stripe_account_id,
-            (SELECT COUNT(*) FROM galleries g WHERE g.photographer_id = p.id) AS galleries_count,
+            (SELECT COUNT(*) FROM galleries g WHERE g.photographer_id = p.id AND g.demo = 0) AS galleries_count,
             (SELECT COUNT(*) FROM photos ph JOIN galleries g ON g.id = ph.gallery_id
-             WHERE g.photographer_id = p.id) AS photos_count,
+             WHERE g.photographer_id = p.id AND g.demo = 0) AS photos_count,
             (SELECT COALESCE(SUM(pay.amount_cents), 0) FROM payments pay JOIN galleries g ON g.id = pay.gallery_id
              WHERE g.photographer_id = p.id AND pay.status = 'paid') AS sales_cents,
-            (SELECT MAX(g.created_at) FROM galleries g WHERE g.photographer_id = p.id) AS last_gallery_at
+            (SELECT MAX(g.created_at) FROM galleries g WHERE g.photographer_id = p.id AND g.demo = 0) AS last_gallery_at
      FROM photographers p ORDER BY p.created_at DESC`
   ).all();
 
@@ -112,8 +112,11 @@ async function platformStats(env, photographerId) {
   if (!owner) return fail(403, "Accès réservé");
 
   const photographersRow = await env.DB.prepare("SELECT COUNT(*) AS n FROM photographers").first();
-  const galleriesRow = await env.DB.prepare("SELECT COUNT(*) AS n FROM galleries").first();
-  const photosRow = await env.DB.prepare("SELECT COUNT(*) AS n FROM photos").first();
+  // Galeries de démonstration exclues : elles ne disent rien de l'usage réel.
+  const galleriesRow = await env.DB.prepare("SELECT COUNT(*) AS n FROM galleries WHERE demo = 0").first();
+  const photosRow = await env.DB.prepare(
+    "SELECT COUNT(*) AS n FROM photos WHERE gallery_id IN (SELECT id FROM galleries WHERE demo = 0)"
+  ).first();
 
   const salesRow = await env.DB.prepare(
     `SELECT COUNT(*) AS n, COALESCE(SUM(amount_cents), 0) AS amount_cents,
@@ -130,7 +133,7 @@ async function platformStats(env, photographerId) {
             (SELECT COUNT(*) FROM photos p WHERE p.gallery_id = g.id AND p.selected = 1) AS selected_count,
             (SELECT COALESCE(SUM(extra_count), 0) FROM payments
              WHERE payments.gallery_id = g.id AND payments.status = 'paid') AS paid_extra_count
-     FROM galleries g`
+     FROM galleries g WHERE g.demo = 0`
   ).all();
 
   let dueExtraCount = 0;

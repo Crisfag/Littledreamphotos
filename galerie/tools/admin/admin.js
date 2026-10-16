@@ -334,6 +334,7 @@
     "Connexion refusée": "Sign-in refused",
     "Réinitialisation refusée": "Reset refused",
     "Confirmation refusée": "Confirmation refused",
+    "Vous avez déjà une galerie de démonstration": "You already have a demo gallery",
     "Échec de l'analyse de l'image": "Image analysis failed",
     "Impossible de démarrer la connexion à Stripe": "Could not start the Stripe connection",
     "Impossible de générer un identifiant unique": "Could not generate a unique ID",
@@ -714,8 +715,20 @@
         statsBar +
         header +
         '<div class="ad-empty"><h2>' + L("Aucune galerie pour le moment", "No galleries yet") + "</h2>" +
-        "<p>" + L("Cliquez sur « Nouvelle galerie » pour envoyer votre première séance.", "Click “New gallery” to send your first session.") + "</p></div>";
+        "<p>" + L("Cliquez sur « Nouvelle galerie » pour envoyer votre première séance — ou voyez d'abord ce que vit votre client, avec une galerie de démonstration toute prête.",
+          "Click “New gallery” to send your first session — or first see what your client experiences, with a ready-made demo gallery.") + "</p>" +
+        '<button type="button" class="ad-btn" id="ad-start-demo">' + L("Voir une galerie de démonstration", "See a demo gallery") + "</button></div>";
       document.getElementById("ad-new-gallery").addEventListener("click", openCreateModal);
+      document.getElementById("ad-start-demo").addEventListener("click", async function () {
+        this.disabled = true;
+        try {
+          var demo = await api("POST", "/demo");
+          renderDetail(demo.slug);
+        } catch (err) {
+          this.disabled = false;
+          toast(err.message, true);
+        }
+      });
       return;
     }
 
@@ -741,6 +754,7 @@
         (g.selection_done_at
           ? '<span class="ad-badge ad-badge-validated" title="' + L("Sélection validée le ", "Selection confirmed on ") + formatDate(g.selection_done_at) + '">' + L("✓ Validée", "✓ Confirmed") + "</span>"
           : "") +
+        (g.demo ? '<span class="ad-badge ad-badge-demo">' + L("Démo", "Demo") + "</span>" : "") +
         (status.label ? '<span class="ad-badge ' + status.cls + '">' + esc(status.label) + "</span>" : "") +
         "</div>" +
         "</article>"
@@ -4188,11 +4202,122 @@
     }).join("");
   }
 
-  async function renderDetail(slug, skipHash) {
+  /* ---------- Galerie de démonstration (créée à l'inscription) ---------- */
+  // Un guide en tête de la fiche : l'ouvrir comme un client, tenter une
+  // capture, lire la sélection de la cliente simulée. Les photos arrivent
+  // en arrière-plan juste après l'inscription : on suit leur arrivée.
+
+  var demoPoll = null;
+
+  function demoGuideHtml(data) {
+    var g = data.gallery;
+    var expected = data.demoExpected || 0;
+    var ready = data.photos.length;
+    var preparing = expected > 0 && ready < expected;
+    var selected = data.photos.filter(isSelected).length;
+    var openable = /^https?:/.test(data.link || "");
+    return (
+      '<section class="ad-demo" id="ad-demo">' +
+      '<div class="ad-demo-head">' +
+      '<p class="ad-demo-kicker">' + L("Galerie de démonstration", "Demo gallery") + "</p>" +
+      "<h3>" + L("Voici exactement ce que vit votre client.", "This is exactly what your client experiences.") + "</h3>" +
+      "<p>" + L("Des photos libres de droits, protégées comme le seront les vôtres : découpées en tuiles, filigranées au nom de votre studio, marquées d'une empreinte invisible. Cette galerie ne compte pas dans votre formule.",
+        "Royalty-free photos, protected just like yours will be: cut into tiles, watermarked with your studio's name, marked with an invisible fingerprint. This gallery doesn't count towards your plan.") + "</p>" +
+      "</div>" +
+      (preparing
+        ? '<p class="ad-demo-progress" role="status"><span class="ad-demo-spinner" aria-hidden="true"></span><span>' +
+          L("Préparation des photos : ", "Preparing the photos: ") + ready + " / " + expected + "…</span></p>"
+        : (expected && !selected && Date.now() / 1000 - (g.created_at || 0) < 300
+          ? '<p class="ad-demo-progress" role="status"><span class="ad-demo-spinner" aria-hidden="true"></span><span>' + L("La famille Martin fait sa sélection…", "The Martins are making their selection…") + "</span></p>"
+          : "")) +
+      '<ol class="ad-demo-steps">' +
+      "<li><strong>" + L("Ouvrez-la comme votre client", "Open it as your client") + "</strong>" +
+      "<span>" + L("Le lien et le mot de passe, tels que vous les enverrez :", "The link and password, just as you'll send them:") + "</span>" +
+      '<div class="ad-demo-access">' +
+      '<div class="ad-copy-row"><input type="text" readonly value="' + esc(data.link) + '" id="ad-demo-link" aria-label="' + L("Lien", "Link") + '" />' +
+      (openable ? '<a class="ad-btn ad-btn-primary" href="' + esc(data.link) + '" target="_blank" rel="noopener">' + L("Ouvrir", "Open") + "</a>" : '<button type="button" class="ad-btn" data-copy="ad-demo-link">' + L("Copier", "Copy") + "</button>") +
+      "</div>" +
+      (g.demo_password
+        ? '<div class="ad-copy-row"><input type="text" readonly value="' + esc(g.demo_password) + '" id="ad-demo-password" aria-label="' + L("Mot de passe", "Password") + '" />' +
+          '<button type="button" class="ad-btn" data-copy="ad-demo-password">' + L("Copier le mot de passe", "Copy password") + "</button></div>"
+        : "") +
+      "</div></li>" +
+      "<li><strong>" + L("Essayez de la copier", "Try to copy it") + "</strong>" +
+      "<span>" + L("Dans la galerie, appuyez sur Impr. écran (⌘ Maj 4 sur Mac) : l'image se voile et l'alerte arrive dans votre boîte e-mail. Le clic droit, lui, n'offre rien à enregistrer.",
+        "In the gallery, press Print Screen (⌘ Shift 4 on a Mac): the image is veiled and the alert lands in your inbox. Right-click offers nothing to save.") + "</span></li>" +
+      "<li><strong>" + L("Lisez la sélection de la famille Martin", "Read the Martins' selection") + "</strong>" +
+      "<span>" + (selected
+        ? L(selected + " coups de cœur pour un forfait de " + (g.included_photos || 0) + " photos : " + (g.due_extra_count || 0) + " suppléments, " + formatEuros(g.due_total_cents || 0) + ", à régler en ligne. Son commentaire et ses codes couleur sont sur les photos, plus bas.",
+            selected + " favourites for a " + (g.included_photos || 0) + "-photo package: " + (g.due_extra_count || 0) + " extras, " + formatEuros(g.due_total_cents || 0) + ", to be paid online. Their note and colour codes are on the photos below.")
+        : L("Dès que les photos sont prêtes, la famille fait sa sélection : coups de cœur, commentaire, codes couleur.", "As soon as the photos are ready, the family makes their selection: favourites, a note, colour codes.")) +
+      "</span></li>" +
+      "<li><strong>" + L("Changez le style", "Change the style") + "</strong>" +
+      "<span>" + L("Choisissez un autre style ou une autre mise en page plus bas, puis rechargez la galerie client.", "Pick another style or layout below, then reload the client gallery.") + "</span></li>" +
+      "</ol>" +
+      '<div class="ad-demo-foot">' +
+      '<button type="button" class="ad-btn ad-btn-primary" id="ad-demo-create">' + L("Créer ma première vraie galerie", "Create my first real gallery") + "</button>" +
+      '<button type="button" class="ad-link-btn" id="ad-demo-delete">' + L("Supprimer la démo", "Delete the demo") + "</button>" +
+      "</div>" +
+      "</section>"
+    );
+  }
+
+  function wireDemoGuide(slug, data) {
+    if (demoPoll) { clearTimeout(demoPoll); demoPoll = null; }
+    if (!data.gallery.demo) return;
+    document.getElementById("ad-demo-create").addEventListener("click", openCreateModal);
+    document.getElementById("ad-demo-delete").addEventListener("click", function () {
+      confirmAction(L("Supprimer la galerie de démonstration ? Vous pourrez en recréer une depuis l'onglet Galeries tant que vous n'en avez aucune.",
+        "Delete the demo gallery? You can create a new one from the Galleries tab while you have no galleries."), async function () {
+        try {
+          await api("DELETE", "/galleries/" + encodeURIComponent(slug));
+          toast(L("Démo supprimée.", "Demo deleted."));
+          renderList();
+        } catch (err) {
+          toast(err.message, true);
+        }
+      });
+    });
+    // Photos encore en route (juste après l'inscription) : on suit leur
+    // arrivée sur la ligne de progression seulement, puis on recharge la
+    // fiche une seule fois, quand la famille a fait sa sélection — jamais
+    // pendant que le photographe remplit un champ.
+    var expected = data.demoExpected || 0;
+    var startedAt = (data.gallery.created_at || 0) * 1000;
+    var settled = function (d) { return d.photos.length >= expected && d.photos.some(isSelected); };
+    if (!expected || settled(data) || Date.now() - startedAt > 5 * 60 * 1000) return;
+    var hash = location.hash;
+    var tick = async function () {
+      demoPoll = null;
+      if (location.hash !== hash) return;
+      var fresh;
+      try {
+        fresh = await api("GET", "/galleries/" + encodeURIComponent(slug));
+      } catch (err) {
+        fresh = null;
+      }
+      if (location.hash !== hash) return;
+      var done = fresh && (settled(fresh) || Date.now() - startedAt > 5 * 60 * 1000);
+      var typing = document.activeElement && el.view.contains(document.activeElement) && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName);
+      if (done && !typing) return renderDetail(slug, true, { keepScroll: true });
+      var line = document.querySelector("#ad-demo .ad-demo-progress");
+      if (line && fresh) {
+        line.lastChild.textContent = fresh.photos.length < expected
+          ? L("Préparation des photos : ", "Preparing the photos: ") + fresh.photos.length + " / " + expected + "…"
+          : L("La famille Martin fait sa sélection…", "The Martins are making their selection…");
+      }
+      demoPoll = setTimeout(tick, 3000);
+    };
+    demoPoll = setTimeout(tick, 3000);
+  }
+
+  async function renderDetail(slug, skipHash, options) {
     var hash = "#/g/" + encodeURIComponent(slug);
     if (!skipHash && location.hash !== hash) history.pushState(null, "", hash);
     setActiveTab("galleries");
-    el.view.innerHTML = '<p class="ad-loading">' + L("Chargement…", "Loading…") + "</p>";
+    // Rechargement discret (suivi de la démo) : ni écran d'attente, ni saut.
+    var keepScroll = options && options.keepScroll ? window.scrollY : null;
+    if (keepScroll === null) el.view.innerHTML = '<p class="ad-loading">' + L("Chargement…", "Loading…") + "</p>";
     var data;
     try {
       data = await api("GET", "/galleries/" + encodeURIComponent(slug));
@@ -4225,12 +4350,15 @@
       "</div>" +
       (status.label ? '<span class="ad-badge ' + status.cls + '">' + esc(status.label) + "</span>" : "") +
       "</header>" +
+      (data.gallery.demo ? demoGuideHtml(data) : "") +
       '<section class="ad-share">' +
       '<label class="ad-field"><span>' + L("Lien", "Link") + '</span><div class="ad-copy-row">' +
       '<input type="text" readonly value="' + esc(data.link) + '" id="ad-detail-link" />' +
       '<button type="button" class="ad-btn" data-copy="ad-detail-link">' + L("Copier", "Copy") + "</button>" +
       "</div></label>" +
-      '<p class="ad-hint">' + L("Le mot de passe n'est plus récupérable ici : il n'a été affiché qu'à la création. ", "The password can't be retrieved here: it was only shown when the gallery was created. ") +
+      '<p class="ad-hint">' + (data.gallery.demo && data.gallery.demo_password
+        ? L("Le mot de passe de cette démo est affiché plus haut. ", "This demo's password is shown above. ")
+        : L("Le mot de passe n'est plus récupérable ici : il n'a été affiché qu'à la création. ", "The password can't be retrieved here: it was only shown when the gallery was created. ")) +
       '<button type="button" class="ad-link-btn" id="ad-new-password">' + L("Générer un nouveau mot de passe", "Generate a new password") + "</button></p>" +
       "</section>" +
       '<section class="ad-quota">' +
@@ -4520,6 +4648,8 @@
 
     wireUploads(slug, data.photos.length);
     wirePhotoRemoval(slug, data.photos);
+    wireDemoGuide(slug, data);
+    if (keepScroll !== null) window.scrollTo(0, keepScroll);
   }
 
   function wirePhotoRemoval(slug, photos) {
@@ -4749,6 +4879,8 @@
       if (!response.ok) throw new Error(serverText(data.error || "Inscription refusée"));
       try { localStorage.removeItem(REFERRAL_KEY); } catch (err) { /* rien à effacer */ }
       form.reset();
+      // Premier écran : la galerie de démonstration, guide en tête.
+      if (data.demoSlug) history.replaceState(null, "", location.pathname + "#/g/" + encodeURIComponent(data.demoSlug));
       showApp(data.photographer);
       bootstrap();
     } catch (err) {

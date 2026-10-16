@@ -133,6 +133,13 @@ CREATE TABLE IF NOT EXISTS galleries (
   -- Langue de la galerie côté client : page, e-mails, boutique, facture
   -- ('fr' ou 'en', voir i18n.js).
   language               TEXT NOT NULL DEFAULT 'fr',
+  -- Galerie de démonstration créée à l'inscription (photos libres de
+  -- droits, cliente simulée) : une au plus par compte, hors quota de
+  -- galeries actives. Son mot de passe est gardé en clair pour que
+  -- l'espace photographe l'affiche (rien de personnel dedans) ; effacé dès
+  -- que le photographe en génère un nouveau.
+  demo                   INTEGER NOT NULL DEFAULT 0,
+  demo_password          TEXT,
   -- Forfait : nombre de photos incluses dans ce que le client a déjà payé.
   -- NULL = pas de forfait défini (comportement d'avant cette fonctionnalité :
   -- aucun supplément calculé, quel que soit le nombre de coups de cœur).
