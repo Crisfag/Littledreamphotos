@@ -1131,6 +1131,37 @@ propriétaire affiche l'effectif, la répartition par pays et par spécialité,
 et permet de retirer une adresse sur demande. Migration :
 `worker/migrations/2026-10-liste-attente.sql`.
 
+### Planning du photographe
+
+`worker/src/planning.js`, onglet **Planning** (juste sous Galeries) : tout ce
+qui a une date ou une action à faire, au même endroit. Rien n'est recopié :
+tout est relu depuis les tables d'origine à chaque affichage.
+
+- **Agenda** (quatre mois devant, groupé par jour, filtres Séances /
+  Rappels / Mes rendez-vous) : séances réservées et confirmées (heure, durée,
+  lieu, acompte, appeler, fiche client) ; séances sous contrat datées
+  (signées, ou devis envoyé « pas encore signé ») ; dates à retenir des clients
+  (anniversaires, étapes d'un bébé…), un clic mène à la **fiche du client** ;
+  temps forts du studio ; rendez-vous ajoutés à la main.
+- **À faire** : sélection reçue à retoucher (faite d'elle-même quand la
+  livraison HD est ouverte) ; séance passée du dernier mois sans galerie
+  créée depuis pour ce client, réservée ou sous contrat signé (« Nouvelle
+  galerie » s'ouvre pré-remplie) ;
+  client à recontacter dès le jour du rappel d'une date ; tâches perso
+  (date, heure, client facultatifs). Une case à cocher pour chacune ; la
+  pastille de l'onglet compte ce qui reste.
+- Pas dedans, à dessein : les expirations de galerie ; les contrats d'avant
+  le sélecteur de date, qui n'ont qu'un texte libre.
+- **Date de séance des contrats** : sélecteur de jour et d'heure
+  (`contracts.session_day`, `session_time`) ; le contrat l'écrit en toutes
+  lettres (« samedi 14 novembre 2026 à 10 h », `sessionDateText`). Un ancien
+  contrat garde son texte jusqu'à ce qu'un jour soit choisi. Migration :
+  `worker/migrations/2026-10-contrat-date.sql`.
+
+Tables : `planning_items` (tâches perso), `planning_done` (tâches
+calculées faites). Test : `tools/tests/planning.test.mjs`. Migration :
+`worker/migrations/2026-10-planning.sql`.
+
 ### Galerie de démonstration à l'inscription
 
 `tools/lib/demo.mjs`. Juste après l'inscription, l'espace photographe crée

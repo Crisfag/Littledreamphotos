@@ -914,6 +914,17 @@ async function handleApi(req, res, url) {
     }
   }
 
+  // /local/planning[/…] — planning du photographe (séances, rappels, tâches).
+  if (parts[0] === "planning" && ["GET", "POST", "DELETE"].includes(req.method)) {
+    const path = "/api/admin/planning" + (parts.length > 1 ? "/" + parts.slice(1).map(encodeURIComponent).join("/") : "");
+    try {
+      const body = req.method === "POST" ? JSON.parse((await readBody(req)).toString("utf8") || "{}") : undefined;
+      return json(res, 200, await client.request(req.method, path, body));
+    } catch (err) {
+      return relayError(res, err, "Le planning n'a pas pu répondre");
+    }
+  }
+
   if (parts[0] === "portfolio") {
     const base = "/api/admin/portfolio";
     try {

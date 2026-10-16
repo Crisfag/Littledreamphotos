@@ -415,6 +415,7 @@
       if (!btn) return;
       var tab = btn.getAttribute("data-tab");
       if (tab === "galleries") renderList();
+      else if (tab === "planning") renderPlanning();
       else if (tab === "sales") renderSales();
       else if (tab === "booking") renderBooking();
       else if (tab === "clients") renderClients();
@@ -6776,7 +6777,7 @@
   function contractEditorHtml(data, c) {
     var editing = Boolean(c && c.id);
     // Nouveau devis, éventuellement ouvert depuis la fiche d'un client.
-    c = c || Object.assign({ clientName: "", clientEmail: "", title: "", sessionDate: "", lines: [{ label: "", amountCents: 0 }], depositCents: 0, terms: data.terms, validUntil: 0 }, contractsState.prefill || {});
+    c = c || Object.assign({ clientName: "", clientEmail: "", title: "", sessionDate: "", sessionDay: "", sessionTime: "", lines: [{ label: "", amountCents: 0 }], depositCents: 0, terms: data.terms, validUntil: 0 }, contractsState.prefill || {});
     contractsState.prefill = null;
     return '<section id="ad-ct-editor"><div class="ad-section-header"><h3>' + (editing ? "Modifier le devis n° " + esc(c.number) : "Nouveau devis") + "</h3></div>" +
       (editing && c.status !== "draft" ? '<p class="ad-banner ad-banner-muted">Ce devis a déjà été envoyé : après modification, renvoyez-le pour que votre client signe la nouvelle version.</p>' : "") +
@@ -6787,8 +6788,16 @@
       "</div>" +
       '<div class="ad-field-row">' +
       '<label class="ad-field"><span>Titre</span><input name="title" maxlength="160" required placeholder="ex. Séance nouveau-né" value="' + esc(c.title) + '" /></label>' +
-      '<label class="ad-field"><span>Date prévue <em>(facultatif, en toutes lettres)</em></span><input name="sessionDate" maxlength="120" placeholder="ex. samedi 14 novembre, 10 h" value="' + esc(c.sessionDate) + '" /></label>' +
+      // Vraie date (et heure) : le contrat l'écrit en toutes lettres, et la
+      // séance arrive dans le Planning.
+      '<div class="ad-field-row ad-ct-when">' +
+      '<label class="ad-field"><span>Date de la séance <em>(facultatif)</em></span><input type="date" name="sessionDay" value="' + esc(c.sessionDay || "") + '" /></label>' +
+      '<label class="ad-field"><span>Heure <em>(facultatif)</em></span><input type="time" name="sessionTime" value="' + esc(c.sessionTime || "") + '"' + (c.sessionDay ? "" : " disabled") + " /></label>" +
       "</div>" +
+      "</div>" +
+      (c.sessionDate && !c.sessionDay
+        ? '<p class="ad-hint">Date notée auparavant : « ' + esc(c.sessionDate) + " ». Choisissez-la dans le calendrier pour qu'elle apparaisse dans le Planning.</p>"
+        : "") +
       '<div class="ad-field"><span>Prestations <em>(montants TTC, en euros)</em></span><div id="ad-ct-lines" class="ad-ct-lines">' +
       (c.lines.length ? c.lines : [{ label: "", amountCents: 0 }]).map(contractLineRowHtml).join("") + "</div>" +
       '<button type="button" class="ad-link-btn ad-ct-add-line" id="ad-ct-add-line">+ Ajouter une prestation</button></div>' +
@@ -6893,7 +6902,7 @@
     return {
       body: {
         clientName: form.elements.clientName.value, clientEmail: form.elements.clientEmail.value, title: form.elements.title.value,
-        sessionDate: form.elements.sessionDate.value, lines: lines, depositCents: deposit, terms: form.elements.terms.value,
+        sessionDay: form.elements.sessionDay.value, sessionTime: form.elements.sessionDay.value ? form.elements.sessionTime.value : "", lines: lines, depositCents: deposit, terms: form.elements.terms.value,
         validUntil: form.elements.validUntil.value || "",
       },
     };
@@ -6933,6 +6942,13 @@
     });
 
     var form = document.getElementById("ad-ct-form");
+    if (form && form.elements.sessionDay) {
+      // L'heure n'a de sens qu'avec une date.
+      form.elements.sessionDay.addEventListener("input", function () {
+        form.elements.sessionTime.disabled = !form.elements.sessionDay.value;
+        if (!form.elements.sessionDay.value) form.elements.sessionTime.value = "";
+      });
+    }
     if (form) {
       refreshContractTotal();
       form.addEventListener("input", refreshContractTotal);
@@ -7702,12 +7718,378 @@
     }
   }
 
+  /* ---------- Planning : séances, rappels et tâches au même endroit ---------- */
+  // Agenda (séances réservées, dates à retenir des clients, temps forts du
+  // studio, rendez-vous perso) et « À faire » (sélections à retoucher,
+  // galeries à créer, clients à recontacter, tâches perso). Tout est
+  // recalculé par le Worker à chaque affichage (worker/src/planning.js).
+
+  var planningState = { data: null, filter: "all", adding: false };
+
+  var PL_SEASONS_EN = { noel: "Christmas", valentin: "Valentine's Day", paques: "Easter", meres: "Mother's Day", peres: "Father's Day", rentree: "Back-to-school", halloween: "Halloween" };
+
+  // Titre d'une date à retenir. Le Worker le rédige en français ; en
+  // anglais, on le recompose depuis ses éléments (type, prénom, âge).
+  function plReminderTitle(ev) {
+    if (LANG !== "en") return ev.title;
+    var label = ev.label || "";
+    if (ev.kind === "season") return (PL_SEASONS_EN[label] || label) + (ev.type === "season" ? " sessions" : " session");
+    if (ev.kind === "baby" && ev.months) return label + " turns " + ev.months + " months";
+    if (ev.kind === "birthday" || ev.kind === "baby") return ev.years ? label + " turns " + ev.years : label + "'s birthday";
+    if (ev.kind === "wedding") return ev.years ? ev.years + (ev.years === 1 ? " year" : " years") + " married: " + label : "Wedding anniversary: " + label;
+    return label;
+  }
+
+  function plParseDay(day) {
+    var p = String(day || "").split("-").map(Number);
+    return new Date(p[0], (p[1] || 1) - 1, p[2] || 1);
+  }
+  function plDayDiff(day, today) {
+    return Math.round((plParseDay(day) - plParseDay(today)) / 86400000);
+  }
+  function plDayLabel(day, today) {
+    var diff = plDayDiff(day, today);
+    if (diff === 0) return L("Aujourd'hui", "Today");
+    if (diff === 1) return L("Demain", "Tomorrow");
+    var d = plParseDay(day);
+    var opts = { weekday: "long", day: "numeric", month: "long" };
+    if (d.getFullYear() !== plParseDay(today).getFullYear()) opts.year = "numeric";
+    var text = d.toLocaleDateString(locale(), opts);
+    return text.charAt(0).toUpperCase() + text.slice(1);
+  }
+  function plShortDay(day) {
+    return plParseDay(day).toLocaleDateString(locale(), { day: "numeric", month: "short" });
+  }
+  function plTime(ts) {
+    return new Date(ts * 1000).toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit" });
+  }
+  function plIn(days) {
+    if (days <= 0) return "";
+    return L("dans " + days + " j", "in " + days + " d");
+  }
+
+  var PL_TYPES = {
+    booking: { cls: "ad-pl-booking", fr: "Séance", en: "Session" },
+    reminder: { cls: "ad-pl-reminder", fr: "Rappel client", en: "Client date" },
+    season: { cls: "ad-pl-season", fr: "Temps fort", en: "Studio date" },
+    item: { cls: "ad-pl-item", fr: "Rendez-vous", en: "Appointment" },
+    contract: { cls: "ad-pl-booking", fr: "Séance sous contrat", en: "Contracted session" },
+  };
+  var PL_FILTERS = [
+    ["all", "Tout", "All"],
+    ["booking", "Séances", "Sessions"],
+    ["reminder", "Rappels", "Reminders"],
+    ["item", "Mes rendez-vous", "My appointments"],
+  ];
+
+  function plEventHtml(ev, today) {
+    var type = PL_TYPES[ev.type] || PL_TYPES.item;
+    var when = ev.startsAt ? plTime(ev.startsAt) : ev.time ? ev.time : L("Journée", "All day");
+    var title = ev.type === "reminder" || ev.type === "season" ? plReminderTitle(ev) : ev.title;
+    var meta = [];
+    var actions = "";
+    if (ev.type === "booking") {
+      if (ev.clientName || ev.clientEmail) meta.push(clLink(ev.clientName, ev.clientEmail));
+      if (ev.durationMin) meta.push(ev.durationMin + " min");
+      if (ev.tier) meta.push(esc(ev.tier));
+      if (ev.location) meta.push(esc(ev.location));
+      if (ev.depositCents) meta.push(ev.depositPaid
+        ? '<span class="ad-pl-ok">' + L("Acompte réglé", "Deposit paid") + " · " + formatEuros(ev.depositCents) + "</span>"
+        : L("Acompte en attente", "Deposit pending"));
+      if (ev.clientPhone) actions += '<a class="ad-btn ad-btn-sm" href="tel:' + esc(ev.clientPhone.replace(/\s+/g, "")) + '">' + L("Appeler", "Call") + "</a>";
+      if (ev.clientEmail) actions += '<a class="ad-btn ad-btn-sm" href="' + clHref(ev.clientEmail) + '">' + L("Fiche client", "Client record") + "</a>";
+    } else if (ev.type === "contract") {
+      if (ev.clientName || ev.clientEmail) meta.push(clLink(ev.clientName, ev.clientEmail));
+      meta.push('<span class="ad-nowrap">' + L("Contrat n° ", "Contract no. ") + esc(ev.number) + "</span>");
+      meta.push(ev.signed
+        ? '<span class="ad-pl-ok">' + L("Signé", "Signed") + (ev.depositCents ? (ev.depositPaid ? L(" · acompte réglé", " · deposit paid") : L(" · acompte en attente", " · deposit pending")) : "") + "</span>"
+        : '<span class="ad-pl-due">' + L("Devis envoyé, pas encore signé", "Quote sent, not signed yet") + "</span>");
+      actions += '<a class="ad-btn ad-btn-sm" href="#/contrats">' + L("Voir le contrat", "View the contract") + "</a>";
+      if (ev.clientEmail) actions += '<a class="ad-btn ad-btn-sm" href="' + clHref(ev.clientEmail) + '">' + L("Fiche client", "Client record") + "</a>";
+    } else if (ev.type === "reminder") {
+      meta.push(clLink(ev.clientName, ev.clientEmail));
+      meta.push(ev.remindOn <= today ? '<span class="ad-pl-due">' + L("Moment de lui écrire", "Time to get in touch") + "</span>"
+        : L("Rappel le ", "Reminder on ") + plShortDay(ev.remindOn));
+      if (ev.mailto) actions += '<a class="ad-btn ad-btn-sm" href="' + esc(ev.mailto) + '">' + L("Écrire", "Write") + "</a>";
+    } else if (ev.type === "season") {
+      meta.push(L("À proposer à tous vos clients", "To offer to all your clients"));
+      actions += '<a class="ad-btn ad-btn-sm" href="#/clients">' + L("Préparer l'envoi", "Prepare the email") + "</a>";
+    } else {
+      if (ev.clientEmail) meta.push(clLink(ev.clientName, ev.clientEmail));
+      if (ev.note) meta.push(esc(ev.note));
+      actions += '<button type="button" class="ad-link-btn ad-pl-delete" data-pl-delete="' + esc(ev.id.slice(4)) + '">' + L("Supprimer", "Delete") + "</button>";
+    }
+    var href = ev.type === "reminder" && ev.clientEmail ? clHref(ev.clientEmail) : "";
+    return (
+      '<li class="ad-pl-event ' + type.cls + '"' + (href ? ' data-pl-href="' + esc(href) + '"' : "") + ">" +
+      '<span class="ad-pl-when">' + esc(when) + "</span>" +
+      '<div class="ad-pl-body">' +
+      '<p class="ad-pl-title"><span class="ad-pl-type">' + L(type.fr, type.en) + "</span>" +
+      (href ? '<a href="' + esc(href) + '">' + esc(title) + "</a>" : esc(title)) + "</p>" +
+      (meta.length ? '<p class="ad-pl-meta">' + meta.join(" · ") + "</p>" : "") +
+      "</div>" +
+      (actions ? '<div class="ad-pl-actions">' + actions + "</div>" : "") +
+      "</li>"
+    );
+  }
+
+  function plAgendaHtml(data) {
+    var events = data.events.filter(function (ev) {
+      var f = planningState.filter;
+      return f === "all" || ev.type === f || (f === "reminder" && ev.type === "season") || (f === "booking" && ev.type === "contract");
+    });
+    var counts = { all: data.events.length, booking: 0, reminder: 0, item: 0 };
+    var group = { season: "reminder", contract: "booking" };
+    data.events.forEach(function (ev) { var k = group[ev.type] || ev.type; counts[k] = (counts[k] || 0) + 1; });
+    var chips = '<div class="ad-pl-filters" role="group" aria-label="' + L("Filtrer l'agenda", "Filter the agenda") + '">' +
+      PL_FILTERS.map(function (f) {
+        return '<button type="button" class="ad-pl-chip" data-pl-filter="' + f[0] + '" aria-pressed="' + (planningState.filter === f[0]) + '">' +
+          L(f[1], f[2]) + ' <span class="ad-pl-chip-n">' + (counts[f[0]] || 0) + "</span></button>";
+      }).join("") + "</div>";
+    if (!events.length) {
+      return chips + '<div class="ad-pl-empty"><p><strong>' + (data.events.length ? L("Rien dans cette catégorie.", "Nothing in this category.") : L("Rien de prévu pour l'instant.", "Nothing planned yet.")) + "</strong></p>" +
+        "<p>" + L("Les séances réservées sur votre mini-site, les dates de vos clients (anniversaires, étapes de bébé) et vos rendez-vous s'afficheront ici, sur les quatre prochains mois.",
+          "Sessions booked on your mini-site, your clients' dates (birthdays, baby milestones) and your appointments will show here, over the next four months.") + "</p>" +
+        '<p class="ad-pl-empty-links"><a href="#/clients">' + L("Ajouter une date à une fiche client", "Add a date to a client record") + '</a> · <a href="#/reservations">' + L("Ouvrir des créneaux", "Open booking slots") + "</a></p></div>";
+    }
+    var html = chips;
+    var current = "";
+    events.forEach(function (ev) {
+      if (ev.date !== current) {
+        if (current) html += "</ol></div>";
+        current = ev.date;
+        var diff = plDayDiff(ev.date, data.today);
+        html += '<div class="ad-pl-day' + (diff === 0 ? " ad-pl-today" : "") + '"><h4><span>' + esc(plDayLabel(ev.date, data.today)) + "</span>" +
+          (diff > 1 ? '<span class="ad-pl-in">' + plIn(diff) + "</span>" : "") + '</h4><ol class="ad-pl-events">';
+      }
+      html += plEventHtml(ev, data.today);
+    });
+    return html + "</ol></div>";
+  }
+
+  function plTaskHtml(t, today) {
+    var title, meta = [], actions = "";
+    if (t.type === "selection") {
+      title = L("Sélection reçue : à retoucher", "Selection received: to retouch");
+      meta.push("<strong>" + esc(t.title) + "</strong>");
+      meta.push((t.selectedCount
+        ? L(t.selectedCount + " photo" + (t.selectedCount > 1 ? "s" : "") + " choisie" + (t.selectedCount > 1 ? "s" : ""), t.selectedCount + " photo" + (t.selectedCount > 1 ? "s" : "") + " chosen") +
+          (t.clientName ? L(" par ", " by ") + clLink(t.clientName, t.clientEmail) : "")
+        : L("Validée", "Confirmed") + (t.clientName ? L(" par ", " by ") + clLink(t.clientName, t.clientEmail) : "")) + L(", le ", " on ") + plShortDay(t.since));
+      actions = '<button type="button" class="ad-btn ad-btn-sm" data-pl-gallery="' + esc(t.slug) + '">' + L("Ouvrir la galerie", "Open the gallery") + "</button>";
+    } else if (t.type === "gallery") {
+      title = L("Séance passée : créer la galerie", "Past session: create the gallery");
+      meta.push("<strong>" + esc(t.title) + "</strong>");
+      meta.push((t.clientName ? clLink(t.clientName, t.clientEmail) + ", " : "") + L("le ", "on ") + plShortDay(t.since));
+      actions = '<button type="button" class="ad-btn ad-btn-sm" data-pl-create="' + esc(t.key) + '">' + L("Nouvelle galerie", "New gallery") + "</button>";
+    } else if (t.type === "contact") {
+      title = L("Écrire à ", "Get in touch with ") + (t.clientName || t.clientEmail);
+      meta.push(esc(plReminderTitle(t)) + L(" le ", " on ") + plShortDay(t.date));
+      actions = (t.mailto ? '<a class="ad-btn ad-btn-sm" href="' + esc(t.mailto) + '">' + L("Écrire", "Write") + "</a>" : "") +
+        '<a class="ad-btn ad-btn-sm" href="' + clHref(t.clientEmail) + '">' + L("Fiche client", "Client record") + "</a>";
+    } else {
+      title = t.title;
+      if (t.date) {
+        var late = !t.done && t.date < today;
+        meta.push((late ? '<span class="ad-pl-late">' + L("En retard · ", "Overdue · ") : "<span>") + plShortDay(t.date) + (t.time ? " · " + esc(t.time) : "") + "</span>");
+      }
+      if (t.clientEmail) meta.push(clLink(t.clientName, t.clientEmail));
+      if (t.note) meta.push(esc(t.note));
+      actions = '<button type="button" class="ad-link-btn ad-pl-delete" data-pl-delete="' + esc(t.id) + '">' + L("Supprimer", "Delete") + "</button>";
+    }
+    var id = "pl-" + t.key.replace(/[^a-zA-Z0-9_-]/g, "-");
+    return (
+      '<li class="ad-pl-task' + (t.done ? " ad-pl-done" : "") + '">' +
+      '<input type="checkbox" id="' + id + '" data-pl-check="' + esc(t.key) + '"' + (t.done ? " checked" : "") + ' aria-label="' + esc(L("Marquer comme fait : ", "Mark as done: ") + title) + '" />' +
+      '<div class="ad-pl-body"><label for="' + id + '" class="ad-pl-title">' + esc(title) + "</label>" +
+      (meta.length ? '<p class="ad-pl-meta">' + meta.join(" · ") + "</p>" : "") +
+      (actions && !t.done ? '<div class="ad-pl-actions">' + actions + "</div>" : "") +
+      "</div></li>"
+    );
+  }
+
+  function plFormHtml(data) {
+    return (
+      '<form class="ad-pl-form" id="ad-pl-form"' + (planningState.adding ? "" : " hidden") + ">" +
+      '<label class="ad-field"><span>' + L("Quoi", "What") + '</span><input name="title" required maxlength="160" placeholder="' +
+      L("ex. Repérage au parc, commander les albums", "e.g. Scout the park, order the albums") + '" /></label>' +
+      '<div class="ad-field-row">' +
+      '<label class="ad-field"><span>' + L("Date", "Date") + " <em>" + L("(facultatif)", "(optional)") + '</em></span><input type="date" name="date" /></label>' +
+      '<label class="ad-field"><span>' + L("Heure", "Time") + " <em>" + L("(facultatif)", "(optional)") + '</em></span><input type="time" name="time" /></label>' +
+      "</div>" +
+      '<label class="ad-field"><span>' + L("Client", "Client") + " <em>" + L("(facultatif)", "(optional)") + '</em></span><input name="clientEmail" type="email" list="ad-pl-clients" placeholder="' +
+      L("adresse e-mail du client", "client's email address") + '" /></label>' +
+      '<datalist id="ad-pl-clients">' + (data.clients || []).map(function (c) {
+        return '<option value="' + esc(c.email) + '">' + esc(c.name || c.email) + "</option>";
+      }).join("") + "</datalist>" +
+      '<p class="ad-hint">' + L("Avec une date, elle s'affiche aussi dans l'agenda.", "With a date, it also shows in the agenda.") + "</p>" +
+      '<div class="ad-pl-form-actions"><button type="submit" class="ad-btn ad-btn-primary">' + L("Ajouter", "Add") + '</button>' +
+      '<button type="button" class="ad-link-btn" id="ad-pl-cancel">' + L("Annuler", "Cancel") + "</button></div>" +
+      "</form>"
+    );
+  }
+
+  function updatePlanningBadge(data) {
+    var tab = document.getElementById("ad-tab-planning");
+    if (!tab) return;
+    var due = data && data.counts ? data.counts.todo : 0;
+    var badge = tab.querySelector(".ad-tab-count");
+    if (!due) { if (badge) badge.remove(); return; }
+    if (!badge) {
+      badge = document.createElement("span");
+      badge.className = "ad-tab-count";
+      tab.appendChild(badge);
+    }
+    badge.textContent = String(due);
+    badge.setAttribute("aria-label", L(due + " chose" + (due > 1 ? "s" : "") + " à faire", due + " thing" + (due > 1 ? "s" : "") + " to do"));
+  }
+
+  function paintPlanning() {
+    var data = planningState.data;
+    var open = data.tasks.filter(function (t) { return !t.done; });
+    var done = data.tasks.filter(function (t) { return t.done; });
+    el.view.innerHTML =
+      '<header class="ad-detail-header"><div><h2>' + L("Planning", "Planning") + "</h2>" +
+      '<p class="ad-hint">' + L("Vos séances, les dates de vos clients et ce qui reste à faire, au même endroit.", "Your sessions, your clients' dates and what's left to do, in one place.") + "</p></div>" +
+      '<button type="button" class="ad-btn ad-btn-primary" id="ad-pl-add">' + L("+ Ajouter une tâche ou un rendez-vous", "+ Add a task or appointment") + "</button>" +
+      "</header>" +
+      '<div class="ad-pl-layout">' +
+      '<section class="ad-pl-todo" aria-labelledby="ad-pl-todo-h"><div class="ad-section-header"><h3 id="ad-pl-todo-h">' + L("À faire", "To do") +
+      (open.length ? ' <span class="ad-pl-count">' + open.length + "</span>" : "") + "</h3></div>" +
+      plFormHtml(data) +
+      (open.length || done.length
+        ? '<ul class="ad-pl-tasks">' + open.concat(done).map(function (t) { return plTaskHtml(t, data.today); }).join("") + "</ul>"
+        : '<p class="ad-pl-clear">' + L("Rien à faire pour l'instant. Les sélections reçues, les galeries à créer après une séance et les clients à recontacter arriveront ici d'eux-mêmes.",
+          "Nothing to do right now. Selections received, galleries to create after a session and clients to get back to will show up here on their own.") + "</p>") +
+      "</section>" +
+      '<section class="ad-pl-agenda" aria-labelledby="ad-pl-agenda-h"><div class="ad-section-header"><h3 id="ad-pl-agenda-h">' + L("Agenda", "Agenda") + "</h3></div>" +
+      plAgendaHtml(data) +
+      "</section>" +
+      "</div>";
+    wirePlanning();
+  }
+
+  async function reloadPlanning() {
+    try {
+      planningState.data = await api("GET", "/planning");
+      updatePlanningBadge(planningState.data);
+      var y = window.scrollY;
+      paintPlanning();
+      window.scrollTo(0, y);
+    } catch (err) {
+      toast(err.message, true);
+    }
+  }
+
+  function wirePlanning() {
+    var data = planningState.data;
+    var form = document.getElementById("ad-pl-form");
+    document.getElementById("ad-pl-add").addEventListener("click", function () {
+      planningState.adding = true;
+      form.hidden = false;
+      form.elements.title.focus();
+    });
+    document.getElementById("ad-pl-cancel").addEventListener("click", function () {
+      planningState.adding = false;
+      form.reset();
+      form.hidden = true;
+    });
+    form.addEventListener("submit", async function (event) {
+      event.preventDefault();
+      var btn = form.querySelector('button[type="submit"]');
+      btn.disabled = true;
+      try {
+        await api("POST", "/planning/items", {
+          title: form.elements.title.value, date: form.elements.date.value, time: form.elements.time.value,
+          clientEmail: form.elements.clientEmail.value,
+        });
+        planningState.adding = false;
+        toast(L("Ajouté au planning.", "Added to your planning."));
+        reloadPlanning();
+      } catch (err) {
+        btn.disabled = false;
+        toast(err.message, true);
+      }
+    });
+    el.view.querySelectorAll("[data-pl-filter]").forEach(function (chip) {
+      chip.addEventListener("click", function () {
+        planningState.filter = chip.getAttribute("data-pl-filter");
+        paintPlanning();
+      });
+    });
+    el.view.querySelectorAll("[data-pl-check]").forEach(function (box) {
+      box.addEventListener("change", async function () {
+        var key = box.getAttribute("data-pl-check");
+        box.disabled = true;
+        try {
+          if (key.indexOf("itm:") === 0) await api("POST", "/planning/items/" + encodeURIComponent(key.slice(4)), { done: box.checked });
+          else await api("POST", "/planning/done", { key: key, done: box.checked });
+          if (box.checked && key.indexOf("itm:") !== 0) toast(L("C'est fait.", "Done."));
+          reloadPlanning();
+        } catch (err) {
+          box.disabled = false;
+          box.checked = !box.checked;
+          toast(err.message, true);
+        }
+      });
+    });
+    el.view.querySelectorAll("[data-pl-delete]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        confirmAction(L("Supprimer cette tâche du planning ?", "Delete this item from your planning?"), async function () {
+          try {
+            await api("DELETE", "/planning/items/" + encodeURIComponent(btn.getAttribute("data-pl-delete")));
+            reloadPlanning();
+          } catch (err) {
+            toast(err.message, true);
+          }
+        });
+      });
+    });
+    el.view.querySelectorAll("[data-pl-gallery]").forEach(function (btn) {
+      btn.addEventListener("click", function () { renderDetail(btn.getAttribute("data-pl-gallery")); });
+    });
+    // Séance passée : la fenêtre de création s'ouvre déjà remplie.
+    el.view.querySelectorAll("[data-pl-create]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var task = data.tasks.filter(function (t) { return t.key === btn.getAttribute("data-pl-create"); })[0];
+        openCreateModal();
+        if (!task) return;
+        var f = document.getElementById("ad-create-form");
+        f.title.value = task.title + (task.clientName ? " — " + task.clientName : "");
+        f.clientName.value = task.clientName || "";
+        f.clientEmail.value = task.clientEmail || "";
+      });
+    });
+    // Un rappel client mène à sa fiche, sur toute la ligne.
+    el.view.querySelectorAll("[data-pl-href]").forEach(function (row) {
+      row.addEventListener("click", function (event) {
+        if (event.target.closest("a, button")) return;
+        location.hash = row.getAttribute("data-pl-href");
+      });
+    });
+  }
+
+  async function renderPlanning(skipHash) {
+    if (!skipHash && location.hash !== "#/planning") history.pushState(null, "", "#/planning");
+    setActiveTab("planning");
+    el.view.innerHTML = '<p class="ad-loading">' + L("Chargement du planning…", "Loading your planning…") + "</p>";
+    try {
+      planningState.data = await api("GET", "/planning");
+    } catch (err) {
+      el.view.innerHTML = '<div class="ad-error-panel"><h2>' + L("Planning indisponible", "Planning unavailable") + "</h2><p>" + esc(err.message) + "</p></div>";
+      return;
+    }
+    updatePlanningBadge(planningState.data);
+    paintPlanning();
+  }
+
   /* ---------- Démarrage et navigation ---------- */
 
   function routeFromHash() {
     var match = /^#\/g\/(.+)$/.exec(location.hash);
     if (match) renderDetail(decodeURIComponent(match[1]), true);
     else if (location.hash === "#/detect") renderDetect(true);
+    else if (location.hash === "#/planning") renderPlanning(true);
     else if (location.hash === "#/ventes") renderSales(true);
     else if (location.hash === "#/reservations") renderBooking(true);
     else if (location.hash === "#/clients") renderClients(true);
@@ -7734,6 +8116,7 @@
       routeFromHash();
       // La pastille « à relancer » s'affiche dès l'ouverture, sans attendre l'onglet.
       if (location.hash.indexOf("#/clients") !== 0) api("GET", "/clients").then(updateClientsBadge).catch(function () {});
+      if (location.hash !== "#/planning") api("GET", "/planning").then(updatePlanningBadge).catch(function () {});
     });
   }
 

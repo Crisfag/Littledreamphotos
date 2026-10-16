@@ -21,6 +21,7 @@ import { THEMES, themeOf, readPresentation, linkOfEmbed } from "./presentation.j
 import { LANGUAGES, languageOf } from "./i18n.js";
 import { handleContractsAdmin } from "./contracts.js";
 import { handleClientsAdmin } from "./clients.js";
+import { handlePlanningAdmin } from "./planning.js";
 import { setPromo, sendPromoToClient, promoForAdmin } from "./campaigns.js";
 import { galleryUrlFor } from "./reminders.js";
 import { salesForAdmin } from "./sales.js";
@@ -930,6 +931,13 @@ export async function handleAdmin(request, env, ctx, path) {
     const photographer = await env.DB.prepare("SELECT * FROM photographers WHERE id = ?").bind(photographerId).first();
     if (!photographer) return fail(401, "Session invalide");
     return handleClientsAdmin(request, env, photographer, parts.slice(3), new URL(request.url));
+  }
+
+  // Planning : séances, rappels, tâches (planning.js).
+  if (section === "planning") {
+    const photographer = await env.DB.prepare("SELECT * FROM photographers WHERE id = ?").bind(photographerId).first();
+    if (!photographer) return fail(401, "Session invalide");
+    return handlePlanningAdmin(request, env, photographer, parts.slice(3));
   }
 
   // Devis et contrats signés en ligne (contracts.js).

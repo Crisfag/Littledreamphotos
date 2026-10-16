@@ -83,7 +83,11 @@ try {
   await page.fill('#ad-ct-form [name="clientName"]', "Camille Dubois");
   await page.fill('#ad-ct-form [name="clientEmail"]', "camille.contrat@example.com");
   await page.fill('#ad-ct-form [name="title"]', "Séance nouveau-né");
-  await page.fill('#ad-ct-form [name="sessionDate"]', "samedi 14 novembre, 10 h");
+  // Sélecteur de date : l'heure ne s'ouvre qu'une fois le jour choisi.
+  const timeLockedFirst = await page.isDisabled('#ad-ct-form [name="sessionTime"]');
+  await page.fill('#ad-ct-form [name="sessionDay"]', "2027-11-13");
+  await page.fill('#ad-ct-form [name="sessionTime"]', "10:00");
+  check("date de séance au sélecteur : l'heure s'ouvre une fois le jour choisi", timeLockedFirst && !(await page.isDisabled('#ad-ct-form [name="sessionTime"]')));
   await page.fill("#ad-ct-lines .ad-ct-line-label", "Séance au studio, 2 h");
   await page.fill("#ad-ct-lines .ad-ct-line-amount", "220");
   await page.click("#ad-ct-add-line");
@@ -97,6 +101,8 @@ try {
   check("le devis est envoyé : numéroté, statut « Envoyé », lien client disponible",
         /^\d{4}-001$/.test(first.number) && first.status === "sent" && first.url.includes("contrat.html?t=") && (await page.textContent(".ad-ct-table tbody tr")).includes("Envoyé"),
         `${first.number} ${first.status}`);
+  check("la date choisie s'écrit en toutes lettres dans le contrat, et reste un vrai jour",
+        first.sessionDate === "samedi 13 novembre 2027 à 10 h" && first.sessionDay === "2027-11-13" && first.sessionTime === "10:00", first.sessionDate);
 
   /* ---------- Le client lit et signe ---------- */
 
