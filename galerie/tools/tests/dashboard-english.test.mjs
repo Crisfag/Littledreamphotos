@@ -95,6 +95,7 @@ check("le compte naît en anglais", me.uiLanguage === "en", me.uiLanguage);
 
 const TRANSLATED = [
   ["galleries", "Galleries"],
+  ["planning", "Planning"],
   ["billing", "Billing"],
   ["shop", "Shop"],
   ["subscription", "Subscription"],

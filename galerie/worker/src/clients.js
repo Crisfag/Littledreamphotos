@@ -104,12 +104,12 @@ export function addMonths(dateStr, n) {
   return new Date(Date.UTC(y, mo, Math.min(date.d, last))).toISOString().slice(0, 10);
 }
 
-function addDays(dateStr, n) {
+export function addDays(dateStr, n) {
   const date = parseDay(dateStr);
   return new Date(Date.UTC(date.y, date.mo - 1, date.d + n)).toISOString().slice(0, 10);
 }
 
-function daysBetween(from, to) {
+export function daysBetween(from, to) {
   const a = parseDay(from);
   const b = parseDay(to);
   return Math.round((Date.UTC(b.y, b.mo - 1, b.d) - Date.UTC(a.y, a.mo - 1, a.d)) / 86400000);
@@ -281,7 +281,7 @@ export function mailtoUrl(email, { subject, body }) {
 
 /* ---------- Agrégation ---------- */
 
-async function bookingPageUrl(env, photographer) {
+export async function bookingPageUrl(env, photographer) {
   if (!hasFeature(env, photographer, "booking")) return "";
   const portfolio = await env.DB.prepare("SELECT handle, published FROM portfolios WHERE photographer_id = ?").bind(photographer.id).first();
   if (!portfolio?.published) return "";
@@ -290,7 +290,7 @@ async function bookingPageUrl(env, photographer) {
 }
 
 // Tout ce que Holypixx sait des clients d'un photographe, regroupé par e-mail.
-async function collect(env, photographerId) {
+export async function collect(env, photographerId) {
   const [galleries, bookings, contracts, payments, records, dates] = await Promise.all([
     env.DB.prepare(
       "SELECT id, slug, title, client_name, client_email, created_at, expires_at FROM galleries WHERE photographer_id = ? AND kind != 'school' AND client_email != ''"
@@ -381,7 +381,7 @@ async function collect(env, photographerId) {
   return list;
 }
 
-function dateOut(d, today) {
+export function dateOut(d, today) {
   const ev = nextEvent(d, today);
   return {
     id: d.id,
@@ -396,7 +396,7 @@ function dateOut(d, today) {
   };
 }
 
-function messageFor(d, next, clientName, studioName, bookingUrl) {
+export function messageFor(d, next, clientName, studioName, bookingUrl) {
   return suggestedMessage({ kind: d.kind, label: d.label, years: next.years, months: next.months, clientName, studioName, bookingUrl, studio: !d.client_email });
 }
 
