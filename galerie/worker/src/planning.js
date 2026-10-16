@@ -1,7 +1,7 @@
 // Planning du photographe : tout ce qui a une date ou une action à faire,
 // au même endroit.
 //
-// - Agenda : séances réservées (confirmées), dates à retenir des clients
+// - Agenda : séances réservées (confirmées) ou sous contrat (datées), dates à retenir des clients
 //   (anniversaires, étapes d'un bébé…), temps forts du studio, rendez-vous
 //   ajoutés à la main.
 // - À faire : sélections reçues à retoucher, séances passées sans galerie,
@@ -45,7 +45,7 @@ export async function planningFor(env, photographer) {
   const today = todayIn();
   const horizon = addDays(today, HORIZON_DAYS);
   const ts = now();
-  const [all, bookingUrl, bookingsRes, galleriesRes, itemsRes, doneRes] = await Promise.all([
+  const [all, bookingUrl, bookingsRes, galleriesRes, itemsRes, doneRes, contractsRes] = await Promise.all([
     collect(env, photographer.id),
     bookingPageUrl(env, photographer),
     env.DB.prepare(
@@ -60,6 +60,12 @@ export async function planningFor(env, photographer) {
     ).bind(photographer.id).all(),
     env.DB.prepare("SELECT * FROM planning_items WHERE photographer_id = ? ORDER BY created_at ASC").bind(photographer.id).all(),
     env.DB.prepare("SELECT item_key FROM planning_done WHERE photographer_id = ?").bind(photographer.id).all(),
+    // Devis et contrats datés (sélecteur de date) : envoyés, signés, réglés.
+    env.DB.prepare(
+      `SELECT id, number, title, status, client_name, client_email, session_day, session_time, deposit_cents, paid_at
+         FROM contracts WHERE photographer_id = ? AND session_day != '' AND session_day >= ?
+          AND status IN ('sent', 'viewed', 'signed', 'paid') ORDER BY session_day ASC`
+    ).bind(photographer.id, addDays(today, -PAST_BOOKING_DAYS)).all(),
   ]);
   const studioName = displayName(photographer);
   const done = new Set((doneRes.results || []).map((r) => r.item_key));
@@ -132,6 +138,30 @@ export async function planningFor(env, photographer) {
     tasks.push({
       key, type: "gallery", since: dayOf(b.starts_at), at: b.starts_at,
       title: b.offer_title, clientName: b.client_name, clientEmail: b.client_email,
+    });
+  }
+
+  // Séances sous contrat : à l'agenda (un devis pas encore signé le dit),
+  // et, une fois passées, « créer la galerie » comme pour une réservation.
+  for (const k of contractsRes.results || []) {
+    const signed = k.status === "signed" || k.status === "paid";
+    if (k.session_day >= today) {
+      events.push({
+        id: `ctr:${k.id}`, type: "contract", date: k.session_day, time: k.session_time || "",
+        title: k.title, number: k.number, signed, depositPaid: Boolean(k.paid_at), depositCents: k.deposit_cents,
+        clientName: k.client_name, clientEmail: k.client_email,
+      });
+      continue;
+    }
+    if (!signed) continue;
+    const key = `gal:${k.id}`;
+    if (done.has(key)) continue;
+    const email = String(k.client_email || "").toLowerCase();
+    const startTs = Math.floor(Date.parse(`${k.session_day}T00:00:00Z`) / 1000);
+    if (galleries.some((g) => String(g.client_email || "").toLowerCase() === email && g.created_at >= startTs - 86400)) continue;
+    tasks.push({
+      key, type: "gallery", since: k.session_day, at: startTs,
+      title: k.title, clientName: k.client_name, clientEmail: k.client_email,
     });
   }
 

@@ -64,6 +64,17 @@ const slug = `planning-${RUN}`;
 await client.createGallery({ slug, title: "Séance famille Bernard", clientName: "Famille Bernard", clientEmail: `bernard-${RUN}@test.invalid`, password: "mot-de-passe-planning" });
 await localSql(API, `UPDATE galleries SET selection_done_at = ${nowS - 3600} WHERE slug = '${slug}'`);
 
+// Contrats datés : une séance à venir (signée), une passée sans galerie.
+const ctrUp = await client.request("POST", "/api/admin/contracts", {
+  clientName: "Famille Roux", clientEmail: `roux-${RUN}@test.invalid`, title: "Séance grossesse",
+  sessionDay: isoDay(6), sessionTime: "14:30", lines: [{ label: "Séance au studio", amountCents: 25000 }], depositCents: 0,
+});
+const ctrPast = await client.request("POST", "/api/admin/contracts", {
+  clientName: "Famille Petit", clientEmail: `petit-${RUN}@test.invalid`, title: "Séance mariage",
+  sessionDay: isoDay(-3), lines: [{ label: "Reportage", amountCents: 120000 }], depositCents: 0,
+});
+await localSql(API, `UPDATE contracts SET status = 'signed', signed_at = ${nowS} WHERE id IN ('${ctrUp.createdId}', '${ctrPast.createdId}')`);
+
 /* ---------- Connexion et onglet ---------- */
 
 const browser = await chromium.launch(EXECUTABLE ? { executablePath: EXECUTABLE } : {});
@@ -82,7 +93,7 @@ await page.click("#ad-login-submit");
 await page.waitForSelector("#ad-tab-planning", { timeout: 10000 });
 await page.waitForSelector("#ad-tab-planning .ad-tab-count", { timeout: 10000 });
 check("onglet Planning dans le menu, avec la pastille des choses à faire",
-      (await page.textContent("#ad-tab-planning")).includes("Planning") && (await page.textContent("#ad-tab-planning .ad-tab-count")).trim() === "3",
+      (await page.textContent("#ad-tab-planning")).includes("Planning") && (await page.textContent("#ad-tab-planning .ad-tab-count")).trim() === "4",
       await page.textContent("#ad-tab-planning .ad-tab-count"));
 
 await page.click("#ad-tab-planning");
@@ -94,6 +105,8 @@ check("agenda : la séance réservée, avec son client, son lieu et l'acompte r�
 check("agenda : l'anniversaire de la cliente (« Léa aura 3 ans ») et le temps fort du studio",
       agenda.includes("Léa aura 3 ans") && agenda.includes("Séances de Noël"));
 check("agenda : la séance passée n'y est plus", !agenda.includes("Séance nouveau-né"));
+check("agenda : la séance sous contrat, à son heure, signée", agenda.includes("Séance grossesse") && agenda.includes("Séance sous contrat") && agenda.includes("14:30") && agenda.includes("Signé"));
+check("à faire : séance sous contrat passée, galerie à créer", todo.includes("Séance mariage"));
 check("à faire : sélection reçue, séance passée sans galerie, cliente à recontacter",
       todo.includes("Sélection reçue : à retoucher") && todo.includes("Séance famille Bernard") &&
       todo.includes("Séance passée : créer la galerie") && todo.includes("Séance nouveau-né") &&
@@ -110,7 +123,7 @@ await shot("01-planning");
 
 await page.click('[data-pl-filter="booking"]');
 const onlyBookings = await page.textContent(".ad-pl-agenda");
-check("filtre Séances : seulement les séances", onlyBookings.includes("Mini-séance de Noël") && !onlyBookings.includes("Léa aura"));
+check("filtre Séances : réservations et séances sous contrat", onlyBookings.includes("Mini-séance de Noël") && onlyBookings.includes("Séance grossesse") && !onlyBookings.includes("Léa aura"));
 await page.click('[data-pl-filter="reminder"]');
 const onlyReminders = await page.textContent(".ad-pl-agenda");
 check("filtre Rappels : dates des clients et temps forts", onlyReminders.includes("Léa aura 3 ans") && onlyReminders.includes("Séances de Noël") && !onlyReminders.includes("Mini-séance"));
@@ -129,7 +142,7 @@ await page.waitForSelector(".ad-pl-layout", { timeout: 10000 });
 /* ---------- Tâches ---------- */
 
 // Séance passée : la création de galerie s'ouvre pré-remplie.
-await page.click('[data-pl-create]');
+await page.click('.ad-pl-task:has-text("Séance nouveau-né") [data-pl-create]');
 await page.waitForSelector("#ad-create-modal:not([hidden])", { timeout: 5000 });
 check("« Nouvelle galerie » depuis une séance passée : client déjà renseigné",
       (await page.inputValue('#ad-create-form [name="clientName"]')) === "Famille Leroy" &&
@@ -162,13 +175,14 @@ await page.check('.ad-pl-task:has-text("Commander les albums") input[type="check
 await page.waitForSelector('.ad-pl-done:has-text("Commander les albums")', { timeout: 10000 });
 check("tâche perso cochée : barrée, toujours visible", await page.isVisible('.ad-pl-done:has-text("Commander les albums")'));
 const badge = (await page.textContent("#ad-tab-planning .ad-tab-count")).trim();
-check("la pastille suit : 2 choses à faire", badge === "2", badge);
+check("la pastille suit : 3 choses à faire", badge === "3", badge);
 await shot("02-planning-done");
 
 // La galerie créée après la séance éteint la tâche d'elle-même.
 await client.createGallery({ slug: `${slug}-leroy`, title: "Séance Leroy", clientName: "Famille Leroy", clientEmail: `leroy-${RUN}@test.invalid`, password: "mot-de-passe-planning" });
 const fresh = await page.evaluate(async () => (await fetch("/local/planning")).json());
-check("galerie créée pour ce client : « créer la galerie » disparaît d'elle-même", !fresh.tasks.some((t) => t.type === "gallery"));
+check("galerie créée pour ce client : sa tâche « créer la galerie » disparaît d'elle-même",
+      !fresh.tasks.some((t) => t.type === "gallery" && t.title === "Séance nouveau-né") && fresh.tasks.some((t) => t.type === "gallery" && t.title === "Séance mariage"));
 
 /* ---------- Mobile ---------- */
 

@@ -6777,7 +6777,7 @@
   function contractEditorHtml(data, c) {
     var editing = Boolean(c && c.id);
     // Nouveau devis, éventuellement ouvert depuis la fiche d'un client.
-    c = c || Object.assign({ clientName: "", clientEmail: "", title: "", sessionDate: "", lines: [{ label: "", amountCents: 0 }], depositCents: 0, terms: data.terms, validUntil: 0 }, contractsState.prefill || {});
+    c = c || Object.assign({ clientName: "", clientEmail: "", title: "", sessionDate: "", sessionDay: "", sessionTime: "", lines: [{ label: "", amountCents: 0 }], depositCents: 0, terms: data.terms, validUntil: 0 }, contractsState.prefill || {});
     contractsState.prefill = null;
     return '<section id="ad-ct-editor"><div class="ad-section-header"><h3>' + (editing ? "Modifier le devis n° " + esc(c.number) : "Nouveau devis") + "</h3></div>" +
       (editing && c.status !== "draft" ? '<p class="ad-banner ad-banner-muted">Ce devis a déjà été envoyé : après modification, renvoyez-le pour que votre client signe la nouvelle version.</p>' : "") +
@@ -6788,8 +6788,16 @@
       "</div>" +
       '<div class="ad-field-row">' +
       '<label class="ad-field"><span>Titre</span><input name="title" maxlength="160" required placeholder="ex. Séance nouveau-né" value="' + esc(c.title) + '" /></label>' +
-      '<label class="ad-field"><span>Date prévue <em>(facultatif, en toutes lettres)</em></span><input name="sessionDate" maxlength="120" placeholder="ex. samedi 14 novembre, 10 h" value="' + esc(c.sessionDate) + '" /></label>' +
+      // Vraie date (et heure) : le contrat l'écrit en toutes lettres, et la
+      // séance arrive dans le Planning.
+      '<div class="ad-field-row ad-ct-when">' +
+      '<label class="ad-field"><span>Date de la séance <em>(facultatif)</em></span><input type="date" name="sessionDay" value="' + esc(c.sessionDay || "") + '" /></label>' +
+      '<label class="ad-field"><span>Heure <em>(facultatif)</em></span><input type="time" name="sessionTime" value="' + esc(c.sessionTime || "") + '"' + (c.sessionDay ? "" : " disabled") + " /></label>" +
       "</div>" +
+      "</div>" +
+      (c.sessionDate && !c.sessionDay
+        ? '<p class="ad-hint">Date notée auparavant : « ' + esc(c.sessionDate) + " ». Choisissez-la dans le calendrier pour qu'elle apparaisse dans le Planning.</p>"
+        : "") +
       '<div class="ad-field"><span>Prestations <em>(montants TTC, en euros)</em></span><div id="ad-ct-lines" class="ad-ct-lines">' +
       (c.lines.length ? c.lines : [{ label: "", amountCents: 0 }]).map(contractLineRowHtml).join("") + "</div>" +
       '<button type="button" class="ad-link-btn ad-ct-add-line" id="ad-ct-add-line">+ Ajouter une prestation</button></div>' +
@@ -6894,7 +6902,7 @@
     return {
       body: {
         clientName: form.elements.clientName.value, clientEmail: form.elements.clientEmail.value, title: form.elements.title.value,
-        sessionDate: form.elements.sessionDate.value, lines: lines, depositCents: deposit, terms: form.elements.terms.value,
+        sessionDay: form.elements.sessionDay.value, sessionTime: form.elements.sessionDay.value ? form.elements.sessionTime.value : "", lines: lines, depositCents: deposit, terms: form.elements.terms.value,
         validUntil: form.elements.validUntil.value || "",
       },
     };
@@ -6934,6 +6942,13 @@
     });
 
     var form = document.getElementById("ad-ct-form");
+    if (form && form.elements.sessionDay) {
+      // L'heure n'a de sens qu'avec une date.
+      form.elements.sessionDay.addEventListener("input", function () {
+        form.elements.sessionTime.disabled = !form.elements.sessionDay.value;
+        if (!form.elements.sessionDay.value) form.elements.sessionTime.value = "";
+      });
+    }
     if (form) {
       refreshContractTotal();
       form.addEventListener("input", refreshContractTotal);
@@ -7758,6 +7773,7 @@
     reminder: { cls: "ad-pl-reminder", fr: "Rappel client", en: "Client date" },
     season: { cls: "ad-pl-season", fr: "Temps fort", en: "Studio date" },
     item: { cls: "ad-pl-item", fr: "Rendez-vous", en: "Appointment" },
+    contract: { cls: "ad-pl-booking", fr: "Séance sous contrat", en: "Contracted session" },
   };
   var PL_FILTERS = [
     ["all", "Tout", "All"],
@@ -7781,6 +7797,14 @@
         ? '<span class="ad-pl-ok">' + L("Acompte réglé", "Deposit paid") + " · " + formatEuros(ev.depositCents) + "</span>"
         : L("Acompte en attente", "Deposit pending"));
       if (ev.clientPhone) actions += '<a class="ad-btn ad-btn-sm" href="tel:' + esc(ev.clientPhone.replace(/\s+/g, "")) + '">' + L("Appeler", "Call") + "</a>";
+      if (ev.clientEmail) actions += '<a class="ad-btn ad-btn-sm" href="' + clHref(ev.clientEmail) + '">' + L("Fiche client", "Client record") + "</a>";
+    } else if (ev.type === "contract") {
+      if (ev.clientName || ev.clientEmail) meta.push(clLink(ev.clientName, ev.clientEmail));
+      meta.push('<span class="ad-nowrap">' + L("Contrat n° ", "Contract no. ") + esc(ev.number) + "</span>");
+      meta.push(ev.signed
+        ? '<span class="ad-pl-ok">' + L("Signé", "Signed") + (ev.depositCents ? (ev.depositPaid ? L(" · acompte réglé", " · deposit paid") : L(" · acompte en attente", " · deposit pending")) : "") + "</span>"
+        : '<span class="ad-pl-due">' + L("Devis envoyé, pas encore signé", "Quote sent, not signed yet") + "</span>");
+      actions += '<a class="ad-btn ad-btn-sm" href="#/contrats">' + L("Voir le contrat", "View the contract") + "</a>";
       if (ev.clientEmail) actions += '<a class="ad-btn ad-btn-sm" href="' + clHref(ev.clientEmail) + '">' + L("Fiche client", "Client record") + "</a>";
     } else if (ev.type === "reminder") {
       meta.push(clLink(ev.clientName, ev.clientEmail));
@@ -7812,10 +7836,11 @@
   function plAgendaHtml(data) {
     var events = data.events.filter(function (ev) {
       var f = planningState.filter;
-      return f === "all" || ev.type === f || (f === "reminder" && ev.type === "season");
+      return f === "all" || ev.type === f || (f === "reminder" && ev.type === "season") || (f === "booking" && ev.type === "contract");
     });
     var counts = { all: data.events.length, booking: 0, reminder: 0, item: 0 };
-    data.events.forEach(function (ev) { counts[ev.type === "season" ? "reminder" : ev.type] = (counts[ev.type === "season" ? "reminder" : ev.type] || 0) + 1; });
+    var group = { season: "reminder", contract: "booking" };
+    data.events.forEach(function (ev) { var k = group[ev.type] || ev.type; counts[k] = (counts[k] || 0) + 1; });
     var chips = '<div class="ad-pl-filters" role="group" aria-label="' + L("Filtrer l'agenda", "Filter the agenda") + '">' +
       PL_FILTERS.map(function (f) {
         return '<button type="button" class="ad-pl-chip" data-pl-filter="' + f[0] + '" aria-pressed="' + (planningState.filter === f[0]) + '">' +

@@ -1918,3 +1918,4 @@ main section.ad-demo {
   .ad-pl-event .ad-pl-actions { grid-column: 2; }
   .ad-pl-form .ad-field-row { grid-template-columns: 1fr 1fr; }
 }
+.ad-nowrap { white-space: nowrap; }

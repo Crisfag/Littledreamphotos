@@ -302,6 +302,8 @@ function adminOut(c, env) {
     clientEmail: c.client_email,
     title: c.title,
     sessionDate: c.session_date,
+    sessionDay: c.session_day || "",
+    sessionTime: c.session_time || "",
     lines: parseLines(c.lines),
     totalCents: c.total_cents,
     depositCents: c.deposit_cents,
@@ -573,12 +575,36 @@ function readDraft(body, defaults = {}) {
     if (!m) return { error: "Date de validité invalide" };
     validUntil = Math.floor(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 21, 59, 59) / 1000);
   }
+  // Date de la séance : jour (AAAA-MM-JJ) et heure facultative, d'où le
+  // texte du contrat (« samedi 14 novembre 2026 à 10 h »). Un contrat
+  // d'avant le sélecteur garde son texte libre tant qu'aucun jour n'est
+  // choisi (voir planning.js : seuls les contrats datés y figurent).
+  const sessionDay = cleanLine(merged.sessionDay, 10);
+  const sessionTime = sessionDay ? cleanLine(merged.sessionTime, 5) : "";
+  if (sessionDay && !/^\d{4}-\d{2}-\d{2}$/.test(sessionDay)) return { error: "Date de séance invalide" };
+  if (sessionTime && !/^([01]\d|2[0-3]):[0-5]\d$/.test(sessionTime)) return { error: "Heure de séance invalide" };
+  const sessionDate = sessionDay ? sessionDateText(sessionDay, sessionTime) : cleanLine(merged.sessionDate, 120);
   return {
     draft: {
       clientName, clientEmail, title, lines, totalCents, depositCents, terms, validUntil,
-      sessionDate: cleanLine(merged.sessionDate, 120),
+      sessionDate, sessionDay, sessionTime,
     },
   };
+}
+
+const DAYS_FR = ["dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"];
+const MONTHS_FR = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
+
+// « samedi 14 novembre 2026 à 10 h », « … à 10 h 30 », ou sans heure.
+export function sessionDateText(day, time) {
+  const [y, m, d] = day.split("-").map(Number);
+  const weekday = DAYS_FR[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
+  let text = `${weekday} ${d === 1 ? "1er" : d} ${MONTHS_FR[m - 1]} ${y}`;
+  if (time) {
+    const [h, min] = time.split(":").map(Number);
+    text += ` à ${h} h${min ? ` ${String(min).padStart(2, "0")}` : ""}`;
+  }
+  return text;
 }
 
 async function listForAdmin(env, photographer) {
@@ -626,12 +652,12 @@ export async function handleContractsAdmin(request, env, photographer, parts) {
     const studio = displayName(photographer);
     await env.DB.prepare(
       `INSERT INTO contracts (id, photographer_id, token, number, status, studio_name, studio_email, seller_name, seller_address, seller_vat,
-         client_name, client_email, title, session_date, lines, total_cents, deposit_cents, terms, valid_until, created_at, updated_at)
-       VALUES (?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         client_name, client_email, title, session_date, session_day, session_time, lines, total_cents, deposit_cents, terms, valid_until, created_at, updated_at)
+       VALUES (?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).bind(
       id, photographer.id, newToken(), await nextNumber(env, photographer.id), studio, photographer.email,
       photographer.billing_company_name || "", photographer.billing_address || "", photographer.billing_vat_number || "",
-      draft.clientName, draft.clientEmail, draft.title, draft.sessionDate, JSON.stringify(draft.lines), draft.totalCents,
+      draft.clientName, draft.clientEmail, draft.title, draft.sessionDate, draft.sessionDay, draft.sessionTime, JSON.stringify(draft.lines), draft.totalCents,
       draft.depositCents, draft.terms, draft.validUntil, ts, ts
     ).run();
     if (body.send) return sendContract(env, photographer, id);
@@ -649,9 +675,9 @@ export async function handleContractsAdmin(request, env, photographer, parts) {
     const { draft, error } = readDraft(body, adminOut(contract));
     if (error) return fail(400, error);
     await env.DB.prepare(
-      `UPDATE contracts SET status = 'draft', client_name = ?, client_email = ?, title = ?, session_date = ?, lines = ?, total_cents = ?,
+      `UPDATE contracts SET status = 'draft', client_name = ?, client_email = ?, title = ?, session_date = ?, session_day = ?, session_time = ?, lines = ?, total_cents = ?,
          deposit_cents = ?, terms = ?, valid_until = ?, updated_at = ? WHERE id = ?`
-    ).bind(draft.clientName, draft.clientEmail, draft.title, draft.sessionDate, JSON.stringify(draft.lines), draft.totalCents,
+    ).bind(draft.clientName, draft.clientEmail, draft.title, draft.sessionDate, draft.sessionDay, draft.sessionTime, JSON.stringify(draft.lines), draft.totalCents,
       draft.depositCents, draft.terms, draft.validUntil, ts, id).run();
     if (body.send) return sendContract(env, photographer, id);
     return json(await listForAdmin(env, photographer));

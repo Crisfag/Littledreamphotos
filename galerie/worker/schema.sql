@@ -1005,6 +1005,8 @@ CREATE TABLE IF NOT EXISTS contracts (
   client_email     TEXT NOT NULL,
   title            TEXT NOT NULL,
   session_date     TEXT NOT NULL DEFAULT '',
+  session_day      TEXT NOT NULL DEFAULT '',  -- AAAA-MM-JJ (sélecteur ; vide : ancien texte libre seul)
+  session_time     TEXT NOT NULL DEFAULT '',  -- HH:MM, facultatif
   lines            TEXT NOT NULL DEFAULT '[]', -- JSON [{label, amountCents}]
   total_cents      INTEGER NOT NULL DEFAULT 0,
   deposit_cents    INTEGER NOT NULL DEFAULT 0,
