@@ -335,6 +335,7 @@
     "Réinitialisation refusée": "Reset refused",
     "Confirmation refusée": "Confirmation refused",
     "Vous avez déjà une galerie de démonstration": "You already have a demo gallery",
+    "Votre formule vous est offerte : aucun abonnement à prendre.": "Your plan is offered to you: no subscription needed.",
     "Échec de l'analyse de l'image": "Image analysis failed",
     "Impossible de démarrer la connexion à Stripe": "Could not start the Stripe connection",
     "Impossible de générer un identifiant unique": "Could not generate a unique ID",
@@ -1890,6 +1891,7 @@
     var status = "";
     var billing = data.interval === "year" ? L("Facturation annuelle. ", "Billed yearly. ") : "";
     if (data.owner) status = L("Compte propriétaire : toutes les fonctionnalités sont incluses.", "Owner account: every feature is included.");
+    else if (data.comped) status = L("Formule " + planLabel(current) + " offerte par Holypixx : toutes ses fonctionnalités, sans aucun paiement.", planLabel(current) + " plan offered by Holypixx: all its features, with no payment.");
     else if (current.key !== "free" && data.cancelAtPeriodEnd && data.renewsAt) status = L("Résiliation programmée : votre formule reste active jusqu'au ", "Cancellation scheduled: your plan stays active until ") + formatDate(data.renewsAt) + ".";
     else if (current.key !== "free" && data.status === "past_due") status = L("Le dernier prélèvement a échoué : mettez à jour votre carte depuis « Gérer mon abonnement ».", "The last payment failed: update your card from “Manage my subscription”.");
     else if (current.key !== "free" && data.status === "trialing" && data.renewsAt) status = L("Essai gratuit jusqu'au " + formatDate(data.renewsAt) + ", puis premier prélèvement automatique (résiliable avant, sans frais).",
@@ -1910,7 +1912,7 @@
         if (isCurrent) {
           action = '<span class="ad-badge ad-badge-selected">' + L("✓ Votre formule", "✓ Your plan") + "</span>" +
             (plan.noSubscription && !data.owner ? ' <button type="button" class="ad-link-btn" data-scolaire="off">' + L("Revenir à Découverte", "Back to Free") + "</button>" : "");
-        } else if (data.owner) action = "";
+        } else if (data.owner || data.comped) action = "";
         else if (plan.noSubscription) {
           action = current.key === "free"
             ? '<button type="button" class="ad-btn ad-btn-primary" data-scolaire="on">' + L("Activer, sans abonnement", "Turn on, no subscription") + "</button>"
@@ -2656,6 +2658,7 @@
   function accountGroup(p) {
     var sub = p.subscription;
     if (p.isOwner) return "owner";
+    if (sub.comped) return "free"; // offerte : ne paie pas
     if (sub.plan !== "free" && sub.status === "trialing") return "trial";
     if (sub.plan !== "free" && (sub.status === "active" || sub.status === "past_due")) return "paying";
     return "free";
@@ -2686,7 +2689,8 @@
       if (sub.founder) details.push("Fondateur");
       planCell =
         '<span class="ad-acc-plan ad-acc-plan-' + esc(sub.plan) + '">' + esc(sub.planLabel) + "</span>" +
-        (sub.plan !== "free" && status ? ' <span class="ad-acc-status ' + status.cls + '">' + status.text + "</span>" : "") +
+        (sub.comped ? ' <span class="ad-acc-status ad-acc-status-ok">Offerte</span>'
+          : sub.plan !== "free" && status ? ' <span class="ad-acc-status ' + status.cls + '">' + status.text + "</span>" : "") +
         (details.length ? '<span class="ad-acc-sub">' + esc(details.join(" · ")) + "</span>" : "");
     }
 
@@ -2741,7 +2745,7 @@
     ].filter(Boolean).join(" · ");
     return (
       '<div class="ad-stats">' +
-      statTile("Abonnés payants", sum.paying, sum.accounts + " compte" + (sum.accounts > 1 ? "s" : "") + " au total", sum.paying ? "ad-stat-success" : "") +
+      statTile("Abonnés payants", sum.paying, sum.accounts + " compte" + (sum.accounts > 1 ? "s" : "") + " au total" + (sum.comped ? " · " + sum.comped + " offert" + (sum.comped > 1 ? "s" : "") : ""), sum.paying ? "ad-stat-success" : "") +
       statTile("En essai gratuit", sum.trialing) +
       statTile("Revenu mensuel récurrent", euros(sum.monthlyRevenueCents), "annuels ramenés au mois") +
       statTile("Places Fondateurs", sum.founders + " / " + sum.foundersLimit) +

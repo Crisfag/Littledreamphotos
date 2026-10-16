@@ -17,7 +17,7 @@ import { handleOwnerMusic } from "./music.js";
 import { runSalesReminders } from "./campaigns.js";
 import { shopState } from "./shop.js";
 import { runStoragePurge, storageUsage, storageQuotaFor } from "./storage.js";
-import { PLANS, FOUNDERS_LIMIT, planFor, isOwner, monthlyRevenueCents } from "./subscription.js";
+import { PLANS, FOUNDERS_LIMIT, planFor, isOwner, isComped, monthlyRevenueCents } from "./subscription.js";
 
 async function requireOwner(env, photographerId) {
   if (!env.OWNER_EMAIL) return null;
@@ -82,6 +82,7 @@ async function listPhotographers(env, photographerId) {
         cancelAtPeriodEnd: Boolean(p.plan_cancel_at_period_end),
         trialUsed: Boolean(p.trial_used_at),
         founder: Boolean(p.founder_at),
+        comped: !owner && isComped(p),
         monthlyRevenueCents: owner ? 0 : monthlyRevenueCents(p),
         stripeCustomerId: p.stripe_customer_id || "",
       },
@@ -93,7 +94,8 @@ async function listPhotographers(env, photographerId) {
   const others = photographers.filter((p) => !p.isOwner);
   const summary = {
     accounts: others.length,
-    paying: others.filter((p) => ["active", "past_due"].includes(p.subscription.status) && p.subscription.plan !== "free").length,
+    paying: others.filter((p) => ["active", "past_due"].includes(p.subscription.status) && p.subscription.plan !== "free" && !p.subscription.comped).length,
+    comped: others.filter((p) => p.subscription.comped).length,
     trialing: others.filter((p) => p.subscription.status === "trialing" && p.subscription.plan !== "free").length,
     pastDue: others.filter((p) => p.subscription.status === "past_due").length,
     cancelling: others.filter((p) => p.subscription.cancelAtPeriodEnd && p.subscription.effectivePlan !== "free").length,

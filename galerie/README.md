@@ -810,6 +810,19 @@ mosaïque, visionneuse (flèches, Échap, glisser au doigt), à propos et
 prestations, contact. Le portfolio, ses photos et ses messages figurent dans
 l'export RGPD et disparaissent avec le compte.
 
+#### Formule offerte
+
+Pour offrir une formule (une proche qui teste tout, par exemple) : la poser
+à la main en base, sans passer par Stripe —
+`UPDATE photographers SET plan = 'studio', plan_status = 'active' WHERE email = '…'`.
+Une formule payante active **sans abonnement Stripe** est une formule
+offerte (`isComped`, `subscription.js`) : elle ouvre toutes les
+fonctionnalités de la formule, ne compte jamais dans le revenu mensuel ni
+dans les « abonnés payants » de l'onglet Admin (badge « Offerte », filtre
+Gratuits), et l'onglet Abonnement du compte l'annonce sans proposer aucun
+paiement (le Worker refuse aussi d'en ouvrir un). Les frais de paiement sur
+les ventes de ses clients restent ceux de tout le monde.
+
 #### Espace de stockage (onglet Abonnement)
 
 Chaque formule inclut un espace : **5 Go** (Découverte), **200 Go**

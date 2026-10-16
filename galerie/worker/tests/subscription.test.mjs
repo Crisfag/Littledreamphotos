@@ -4,7 +4,7 @@
 //
 //   node tests/subscription.test.mjs
 
-import { PLANS, planFor, hasFeature, planKeyFromSubscription, handleSubscriptionEvent, TRIAL_DAYS, FOUNDERS_LIMIT, founderCoupon, trialAvailable, founderEligible, publicPlans, syncSubscription, monthlyRevenueCents, STUDIO_FOUNDERS_LIMIT, schoolEnabled, planOut, featureRefusal } from "../src/subscription.js";
+import { PLANS, planFor, hasFeature, planKeyFromSubscription, handleSubscriptionEvent, TRIAL_DAYS, FOUNDERS_LIMIT, founderCoupon, trialAvailable, founderEligible, publicPlans, syncSubscription, monthlyRevenueCents, STUDIO_FOUNDERS_LIMIT, schoolEnabled, planOut, featureRefusal, isComped } from "../src/subscription.js";
 
 const checks = [];
 function check(label, ok, detail) {
@@ -131,10 +131,10 @@ check("la fin d'un ancien abonnement n'écrase pas un abonnement plus récent", 
 {
   const t = 1800000000, YEAR = 365 * 86400;
   check("revenu mensuel : mensuel au prix normal, annuel ramené au mois, prix Fondateurs la 1re année seulement",
-        monthlyRevenueCents({ plan: "pro", plan_status: "active", plan_interval: "month" }, t) === 2900 &&
-        monthlyRevenueCents({ plan: "essentiel", plan_status: "active", plan_interval: "year" }, t) === 1250 &&
-        monthlyRevenueCents({ plan: "pro", plan_status: "active", plan_interval: "year", founder_at: t - 10 }, t) === 2000 &&
-        monthlyRevenueCents({ plan: "essentiel", plan_status: "active", plan_interval: "month", founder_at: t - YEAR - 1 }, t) === 1500);
+        monthlyRevenueCents({ plan: "pro", plan_status: "active", stripe_subscription_id: "sub_1", plan_interval: "month" }, t) === 2900 &&
+        monthlyRevenueCents({ plan: "essentiel", plan_status: "active", stripe_subscription_id: "sub_1", plan_interval: "year" }, t) === 1250 &&
+        monthlyRevenueCents({ plan: "pro", plan_status: "active", stripe_subscription_id: "sub_1", plan_interval: "year", founder_at: t - 10 }, t) === 2000 &&
+        monthlyRevenueCents({ plan: "essentiel", plan_status: "active", stripe_subscription_id: "sub_1", plan_interval: "month", founder_at: t - YEAR - 1 }, t) === 1500);
   check("un essai, un impayé ou un compte gratuit ne rapportent rien",
         monthlyRevenueCents({ plan: "pro", plan_status: "trialing", plan_interval: "month" }, t) === 0 &&
         monthlyRevenueCents({ plan: "pro", plan_status: "canceled" }, t) === 0 && monthlyRevenueCents({ plan: "free", plan_status: "" }, t) === 0);
@@ -216,6 +216,17 @@ check("sans session : l'abonnement en cours est retrouvé par sa métadonnée (l
       decodeURIComponent(stripeCalls[0]).includes("metadata['photographer_id']:'pho_1'") && searchWrites.length === 2 &&
       searchWrites[0].binds.slice(0, 4).join(",") === "essentiel,trialing,cus_9,sub_9" && searchWrites[0].binds[4] === 1 && searchWrites[0].binds[6] === 1,
       searchWrites.map((c) => c.binds.join(",")).join(" | "));
+
+/* ---------- Formule offerte ---------- */
+
+const comped = { plan: "studio", plan_status: "active", stripe_customer_id: "", stripe_subscription_id: "", email: "amie@test.invalid" };
+check("formule offerte (payante, active, sans abonnement Stripe) : toutes les fonctionnalités Studio",
+      isComped(comped) && planFor({}, comped).key === "studio" && hasFeature({}, comped, "booking") && hasFeature({}, comped, "school"));
+check("…sans compter comme revenu", monthlyRevenueCents(comped) === 0);
+check("un vrai abonnement Stripe n'est jamais une formule offerte",
+      !isComped({ ...comped, stripe_subscription_id: "sub_123" }) && monthlyRevenueCents({ ...comped, stripe_subscription_id: "sub_123", plan_interval: "year" }) > 0);
+check("ni la formule gratuite, ni le Scolaire (sans prix), ni un abonnement résilié",
+      !isComped({ ...comped, plan: "free" }) && !isComped({ ...comped, plan: "scolaire" }) && !isComped({ ...comped, plan_status: "canceled" }));
 
 const failed = checks.filter((c) => !c.ok);
 console.log(failed.length ? `\n${failed.length} vérification(s) en échec.` : `\n${checks.length} vérifications, toutes passent.`);
