@@ -1715,6 +1715,31 @@ const expiredOk = await (async () => {
   return (await free("POST", "/api/admin/galleries", { slug: `${SLUG}-gratuit-4`, password: "mot-de-passe-solide", title: "Gratuite 4" })).status;
 })();
 check("supprimer une galerie libère une place", expiredOk === 201);
+
+// Galerie de démonstration (créée à l'inscription par l'espace photographe) :
+// hors quota, une seule, mot de passe affichable, hors statistiques.
+const demoSlug = `${SLUG}-demo`;
+const demoCreate = await free("POST", "/api/admin/galleries", { demo: true, slug: demoSlug, password: "demo-mot-de-passe", title: "Démo", includedPhotos: 5, extraPhotoPrice: 15 });
+const secondDemo = await free("POST", "/api/admin/galleries", { demo: true, slug: `${demoSlug}-2`, password: "demo-mot-de-passe", title: "Démo 2" });
+check("démo : créée même avec les 3 galeries gratuites prises, mais une seule à la fois",
+      demoCreate.status === 201 && secondDemo.status === 409, `${demoCreate.status}, ${secondDemo.status}`);
+const demoDetail = await (await free("GET", `/api/admin/galleries/${demoSlug}`)).json();
+const freeUsage = (await (await free("GET", "/api/admin/subscription")).json()).usage;
+const freeStats = await (await free("GET", "/api/admin/stats")).json();
+const freeList = (await (await free("GET", "/api/admin/galleries")).json()).galleries;
+check("démo : repérée, mot de passe affichable, hors galeries actives et hors chiffres du tableau de bord",
+      demoDetail.gallery?.demo === true && demoDetail.gallery.demo_password === "demo-mot-de-passe" &&
+      freeUsage?.activeGalleries === 3 && freeStats.galleriesCount === 3 && freeList.find((g) => g.slug === demoSlug)?.demo === 1,
+      JSON.stringify({ usage: freeUsage, stats: freeStats.galleriesCount }));
+const realDetail = await (await free("GET", `/api/admin/galleries/${SLUG}-gratuit-1`)).json();
+check("une vraie galerie n'expose jamais de mot de passe", realDetail.gallery?.demo === false && !JSON.stringify(realDetail).includes("password"));
+await free("POST", `/api/admin/galleries/${demoSlug}/password`, { password: "nouveau-mot-de-passe" });
+check("nouveau mot de passe : celui de la démo n'est plus affiché",
+      (await (await free("GET", `/api/admin/galleries/${demoSlug}`)).json()).gallery?.demo_password === "");
+await free("DELETE", `/api/admin/galleries/${demoSlug}`);
+check("démo supprimée : on peut en recréer une",
+      (await free("POST", "/api/admin/galleries", { demo: true, slug: `${demoSlug}-3`, password: "demo-mot-de-passe", title: "Démo" })).status === 201);
+await free("DELETE", `/api/admin/galleries/${demoSlug}-3`);
 const freeShop = await free("POST", `/api/admin/galleries/${SLUG}-gratuit-1/shop`, { enabled: true });
 const freeSubdomain = await free("POST", "/api/admin/account/subdomain", { subdomain: `gratuit-${RUN}`.slice(0, 30) });
 check("la boutique et l'adresse à son nom sont réservées aux formules qui les incluent (402)",

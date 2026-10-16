@@ -24,6 +24,8 @@ RUN npm install --omit=dev
 
 COPY admin-server.mjs prepare.mjs detect.mjs signup.mjs ./
 COPY lib ./lib
+# Photos libres de droits de la galerie de démonstration (voir lib/demo.mjs).
+COPY demo ./demo
 COPY admin ./admin
 
 # Sans hôte à l'écoute au-delà de la boucle locale, le service serait

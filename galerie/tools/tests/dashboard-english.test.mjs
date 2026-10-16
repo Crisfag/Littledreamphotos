@@ -19,6 +19,16 @@ const API = process.env.GALERIE_API || "http://127.0.0.1:8788";
 const EXECUTABLE = process.env.CHROMIUM_PATH || undefined;
 const SHOTS = process.env.SHOTS || "";
 
+// Inscription : premier écran sur la galerie de démonstration (voir
+// demo.test.mjs). On la retire pour que la suite parte d'un compte vide.
+async function dropDemo(page) {
+  await page.waitForSelector("#ad-demo", { timeout: 15000 });
+  const demoSlug = await page.evaluate(() => decodeURIComponent(location.hash.slice(4)));
+  await page.evaluate(async (s) => fetch(`/local/galleries/${encodeURIComponent(s)}`, { method: "DELETE" }), demoSlug);
+  await page.click("#ad-tab-galleries");
+  return demoSlug;
+}
+
 const checks = [];
 function check(label, ok, detail) {
   checks.push({ label, ok });
@@ -71,6 +81,11 @@ await page.fill('#ad-signup-form [name="email"]', email);
 await page.fill('#ad-signup-form [name="password"]', "dashboard-english-1234");
 await page.check('#ad-signup-form [name="acceptTerms"]');
 await page.click("#ad-signup-submit");
+await page.waitForSelector("#ad-demo", { timeout: 15000 });
+check("démo en anglais dès l'inscription", (await page.textContent("#ad-demo")).includes("This is exactly what your client experiences") &&
+      frenchLeftovers(await page.innerText("#ad-demo")).length === 0, frenchLeftovers(await page.innerText("#ad-demo")).join(" | "));
+await shot("00-demo");
+await dropDemo(page);
 await page.waitForSelector("#ad-new-gallery", { timeout: 10000 });
 await setTestPlan(API, email, "pro");
 const me = await page.evaluate(async () => (await (await fetch("/local/auth/me")).json()).photographer);

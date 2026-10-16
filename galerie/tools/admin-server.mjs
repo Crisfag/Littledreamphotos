@@ -30,6 +30,7 @@ import { PdfImageWriter, A4_LANDSCAPE_PT } from "./lib/pdf.mjs";
 import { ZipWriter } from "./lib/zip.mjs";
 import { PREVIEW_COLS, PREVIEW_ROWS } from "./lib/tiles.mjs";
 import { WorkerClient } from "./lib/client.mjs";
+import { createDemoGallery, demoPhotoFiles } from "./lib/demo.mjs";
 import { identify, isMatch, MATCH_MIN_SNR, MATCH_MIN_BITS } from "./lib/forensic.mjs";
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
@@ -347,7 +348,10 @@ async function handleAuth(req, res, parts) {
     // Connexion automatique : pas de raison de faire retaper les mêmes
     // identifiants juste après les avoir choisis.
     setSessionCookie(req, res, data.token, Math.min(data.expiresIn || SESSION_MAX_AGE, SESSION_MAX_AGE));
-    return json(res, 201, { photographer: data.photographer });
+    // Galerie de démonstration : créée tout de suite (le tableau de bord
+    // l'ouvre), ses photos arrivent ensuite en arrière-plan.
+    const demo = await startDemo(new WorkerClient({ api: config.api, token: data.token }), data.photographer);
+    return json(res, 201, { photographer: data.photographer, demoSlug: demo ? demo.slug : "" });
   }
 
   if (parts.length === 2 && parts[1] === "forgot-password" && req.method === "POST") {
@@ -1046,6 +1050,14 @@ async function handleApi(req, res, url) {
   }
 
   // POST /local/account — nom du studio.
+  // POST /local/demo — (re)crée la galerie de démonstration (une à la fois).
+  if (parts.length === 1 && parts[0] === "demo" && req.method === "POST") {
+    const photographer = await profileFor(client);
+    const demo = await startDemo(client, photographer);
+    if (!demo) return json(res, 409, { error: "Vous avez déjà une galerie de démonstration" });
+    return json(res, 201, { slug: demo.slug });
+  }
+
   if (parts.length === 1 && parts[0] === "account" && req.method === "POST") {
     const body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
     try {
@@ -1308,7 +1320,9 @@ async function handleApi(req, res, url) {
           client.getGallery(slug),
           client.galleryLog(slug, 100).catch(() => ({ log: [] })),
         ]);
-        return json(res, 200, { ...detail, log: logResult.log, link: await linkFor(client, slug) });
+        // Démo en préparation : l'interface suit l'arrivée des photos.
+        const demoExpected = detail.gallery && detail.gallery.demo ? (await demoPhotoFiles()).length : 0;
+        return json(res, 200, { ...detail, log: logResult.log, link: await linkFor(client, slug), demoExpected });
       } catch (err) {
         return relayError(res, err, "Galerie introuvable");
       }
@@ -1624,6 +1638,24 @@ async function makePrintMaster(input) {
     .toColourspace("srgb")
     .jpeg({ quality: 92, chromaSubsampling: "4:4:4" })
     .toBuffer();
+}
+
+// Lance la galerie de démonstration d'un compte (voir lib/demo.mjs) ; null
+// si elle existe déjà ou n'a pas pu être créée — jamais une erreur.
+async function startDemo(client, photographer) {
+  try {
+    const demo = await createDemoGallery(client, {
+      api: config.api, forensicKey: config.forensicKey,
+      studioName: (photographer && photographer.studioName) || config.brand,
+      language: photographer && photographer.uiLanguage === "en" ? "en" : "fr",
+      slot: withProcessingSlot,
+    });
+    if (demo) demo.done.catch((err) => console.error("Démo :", err));
+    return demo;
+  } catch (err) {
+    console.error("Démo non créée :", err);
+    return null;
+  }
 }
 
 // Marque par défaut du filigrane : celle du studio du compte connecté, avec

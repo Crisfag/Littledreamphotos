@@ -1131,6 +1131,35 @@ propriétaire affiche l'effectif, la répartition par pays et par spécialité,
 et permet de retirer une adresse sur demande. Migration :
 `worker/migrations/2026-10-liste-attente.sql`.
 
+### Galerie de démonstration à l'inscription
+
+`tools/lib/demo.mjs`. Juste après l'inscription, l'espace photographe crée
+une galerie « Séance famille Martin (démo) » et l'ouvre en premier écran.
+
+- **Photos** : 11 photos libres de droits (Unsplash, `tools/demo/*.json`),
+  traitées comme de vraies photos (tuiles, filigrane « studio · Famille
+  Martin », empreinte invisible), en arrière-plan : la fiche suit leur
+  arrivée sur une ligne de progression et ne se recharge qu'une fois, sans
+  jamais interrompre une saisie.
+- **Cliente simulée** : une fois les photos prêtes, elle ouvre la galerie
+  par l'API publique, comme un vrai client, et fait sa sélection : 7 coups
+  de cœur pour un forfait de 5 (2 suppléments à 15 €), 3 codes couleur, un
+  commentaire. Ce sont de vraies lignes du journal d'accès.
+- **Guide** en tête de fiche : lien et mot de passe pour l'ouvrir comme un
+  client (`galleries.demo_password`, gardé en clair pour la seule démo et
+  effacé dès qu'un nouveau mot de passe est généré), essai de capture
+  d'écran (l'alerte e-mail part vraiment), lecture de la sélection,
+  changement de style ; « Créer ma première vraie galerie » et « Supprimer
+  la démo ».
+- **Règles** (`galleries.demo`) : une seule à la fois par compte, hors quota
+  de galeries actives, exclue du bandeau de chiffres du photographe et des
+  statistiques de l'onglet Admin. Sans galerie, l'écran vide propose d'en
+  revoir une (`POST /local/demo`). Si `tools/demo/` manque, pas de démo,
+  et l'inscription n'est jamais bloquée.
+
+Test : `tools/tests/demo.test.mjs`. Migration :
+`worker/migrations/2026-10-galerie-demo.sql`.
+
 ### Espace photographe en anglais (parcours de base)
 
 Langue propre à chaque compte (`photographers.ui_language`, `fr` par

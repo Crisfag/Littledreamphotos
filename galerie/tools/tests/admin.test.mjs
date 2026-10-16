@@ -29,6 +29,16 @@ const PHOTOS = [
   join(REPO_ROOT, "images", "maternite", "maternite-01.jpeg"),
 ];
 
+// Inscription : premier écran sur la galerie de démonstration (voir
+// demo.test.mjs). On la retire pour que la suite parte d'un compte vide.
+async function dropDemo(page) {
+  await page.waitForSelector("#ad-demo", { timeout: 15000 });
+  const demoSlug = await page.evaluate(() => decodeURIComponent(location.hash.slice(4)));
+  await page.evaluate(async (s) => fetch(`/local/galleries/${encodeURIComponent(s)}`, { method: "DELETE" }), demoSlug);
+  await page.click("#ad-tab-galleries");
+  return demoSlug;
+}
+
 const checks = [];
 function check(label, ok, detail) {
   checks.push({ label, ok });
@@ -87,6 +97,7 @@ check("l'inscription exige d'accepter les conditions et la politique de confiden
       (await page.textContent("#ad-signup-form")).includes("politique de confidentialité"));
 await page.check('#ad-signup-form [name="acceptTerms"]');
 await page.click("#ad-signup-submit");
+check("l'inscription ouvre la galerie de démonstration", /^demo-/.test(await dropDemo(page)));
 await page.waitForSelector("#ad-new-gallery", { timeout: 10000 });
 // Formule Pro (comme après un abonnement) : boutique, adresse à son nom et
 // galeries sans limite sont testées plus bas.
