@@ -174,9 +174,18 @@ const YEAR_SECONDS = 365 * 24 * 60 * 60;
 export function monthlyRevenueCents(photographer, at = now()) {
   const plan = PLANS[photographer?.plan];
   if (!plan || plan.key === "free" || !["active", "past_due"].includes(photographer.plan_status)) return 0;
+  if (isComped(photographer)) return 0;
   const founder = photographer.founder_at && at < photographer.founder_at + YEAR_SECONDS;
   if (photographer.plan_interval === "year") return Math.round((founder ? plan.founderYearlyCents : plan.yearlyCents) / 12);
   return founder ? plan.founderCents : plan.priceCents;
+}
+
+// Formule offerte (une proche qui teste tout, par exemple) : une formule
+// payante active posée à la main, sans abonnement Stripe derrière. Elle
+// ouvre tout ce qu'ouvre la formule, sans jamais compter comme revenu.
+export function isComped(photographer) {
+  const plan = PLANS[photographer?.plan];
+  return Boolean(plan && plan.priceCents > 0 && ACTIVE_STATUSES.has(photographer.plan_status) && !photographer.stripe_subscription_id);
 }
 
 export function hasFeature(env, photographer, feature) {
@@ -297,6 +306,7 @@ export async function subscriptionForAdmin(env, photographer) {
     studioFounderEligible: withSchool && founderEligible(photographer, studioTaken, STUDIO_FOUNDERS_LIMIT),
     plan: planOut(plan),
     owner: isOwner(env, photographer),
+    comped: isComped(photographer),
     status: photographer.plan_status || "",
     interval: photographer.plan_interval || "month",
     subscribedPlan: photographer.plan || "free",
@@ -341,6 +351,7 @@ export async function startSubscriptionCheckout(request, env, photographer) {
   if (plan.schoolPlan && !schoolLaunched(env)) return fail(409, "Cette formule n'est pas encore ouverte.");
   const interval = plan.yearlyOnly ? "year" : INTERVALS.includes(body?.interval) ? body.interval : "month";
   if (isOwner(env, photographer)) return fail(409, "Le compte propriétaire a déjà toutes les fonctionnalités.");
+  if (isComped(photographer)) return fail(409, "Votre formule vous est offerte : aucun abonnement à prendre.");
   if (planFor(env, photographer).key !== "free" && photographer.stripe_customer_id) {
     return fail(409, "Vous avez déjà un abonnement : changez de formule depuis « Gérer mon abonnement ».");
   }
