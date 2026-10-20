@@ -25,7 +25,7 @@ const base = {
   photoLabel: "Photo n° 3",
   reason: "impr-ecran",
   ts: 1_700_000_000,
-  adminUrl: "https://holypixx-admin.onrender.com/",
+  adminUrl: "https://admin.holypixx.com/",
 };
 
 const email = buildCaptureAlertEmail(base);
@@ -67,7 +67,7 @@ check("le nom du client est échappé dans le HTML", !hostile.html.includes("<b>
 
 const resetEmail = buildPasswordResetEmail({
   studioName: "Studio Test",
-  resetUrl: "https://holypixx-admin.onrender.com/?reset=abc123",
+  resetUrl: "https://admin.holypixx.com/?reset=abc123",
   ts: 1_700_000_000,
 });
 check("le sujet évoque la réinitialisation", resetEmail.subject.toLowerCase().includes("réinitialisation"));
@@ -78,7 +78,7 @@ check("le message précise que le lien est à usage unique et limité dans le te
 
 const hostileReset = buildPasswordResetEmail({
   studioName: '<img src=x onerror=alert(1)>',
-  resetUrl: "https://holypixx-admin.onrender.com/?reset=abc123",
+  resetUrl: "https://admin.holypixx.com/?reset=abc123",
   ts: 1_700_000_000,
 });
 check("le nom du studio est échappé dans l'e-mail de réinitialisation", !hostileReset.html.includes("<img"));
@@ -91,7 +91,7 @@ check("le nom du studio est échappé dans l'e-mail de réinitialisation", !host
 
 const emailChangeEmail = buildEmailChangeConfirmationEmail({
   studioName: "Studio Test",
-  confirmUrl: "https://holypixx-admin.onrender.com/?confirm-email=abc123",
+  confirmUrl: "https://admin.holypixx.com/?confirm-email=abc123",
   ts: 1_700_000_000,
 });
 check("le sujet évoque la confirmation d'une nouvelle adresse",
@@ -103,7 +103,7 @@ check("le message précise que le lien est à usage unique et limité dans le te
 
 const hostileEmailChange = buildEmailChangeConfirmationEmail({
   studioName: '<img src=x onerror=alert(1)>',
-  confirmUrl: "https://holypixx-admin.onrender.com/?confirm-email=abc123",
+  confirmUrl: "https://admin.holypixx.com/?confirm-email=abc123",
   ts: 1_700_000_000,
 });
 check("le nom du studio est échappé dans l'e-mail de confirmation d'adresse", !hostileEmailChange.html.includes("<img"));
@@ -136,11 +136,11 @@ check("nom du studio, titre et nom du client sont échappés dans la relance cli
       !hostileReminder.html.includes("<script>") && !hostileReminder.html.includes("<b>") && !hostileReminder.html.includes("<i>"));
 
 const photographerReminder = buildPhotographerReminderEmail({
-  galleryTitle: "Séance Bambin", clientName: "Julie Peters", daysLeft: 2, selectedCount: 4, adminUrl: "https://holypixx-admin.onrender.com",
+  galleryTitle: "Séance Bambin", clientName: "Julie Peters", daysLeft: 2, selectedCount: 4, adminUrl: "https://admin.holypixx.com",
 });
 check("la relance photographe nomme le client, l'échéance et le tableau de bord",
       photographerReminder.subject.includes("Séance Bambin") && photographerReminder.html.includes("Julie Peters") &&
-      photographerReminder.html.includes("dans 2 jours") && photographerReminder.html.includes("holypixx-admin.onrender.com"));
+      photographerReminder.html.includes("dans 2 jours") && photographerReminder.html.includes("admin.holypixx.com"));
 
 const validated = buildSelectionValidatedEmail({
   galleryTitle: "Séance Bambin", clientName: "Julie Peters", selectedCount: 12, dueExtraCount: 2, dueTotalCents: 3000, adminUrl: "",
@@ -208,7 +208,7 @@ check("e-mails du photographe en anglais : tous, sans reste de français",
       enPhotographerMails.map((m) => m.subject).join(" | "));
 const enCapture = enPhotographerMails[0];
 check("alerte de capture en anglais : motif traduit, photo et lien",
-      /screenshot/i.test(enCapture.subject) && enCapture.text.includes("Print Screen key") && enCapture.text.includes("Photo no. 3") && enCapture.text.includes("https://holypixx-admin.onrender.com/"), enCapture.text);
+      /screenshot/i.test(enCapture.subject) && enCapture.text.includes("Print Screen key") && enCapture.text.includes("Photo no. 3") && enCapture.text.includes("https://admin.holypixx.com/"), enCapture.text);
 check("sans langue précisée, les e-mails du photographe restent en français",
       /Bonjour|Réinitialis|mot de passe/i.test(buildPasswordResetEmail({ studioName: "Studio Test", resetUrl: "https://x", ts: 1_700_000_000 }).text));
 

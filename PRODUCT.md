@@ -25,7 +25,7 @@ Protection honnête et traçable plutôt que promesse impossible : photos décou
 - Interface photographe (tableau de bord, hébergé séparément) ; page galerie client ; page portfolio ; espace famille scolaire (`/ecole`).
 - Paiements par Stripe Connect sur le compte du photographe ; frais de paiement retenus 2 % + 0,30 € par vente, aucune commission (formule Scolaire : 4,5 % sur les ventes scolaires, frais bancaires compris).
 - Tirages de la boutique : laboratoire Prodigi ; photos scolaires : laboratoire BePhoto (Belgique), intégration en cours.
-- Inscription et connexion se font sur l'admin (`https://holypixx-admin.onrender.com/`, `#/inscription`).
+- Inscription et connexion se font sur l'admin (`https://admin.holypixx.com/`, `#/inscription`).
 
 ## Capabilities and Constraints
 
