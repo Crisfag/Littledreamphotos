@@ -99,6 +99,30 @@ function withProcessingSlot(fn) {
   });
 }
 
+// Envois de photos : le fichier reçu est copié plusieurs fois en mémoire
+// (lecture, formulaire, traitement, fichier d'impression). Lire trois envois
+// à la fois en attendant leur tour suffisait à dépasser les 512 Mo d'une
+// petite instance (constaté : arrêts « out of memory » sous Render, offre
+// Starter). Un envoi n'est donc lu qu'à son tour : les suivants attendent,
+// non lus, que le précédent soit traité et envoyé au Worker.
+let activeUploads = 0;
+const uploadQueue = [];
+function acquireUploadSlot() {
+  return new Promise((resolve) => {
+    const release = () => {
+      activeUploads--;
+      const next = uploadQueue.shift();
+      if (next) next();
+    };
+    const run = () => {
+      activeUploads++;
+      resolve(release);
+    };
+    if (activeUploads < PROCESS_CONCURRENCY) run();
+    else uploadQueue.push(run);
+  });
+}
+
 const config = {
   api: process.env.GALERIE_API || "",
   forensicKey: process.env.GALERIE_FORENSIC_KEY || "",
@@ -651,6 +675,8 @@ async function handleApi(req, res, url) {
     const groupId = decodeURIComponent(parts[2]);
     const contentLength = Number(req.headers["content-length"] || 0);
     if (contentLength > MAX_UPLOAD_BYTES) return json(res, 413, { error: "Fichier trop volumineux" });
+    const release = await acquireUploadSlot();
+    try {
     let form;
     try {
       form = await nodeRequestToWebRequest(req, await readBody(req)).formData();
@@ -679,6 +705,9 @@ async function handleApi(req, res, url) {
     } catch (err) {
       console.error(`Échec du traitement de ${file.name || "?"} (groupe scolaire) :`, err);
       return relayError(res, err, `Échec du traitement de ${file.name || "cette photo"}`);
+    }
+    } finally {
+      release();
     }
   }
 
@@ -1589,6 +1618,8 @@ async function handleApi(req, res, url) {
     const contentLength = Number(req.headers["content-length"] || 0);
     if (contentLength > MAX_UPLOAD_BYTES) return json(res, 413, { error: "Fichier trop volumineux" });
 
+    const release = await acquireUploadSlot();
+    try {
     let form;
     try {
       const body = await readBody(req);
@@ -1634,6 +1665,9 @@ async function handleApi(req, res, url) {
     } catch (err) {
       console.error(`Échec du traitement de ${file.name || "?"} :`, err);
       return relayError(res, err, `Échec du traitement de ${file.name || "cette photo"}`);
+    }
+    } finally {
+      release();
     }
   }
 
