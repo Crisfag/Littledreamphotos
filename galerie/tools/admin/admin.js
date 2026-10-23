@@ -8,7 +8,7 @@
 (function () {
   "use strict";
 
-  var UPLOAD_CONCURRENCY = 3;
+  var UPLOAD_CONCURRENCY = 2;
   var EVENT_LABELS = {
     login: "Connexion",
     login_failed: "Mot de passe erroné",
@@ -569,13 +569,31 @@
           /* réponse illisible : traité ci-dessous comme une erreur */
         }
         if (xhr.status >= 200 && xhr.status < 300) resolve(data);
-        else reject(new Error(serverText(data && data.error) || L("Échec de l'envoi (", "Upload failed (") + xhr.status + ")"));
+        else reject(Object.assign(new Error(serverText(data && data.error) || L("Échec de l'envoi (", "Upload failed (") + xhr.status + ")"), { status: xhr.status }));
       };
       xhr.onerror = function () {
-        reject(new Error(L("Connexion au serveur d'administration perdue", "Lost connection to the dashboard server")));
+        reject(Object.assign(new Error(L("Connexion au serveur d'administration perdue", "Lost connection to the dashboard server")), { status: 0 }));
       };
       xhr.send(form);
     });
+  }
+
+  // Serveur momentanément indisponible (redémarrage, mise à jour : connexion
+  // coupée, 502, 503, 504) : la photo est renvoyée d'elle-même, deux fois au
+  // plus, plutôt que de rester en échec. Une photo refusée (fichier
+  // illisible, quota) ne l'est pas.
+  function uploadPhotoWithRetry(slug, file, position, onProgress, onRetry) {
+    var attempt = 0;
+    function tryOnce() {
+      return uploadPhoto(slug, file, position, onProgress).catch(function (err) {
+        var transient = err.status === 0 || err.status === 502 || err.status === 503 || err.status === 504;
+        if (!transient || attempt >= 2) throw err;
+        attempt++;
+        if (onRetry) onRetry(attempt);
+        return new Promise(function (resolve) { setTimeout(resolve, 4000 * attempt); }).then(tryOnce);
+      });
+    }
+    return tryOnce();
   }
 
   /* ---------- Utilitaires d'interface ---------- */
@@ -4882,8 +4900,10 @@
       if (cursor >= items.length) return Promise.resolve();
       var item = items[cursor++];
       fill(item.row, 0, L("envoi…", "uploading…"));
-      return uploadPhoto(slug, item.file, item.position, function (ratio) {
+      return uploadPhotoWithRetry(slug, item.file, item.position, function (ratio) {
         fill(item.row, ratio * 0.5, ratio < 1 ? L("envoi…", "uploading…") : L("traitement…", "processing…"));
+      }, function () {
+        fill(item.row, 0, L("nouvel essai…", "retrying…"));
       })
         .then(function (result) {
           fill(item.row, 1, L("terminé", "done"));
