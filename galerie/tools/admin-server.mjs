@@ -1708,7 +1708,11 @@ async function makePrintMaster(input) {
     .rotate()
     .resize({ width: PRINT_MASTER_MAX, height: PRINT_MASTER_MAX, fit: "inside", withoutEnlargement: true })
     .toColourspace("srgb")
-    .jpeg({ quality: 92, chromaSubsampling: "4:4:4" })
+    // Sans optimisation du codage : avec elle, tout le fichier codé reste en
+    // mémoire avant l'écriture (≈ 560 Mo au pic pour 45 Mpx, contre ≈ 175 Mo
+    // sans) — de quoi faire tomber une instance de 512 Mo. Même qualité, fichier
+    // ≈ 5 % plus lourd.
+    .jpeg({ quality: 92, chromaSubsampling: "4:4:4", optimiseCoding: false })
     .toBuffer();
 }
 
