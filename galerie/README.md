@@ -1204,6 +1204,33 @@ une galerie « Séance famille Martin (démo) » et l'ouvre en premier écran.
 Test : `tools/tests/demo.test.mjs`. Migration :
 `worker/migrations/2026-10-galerie-demo.sql`.
 
+### Parcours d'inscription (mesure)
+
+Onglet Admin → « Parcours d'inscription » : de la visite du site au premier
+client, sur 7 jours, 30 jours, 90 jours ou un an, avec le plus gros
+décrochage mis en avant et la répartition par source et par page.
+
+- **Haut du parcours** (`worker/src/funnel.js`, table `funnel_daily`) :
+  compteurs anonymes par jour, étape, page et source — une visite par
+  session (page d'arrivée), chaque clic « Créer un compte », l'écran
+  d'inscription ouvert. Envoyés par `web/funnel.js` (balise `sendBeacon`
+  vers `POST /api/public/funnel`) et par l'espace photographe
+  (`POST /local/funnel`). Ni IP, ni navigateur, ni identifiant ; robots
+  écartés ; 50 000 lignes au plus.
+- **Source** : `utm_source` du lien, sinon le site d'où vient le visiteur
+  (Google, Instagram, ChatGPT…), sinon « accès direct » ; gardée le temps
+  de l'onglet (`sessionStorage`) et transmise au lien d'inscription
+  (`#/inscription?from=page&src=source`).
+- **Suite du parcours** : lue sur les comptes créés pendant la période
+  (`photographers.signup_page` / `signup_source`, enregistrés à
+  l'inscription) — première vraie galerie, photos, galerie ouverte par un
+  client, formule payante choisie (essai compris) et comptes payants
+  aujourd'hui. Les comptes créés avant la mesure (sans source) n'y entrent
+  pas.
+
+Tests : `worker/tests/funnel.test.mjs`, `tools/tests/funnel.test.mjs`.
+Migration : `worker/migrations/2026-10-parcours.sql`.
+
 ### Espace photographe en anglais (parcours de base)
 
 Langue propre à chaque compte (`photographers.ui_language`, `fr` par

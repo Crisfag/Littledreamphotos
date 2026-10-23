@@ -29,6 +29,7 @@ import { runStoragePurge } from "./storage.js";
 import { plansForPublic } from "./subscription.js";
 import { publicReferral, runReferralRewards } from "./referral.js";
 import { joinWaitlist } from "./waitlist.js";
+import { recordFunnelEvent } from "./funnel.js";
 import { shopState } from "./shop.js";
 import { studioSubdomainOf, handleStudioHost } from "./studio.js";
 import { handlePrintAsset, handleProdigiCallback } from "./shop.js";
@@ -107,6 +108,9 @@ export default {
       } else if (path === "/api/public/waitlist" && request.method === "POST") {
         // Liste d'attente « Holypixx in English » (page d'accueil /en/).
         response = await joinWaitlist(request, env);
+      } else if (path === "/api/public/funnel" && request.method === "POST") {
+        // Parcours d'inscription : compteur anonyme (site, écran d'inscription).
+        response = await recordFunnelEvent(request, env);
       } else if (path.startsWith("/api/portfolio/")) {
         // Mini-site public du photographe (lecture, photos, formulaire de contact).
         response = await handlePortfolioPublic(request, env, path);

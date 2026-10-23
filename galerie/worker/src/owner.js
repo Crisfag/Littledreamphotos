@@ -9,6 +9,7 @@
 // une autorisation en soi.
 
 import { waitlistForOwner, removeFromWaitlist } from "./waitlist.js";
+import { funnelForOwner } from "./funnel.js";
 import { json, fail } from "./http.js";
 import { authenticatePhotographer } from "./authPhotographer.js";
 import { supplementFor } from "./admin.js";
@@ -208,6 +209,12 @@ export async function handleOwner(request, env, path) {
     const owner = await requireOwner(env, photographerId);
     if (!owner) return fail(403, "Accès réservé");
     return json(await runStoragePurge(env));
+  }
+  // Parcours d'inscription : de la visite au premier client (funnel.js).
+  if (action === "funnel" && parts.length === 3 && request.method === "GET") {
+    const owner = await requireOwner(env, photographerId);
+    if (!owner) return fail(403, "Accès réservé");
+    return json(await funnelForOwner(env, { days: new URL(request.url).searchParams.get("days") }));
   }
   // Liste d'attente « Holypixx in English » : lecture, retrait d'une adresse.
   if (action === "waitlist") {
