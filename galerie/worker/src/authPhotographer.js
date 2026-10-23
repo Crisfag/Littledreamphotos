@@ -23,6 +23,7 @@ import {
 import { sendPasswordResetEmail } from "./notify.js";
 import { languageOf } from "./i18n.js";
 import { confirmEmailChange } from "./account.js";
+import { signupAttribution } from "./funnel.js";
 
 // Outil utilisé au long cours (CLI, admin locale) plutôt qu'une session web
 // ponctuelle : durée de vie longue, à l'image d'un jeton d'API.
@@ -130,10 +131,12 @@ async function signup(request, env) {
 
   const { hash, salt } = await hashPassword(password);
   const id = newId();
+  const attribution = signupAttribution(body);
 
   await env.DB.prepare(
-    `INSERT INTO photographers (id, email, password_hash, password_salt, studio_name, first_name, last_name, created_at, terms_accepted_at, terms_version, ui_language)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO photographers (id, email, password_hash, password_salt, studio_name, first_name, last_name, created_at, terms_accepted_at, terms_version, ui_language,
+       signup_page, signup_source)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   )
     // Acceptation des conditions et de la politique de confidentialité :
     // exigée par l'écran d'inscription (admin-server), horodatée ici avec la
@@ -141,7 +144,9 @@ async function signup(request, env) {
     .bind(id, email, hash, salt, studioName, firstName, lastName, now(),
       body.acceptTerms === true ? now() : null, body.acceptTerms === true ? TERMS_VERSION : "",
       // Langue de l'espace photographe, choisie à l'inscription (page /en/).
-      languageOf(body.language))
+      languageOf(body.language),
+      // Page du site et source d'arrivée (parcours d'inscription, funnel.js).
+      attribution.page, attribution.source)
     .run();
 
   // Lien de parrainage : un code inconnu est ignoré, l'inscription aboutit.

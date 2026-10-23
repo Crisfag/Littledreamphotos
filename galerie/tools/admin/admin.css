@@ -947,6 +947,24 @@ main section > p, .ad-share > p { max-width: 75ch; }
 .ad-chart-tick { fill: var(--muted); font-size: 11px; font-family: var(--sans); font-variant-numeric: tabular-nums; }
 .ad-chart-year { font-size: 10px; }
 .ad-chart-value { fill: var(--ink); font-size: 12px; font-weight: 500; font-family: var(--sans); }
+
+/* Parcours d'inscription (onglet Admin) : une barre par étape, à l'échelle
+   de la plus grande ; chiffres et pourcentages en texte, jamais la couleur seule. */
+.ad-funnel { list-style: none; margin: 12px 0 8px; padding: 0; display: grid; gap: 6px; }
+.ad-funnel-step { display: grid; grid-template-columns: minmax(150px, 220px) 1fr 56px minmax(150px, 230px); align-items: center; gap: 12px; padding: 4px 0; font-size: 14px; }
+.ad-funnel-split { margin-top: 10px; padding-top: 12px; border-top: 1px dashed var(--line-2); }
+.ad-funnel-label { color: var(--ink); }
+.ad-funnel-track { height: 12px; border-radius: 4px; background: var(--mist-2); overflow: hidden; }
+.ad-funnel-bar { display: block; height: 100%; min-width: 0; border-radius: 4px; background: var(--accent); }
+.ad-funnel-count { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ink); }
+.ad-funnel-note { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+.ad-funnel-headline { margin: 8px 0 0; padding: 10px 14px; border-radius: 10px; background: var(--accent-soft); color: var(--ink); font-size: 14px; }
+.ad-funnel-sub { margin: 20px 0 8px; font-size: 14px; font-weight: 600; }
+@media (max-width: 720px) {
+  .ad-funnel-step { grid-template-columns: 1fr auto; gap: 4px 10px; }
+  .ad-funnel-track { grid-column: 1 / -1; grid-row: 2; }
+  .ad-funnel-note { grid-column: 1 / -1; }
+}
 .ad-chart-hit { fill: transparent; }
 .ad-chart-col { cursor: default; outline: none; }
 .ad-chart-col-active .ad-chart-hit, .ad-chart-col:focus-visible .ad-chart-hit { fill: rgba(20, 20, 60, .05); }

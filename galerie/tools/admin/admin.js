@@ -445,7 +445,36 @@
 
   function showLogin() {
     // Le bouton « Créer un compte » du site mène à #/inscription.
-    showLoginCard(location.hash.indexOf("#/inscription") === 0 ? "ad-signup-card" : "ad-login-card");
+    var signup = location.hash.indexOf("#/inscription") === 0;
+    showLoginCard(signup ? "ad-signup-card" : "ad-login-card");
+    if (signup) trackSignupView();
+  }
+
+  // Parcours d'inscription (worker/src/funnel.js) : page du site et source
+  // d'arrivée (#/inscription?from=mariage&src=google), gardées le temps de
+  // s'inscrire puis enregistrées sur le compte. L'ouverture de l'écran
+  // d'inscription est comptée une fois par session, sans donnée personnelle.
+  var ARRIVAL_KEY = "holypixx-arrivee";
+  function signupArrival() {
+    var from = /[?&]from=([a-z0-9-]{1,40})/.exec(location.hash);
+    var src = /[?&]src=([a-z0-9-]{1,40})/.exec(location.hash);
+    var arrival = { page: from ? from[1] : "", source: src ? src[1] : "" };
+    try {
+      if (arrival.page || arrival.source) sessionStorage.setItem(ARRIVAL_KEY, JSON.stringify(arrival));
+      else arrival = JSON.parse(sessionStorage.getItem(ARRIVAL_KEY) || "null") || arrival;
+    } catch (err) { /* navigation privée : l'adresse suffit */ }
+    return arrival;
+  }
+  function trackSignupView() {
+    var seen = false;
+    try { seen = sessionStorage.getItem("holypixx-inscription-vue") === "1"; sessionStorage.setItem("holypixx-inscription-vue", "1"); } catch (err) { seen = false; }
+    if (seen || navigator.webdriver) return;
+    var arrival = signupArrival();
+    fetch("/local/funnel", {
+      method: "POST",
+      headers: { "content-type": "text/plain" },
+      body: JSON.stringify({ step: "signup_view", page: arrival.page, source: arrival.source || "direct" }),
+    }).catch(function () { /* mesure perdue, sans conséquence */ });
   }
 
   // Lien de parrainage (holypixx.com/?parrain=CODE → #/inscription?parrain=CODE) :
@@ -2584,6 +2613,93 @@
     );
   }
 
+  /* ---------- Admin : parcours d'inscription ---------- */
+
+  // De la visite du site au premier client (worker/src/funnel.js). Le haut
+  // du parcours (visiteurs, clics, écran d'inscription) compte les
+  // évènements de la période ; la suite suit les comptes créés pendant la
+  // période, jusqu'à aujourd'hui.
+  var funnelDays = 30;
+
+  function percentText(part, whole) {
+    if (!whole) return "—";
+    var p = (part / whole) * 100;
+    return (p >= 10 || p === 0 ? Math.round(p) : p.toFixed(1).replace(".", ",")) + "\u00a0%";
+  }
+
+  function funnelSectionHtml(data) {
+    var periods = [[7, "7 jours"], [30, "30 jours"], [90, "90 jours"], [365, "1 an"]];
+    var head = '<section id="ad-funnel"><div class="ad-section-header"><h3>Parcours d\'inscription</h3>' +
+      '<div class="ad-seg" role="group" aria-label="Période">' +
+      periods.map(function (p) {
+        return '<button type="button" class="ad-seg-btn" data-funnel-days="' + p[0] + '" aria-pressed="' + (p[0] === funnelDays) + '">' + p[1] + "</button>";
+      }).join("") + "</div></div>";
+    if (!data) return head + '<p class="ad-hint">Parcours indisponible pour le moment.</p></section>';
+
+    var steps = data.steps;
+    var max = Math.max.apply(null, steps.map(function (st) { return st.count; }).concat([1]));
+    // Plus gros décrochage entre deux étapes qui ont eu du monde.
+    var worst = null;
+    for (var i = 1; i < steps.length; i++) {
+      var prev = steps[i - 1].count;
+      if (prev < 3) continue;
+      var kept = steps[i].count / prev;
+      if (!worst || kept < worst.kept) worst = { from: steps[i - 1], to: steps[i], kept: kept };
+    }
+    var rows = steps.map(function (st, idx) {
+      var prev = idx ? steps[idx - 1].count : 0;
+      var width = st.count ? Math.max(1, Math.round((st.count / max) * 100)) : 0;
+      var note = idx ? percentText(st.count, prev) + " de l'étape précédente" : "";
+      if (st.key === "subscribed") note += (note ? " · " : "") + data.paying + " payant" + (data.paying > 1 ? "s" : "") + " aujourd'hui";
+      return '<li class="ad-funnel-step' + (idx === 3 ? " ad-funnel-split" : "") + '" title="' + esc(st.label + " : " + st.count + (note ? " (" + note + ")" : "")) + '">' +
+        '<span class="ad-funnel-label">' + esc(st.label) + "</span>" +
+        '<span class="ad-funnel-track"><span class="ad-funnel-bar" style="width:' + width + '%"></span></span>' +
+        '<span class="ad-funnel-count">' + st.count + "</span>" +
+        '<span class="ad-funnel-note">' + esc(note) + "</span></li>";
+    });
+    var headline = worst
+      ? '<p class="ad-funnel-headline">Plus gros décrochage : <strong>' + esc(worst.from.label) + " → " + esc(worst.to.label) +
+        "</strong>, " + percentText(worst.to.count, worst.from.count) + " passent l'étape.</p>"
+      : '<p class="ad-hint">Pas encore assez de passage pour repérer où les visiteurs décrochent.</p>';
+
+    var table = function (title, list, firstCol) {
+      var body = list.filter(function (r) { return r.visits || r.clicks || r.signups; }).map(function (r) {
+        return "<tr><td>" + esc(r.label) + "</td><td>" + r.visits + "</td><td>" + r.clicks + "</td><td>" + r.signups + "</td><td>" + r.activated +
+          "</td><td>" + (r.visits ? percentText(r.signups, r.visits) : "—") + "</td></tr>";
+      });
+      return '<h4 class="ad-funnel-sub">' + esc(title) + "</h4>" + (body.length
+        ? '<div class="ad-table-wrap"><table class="ad-table"><thead><tr><th>' + esc(firstCol) +
+          "</th><th>Visiteurs</th><th>Clics</th><th>Comptes</th><th>Jusqu'au client</th><th>Visite → compte</th></tr></thead><tbody>" +
+          body.join("") + "</tbody></table></div>"
+        : '<p class="ad-hint">Rien sur cette période.</p>');
+    };
+
+    return head +
+      '<p class="ad-hint">Du site au premier client, sur les ' + (data.days === 365 ? "12 derniers mois" : data.days + " derniers jours") +
+      ". Les visites et les clics sont comptés sans cookie ni donnée personnelle (une visite par session, sur la page d'arrivée) ; " +
+      "à partir des comptes créés, chaque compte de la période est suivi jusqu'à aujourd'hui.</p>" +
+      headline +
+      '<ol class="ad-funnel">' + rows.join("") + "</ol>" +
+      table("Par source", data.bySource, "Source") +
+      table("Par page du site", data.byPage, "Page") +
+      '<p class="ad-hint">Page : celle d\'arrivée pour les visiteurs, celle du clic pour les clics et les comptes. ' +
+      "Pour suivre une campagne, ajoutez <code>?utm_source=nom</code> au lien partagé (ex. <code>holypixx.com/?utm_source=newsletter</code>).</p>" +
+      "</section>";
+  }
+
+  function wireFunnel() {
+    document.querySelectorAll("[data-funnel-days]").forEach(function (btn) {
+      btn.addEventListener("click", async function () {
+        funnelDays = Number(btn.getAttribute("data-funnel-days"));
+        var data = await api("GET", "/owner/funnel?days=" + funnelDays).catch(function () { return null; });
+        var section = document.getElementById("ad-funnel");
+        if (!section) return;
+        section.outerHTML = funnelSectionHtml(data);
+        wireFunnel();
+      });
+    });
+  }
+
   /* ---------- Admin : liste d'attente « Holypixx in English » ---------- */
 
   var WAITLIST_SPECIALTY = {
@@ -2846,11 +2962,12 @@
     setActiveTab("owner");
     el.view.innerHTML = '<p class="ad-loading">Chargement…</p>';
 
-    var statsData, photographersData, waitlistData;
+    var statsData, photographersData, waitlistData, funnelData;
     try {
       statsData = await api("GET", "/owner/stats");
       photographersData = await api("GET", "/owner/photographers");
       waitlistData = await api("GET", "/owner/waitlist").catch(function () { return null; });
+      funnelData = await api("GET", "/owner/funnel?days=" + funnelDays).catch(function () { return null; });
     } catch (err) {
       toast(err.message, true);
       return renderList();
@@ -2864,6 +2981,8 @@
 
       ownerStatsHtml(statsData) +
       stripeConfigHtml(statsData.stripe) +
+
+      funnelSectionHtml(funnelData) +
 
       '<section><div class="ad-section-header"><h3>Inscriptions par mois</h3></div>' +
       signupsTableHtml(statsData.signupsByMonth) +
@@ -2893,6 +3012,7 @@
     wireOwnerMusic();
     wireAccountsTable();
     wireWaitlist();
+    wireFunnel();
     document.getElementById("ad-run-reminders").addEventListener("click", async function () {
       var btn = this;
       var out = document.getElementById("ad-run-reminders-result");
@@ -4878,6 +4998,8 @@
           acceptTerms: form.acceptTerms.checked,
           referralCode: referralCode(),
           language: LANG,
+          signupPage: signupArrival().page,
+          signupSource: signupArrival().source,
         }),
       });
       var data = await response.json().catch(function () { return {}; });

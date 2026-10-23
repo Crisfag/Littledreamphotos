@@ -337,7 +337,9 @@ async function handleAuth(req, res, parts) {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ email, password, studioName, firstName, lastName, acceptTerms: true, referralCode: String(body.referralCode || "").slice(0, 20),
-          language: body.language === "en" ? "en" : "fr" }),
+          language: body.language === "en" ? "en" : "fr",
+          // Page du site et source d'arrivée (parcours d'inscription), relues par le Worker.
+          signupPage: String(body.signupPage || "").slice(0, 40), signupSource: String(body.signupSource || "").slice(0, 40) }),
       });
     } catch {
       return json(res, 502, { error: "Worker injoignable" });
@@ -477,6 +479,21 @@ async function handleApi(req, res, url) {
     } catch {
       return json(res, 502, { error: "Worker injoignable" });
     }
+  }
+
+  // POST /local/funnel — écran d'inscription ouvert (parcours d'inscription,
+  // public : on n'a pas encore de compte). Compteur anonyme côté Worker ;
+  // le navigateur est transmis pour que les robots y soient écartés.
+  if (parts.length === 1 && parts[0] === "funnel" && req.method === "POST") {
+    try {
+      const body = (await readBody(req, 2000)).toString();
+      await fetch(`${config.api}/api/public/funnel`, {
+        method: "POST",
+        headers: { "content-type": "text/plain", "user-agent": String(req.headers["user-agent"] || "") },
+        body,
+      });
+    } catch { /* mesure perdue, sans conséquence */ }
+    return json(res, 200, { ok: true });
   }
 
   // Tout ce qui suit agit au nom d'un compte : session obligatoire.
@@ -1221,6 +1238,16 @@ async function handleApi(req, res, url) {
     }
   }
 
+  // GET /local/owner/funnel?days=30 — parcours d'inscription, revérifié par le Worker.
+  if (parts.length === 2 && parts[0] === "owner" && parts[1] === "funnel" && req.method === "GET") {
+    try {
+      const days = new URL(req.url, "http://localhost").searchParams.get("days") || "30";
+      return json(res, 200, await client.request("GET", `/api/owner/funnel?days=${encodeURIComponent(days)}`));
+    } catch (err) {
+      return relayError(res, err, "Impossible de lire le parcours d'inscription");
+    }
+  }
+
   // /local/owner/waitlist — liste d'attente « Holypixx in English » (lecture,
   // retrait d'une adresse), revérifiée par le Worker.
   if (parts.length === 2 && parts[0] === "owner" && parts[1] === "waitlist" && (req.method === "GET" || req.method === "DELETE")) {
@@ -1690,7 +1717,9 @@ async function linkFor(client, slug) {
 /* ---------- Serveur ---------- */
 
 const server = createServer(async (req, res) => {
-  const url = new URL(req.url, `http://${HOST}`);
+  // « //chemin » se lirait comme une adresse sans protocole (et ferait
+  // planter le serveur) : les barres de tête sont ramenées à une seule.
+  const url = new URL(String(req.url || "/").replace(/^\/+/, "/"), `http://${HOST}`);
   try {
     if (url.pathname.startsWith("/local/")) {
       await handleApi(req, res, { pathname: url.pathname.slice("/local".length) || "/", search: url.search });

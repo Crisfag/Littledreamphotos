@@ -89,6 +89,11 @@ CREATE TABLE IF NOT EXISTS photographers (
   bephoto_email        TEXT NOT NULL DEFAULT '',
   bephoto_password_enc TEXT NOT NULL DEFAULT '',
   bephoto_token_enc    TEXT NOT NULL DEFAULT '',
+  -- Parcours d'inscription (funnel.js) : page du site et source (Google,
+  -- Instagram, accès direct…) d'où le photographe est arrivé. Vide pour les
+  -- comptes créés avant la mesure ou sans passer par le site.
+  signup_page          TEXT NOT NULL DEFAULT '',
+  signup_source        TEXT NOT NULL DEFAULT '',
   created_at     INTEGER NOT NULL
 );
 
@@ -1143,4 +1148,16 @@ CREATE TABLE IF NOT EXISTS planning_done (
   item_key        TEXT NOT NULL,              -- sel:{galerie}, gal:{réservation}, cld:{date}:{AAAA-MM-JJ}
   done_at         INTEGER NOT NULL,
   PRIMARY KEY (photographer_id, item_key)
+);
+
+-- Parcours d'inscription (funnel.js) : compteurs anonymes du haut du
+-- parcours (visite du site, clic « Créer un compte », écran d'inscription),
+-- par jour, page et source. Ni IP, ni navigateur, ni identifiant.
+CREATE TABLE IF NOT EXISTS funnel_daily (
+  day    TEXT NOT NULL,                 -- AAAA-MM-JJ (UTC)
+  step   TEXT NOT NULL,                 -- visit, signup_click, signup_view
+  page   TEXT NOT NULL DEFAULT '',      -- accueil, mariage, contrat…
+  source TEXT NOT NULL DEFAULT '',      -- direct, google, instagram…
+  count  INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (day, step, page, source)
 );
