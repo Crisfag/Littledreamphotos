@@ -8,7 +8,7 @@
 import { json, fail } from "./http.js";
 import { parseMarks } from "./marks.js";
 import { handleShopAdmin, listPrintOrders } from "./shop.js";
-import { hashPassword, randomBytes, b64url } from "./auth.js";
+import { hashPassword, randomBytes, b64url, signToken } from "./auth.js";
 import { listLibrary, setMusicChoice, musicForAdmin } from "./music.js";
 import { handleDeliveryAdmin, deliveryForAdmin } from "./delivery.js";
 import { sendDeliveryReady } from "./notify.js";
@@ -302,6 +302,21 @@ async function getGallery(env, photographerId, slug) {
     payments,
     printOrders: await listPrintOrders(env, { galleryId: gallery.id }),
   });
+}
+
+// Clé d'aperçu : ouvre la page client sans mot de passe, pour le seul
+// photographe, dix minutes. La session qu'elle ouvre n'écrit rien (ni
+// journal, ni sélection, ni paiement — voir viewer.js, PREVIEW_KIND).
+export const PREVIEW_KEY_TTL_SECONDS = 600;
+async function previewKey(env, photographerId, slug) {
+  const gallery = await ownedGallery(env, photographerId, slug);
+  if (!gallery) return fail(404, "Galerie introuvable");
+  const key = await signToken(env.TOKEN_SECRET, {
+    g: gallery.id,
+    k: "apercu",
+    exp: Math.floor(Date.now() / 1000) + PREVIEW_KEY_TTL_SECONDS,
+  });
+  return json({ key, expiresIn: PREVIEW_KEY_TTL_SECONDS });
 }
 
 // Remplace le mot de passe d'une galerie — l'ancien cesse aussitôt de
@@ -798,6 +813,9 @@ export async function handleAdmin(request, env, ctx, path) {
     }
     if (parts.length === 5 && parts[4] === "password" && request.method === "POST") {
       return regeneratePassword(request, env, photographerId, slug);
+    }
+    if (parts.length === 5 && parts[4] === "preview" && request.method === "POST") {
+      return previewKey(env, photographerId, slug);
     }
     if (parts.length === 6 && parts[4] === "background" && parts[5] === "color" && request.method === "POST") {
       return setBackgroundColor(request, env, photographerId, slug);

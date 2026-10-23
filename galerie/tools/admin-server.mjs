@@ -1417,6 +1417,18 @@ async function handleApi(req, res, url) {
     }
   }
 
+  // POST /local/galleries/:slug/preview — aperçu de la page client : clé
+  // courte (10 min) ajoutée au lien du client, après le « # » pour qu'elle
+  // ne parte jamais vers un serveur ni dans un en-tête Referer.
+  if (parts.length === 3 && parts[2] === "preview" && req.method === "POST") {
+    try {
+      const { key } = await client.request("POST", `/api/admin/galleries/${encodeURIComponent(slug)}/preview`, {});
+      return json(res, 200, { key, url: `${await linkFor(client, slug)}#apercu=${encodeURIComponent(key)}` });
+    } catch (err) {
+      return relayError(res, err, "Impossible d'ouvrir l'aperçu");
+    }
+  }
+
   // POST /local/galleries/:slug/background/color
   if (parts.length === 4 && parts[2] === "background" && parts[3] === "color" && req.method === "POST") {
     const body = JSON.parse((await readBody(req)).toString("utf8") || "{}");

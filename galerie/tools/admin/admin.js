@@ -281,6 +281,7 @@
     "Lettres minuscules, chiffres et tirets seulement (30 caractères maximum, sans tiret au début ni à la fin)": "Lowercase letters, digits and hyphens only (30 characters maximum, no hyphen at the start or end)",
     "Lien Deezer non reconnu : copiez le lien d'un titre, d'un album ou d'une playlist.": "Deezer link not recognised: copy the link of a track, an album or a playlist.",
     "Lien SoundCloud non reconnu : copiez le lien d'un morceau ou d'une playlist.": "SoundCloud link not recognised: copy the link of a track or a playlist.",
+    "Impossible d'ouvrir l'aperçu": "Couldn't open the preview",
     "Lien Spotify non reconnu : copiez le lien d'un titre, d'un album ou d'une playlist (Partager → Copier le lien).": "Spotify link not recognised: copy the link of a track, an album or a playlist (Share → Copy link).",
     "Lien Vimeo non reconnu : copiez le lien de la vidéo.": "Vimeo link not recognised: copy the link of the video.",
     "Lien YouTube non reconnu : copiez le lien d'une vidéo ou d'une playlist.": "YouTube link not recognised: copy the link of a video or a playlist.",
@@ -4498,6 +4499,7 @@
       '<label class="ad-field"><span>' + L("Lien", "Link") + '</span><div class="ad-copy-row">' +
       '<input type="text" readonly value="' + esc(data.link) + '" id="ad-detail-link" />' +
       '<button type="button" class="ad-btn" data-copy="ad-detail-link">' + L("Copier", "Copy") + "</button>" +
+      '<button type="button" class="ad-btn" id="ad-preview" title="' + L("Voir la galerie comme votre client, sans mot de passe et sans rien enregistrer", "See the gallery as your client does, with no password and nothing saved") + '">' + L("Aperçu client ↗", "Client preview ↗") + "</button>" +
       "</div></label>" +
       '<p class="ad-hint">' + (data.gallery.demo && data.gallery.demo_password
         ? L("Le mot de passe de cette démo est affiché plus haut. ", "This demo's password is shown above. ")
@@ -4777,6 +4779,23 @@
         });
       });
     }
+    // Aperçu client : la fenêtre s'ouvre tout de suite (sinon le navigateur
+    // la bloquerait), puis reçoit le lien d'aperçu une fois la clé obtenue.
+    document.getElementById("ad-preview").addEventListener("click", async function () {
+      var win = window.open("", "_blank");
+      try {
+        var data = await api("POST", "/galleries/" + encodeURIComponent(slug) + "/preview", {});
+        if (win) {
+          win.opener = null;
+          win.location.href = new URL(data.url, location.href).href;
+        } else {
+          location.href = data.url;
+        }
+      } catch (err) {
+        if (win) win.close();
+        toast(err.message, true);
+      }
+    });
     document.getElementById("ad-new-password").addEventListener("click", function () {
       confirmAction(L("Générer un nouveau mot de passe ? L'ancien cessera aussitôt de fonctionner.", "Generate a new password? The old one stops working immediately."), async function () {
         try {

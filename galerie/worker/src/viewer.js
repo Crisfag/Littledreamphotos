@@ -96,6 +96,17 @@ async function handleLogin(request, env, slug) {
   }
   const password = typeof body?.password === "string" ? body.password : "";
 
+  // Aperçu du photographe (clé courte signée par l'espace photographe, voir
+  // admin.js) : ni mot de passe, ni ligne au journal, et une session qui
+  // n'écrit rien. Une galerie expirée reste visible en aperçu.
+  if (typeof body?.preview === "string" && body.preview) {
+    const key = await verifyToken(env.TOKEN_SECRET, body.preview);
+    const gallery = key && key.k === "apercu" ? await getGallery(env, slug) : null;
+    if (!gallery || gallery.id !== key.g) return fail(401, "Lien d'aperçu expiré : rouvrez l'aperçu depuis votre espace.");
+    const token = await signToken(env.TOKEN_SECRET, { g: gallery.id, v: "apercu", pv: 1, exp: now() + PREVIEW_SESSION_SECONDS });
+    return openSession(env, gallery, token, PREVIEW_SESSION_SECONDS, true);
+  }
+
   if (await tooManyFailures(env, ipHash)) {
     return fail(429, "Trop de tentatives. Réessayez dans quelques minutes.");
   }
@@ -131,6 +142,15 @@ async function handleLogin(request, env, slug) {
 
   await logAccess(env, { galleryId: gallery.id, viewerId, event: "login", ipHash, userAgent });
 
+  return openSession(env, gallery, token, SESSION_TTL_SECONDS, false);
+}
+
+// Aperçu : une heure, de quoi parcourir la galerie comme le client.
+const PREVIEW_SESSION_SECONDS = 3600;
+
+// Ce que reçoit la page client à l'ouverture : la galerie, ses photos, sa
+// boutique. `preview` : session du photographe, qui n'écrit rien.
+async function openSession(env, gallery, token, expiresIn, preview) {
   const { results: photos } = await env.DB.prepare(
     `SELECT id, width, height, cols, rows, preview_width, preview_height, selected, comment, tag, marks, has_original FROM photos
      WHERE gallery_id = ? ORDER BY position ASC, created_at ASC`
@@ -155,8 +175,9 @@ async function handleLogin(request, env, slug) {
 
   return json({
     token,
-    expiresIn: SESSION_TTL_SECONDS,
+    expiresIn,
     gallery: {
+      preview,
       shop,
       printOrders,
       title: gallery.title,
@@ -206,8 +227,18 @@ async function authorize(request, env, slug) {
 
   const gallery = await getGallery(env, slug);
   if (!gallery || gallery.id !== payload.g) return { error: fail(403, "Accès refusé") };
-  if (isExpired(gallery)) return { error: fail(410, "Cette galerie a expiré.") };
-  return { gallery, viewerId: payload.v };
+  if (isExpired(gallery) && !payload.pv) return { error: fail(410, "Cette galerie a expiré.") };
+  return { gallery, viewerId: payload.v, preview: Boolean(payload.pv) };
+}
+
+// Actions qui écrivent (sélection, couleurs, commentaires, validation,
+// panier, paiements, journal, liens de téléchargement) : refusées à une
+// session d'aperçu, quoi que fasse la page.
+const WRITE_ACTIONS = new Set(["select", "comment", "tag", "marks", "validate", "cart", "print-order", "event", "checkout", "delivery"]);
+async function isPreviewSession(request, env) {
+  const header = request.headers.get("Authorization") || "";
+  const payload = header.startsWith("Bearer ") ? await verifyToken(env.TOKEN_SECRET, header.slice(7)) : null;
+  return Boolean(payload?.pv);
 }
 
 const PREVIEW_COLS = 2;
@@ -700,6 +731,9 @@ export async function handleViewer(request, env, ctx, path) {
 
   if (action === "login" && request.method === "POST") {
     return handleLogin(request, env, slug);
+  }
+  if (WRITE_ACTIONS.has(action) && request.method === "POST" && await isPreviewSession(request, env)) {
+    return fail(403, "Aperçu : rien n'est enregistré.");
   }
   if (action === "background" && request.method === "GET" && parts.length === 4) {
     return handleBackground(env, slug);
