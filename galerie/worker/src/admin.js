@@ -8,7 +8,7 @@
 import { json, fail } from "./http.js";
 import { parseMarks } from "./marks.js";
 import { handleShopAdmin, listPrintOrders } from "./shop.js";
-import { hashPassword, randomBytes, b64url } from "./auth.js";
+import { hashPassword, randomBytes, b64url, signToken } from "./auth.js";
 import { listLibrary, setMusicChoice, musicForAdmin } from "./music.js";
 import { handleDeliveryAdmin, deliveryForAdmin } from "./delivery.js";
 import { sendDeliveryReady } from "./notify.js";
@@ -25,6 +25,7 @@ import { handlePlanningAdmin } from "./planning.js";
 import { setPromo, sendPromoToClient, promoForAdmin } from "./campaigns.js";
 import { galleryUrlFor } from "./reminders.js";
 import { salesForAdmin } from "./sales.js";
+import { insightsForAdmin, setSessionType, cleanSessionType, guessSessionType } from "./insights.js";
 import { handlePortfolioAdmin, deletePortfolioFiles } from "./portfolio.js";
 import { storageRefusal, TILE_BYTES_PER_PHOTO } from "./storage.js";
 import { authenticatePhotographer } from "./authPhotographer.js";
@@ -166,8 +167,8 @@ async function createGallery(request, env, photographerId) {
   await env.DB.prepare(
     `INSERT INTO galleries
        (id, photographer_id, slug, title, client_name, client_email, password_hash, password_salt, watermark_text, expires_at,
-        included_photos, extra_photo_price_cents, layout, theme, language, demo, demo_password, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        included_photos, extra_photo_price_cents, layout, theme, language, demo, demo_password, session_type, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   )
     .bind(
       id,
@@ -187,6 +188,9 @@ async function createGallery(request, env, photographerId) {
       language,
       demo ? 1 : 0,
       demo ? password : null,
+      // Type de séance (statistiques, voir insights.js) : vide = deviné
+      // d'après le titre tant que le photographe ne l'a pas choisi.
+      cleanSessionType(body.sessionType),
       now()
     )
     .run();
@@ -264,6 +268,9 @@ async function getGallery(env, photographerId, slug) {
       watermark_text: gallery.watermark_text,
       expires_at: gallery.expires_at,
       created_at: gallery.created_at,
+      // Type de séance (statistiques) : choisi, sinon deviné d'après le titre.
+      session_type: cleanSessionType(gallery.session_type),
+      session_type_guess: guessSessionType(gallery.title),
       demo: Boolean(gallery.demo),
       // Montré au seul photographe, pour ouvrir sa démo comme un client ;
       // absent de toute autre galerie (aucun mot de passe n'en sort jamais).
@@ -302,6 +309,21 @@ async function getGallery(env, photographerId, slug) {
     payments,
     printOrders: await listPrintOrders(env, { galleryId: gallery.id }),
   });
+}
+
+// Clé d'aperçu : ouvre la page client sans mot de passe, pour le seul
+// photographe, dix minutes. La session qu'elle ouvre n'écrit rien (ni
+// journal, ni sélection, ni paiement — voir viewer.js, PREVIEW_KIND).
+export const PREVIEW_KEY_TTL_SECONDS = 600;
+async function previewKey(env, photographerId, slug) {
+  const gallery = await ownedGallery(env, photographerId, slug);
+  if (!gallery) return fail(404, "Galerie introuvable");
+  const key = await signToken(env.TOKEN_SECRET, {
+    g: gallery.id,
+    k: "apercu",
+    exp: Math.floor(Date.now() / 1000) + PREVIEW_KEY_TTL_SECONDS,
+  });
+  return json({ key, expiresIn: PREVIEW_KEY_TTL_SECONDS });
 }
 
 // Remplace le mot de passe d'une galerie — l'ancien cesse aussitôt de
@@ -775,6 +797,9 @@ export async function handleAdmin(request, env, ctx, path) {
 
   // Tableau de bord des ventes (12 derniers mois).
   if (section === "sales" && parts.length === 3 && request.method === "GET") return salesForAdmin(env, photographerId);
+  if (section === "insights" && parts.length === 3 && request.method === "GET") {
+    return insightsForAdmin(env, photographerId, new URL(request.url).searchParams.get("period") || "12m");
+  }
 
   // Bibliothèque musicale commune, lue par tous les photographes.
   if (section === "music-library" && parts.length === 3 && request.method === "GET") return listLibrary(env);
@@ -798,6 +823,12 @@ export async function handleAdmin(request, env, ctx, path) {
     }
     if (parts.length === 5 && parts[4] === "password" && request.method === "POST") {
       return regeneratePassword(request, env, photographerId, slug);
+    }
+    if (parts.length === 5 && parts[4] === "preview" && request.method === "POST") {
+      return previewKey(env, photographerId, slug);
+    }
+    if (parts.length === 5 && parts[4] === "session-type" && request.method === "POST") {
+      return setSessionType(request, env, photographerId, slug);
     }
     if (parts.length === 6 && parts[4] === "background" && parts[5] === "color" && request.method === "POST") {
       return setBackgroundColor(request, env, photographerId, slug);

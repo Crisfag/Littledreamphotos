@@ -66,6 +66,11 @@
 
   <!-- ============ Galerie ============ -->
   <div id="gp-gallery" hidden>
+    <!-- Aperçu ouvert depuis l'espace photographe : rien n'est enregistré. -->
+    <div class="gp-preview-banner" id="gp-preview-banner" role="status" hidden>
+      <strong data-en="Preview">Aperçu</strong>
+      <span data-en="This is exactly what your client sees. Hearts, colours and comments work here but are not saved; payments and downloads are turned off. Your client never sees this banner.">C'est exactement ce que voit votre client. Cœurs, couleurs et commentaires fonctionnent ici mais ne sont pas enregistrés ; paiements et téléchargements sont désactivés. Votre client ne voit jamais ce bandeau.</span>
+    </div>
     <!-- En-tête choisi par le photographe : photo de couverture ou film. -->
     <section class="gp-hero" id="gp-hero" hidden></section>
     <header class="gp-header">
@@ -134,10 +139,14 @@
           <p class="gp-validate-status" id="gp-validate-status" aria-live="polite"></p>
         </div>
       </div>
-      <label class="gp-toolbar-filter">
-        <input type="checkbox" id="gp-filter-selected" />
-        <span data-en="Show only my selection">Afficher uniquement ma sélection</span>
-      </label>
+      <div class="gp-filters" id="gp-filters" role="group" aria-label="Afficher" data-en-label="Show">
+        <button type="button" class="gp-filter" data-filter="all" aria-pressed="true"><span data-en="All">Toutes</span> <span class="gp-filter-n"></span></button>
+        <button type="button" class="gp-filter" data-filter="selected" aria-pressed="false"><span class="gp-filter-heart" aria-hidden="true">♥</span> <span data-en="My favourites">Mes favoris</span> <span class="gp-filter-n"></span></button>
+        <button type="button" class="gp-filter" data-filter="green" aria-pressed="false" hidden><i class="gp-filter-dot gp-tag-dot-green" aria-hidden="true"></i> <span data-en="Green">Vertes</span> <span class="gp-filter-n"></span></button>
+        <button type="button" class="gp-filter" data-filter="yellow" aria-pressed="false" hidden><i class="gp-filter-dot gp-tag-dot-yellow" aria-hidden="true"></i> <span data-en="Orange">Oranges</span> <span class="gp-filter-n"></span></button>
+        <button type="button" class="gp-filter" data-filter="red" aria-pressed="false" hidden><i class="gp-filter-dot gp-tag-dot-red" aria-hidden="true"></i> <span data-en="Red">Rouges</span> <span class="gp-filter-n"></span></button>
+        <button type="button" class="gp-filter" data-filter="comment" aria-pressed="false" hidden><span data-en="With a comment">Commentées</span> <span class="gp-filter-n"></span></button>
+      </div>
     </div>
 
     <div class="gp-grid" id="gp-grid"></div>

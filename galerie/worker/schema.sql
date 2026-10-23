@@ -187,6 +187,9 @@ CREATE TABLE IF NOT EXISTS galleries (
   -- les photos d'un groupe scolaire (school_groups.gallery_id), jamais
   -- listée avec les galeries classiques ni comptée dans leur quota.
   kind                   TEXT NOT NULL DEFAULT 'client',
+  -- Type de séance (grossesse, naissance, famille…, voir insights.js) pour
+  -- les statistiques ; vide = deviné d'après le titre.
+  session_type           TEXT NOT NULL DEFAULT '',
   created_at             INTEGER NOT NULL
 );
 

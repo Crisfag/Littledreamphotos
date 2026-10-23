@@ -69,14 +69,55 @@
   };
   var loadedFonts = { cormorant: true, jost: true }; // déjà dans la page
 
+  /* ---------- Aperçu du photographe ---------- */
+
+  // Ouvert depuis l'espace photographe (lien « #apercu=… ») : la galerie se
+  // parcourt comme le client la verra, cœurs, couleurs et filtres compris,
+  // mais rien ne part au serveur (qui le refuserait de toute façon, voir
+  // viewer.js) : la réponse est simulée ici, dans la page.
+  var PREVIEW_REPLIES = {
+    "/select": function () { return { ok: true }; },
+    "/tag": function () { return { ok: true }; },
+    "/comment": function (body) { return { comment: String(body.comment || "") }; },
+    "/marks": function (body) { return { marks: Array.isArray(body.marks) ? body.marks : [] }; },
+    "/validate": function () { return { selectionDoneAt: Math.floor(Date.now() / 1000) }; },
+    "/cart": function () { return { ok: true }; },
+    "/event": function () { return { ok: true }; },
+  };
+  var PREVIEW_BLOCKED = ["/checkout", "/print-order", "/delivery/link"];
+  function fetch(url, options) {
+    var method = (options && options.method) || "GET";
+    if (state.preview && method !== "GET" && typeof url === "string" && url.indexOf(API + "/api/gallery/") === 0) {
+      var action = url.slice((API + "/api/gallery/" + encodeURIComponent(state.slug)).length);
+      var body = {};
+      try { body = JSON.parse((options && options.body) || "{}"); } catch (err) { body = {}; }
+      if (PREVIEW_REPLIES[action]) {
+        return Promise.resolve(new Response(JSON.stringify(PREVIEW_REPLIES[action](body)), { status: 200, headers: { "content-type": "application/json" } }));
+      }
+      if (PREVIEW_BLOCKED.indexOf(action) !== -1) {
+        var message = L("Aperçu : paiements et téléchargements sont désactivés.", "Preview: payments and downloads are turned off.");
+        return Promise.resolve(new Response(JSON.stringify({ error: message }), { status: 403, headers: { "content-type": "application/json" } }));
+      }
+    }
+    return window.fetch(url, options);
+  }
+
+  function previewKeyFromHash() {
+    var match = /(?:^#|&)apercu=([^&]+)/.exec(window.location.hash);
+    return match ? decodeURIComponent(match[1]) : "";
+  }
+
   var state = {
     slug: null,
+    preview: false,
     token: null,
     photos: [],
     gallery: null,
     current: -1,
     viewerList: null,
-    filterSelected: false,
+    // Filtre de la grille : all, selected (cœurs), green, yellow, red
+    // (codes couleur), comment (photos commentées).
+    filter: "all",
     drawn: {},
   };
 
@@ -168,13 +209,54 @@
     return count;
   }
 
-  // La liste que parcourt la visionneuse (Précédent/Suivant) : toutes les
-  // photos, ou seulement les sélectionnées si le filtre est actif.
+  function matchesFilter(photo, filter) {
+    if (filter === "selected") return !!photo.selected;
+    if (filter === "comment") return hasComment(photo);
+    if (filter === "green" || filter === "yellow" || filter === "red") return photo.tag === filter;
+    return true;
+  }
+
+  // La liste que parcourt la visionneuse (Précédent/Suivant) : les photos
+  // que montre le filtre en cours (toutes par défaut).
   function visiblePhotos() {
-    if (!state.filterSelected) return state.photos;
+    if (state.filter === "all") return state.photos;
     return state.photos.filter(function (p) {
-      return p.selected;
+      return matchesFilter(p, state.filter);
     });
+  }
+
+  // Boutons de filtre : nombre de photos de chacun ; les codes couleur et
+  // « commentées » n'apparaissent que s'ils servent (ou s'ils sont actifs).
+  var FILTER_EMPTY = {
+    selected: ["Vous n'avez encore rien sélectionné — cliquez sur le cœur d'une photo pour commencer.", "You haven't selected anything yet — tap the heart on a photo to start."],
+    green: ["Aucune photo en vert pour l'instant.", "No green photos yet."],
+    yellow: ["Aucune photo en orange pour l'instant.", "No orange photos yet."],
+    red: ["Aucune photo en rouge pour l'instant.", "No red photos yet."],
+    comment: ["Aucune photo commentée pour l'instant.", "No commented photos yet."],
+  };
+  function updateFilterUI() {
+    if (!el.filters) return;
+    var active = state.filter;
+    var visible = 0;
+    el.filters.forEach(function (button) {
+      var key = button.getAttribute("data-filter");
+      var count = 0;
+      for (var i = 0; i < state.photos.length; i++) if (matchesFilter(state.photos[i], key)) count++;
+      if (key === active) visible = count;
+      var n = button.querySelector(".gp-filter-n");
+      if (n) n.textContent = String(count);
+      var optional = key !== "all" && key !== "selected";
+      button.hidden = optional && count === 0 && key !== active;
+      button.setAttribute("aria-pressed", key === active ? "true" : "false");
+    });
+    if (el.grid) {
+      el.grid.setAttribute("data-filter", active);
+      el.grid.classList.toggle("gp-grid-filtered", active !== "all");
+    }
+    if (el.filterEmpty) {
+      el.filterEmpty.hidden = !(active !== "all" && visible === 0 && state.photos.length > 0);
+      if (FILTER_EMPTY[active]) el.filterEmpty.textContent = L(FILTER_EMPTY[active][0], FILTER_EMPTY[active][1]);
+    }
   }
 
   function heartLabel(selected) {
@@ -326,9 +408,7 @@
           : count + L(count > 1 ? " photos sélectionnées" : " photo sélectionnée", count > 1 ? " photos selected" : " photo selected");
     }
     updateQuotaUI(count);
-    if (el.filterEmpty) {
-      el.filterEmpty.hidden = !(state.filterSelected && count === 0);
-    }
+    updateFilterUI();
     if (el.toolbar) el.toolbar.hidden = state.photos.length === 0;
     updateValidateUI(count);
   }
@@ -422,8 +502,8 @@
   }
 
   // Répercute l'état d'une photo sur tout ce qui l'affiche, sans jamais
-  // reconstruire la grille ni retélécharger de tuile : le filtre « ma
-  // sélection » masque/affiche par CSS, pas en retirant les photos du DOM.
+  // reconstruire la grille ni retélécharger de tuile : les filtres
+  // masquent/affichent par CSS, pas en retirant les photos du DOM.
   function reflectSelection(photo) {
     var heart = heartButtons[photo.id];
     if (heart) {
@@ -446,10 +526,14 @@
   // le bouton de la visionneuse, sans jamais reconstruire la grille.
   function reflectComment(photo) {
     var badge = commentBadges[photo.id];
-    if (badge) badge.hidden = !hasComment(photo);
+    if (badge) {
+      badge.hidden = !hasComment(photo);
+      badge.closest(".gp-item").classList.toggle("gp-item-comment", hasComment(photo));
+    }
     if (el.commentToggle && state.viewerList && state.viewerList[state.current] === photo) {
       el.commentToggle.classList.toggle("gp-comment-has-text", hasComment(photo));
     }
+    updateFilterUI();
   }
 
   function setCommentStatus(text) {
@@ -547,12 +631,17 @@
       dot.hidden = !photo.tag;
       dot.className = "gp-tag-dot" + (photo.tag ? " gp-tag-dot-" + photo.tag : "");
       dot.title = photo.tag ? TAG_LABELS[photo.tag] || "" : "";
+      var item = dot.closest(".gp-item");
+      if (item) {
+        ["green", "yellow", "red"].forEach(function (tag) { item.classList.toggle("gp-item-tag-" + tag, photo.tag === tag); });
+      }
     }
     if (el.tagButtons && currentViewerPhoto() === photo) {
       el.tagButtons.forEach(function (button) {
         button.setAttribute("aria-pressed", button.getAttribute("data-tag") === photo.tag ? "true" : "false");
       });
     }
+    updateFilterUI();
   }
 
   // Cliquer sur la couleur déjà active la retire : trois boutons, pas de
@@ -1794,12 +1883,12 @@
     tagDots = {};
     markBadges = {};
     var plan = el.grid.getAttribute("data-layout") === "recit" ? recitPlan(state.photos) : [];
-    // La grille contient toujours toutes les photos ; le filtre « ma
-    // sélection » les masque par CSS (.gp-grid-filtered), pour ne jamais
-    // retélécharger de tuile au seul geste de cocher un cœur.
+    // La grille contient toujours toutes les photos ; les filtres (cœurs,
+    // couleurs, commentées) les masquent par CSS (data-filter), pour ne
+    // jamais retélécharger de tuile au seul geste de cocher un cœur.
     state.photos.forEach(function (photo, index) {
       var figure = document.createElement("figure");
-      figure.className = "gp-item" + (photo.selected ? " gp-item-selected" : "") + (plan[index] ? " " + plan[index] : "");
+      figure.className = "gp-item" + (photo.selected ? " gp-item-selected" : "") + (hasComment(photo) ? " gp-item-comment" : "") + (plan[index] ? " " + plan[index] : "");
       figure.setAttribute("data-photo", photo.id);
       var ratio = plan[index + "r"] || (photo.height / photo.width) * 100;
       figure.style.setProperty("--ratio", ratio.toFixed(3) + "%");
@@ -2106,7 +2195,9 @@
     node.hidden = true;
   }
 
-  function login(password) {
+  // `credentials` : { password } (le client) ou { preview } (aperçu du
+  // photographe, clé venue de l'espace photographe).
+  function login(credentials) {
     el.error.hidden = true;
     el.submit.disabled = true;
     el.submit.textContent = L("Ouverture…", "Opening…");
@@ -2114,7 +2205,7 @@
     return fetch(apiUrl("/login"), {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ password: password }),
+      body: JSON.stringify(credentials),
     })
       .then(function (response) {
         return response.json().then(function (data) {
@@ -2126,7 +2217,9 @@
         state.token = result.data.token;
         state.gallery = result.data.gallery;
         state.photos = result.data.photos;
+        state.preview = Boolean(state.gallery.preview);
         setLanguage(state.gallery.language);
+        if (el.previewBanner) el.previewBanner.hidden = !state.preview;
 
         el.title.textContent = state.gallery.title;
         if (state.gallery.studioName) {
@@ -2238,7 +2331,7 @@
       payButton: $("gp-pay-supplement"),
       payError: $("gp-pay-error"),
       invoiceButton: $("gp-download-invoice"),
-      filterCheckbox: $("gp-filter-selected"),
+      filters: Array.prototype.slice.call(document.querySelectorAll("#gp-filters [data-filter]")),
       validateBlock: $("gp-validate-block"),
       validate: $("gp-validate"),
       validateStatus: $("gp-validate-status"),
@@ -2292,6 +2385,7 @@
       cartCountry: $("gp-cart-country"),
       cartError: $("gp-cart-error"),
       cartPay: $("gp-cart-pay"),
+      previewBanner: $("gp-preview-banner"),
     };
 
     state.slug = readSlug();
@@ -2307,10 +2401,17 @@
       return;
     }
     applyBackground();
+    // Aperçu du photographe : la galerie s'ouvre directement ; la clé est
+    // retirée de l'adresse (elle ne sert qu'une fois et expire vite).
+    var previewKey = previewKeyFromHash();
+    if (previewKey) {
+      history.replaceState(null, "", window.location.pathname + window.location.search);
+      login({ preview: previewKey });
+    }
 
     el.form.addEventListener("submit", function (event) {
       event.preventDefault();
-      login(el.password.value);
+      login({ password: el.password.value });
     });
     el.prev.addEventListener("click", function () {
       step(-1);
@@ -2328,13 +2429,12 @@
         if (photo) toggleSelect(photo);
       });
     }
-    if (el.filterCheckbox) {
-      el.filterCheckbox.addEventListener("change", function () {
-        state.filterSelected = el.filterCheckbox.checked;
-        el.grid.classList.toggle("gp-grid-filtered", state.filterSelected);
-        updateSelectionUI();
+    el.filters.forEach(function (button) {
+      button.addEventListener("click", function () {
+        state.filter = button.getAttribute("data-filter");
+        updateFilterUI();
       });
-    }
+    });
     if (el.payButton) {
       el.payButton.addEventListener("click", payForSupplement);
     }

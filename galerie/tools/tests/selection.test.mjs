@@ -136,7 +136,7 @@ check("3 cœurs actifs dans la grille après sélection via la visionneuse",
 // Filtre « ma sélection » : masque sans retélécharger, et borne la navigation.
 await hearts.nth(1).click(); // désélectionne une des trois pour avoir un cas 2/3 significatif
 await page.waitForTimeout(300);
-await page.check("#gp-filter-selected");
+await page.click('#gp-filters [data-filter="selected"]');
 await page.waitForTimeout(200);
 check("le filtre ne montre que les photos sélectionnées",
       await page.locator(".gp-item:visible").count() === 2);
@@ -146,7 +146,29 @@ check("la visionneuse filtrée ne compte que les sélectionnées",
       (await page.textContent("#gp-counter")).trim().endsWith("/ 2"),
       await page.textContent("#gp-counter"));
 await page.click("#gp-close");
-await page.uncheck("#gp-filter-selected");
+await page.click('#gp-filters [data-filter="all"]');
+check("« Toutes » remontre toute la galerie", await page.locator(".gp-item:visible").count() === await page.locator(".gp-item").count());
+
+// Filtres par code couleur : n'apparaissent qu'une fois une couleur posée.
+check("sans couleur posée, pas de filtre « Vertes »", await page.locator('#gp-filters [data-filter="green"]').isHidden());
+await page.locator(".gp-item .gp-open").nth(2).click();
+await page.waitForSelector("#gp-viewer:not([hidden])");
+await page.click('.gp-tag[data-tag="green"]');
+await page.waitForTimeout(300);
+await page.click("#gp-close");
+check("une photo en vert : le filtre « Vertes » apparaît avec 1",
+      await page.locator('#gp-filters [data-filter="green"]').isVisible() &&
+      (await page.textContent('#gp-filters [data-filter="green"] .gp-filter-n')).trim() === "1");
+await page.click('#gp-filters [data-filter="green"]');
+await page.waitForTimeout(200);
+check("filtre « Vertes » : seule la photo verte reste", await page.locator(".gp-item:visible").count() === 1);
+await page.click('#gp-filters [data-filter="all"]');
+// Remise à zéro de la couleur (la suite du test compte les codes couleur).
+await page.locator(".gp-item .gp-open").nth(2).click();
+await page.waitForSelector("#gp-viewer:not([hidden])");
+await page.click('.gp-tag[data-tag="green"]');
+await page.waitForTimeout(300);
+await page.click("#gp-close");
 
 /* ---------- Persistance : une reconnexion complète retrouve la sélection ---------- */
 
