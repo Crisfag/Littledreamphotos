@@ -1035,6 +1035,17 @@ async function handleApi(req, res, url) {
     }
   }
 
+  // GET /local/insights?period=12m — statistiques des séances (types,
+  // forfaits, suppléments, panier), voir worker/src/insights.js.
+  if (parts[0] === "insights" && parts.length === 1 && req.method === "GET") {
+    try {
+      const period = new URL(req.url, "http://localhost").searchParams.get("period") || "12m";
+      return json(res, 200, await client.request("GET", `/api/admin/insights?period=${encodeURIComponent(period)}`));
+    } catch (err) {
+      return relayError(res, err, "Les statistiques n'ont pas pu être chargées");
+    }
+  }
+
   // /local/subscription — abonnement Holypixx du photographe. Les adresses
   // de retour de Stripe pointent vers ce même tableau de bord.
   if (parts[0] === "subscription") {
@@ -1367,6 +1378,7 @@ async function handleApi(req, res, url) {
           password, watermarkText, expiresAt,
           includedPhotos: body.includedPhotos, extraPhotoPrice: body.extraPhotoPrice,
           theme: body.theme ? String(body.theme) : undefined,
+          sessionType: body.sessionType ? String(body.sessionType).slice(0, 20) : undefined,
           language: body.language === "en" ? "en" : undefined,
         });
         return json(res, 201, { id: created.id, slug, password, link: await linkFor(client, slug) });
@@ -1414,6 +1426,16 @@ async function handleApi(req, res, url) {
       return json(res, 200, { password: newPassword, link: await linkFor(client, slug) });
     } catch (err) {
       return relayError(res, err, "Impossible de générer un nouveau mot de passe");
+    }
+  }
+
+  // POST /local/galleries/:slug/session-type — type de séance (statistiques).
+  if (parts.length === 3 && parts[2] === "session-type" && req.method === "POST") {
+    try {
+      const body = JSON.parse((await readBody(req, 2000)).toString("utf8") || "{}");
+      return json(res, 200, await client.request("POST", `/api/admin/galleries/${encodeURIComponent(slug)}/session-type`, { sessionType: String(body.sessionType || "") }));
+    } catch (err) {
+      return relayError(res, err, "Impossible d'enregistrer le type de séance");
     }
   }
 

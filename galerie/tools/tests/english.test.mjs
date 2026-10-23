@@ -121,7 +121,7 @@ const galleryText = await page.textContent("#gp-gallery");
 check("la galerie est en anglais (sous-titre, échéance, avertissement, barre d'outils)",
       (await page.textContent("#gp-subtitle")) === "Gallery of Emma" && (await page.textContent("#gp-expiry")).startsWith("Access open until ") &&
       galleryText.includes("These photos are viewing proofs") && galleryText.includes("No photos selected yet") &&
-      galleryText.includes("Show only my selection") && galleryText.includes("My prints"), (await page.textContent("#gp-expiry")));
+      galleryText.includes("My favourites") && galleryText.includes("My prints"), (await page.textContent("#gp-expiry")));
 check("aucun texte français visible dans la galerie",
       !/Votre |vos photos|Valider|sélection|Tirages|Afficher/.test(await page.evaluate(() => document.getElementById("gp-gallery").innerText)));
 

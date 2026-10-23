@@ -419,6 +419,7 @@
       if (tab === "galleries") renderList();
       else if (tab === "planning") renderPlanning();
       else if (tab === "sales") renderSales();
+      else if (tab === "insights") renderInsights();
       else if (tab === "booking") renderBooking();
       else if (tab === "clients") renderClients();
       else if (tab === "contracts") renderContracts();
@@ -685,9 +686,29 @@
     return { label: L("Sans expiration", "No expiry"), cls: "" };
   }
 
+  // Types de séance (même liste que worker/src/insights.js, SESSION_TYPES).
+  // Vide = deviné d'après le titre de la galerie dans les statistiques.
+  var SESSION_TYPES = [
+    ["grossesse", "Grossesse", "Maternity"], ["naissance", "Naissance", "Newborn"], ["bebe", "Bébé", "Baby"],
+    ["smash", "Smash cake · anniversaire", "Cake smash · birthday"], ["enfant", "Enfant", "Child"], ["famille", "Famille", "Family"],
+    ["couple", "Couple", "Couple"], ["mariage", "Mariage", "Wedding"], ["bapteme", "Baptême · communion", "Christening · communion"],
+    ["portrait", "Portrait · pro", "Portrait · business"], ["mini", "Mini-séance", "Mini session"], ["evenement", "Événement", "Event"],
+    ["autre", "Autre", "Other"],
+  ];
+  function sessionTypeLabel(key) {
+    var t = SESSION_TYPES.find(function (x) { return x[0] === key; });
+    return t ? L(t[1], t[2]) : L("Non classée", "Not classified");
+  }
+  function sessionTypeOptions(selected, emptyLabel) {
+    return '<option value="">' + esc(emptyLabel) + "</option>" + SESSION_TYPES.map(function (t) {
+      return '<option value="' + t[0] + '"' + (t[0] === selected ? " selected" : "") + ">" + esc(L(t[1], t[2])) + "</option>";
+    }).join("");
+  }
+
   function openCreateModal() {
     var form = document.getElementById("ad-create-form");
     form.reset();
+    form.sessionType.innerHTML = sessionTypeOptions("", L("Deviné d'après le titre", "Guessed from the title"));
     // Style de départ : celui des paramètres, modifiable ici et ensuite.
     var preferred = (state.me && state.me.defaultTheme) || "classique";
     form.theme.innerHTML = GALLERY_STYLES.map(function (s) {
@@ -1786,6 +1807,193 @@
       "</section>";
   }
 
+  /* ---------- Statistiques des séances ---------- */
+
+  // Types de séance, photos choisies, forfaits, suppléments et panier, sur
+  // une période (worker/src/insights.js). Une séance = une galerie client
+  // créée pendant la période ; son type est celui choisi, sinon deviné
+  // d'après le titre (et proposé à la confirmation plus bas).
+  var insightsPeriod = "12m";
+  var INSIGHTS_PERIODS = [["3m", "3 mois", "3 months"], ["6m", "6 mois", "6 months"], ["12m", "12 mois", "12 months"], ["year", "Cette année", "This year"], ["all", "Tout", "All time"]];
+
+  function insPercent(ratio) {
+    return Math.round((ratio || 0) * 100) + "\u00a0%";
+  }
+  function insNumber(x) {
+    return String(x || 0).replace(".", LANG === "en" ? "." : ",");
+  }
+  function insTypeName(key) {
+    return key ? sessionTypeLabel(key) : L("Non classée", "Not classified");
+  }
+
+  function insightsHighlightsHtml(d) {
+    var h = d.highlights;
+    var byKey = function (key) { return d.byType.find(function (t) { return t.key === key; }); };
+    var items = [];
+    if (h.mostRequested) {
+      var top = byKey(h.mostRequested);
+      items.push([L("La plus demandée", "Most requested"), insTypeName(h.mostRequested), top.count + " " + L(top.count > 1 ? "séances" : "séance", top.count > 1 ? "sessions" : "session") + " · " + insPercent(top.share)]);
+    }
+    if (h.leastPractised) {
+      var low = byKey(h.leastPractised);
+      items.push([L("La moins pratiquée", "Least practised"), insTypeName(h.leastPractised), low.count + " " + L(low.count > 1 ? "séances" : "séance", low.count > 1 ? "sessions" : "session")]);
+    }
+    if (h.bestBasket) {
+      var best = byKey(h.bestBasket);
+      items.push([L("Meilleur panier moyen", "Best average basket"), insTypeName(h.bestBasket), formatEuros(best.basketCents) + L(" par séance qui achète", " per session that buys")]);
+    }
+    if (h.mostExtras) {
+      var extra = byKey(h.mostExtras);
+      items.push([L("Le plus de photos en plus", "Most extra photos"), insTypeName(h.mostExtras), insPercent(extra.extrasRate) + L(" des séances, ", " of sessions, ") + insNumber(extra.avgExtras) + L(" photos en plus en moyenne", " extra photos on average")]);
+    }
+    if (h.topPackage != null) {
+      var pack = d.byPackage.find(function (p) { return p.included === h.topPackage; });
+      items.push([L("Forfait le plus fréquent", "Most common package"), h.topPackage + " " + L("photos", "photos"), pack.count + " " + L(pack.count > 1 ? "séances" : "séance", pack.count > 1 ? "sessions" : "session") + " · " + L("suppléments ", "extras ") + insPercent(pack.extrasRate) + L(" du temps", " of the time")]);
+    }
+    if (!items.length) return "";
+    return '<section><div class="ad-section-header"><h3>' + L("À retenir", "Key takeaways") + '</h3></div><ul class="ad-ins-highlights">' +
+      items.map(function (i) {
+        return '<li><span class="ad-ins-hl-label">' + esc(i[0]) + '</span><strong>' + esc(i[1]) + '</strong><span class="ad-ins-hl-sub">' + esc(i[2]) + "</span></li>";
+      }).join("") + "</ul></section>";
+  }
+
+  function insightsByTypeHtml(d) {
+    var max = Math.max.apply(null, d.byType.map(function (t) { return t.count; }).concat([1]));
+    var bars = d.byType.map(function (t) {
+      var width = Math.max(1, Math.round((t.count / max) * 100));
+      return '<li class="ad-ins-bar" title="' + esc(insTypeName(t.key) + " : " + t.count) + '"><span class="ad-ins-bar-label">' + esc(insTypeName(t.key)) +
+        (t.guessed ? ' <span class="ad-ins-guess">' + L(t.guessed === t.count ? "deviné" : t.guessed + " deviné" + (t.guessed > 1 ? "s" : ""), t.guessed === t.count ? "guessed" : t.guessed + " guessed") + "</span>" : "") + "</span>" +
+        '<span class="ad-ins-track"><span class="ad-ins-fill" style="width:' + width + '%"></span></span>' +
+        '<span class="ad-ins-count">' + t.count + '</span><span class="ad-ins-share">' + insPercent(t.share) + "</span></li>";
+    }).join("");
+    var rows = d.byType.map(function (t) {
+      return "<tr><td>" + esc(insTypeName(t.key)) + "</td><td>" + t.count + "</td><td>" + insNumber(t.avgSelected) + " / " + insNumber(t.avgPhotos) + "</td><td>" +
+        (t.avgIncluded ? insNumber(t.avgIncluded) : "—") + "</td><td>" + (t.avgIncluded ? insPercent(t.extrasRate) + (t.avgExtras ? " · +" + insNumber(t.avgExtras) : "") : "—") + "</td><td>" +
+        formatEuros(t.revenueCents) + "</td><td>" + (t.buyers ? formatEuros(t.basketCents) : "—") + "</td></tr>";
+    }).join("");
+    return '<section><div class="ad-section-header"><h3>' + L("Séances par type", "Sessions by type") + '</h3></div><ol class="ad-ins-bars">' + bars + "</ol>" +
+      '<div class="ad-table-wrap"><table class="ad-table"><thead><tr><th>' + L("Type", "Type") + "</th><th>" + L("Séances", "Sessions") + "</th><th>" +
+      L("Photos choisies / livrées", "Photos chosen / delivered") + "</th><th>" + L("Forfait moyen", "Average package") + "</th><th>" + L("Suppléments", "Extras") + "</th><th>" +
+      L("Encaissé", "Collected") + "</th><th>" + L("Panier moyen", "Average basket") + "</th></tr></thead><tbody>" + rows + "</tbody></table></div>" +
+      '<p class="ad-hint">' + L("Suppléments : part des séances avec forfait où le client a choisi plus de photos que prévu, et combien en plus en moyenne. Panier moyen : suppléments et tirages encaissés, par séance qui a acheté.",
+        "Extras: share of sessions with a package where the client chose more photos than included, and how many more on average. Average basket: extras and prints collected, per session that bought.") + "</p></section>";
+  }
+
+  function insightsPackagesHtml(d) {
+    if (!d.byPackage.length) return "";
+    var rows = d.byPackage.map(function (p) {
+      return "<tr><td>" + (p.included == null ? L("Sans forfait", "No package") : p.included + " " + L("photos", "photos")) + "</td><td>" + p.count + "</td><td>" +
+        insNumber(p.avgSelected) + "</td><td>" + (p.included == null ? "—" : insPercent(p.extrasRate) + (p.avgExtras ? " · +" + insNumber(p.avgExtras) : "")) + "</td><td>" +
+        esc(insTypeName(p.topType)) + "</td><td>" + formatEuros(p.revenueCents) + "</td></tr>";
+    }).join("");
+    return '<section><div class="ad-section-header"><h3>' + L("Forfaits", "Packages") + "</h3></div>" +
+      '<div class="ad-table-wrap"><table class="ad-table"><thead><tr><th>' + L("Forfait", "Package") + "</th><th>" + L("Séances", "Sessions") + "</th><th>" +
+      L("Photos choisies (moy.)", "Photos chosen (avg.)") + "</th><th>" + L("Suppléments", "Extras") + "</th><th>" + L("Surtout en", "Mostly") + "</th><th>" +
+      L("Encaissé", "Collected") + "</th></tr></thead><tbody>" + rows + "</tbody></table></div></section>";
+  }
+
+  function insightsBookingsHtml(d) {
+    if (!d.bookings.length) return "";
+    var max = Math.max.apply(null, d.bookings.map(function (b) { return b.count; }).concat([1]));
+    return '<section><div class="ad-section-header"><h3>' + L("Réservations en ligne par prestation", "Online bookings by service") + '</h3></div><ol class="ad-ins-bars">' +
+      d.bookings.map(function (b) {
+        return '<li class="ad-ins-bar"><span class="ad-ins-bar-label">' + esc(b.title) + '</span><span class="ad-ins-track"><span class="ad-ins-fill" style="width:' +
+          Math.max(1, Math.round((b.count / max) * 100)) + '%"></span></span><span class="ad-ins-count">' + b.count + '</span><span class="ad-ins-share"></span></li>';
+      }).join("") + "</ol></section>";
+  }
+
+  function insightsClassifyHtml(d) {
+    if (!d.sessions.length) return "";
+    var guessed = d.sessions.filter(function (s) { return s.guessed; }).length;
+    return '<section id="ad-ins-classify"><div class="ad-section-header"><h3>' + L("Séances à classer", "Sessions to classify") + " (" + d.toClassify + ")</h3>" +
+      (guessed ? '<button type="button" class="ad-btn ad-btn-small" id="ad-ins-confirm-all">' + L("Valider les " + guessed + " types devinés", "Confirm the " + guessed + " guessed types") + "</button>" : "") + "</div>" +
+      '<p class="ad-hint">' + L("Le type est deviné d'après le titre de la galerie ; corrigez-le si besoin, il est enregistré aussitôt.", "The type is guessed from the gallery title; correct it if needed, it is saved straight away.") + "</p>" +
+      '<ul class="ad-ins-classify">' + d.sessions.map(function (s) {
+        return '<li><span class="ad-ins-cl-title"><a href="#/g/' + encodeURIComponent(s.slug) + '">' + esc(s.title) + "</a>" +
+          (s.clientName ? '<span class="ad-ins-cl-sub">' + esc(s.clientName) + "</span>" : "") + "</span>" +
+          '<select data-ins-type="' + esc(s.slug) + '" data-guessed="' + (s.guessed ? "1" : "") + '">' + sessionTypeOptions(s.type, L("À classer", "To classify")) + "</select></li>";
+      }).join("") + "</ul></section>";
+  }
+
+  async function renderInsights(skipHash) {
+    if (!skipHash && location.hash !== "#/statistiques") history.pushState(null, "", "#/statistiques");
+    setActiveTab("insights");
+    el.view.innerHTML = '<p class="ad-loading">' + L("Chargement…", "Loading…") + "</p>";
+    var d;
+    try {
+      d = await api("GET", "/insights?period=" + insightsPeriod);
+    } catch (err) {
+      el.view.innerHTML = '<div class="ad-error-panel"><h2>' + L("Statistiques indisponibles", "Statistics unavailable") + "</h2><p>" + esc(err.message) + "</p></div>";
+      return;
+    }
+    if (location.hash !== "#/statistiques") return;
+    var o = d.overall;
+    var head =
+      '<header class="ad-detail-header"><div><h2>' + L("Statistiques", "Statistics") + "</h2>" +
+      '<p class="ad-hint">' + L("Vos séances sur la période : types, photos choisies, forfaits, suppléments et panier. Une séance = une galerie client créée pendant la période (démo et photo de groupe à part).",
+        "Your sessions over the period: types, photos chosen, packages, extras and basket. A session = a client gallery created during the period (demo and group photos aside).") + "</p></div>" +
+      '<div class="ad-seg" role="group" aria-label="' + L("Période", "Period") + '">' + INSIGHTS_PERIODS.map(function (p) {
+        return '<button type="button" class="ad-seg-btn" data-ins-period="' + p[0] + '" aria-pressed="' + (p[0] === d.period) + '">' + L(p[1], p[2]) + "</button>";
+      }).join("") + "</div></header>";
+    if (!d.total) {
+      el.view.innerHTML = head + '<div class="ad-empty"><p>' + L("Aucune séance sur cette période. Les statistiques se remplissent avec vos galeries.", "No sessions in this period. Statistics fill up as you create galleries.") + "</p></div>" +
+        insightsBookingsHtml(d);
+      wireInsights(d);
+      return;
+    }
+    el.view.innerHTML = head +
+      '<div class="ad-stats">' +
+      statTile(L("Séances", "Sessions"), String(d.total), d.byType.filter(function (t) { return t.key; }).length + " " + L("types différents", "different types")) +
+      statTile(L("Photos choisies en moyenne", "Photos chosen on average"), insNumber(o.avgSelected), L("sur ", "out of ") + insNumber(o.avgPhotos) + L(" livrées", " delivered")) +
+      statTile(L("Séances avec suppléments", "Sessions with extras"), insPercent(o.extrasRate), o.avgExtras ? "+" + insNumber(o.avgExtras) + L(" photos en moyenne", " photos on average") : "") +
+      statTile(L("Panier moyen", "Average basket"), o.buyers ? formatEuros(o.basketCents) : "—", o.buyers ? o.buyers + L(" séance" + (o.buyers > 1 ? "s" : "") + " qui achète" + (o.buyers > 1 ? "nt" : ""), " session" + (o.buyers > 1 ? "s" : "") + " that bought") : L("aucun achat sur la période", "no purchase in this period")) +
+      statTile(L("Encaissé par séance", "Collected per session"), formatEuros(o.avgRevenueCents), formatEuros(o.revenueCents) + L(" au total", " in total")) +
+      "</div>" +
+      insightsHighlightsHtml(d) +
+      insightsByTypeHtml(d) +
+      insightsPackagesHtml(d) +
+      insightsBookingsHtml(d) +
+      insightsClassifyHtml(d);
+    wireInsights(d);
+  }
+
+  function wireInsights(d) {
+    document.querySelectorAll("[data-ins-period]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        insightsPeriod = btn.getAttribute("data-ins-period");
+        renderInsights(true);
+      });
+    });
+    document.querySelectorAll("[data-ins-type]").forEach(function (select) {
+      select.addEventListener("change", async function () {
+        try {
+          await api("POST", "/galleries/" + encodeURIComponent(select.getAttribute("data-ins-type")) + "/session-type", { sessionType: select.value });
+          toast(L("Type de séance enregistré.", "Session type saved."));
+          renderInsights(true);
+        } catch (err) {
+          toast(err.message, true);
+        }
+      });
+    });
+    var confirmAll = document.getElementById("ad-ins-confirm-all");
+    if (confirmAll) {
+      confirmAll.addEventListener("click", async function () {
+        confirmAll.disabled = true;
+        var selects = Array.prototype.slice.call(document.querySelectorAll('[data-ins-type][data-guessed="1"]'));
+        try {
+          for (var i = 0; i < selects.length; i++) {
+            await api("POST", "/galleries/" + encodeURIComponent(selects[i].getAttribute("data-ins-type")) + "/session-type", { sessionType: selects[i].value });
+          }
+          toast(L(selects.length + " séance(s) classée(s).", selects.length + " session(s) classified."));
+          renderInsights(true);
+        } catch (err) {
+          confirmAll.disabled = false;
+          toast(err.message, true);
+        }
+      });
+    }
+  }
+
   async function renderSales(skipHash) {
     if (!skipHash && location.hash !== "#/ventes") history.pushState(null, "", "#/ventes");
     setActiveTab("sales");
@@ -2640,7 +2848,7 @@
   // période, jusqu'à aujourd'hui.
   var funnelDays = 30;
 
-  function percentText(part, whole) {
+  function funnelPercent(part, whole) {
     if (!whole) return "—";
     var p = (part / whole) * 100;
     return (p >= 10 || p === 0 ? Math.round(p) : p.toFixed(1).replace(".", ",")) + "\u00a0%";
@@ -2668,7 +2876,7 @@
     var rows = steps.map(function (st, idx) {
       var prev = idx ? steps[idx - 1].count : 0;
       var width = st.count ? Math.max(1, Math.round((st.count / max) * 100)) : 0;
-      var note = idx ? percentText(st.count, prev) + " de l'étape précédente" : "";
+      var note = idx ? funnelPercent(st.count, prev) + " de l'étape précédente" : "";
       if (st.key === "subscribed") note += (note ? " · " : "") + data.paying + " payant" + (data.paying > 1 ? "s" : "") + " aujourd'hui";
       return '<li class="ad-funnel-step' + (idx === 3 ? " ad-funnel-split" : "") + '" title="' + esc(st.label + " : " + st.count + (note ? " (" + note + ")" : "")) + '">' +
         '<span class="ad-funnel-label">' + esc(st.label) + "</span>" +
@@ -2678,13 +2886,13 @@
     });
     var headline = worst
       ? '<p class="ad-funnel-headline">Plus gros décrochage : <strong>' + esc(worst.from.label) + " → " + esc(worst.to.label) +
-        "</strong>, " + percentText(worst.to.count, worst.from.count) + " passent l'étape.</p>"
+        "</strong>, " + funnelPercent(worst.to.count, worst.from.count) + " passent l'étape.</p>"
       : '<p class="ad-hint">Pas encore assez de passage pour repérer où les visiteurs décrochent.</p>';
 
     var table = function (title, list, firstCol) {
       var body = list.filter(function (r) { return r.visits || r.clicks || r.signups; }).map(function (r) {
         return "<tr><td>" + esc(r.label) + "</td><td>" + r.visits + "</td><td>" + r.clicks + "</td><td>" + r.signups + "</td><td>" + r.activated +
-          "</td><td>" + (r.visits ? percentText(r.signups, r.visits) : "—") + "</td></tr>";
+          "</td><td>" + (r.visits ? funnelPercent(r.signups, r.visits) : "—") + "</td></tr>";
       });
       return '<h4 class="ad-funnel-sub">' + esc(title) + "</h4>" + (body.length
         ? '<div class="ad-table-wrap"><table class="ad-table"><thead><tr><th>' + esc(firstCol) +
@@ -4483,6 +4691,9 @@
       "<div>" +
       "<h2>" + esc(data.gallery.title) + "</h2>" +
       '<p class="ad-card-sub">' + (data.gallery.client_name ? clLink(data.gallery.client_name, data.gallery.client_email) + " · " : "") + esc(data.gallery.slug) + "</p>" +
+      (data.gallery.demo ? "" : '<label class="ad-session-type">' + L("Type de séance", "Session type") +
+        '<select id="ad-session-type">' + sessionTypeOptions(data.gallery.session_type || "", data.gallery.session_type_guess
+          ? L("Deviné : ", "Guessed: ") + sessionTypeLabel(data.gallery.session_type_guess) : L("À classer", "To classify")) + "</select></label>") +
       (data.gallery.selection_done_at
         ? '<p class="ad-validated" id="ad-selection-validated">' + L("✓ Sélection validée par le client le ", "✓ Selection confirmed by the client on ") + formatDateTime(data.gallery.selection_done_at) + "</p>"
         : '<p class="ad-hint" id="ad-selection-pending">' + L("Sélection pas encore validée par le client", "Selection not yet confirmed by the client") +
@@ -4779,6 +4990,17 @@
         });
       });
     }
+    var sessionTypeSelect = document.getElementById("ad-session-type");
+    if (sessionTypeSelect) {
+      sessionTypeSelect.addEventListener("change", async function () {
+        try {
+          await api("POST", "/galleries/" + encodeURIComponent(slug) + "/session-type", { sessionType: sessionTypeSelect.value });
+          toast(L("Type de séance enregistré.", "Session type saved."));
+        } catch (err) {
+          toast(err.message, true);
+        }
+      });
+    }
     // Aperçu client : la fenêtre s'ouvre tout de suite (sinon le navigateur
     // la bloquerait), puis reçoit le lien d'aperçu une fois la clé obtenue.
     document.getElementById("ad-preview").addEventListener("click", async function () {
@@ -4981,6 +5203,7 @@
       extraPhotoPrice: form.extraPhotoPrice.value.trim() || undefined,
       theme: form.theme.value || undefined,
       language: form.language.value === "en" ? "en" : undefined,
+      sessionType: form.sessionType.value || undefined,
     };
 
     try {
@@ -8256,6 +8479,7 @@
     else if (location.hash === "#/detect") renderDetect(true);
     else if (location.hash === "#/planning") renderPlanning(true);
     else if (location.hash === "#/ventes") renderSales(true);
+    else if (location.hash === "#/statistiques") renderInsights(true);
     else if (location.hash === "#/reservations") renderBooking(true);
     else if (location.hash === "#/clients") renderClients(true);
     else if (/^#\/clients\/.+/.test(location.hash)) renderClientDetail(decodeURIComponent(location.hash.slice(10)), true);

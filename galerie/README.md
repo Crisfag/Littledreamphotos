@@ -1204,6 +1204,43 @@ une galerie « Séance famille Martin (démo) » et l'ouvre en premier écran.
 Test : `tools/tests/demo.test.mjs`. Migration :
 `worker/migrations/2026-10-galerie-demo.sql`.
 
+### Statistiques des séances
+
+Onglet « Statistiques » (`worker/src/insights.js`, `GET /api/admin/insights?period=3m|6m|12m|year|all`) :
+séances de la période (galeries client créées, démo et photo de groupe à
+part), photos choisies et livrées, séances avec suppléments, panier moyen,
+encaissé par séance ; points à retenir (type le plus demandé, le moins
+pratiqué, meilleur panier, le plus de suppléments, forfait le plus
+fréquent) ; séances par type, forfaits (10, 15, 20 photos…), réservations
+en ligne par prestation.
+
+- **Type de séance** (`galleries.session_type`) : grossesse, naissance,
+  bébé, smash cake, enfant, famille, couple, mariage, baptême, portrait,
+  mini-séance, événement, autre. Choisi à la création ou sur la fiche de la
+  galerie ; à défaut, deviné d'après le titre (« Naissance de Léo ») et
+  proposé dans « Séances à classer », à valider d'un clic.
+- **Argent** : paiements réglés uniquement (suppléments et tirages), comme
+  l'onglet Ventes et les factures.
+
+Tests : `worker/tests/insights.test.mjs`, `tools/tests/insights.test.mjs`.
+Migration : `worker/migrations/2026-10-type-seance.sql`.
+
+### Aperçu client et filtres de la galerie
+
+- **Aperçu client** : bouton « Aperçu client ↗ » sur la fiche d'une galerie.
+  Clé de 10 minutes (`POST /api/admin/galleries/:slug/preview`) ajoutée au
+  lien du client après le `#`, retirée de l'adresse à l'ouverture. La
+  session d'aperçu (`pv` dans le jeton) n'écrit rien : pas de ligne au
+  journal, sélection, couleurs, commentaires, validation, panier, paiements
+  et téléchargements refusés par le Worker ; dans la page, cœurs, couleurs
+  et filtres fonctionnent (réponses simulées), sous un bandeau « Aperçu ».
+- **Filtres** (page client) : Toutes, Mes favoris, Vertes, Oranges, Rouges,
+  Commentées, avec leur nombre de photos ; les filtres de couleur et
+  « Commentées » n'apparaissent qu'une fois utiles. La visionneuse suit le
+  filtre.
+
+Tests : `tools/tests/preview.test.mjs`, `tools/tests/selection.test.mjs`.
+
 ### Parcours d'inscription (mesure)
 
 Onglet Admin → « Parcours d'inscription » : de la visite du site au premier
