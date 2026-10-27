@@ -895,6 +895,32 @@ async function handleApi(req, res, url) {
     }
   }
 
+  // /local/giftcards/… — bons cadeaux : relais JSON vers
+  // /api/admin/giftcards/…, sauf le PDF d'un bon, relayé tel quel.
+  if (parts[0] === "giftcards" && parts.length === 3 && parts[2] === "pdf" && req.method === "GET") {
+    try {
+      const upstream = await client.rawGet(`/api/admin/giftcards/${encodeURIComponent(parts[1])}/pdf`);
+      if (!upstream.ok) return json(res, upstream.status, { error: "Bon cadeau introuvable" });
+      res.writeHead(200, {
+        "content-type": "application/pdf",
+        "content-disposition": upstream.headers.get("content-disposition") || "attachment",
+        "cache-control": "no-store",
+      });
+      return res.end(Buffer.from(await upstream.arrayBuffer()));
+    } catch (err) {
+      return json(res, 502, { error: "Worker injoignable" });
+    }
+  }
+  if (parts[0] === "giftcards" && ["GET", "POST"].includes(req.method)) {
+    const path = "/api/admin/giftcards" + (parts.length > 1 ? "/" + parts.slice(1).map(encodeURIComponent).join("/") : "");
+    try {
+      const body = req.method === "POST" ? JSON.parse((await readBody(req)).toString("utf8") || "{}") : undefined;
+      return json(res, path.endsWith("/manual") ? 201 : 200, await client.request(req.method, path, body));
+    } catch (err) {
+      return relayError(res, err, "Les bons cadeaux n'ont pas pu répondre");
+    }
+  }
+
   // POST /local/booking/images (multipart) : image d'illustration d'une
   // formule, redressée, réduite à 1600 px et convertie en WebP sans ses
   // métadonnées, comme les photos du portfolio. GET : relecture pour l'aperçu.

@@ -730,7 +730,8 @@ main section > p, .ad-share > p { max-width: 75ch; }
 
 /* ---------- Journal ---------- */
 
-.ad-table-wrap { overflow-x: auto; }
+/* position : les libellés masqués (« Actions ») restent dans le cadre qui défile, sans élargir la page. */
+.ad-table-wrap { overflow-x: auto; position: relative; }
 .ad-table { width: 100%; border-collapse: collapse; font-size: .86rem; font-variant-numeric: tabular-nums; }
 
 .ad-owner-steps { margin: .9rem 0; padding-left: 1.3rem; }
@@ -1972,3 +1973,12 @@ main section.ad-demo {
 .ad-sc-names { margin-top: 14px; border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; background: var(--paper); }
 .ad-sc-names summary { cursor: pointer; font-weight: 600; font-size: 14px; }
 .ad-sc-names textarea { display: block; width: 100%; margin: 8px 0 10px; font: inherit; font-size: 14px; padding: 8px 10px; border: 1px solid var(--line-2); border-radius: 8px; resize: vertical; box-sizing: border-box; }
+
+/* Bons cadeaux. */
+.ad-gift-settings, .ad-gift-manual { max-width: 640px; }
+.ad-gift-manual { margin: 0 0 1.4rem; padding: 1rem 1.2rem; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); }
+.ad-gift-settings .ad-hint { margin-top: .8rem; }
+.ad-gift-code { font-family: ui-monospace, "SF Mono", Menlo, monospace; letter-spacing: .06em; }
+.ad-gift-table .ad-row-actions { white-space: normal; }
+.ad-gift-table .ad-row-actions > * { margin: 2px; }
+

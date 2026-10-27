@@ -381,7 +381,7 @@
   }
 
   // Sections pas encore traduites : un bandeau le dit, en anglais.
-  var UNTRANSLATED_TABS = { clients: 1, booking: 1, contracts: 1, sales: 1, portfolio: 1, school: 1, owner: 1 };
+  var UNTRANSLATED_TABS = { clients: 1, booking: 1, giftcards: 1, contracts: 1, sales: 1, portfolio: 1, school: 1, owner: 1 };
 
   setLanguage(initialLanguage(), false);
   var langSwitch = document.getElementById("ad-lang-switch");
@@ -421,6 +421,7 @@
       else if (tab === "sales") renderSales();
       else if (tab === "insights") renderInsights();
       else if (tab === "booking") renderBooking();
+      else if (tab === "giftcards") renderGiftCards();
       else if (tab === "clients") renderClients();
       else if (tab === "contracts") renderContracts();
       else if (tab === "portfolio") renderPortfolio();
@@ -8495,6 +8496,230 @@
     });
   }
 
+  /* ---------- Bons cadeaux ---------- */
+
+  var GIFT_STATUS = {
+    valid: ["Valable", "ad-badge-validated"],
+    redeemed: ["Utilisé", "ad-badge-comment"],
+    expired: ["Périmé", "ad-badge-expired"],
+    cancelled: ["Annulé", "ad-badge-expired"],
+  };
+  var giftState = { data: null, manualOpen: false };
+
+  function giftWhatText(c) {
+    var what = c.offerTitle || "Séance au choix";
+    if (c.tierPhotos) what += " · " + c.tierPhotos + " photo" + (c.tierPhotos > 1 ? "s" : "");
+    if (c.durationMin) what += " · " + durationText(c.durationMin);
+    return what;
+  }
+
+  function giftRowHtml(c) {
+    var status = GIFT_STATUS[c.status] || [c.status, ""];
+    var actions = '<a class="ad-btn ad-btn-small ad-btn-ghost" href="/local/giftcards/' + encodeURIComponent(c.id) + '/pdf" download>PDF</a>' +
+      '<a class="ad-btn ad-btn-small ad-btn-ghost" href="' + esc(c.pageUrl) + '" target="_blank" rel="noopener">Page</a>';
+    if (c.status === "valid") actions += '<button type="button" class="ad-btn ad-btn-small" data-gift-redeem="' + esc(c.id) + '">Utilisé</button>';
+    if (c.status === "redeemed") actions += '<button type="button" class="ad-btn ad-btn-small ad-btn-ghost" data-gift-undo="' + esc(c.id) + '">Pas encore utilisé</button>';
+    if (c.status === "valid" || c.status === "expired") actions += '<button type="button" class="ad-btn ad-btn-small ad-btn-danger" data-gift-cancel="' + esc(c.id) + '">Annuler</button>';
+    return "<tr>" +
+      '<td><strong class="ad-gift-code">' + esc(c.code) + "</strong><br>" + '<span class="ad-hint">' + esc(c.source === "manual" ? "Émis à la main" : "Vendu en ligne") + " · " + esc(formatDate(c.paidAt || c.createdAt)) + "</span></td>" +
+      "<td><strong>" + esc(c.toName) + '</strong><br><span class="ad-hint">de ' + esc(c.fromName) + "</span>" +
+      (c.buyerEmail ? '<br><a class="ad-acc-sub" href="mailto:' + esc(c.buyerEmail) + '">' + esc(c.buyerEmail) + "</a>" : "") + "</td>" +
+      "<td>" + esc(giftWhatText(c)) + (c.redeemedNote ? '<br><span class="ad-hint">' + esc(c.redeemedNote) + "</span>" : "") + "</td>" +
+      '<td class="ad-num">' + formatEuros(c.amountCents) + "</td>" +
+      "<td>" + esc(formatDate(c.validUntil)) + "</td>" +
+      '<td><span class="ad-badge ' + status[1] + '">' + esc(status[0]) + "</span></td>" +
+      '<td class="ad-row-actions">' + actions + "</td></tr>";
+  }
+
+  function giftTableHtml(list) {
+    return '<div class="ad-table-wrap"><table class="ad-table ad-gift-table"><thead><tr><th>Code</th><th>Pour</th><th>Séance offerte</th><th class="ad-num">Valeur</th><th>Valable jusqu\'au</th><th>État</th><th><span class="ad-visually-hidden">Actions</span></th></tr></thead><tbody>' +
+      list.map(giftRowHtml).join("") + "</tbody></table></div>";
+  }
+
+  function giftOfferOptions(offers) {
+    return '<option value="">Montant libre (séance au choix)</option>' +
+      offers.map(function (o) { return '<option value="' + esc(o.id) + '">' + esc(o.title) + "</option>"; }).join("");
+  }
+
+  function giftMonthsOptions(selected) {
+    return [3, 6, 12, 18, 24, 36].map(function (m) {
+      return '<option value="' + m + '"' + (m === selected ? " selected" : "") + ">" + m + " mois</option>";
+    }).join("");
+  }
+
+  async function renderGiftCards(skipHash) {
+    if (!skipHash && location.hash !== "#/bons-cadeaux") history.pushState(null, "", "#/bons-cadeaux");
+    setActiveTab("giftcards");
+    if (!giftState.data) el.view.innerHTML = '<p class="ad-loading">Chargement…</p>';
+    var data;
+    try {
+      data = await api("GET", "/giftcards");
+    } catch (err) {
+      el.view.innerHTML = '<div class="ad-error-panel"><h2>Bons cadeaux indisponibles</h2><p>' + esc(err.message) + "</p></div>";
+      return;
+    }
+    if (location.hash !== "#/bons-cadeaux") return;
+    paintGiftCards(data);
+  }
+
+  function paintGiftCards(data) {
+    giftState.data = data;
+    var s = data.settings;
+    var open = data.cards.filter(function (c) { return c.status === "valid"; });
+    var others = data.cards.filter(function (c) { return c.status !== "valid"; });
+    var notices = "";
+    if (!data.enabled) {
+      notices += '<p class="ad-banner ad-banner-muted">Les bons cadeaux sont inclus dans la formule Pro, avec la réservation en ligne. ' +
+        '<button type="button" class="ad-link-btn" data-gift-goto="subscription">Voir les formules</button></p>';
+    } else if (s.enabled) {
+      if (!data.portfolio.published) notices += '<p class="ad-banner ad-banner-muted">Vos clients achètent les bons sur votre mini-site : publiez-le pour ouvrir la vente. <button type="button" class="ad-link-btn" data-gift-goto="portfolio">Onglet Portfolio</button></p>';
+      if (!data.stripeReady) notices += '<p class="ad-banner ad-banner-muted">La vente en ligne s\'ouvrira dès que le paiement en ligne sera activé. <button type="button" class="ad-link-btn" data-gift-goto="billing">Onglet Facturation</button></p>';
+    }
+    var live = data.enabled && s.enabled && data.portfolio.published && data.stripeReady;
+
+    el.view.innerHTML =
+      '<header class="ad-detail-header"><div><h2>Bons cadeaux</h2>' +
+      '<p class="ad-hint">Vos clients offrent une séance depuis votre mini-site : ils choisissent la séance et le forfait, la valeur (au moins votre minimum), « de la part de », « pour » et un petit mot, puis paient en ligne. Le bon part aussitôt en PDF, avec un QR code vers sa page.</p></div>' +
+      (live && data.portfolio.shopUrl ? '<a class="ad-btn" href="' + esc(data.portfolio.shopUrl) + '" target="_blank" rel="noopener">Voir sur mon mini-site</a>' : "") +
+      "</header>" + notices +
+      (data.enabled
+        ? '<div class="ad-stats">' +
+          salesStatHtml("Bons émis", String(data.totals.sold), data.totals.soldCents ? formatEuros(data.totals.soldCents) : "") +
+          salesStatHtml("En circulation", data.totals.openCents ? formatEuros(data.totals.openCents) : "—", data.totals.openCount + " bon" + (data.totals.openCount > 1 ? "s" : "") + " à utiliser") +
+          salesStatHtml("Utilisés", String(data.totals.redeemed), "") +
+          "</div>" +
+          '<section><div class="ad-section-header"><h3>Vente sur le mini-site</h3></div>' +
+          '<form id="ad-gift-settings" class="ad-gift-settings">' +
+          '<label class="ad-check"><input type="checkbox" name="enabled"' + (s.enabled ? " checked" : "") + " /> Proposer les bons cadeaux sur mon mini-site</label>" +
+          '<div class="ad-field-row">' +
+          '<label class="ad-field"><span>Valeur minimum (€)</span><input type="text" name="min" inputmode="decimal" value="' + esc(bookingEurosInput(s.minCents)) + '" /></label>' +
+          '<label class="ad-field"><span>Validité</span><select name="validityMonths">' + giftMonthsOptions(s.validityMonths) + "</select></label>" +
+          "</div>" +
+          '<label class="ad-field"><span>Conditions imprimées sur le bon <em>(facultatif)</em></span><textarea name="terms" rows="2" maxlength="300" placeholder="Bon non remboursable, à utiliser en une fois, sur rendez-vous.">' + esc(s.terms) + "</textarea></label>" +
+          '<button type="submit" class="ad-btn">Enregistrer</button>' +
+          '<p class="ad-hint">Les séances proposées sont vos formules actives (onglet Réservations), avec leurs forfaits ; le client peut aussi offrir un montant libre. Le paiement arrive sur votre compte Stripe, aux mêmes frais que les acomptes.</p>' +
+          "</form></section>" +
+          '<section id="ad-gift-list"><div class="ad-section-header"><h3>Bons à utiliser (' + open.length + ")</h3>" +
+          '<button type="button" class="ad-btn ad-btn-ghost" id="ad-gift-manual-toggle">' + (giftState.manualOpen ? "Fermer" : "+ Émettre un bon à la main") + "</button></div>" +
+          (giftState.manualOpen ? giftManualFormHtml(data) : "") +
+          (open.length ? giftTableHtml(open) : '<p class="ad-hint">Aucun bon en cours. À la séance, marquez le bon comme « Utilisé » : il sort de cette liste.</p>') +
+          (others.length ? '<details class="ad-advanced"><summary>Bons utilisés, périmés ou annulés (' + others.length + ")</summary>" + giftTableHtml(others) + "</details>" : "") +
+          "</section>"
+        : "");
+    bindGiftCards(data);
+  }
+
+  function giftManualFormHtml(data) {
+    return '<form id="ad-gift-manual" class="ad-gift-manual">' +
+      '<p class="ad-hint">Un bon vendu au studio, offert pour un concours… Il est valable tout de suite ; s\'il y a une adresse e-mail, le bon y part en PDF.</p>' +
+      '<div class="ad-field-row">' +
+      '<label class="ad-field"><span>Séance offerte</span><select name="offerId">' + giftOfferOptions(data.offers) + "</select></label>" +
+      '<label class="ad-field" id="ad-gift-tier-field" hidden><span>Forfait</span><select name="tier"></select></label>' +
+      "</div>" +
+      '<div class="ad-field-row">' +
+      '<label class="ad-field"><span>Valeur (€)</span><input type="text" name="amount" inputmode="decimal" required /></label>' +
+      '<label class="ad-field"><span>Validité</span><select name="validityMonths">' + giftMonthsOptions(data.settings.validityMonths) + "</select></label>" +
+      "</div>" +
+      '<div class="ad-field-row">' +
+      '<label class="ad-field"><span>De la part de</span><input type="text" name="fromName" maxlength="80" required /></label>' +
+      '<label class="ad-field"><span>Pour</span><input type="text" name="toName" maxlength="80" required /></label>' +
+      "</div>" +
+      '<label class="ad-field"><span>Petit mot <em>(facultatif)</em></span><textarea name="message" rows="2" maxlength="400"></textarea></label>' +
+      '<label class="ad-field"><span>Envoyer le bon à <em>(facultatif)</em></span><input type="email" name="email" maxlength="200" placeholder="adresse@exemple.be" /></label>' +
+      '<button type="submit" class="ad-btn">Émettre le bon</button></form>';
+  }
+
+  async function giftCall(method, path, body, okMessage) {
+    try {
+      var data = await api(method, "/giftcards" + path, body);
+      if (okMessage) toast(okMessage);
+      paintGiftCards(data);
+      return data;
+    } catch (err) {
+      toast(err.message, true);
+      return null;
+    }
+  }
+
+  function bindGiftCards(data) {
+    el.view.querySelectorAll("[data-gift-goto]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var target = btn.getAttribute("data-gift-goto");
+        if (target === "subscription") renderSubscription();
+        else if (target === "portfolio") renderPortfolio();
+        else renderBilling();
+      });
+    });
+    var settings = document.getElementById("ad-gift-settings");
+    if (settings) settings.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var f = settings.elements;
+      giftCall("POST", "/settings", {
+        enabled: f.enabled.checked, min: f.min.value, validityMonths: Number(f.validityMonths.value), terms: f.terms.value,
+      }, f.enabled.checked ? "Réglages enregistrés : les bons sont proposés sur votre mini-site." : "Réglages enregistrés.");
+    });
+    var toggle = document.getElementById("ad-gift-manual-toggle");
+    if (toggle) toggle.addEventListener("click", function () {
+      giftState.manualOpen = !giftState.manualOpen;
+      paintGiftCards(giftState.data);
+      var first = document.querySelector('#ad-gift-manual [name="offerId"]');
+      if (first) first.focus();
+    });
+    var manual = document.getElementById("ad-gift-manual");
+    if (manual) {
+      var f = manual.elements;
+      var syncTiers = function () {
+        var offer = data.offers.find(function (o) { return o.id === f.offerId.value; });
+        var tiers = offer ? offer.tiers : [];
+        document.getElementById("ad-gift-tier-field").hidden = !tiers.length;
+        f.tier.innerHTML = tiers.map(function (t, i) {
+          return '<option value="' + i + '">' + esc(t.photos + " photo" + (t.photos > 1 ? "s" : "") + (t.label ? " (" + t.label + ")" : "") + " · " + formatEuros(t.priceCents)) + "</option>";
+        }).join("");
+        var price = tiers.length ? tiers[0].priceCents : offer ? offer.priceCents : 0;
+        if (price) f.amount.value = bookingEurosInput(price);
+      };
+      f.offerId.addEventListener("change", syncTiers);
+      f.tier.addEventListener("change", function () {
+        var offer = data.offers.find(function (o) { return o.id === f.offerId.value; });
+        if (offer && offer.tiers[Number(f.tier.value)]) f.amount.value = bookingEurosInput(offer.tiers[Number(f.tier.value)].priceCents);
+      });
+      manual.addEventListener("submit", async function (e) {
+        e.preventDefault();
+        var offer = data.offers.find(function (o) { return o.id === f.offerId.value; });
+        var result = await giftCall("POST", "/manual", {
+          offerId: f.offerId.value, tier: offer && offer.tiers.length ? Number(f.tier.value) : undefined,
+          amount: f.amount.value, validityMonths: Number(f.validityMonths.value),
+          fromName: f.fromName.value, toName: f.toName.value, message: f.message.value, email: f.email.value,
+        }, f.email.value.trim() ? "Bon émis et envoyé par e-mail." : "Bon émis : téléchargez-le en PDF dans la liste.");
+        if (result) {
+          giftState.manualOpen = false;
+          paintGiftCards(result);
+        }
+      });
+    }
+    el.view.querySelectorAll("[data-gift-redeem]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        giftCall("POST", "/" + encodeURIComponent(btn.getAttribute("data-gift-redeem")) + "/redeem", {}, "Bon marqué comme utilisé.");
+      });
+    });
+    el.view.querySelectorAll("[data-gift-undo]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        giftCall("POST", "/" + encodeURIComponent(btn.getAttribute("data-gift-undo")) + "/redeem", { undo: true }, "Le bon est de nouveau à utiliser.");
+      });
+    });
+    el.view.querySelectorAll("[data-gift-cancel]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        if (btn.getAttribute("data-confirm") !== "1") {
+          btn.setAttribute("data-confirm", "1");
+          btn.textContent = "Confirmer l'annulation";
+          return;
+        }
+        giftCall("POST", "/" + encodeURIComponent(btn.getAttribute("data-gift-cancel")) + "/cancel", {},
+          "Bon annulé. Un paiement en ligne se rembourse depuis votre tableau de bord Stripe.");
+      });
+    });
+  }
+
   async function renderPlanning(skipHash) {
     if (!skipHash && location.hash !== "#/planning") history.pushState(null, "", "#/planning");
     setActiveTab("planning");
@@ -8519,6 +8744,7 @@
     else if (location.hash === "#/ventes") renderSales(true);
     else if (location.hash === "#/statistiques") renderInsights(true);
     else if (location.hash === "#/reservations") renderBooking(true);
+    else if (location.hash === "#/bons-cadeaux") renderGiftCards(true);
     else if (location.hash === "#/clients") renderClients(true);
     else if (/^#\/clients\/.+/.test(location.hash)) renderClientDetail(decodeURIComponent(location.hash.slice(10)), true);
     else if (location.hash === "#/contrats") renderContracts(true);

@@ -24,7 +24,7 @@
 /site.webmanifest
   Cache-Control: public, max-age=604800
 
-# Pages privées (galerie client, espace famille) : jamais indexées, même
+# Pages privées (galerie client, espace famille, contrat, bon cadeau) : jamais indexées, même
 # si un lien circule. La balise meta dit déjà la même chose ; l'en-tête
 # couvre aussi les fichiers et les redirections.
 /galerie
@@ -39,3 +39,7 @@
   X-Robots-Tag: noindex, nofollow, noarchive
 /contrat.html
   X-Robots-Tag: noindex, nofollow, noarchive
+/bon-cadeau
+  X-Robots-Tag: noindex, nofollow, noarchive, noimageindex
+/bon-cadeau.html
+  X-Robots-Tag: noindex, nofollow, noarchive, noimageindex

@@ -23,6 +23,7 @@ import { purgeOldAccessLogs } from "./privacy.js";
 import { runSalesReminders } from "./campaigns.js";
 import { handlePortfolioPublic, purgeOldPortfolioMessages } from "./portfolio.js";
 import { handleBookingPublic, runBookingReminders } from "./booking.js";
+import { handleGiftShop, handleGiftPublic, purgeAbandonedGiftCards } from "./giftcards.js";
 import { handleContractPublic } from "./contracts.js";
 import { runClientReminders } from "./clients.js";
 import { runStoragePurge } from "./storage.js";
@@ -117,6 +118,12 @@ export default {
       } else if (path.startsWith("/api/booking/")) {
         // Réservation en ligne depuis le mini-site (formules, créneaux, acompte).
         response = await handleBookingPublic(request, env, path);
+      } else if (path.startsWith("/api/giftcard/")) {
+        // Bons cadeaux en vente sur le mini-site (achat, retour de Stripe).
+        response = await handleGiftShop(request, env, path);
+      } else if (path.startsWith("/api/gift/")) {
+        // Page privée d'un bon cadeau (son code), PDF, image de la séance.
+        response = await handleGiftPublic(request, env, path);
       } else if (path.startsWith("/api/contract/")) {
         // Devis et contrat à signer (lien secret envoyé au client).
         response = await handleContractPublic(request, env, path);
@@ -198,6 +205,12 @@ export default {
     ctx.waitUntil(
       runBookingReminders(env).catch((err) => {
         console.error("Rappels de séance : échec :", err && err.stack ? err.stack : err);
+      })
+    );
+    // Bons cadeaux jamais payés : effacés après deux jours.
+    ctx.waitUntil(
+      purgeAbandonedGiftCards(env).catch((err) => {
+        console.error("Bons cadeaux : purge des achats abandonnés impossible :", err && err.stack ? err.stack : err);
       })
     );
     // Fiches clients : rappel au photographe trois semaines avant une date à retenir.

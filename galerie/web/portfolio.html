@@ -45,6 +45,7 @@
           <a href="#travaux">Travaux</a>
           <a href="#apropos" id="pf-nav-about">À propos</a>
           <a href="#reserver" id="pf-nav-booking" hidden>Réserver</a>
+          <a href="#offrir" id="pf-nav-gift" hidden>Offrir</a>
           <a href="#contact" class="pf-nav-cta" id="pf-nav-contact">Me contacter</a>
         </nav>
       </div>
@@ -122,6 +123,55 @@
             <button type="submit" class="pf-btn" id="pf-bk-submit">Réserver</button>
           </form>
         </div>
+      </section>
+      <section class="pf-section pf-wrap pf-gift" id="offrir" aria-labelledby="pf-gift-title" hidden>
+        <h2 id="pf-gift-title">Offrir une séance</h2>
+        <p class="pf-gift-lede" id="pf-gift-lede">Un bon cadeau à imprimer ou à envoyer : la personne qui le reçoit découvre sa séance en scannant le QR code.</p>
+        <div class="pf-bk-result" id="pf-gift-result" role="status" hidden></div>
+        <form class="pf-form pf-gift-form" id="pf-gift-form" novalidate>
+          <p class="pf-bk-step">1. Que souhaitez-vous offrir&nbsp;?</p>
+          <div class="pf-gift-offers" id="pf-gift-offers" role="group" aria-label="Séance offerte"></div>
+          <div id="pf-gift-tier-step" hidden>
+            <p class="pf-bk-step">Quel forfait&nbsp;?</p>
+            <div class="pf-bk-tiers" id="pf-gift-tiers" role="group" aria-label="Forfait offert"></div>
+          </div>
+          <label class="pf-field pf-gift-amount">
+            <span>Valeur du bon (€)</span>
+            <input type="text" name="amount" inputmode="decimal" autocomplete="off" required />
+            <small id="pf-gift-min"></small>
+          </label>
+          <p class="pf-bk-step">2. Personnalisez le bon</p>
+          <div class="pf-row">
+            <label class="pf-field">
+              <span>De la part de</span>
+              <input type="text" name="fromName" maxlength="80" required placeholder="Mamie Jeanne" />
+            </label>
+            <label class="pf-field">
+              <span>Pour</span>
+              <input type="text" name="toName" maxlength="80" required placeholder="Léa et Tom" />
+            </label>
+          </div>
+          <label class="pf-field">
+            <span>Petit mot <em>(facultatif, imprimé sur le bon)</em></span>
+            <textarea name="message" rows="3" maxlength="400" placeholder="Pour garder un souvenir de ces premiers jours…"></textarea>
+          </label>
+          <p class="pf-bk-step">3. Recevoir le bon</p>
+          <div class="pf-row">
+            <label class="pf-field">
+              <span>Votre e-mail</span>
+              <input type="email" name="email" autocomplete="email" maxlength="200" required />
+            </label>
+            <label class="pf-field">
+              <span>E-mail de la personne gâtée <em>(facultatif)</em></span>
+              <input type="email" name="recipientEmail" maxlength="200" placeholder="Pour lui envoyer directement" />
+            </label>
+          </div>
+          <label class="pf-trap" aria-hidden="true">Site web <input type="text" name="website" tabindex="-1" autocomplete="off" /></label>
+          <p class="pf-bk-summary" id="pf-gift-summary"></p>
+          <p class="pf-privacy" id="pf-gift-terms"></p>
+          <p class="pf-error" id="pf-gift-error" role="alert" hidden></p>
+          <button type="submit" class="pf-btn" id="pf-gift-submit">Offrir ce bon</button>
+        </form>
       </section>
       <section class="pf-section pf-wrap pf-contact" id="contact" aria-labelledby="pf-contact-title" hidden>
         <div class="pf-contact-intro">

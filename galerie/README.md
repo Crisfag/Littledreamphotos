@@ -1098,6 +1098,51 @@ npx wrangler d1 execute galerie-protegee --remote --file=migrations/2026-10-rese
 npm run deploy
 ```
 
+### Bons cadeaux (mini-site)
+
+Le photographe (formule Pro, comme la réservation) ouvre la vente dans
+l'onglet **Bons cadeaux** : valeur minimum, validité (3 à 36 mois),
+conditions courtes imprimées sur le bon. Sur son mini-site, une section
+« Offrir une séance » (`#offrir`) propose ses formules actives avec leurs
+forfaits, ou un montant libre : le client choisit, ajuste la valeur (au
+moins le minimum), remplit « de la part de », « pour », un petit mot, son
+e-mail (et, s'il veut, celui de la personne gâtée), puis paie par Stripe,
+en charge de destination vers le photographe, aux frais des acomptes
+(`worker/src/giftcards.js`, webhook `metadata.kind = "giftcard"`, ou
+relecture de la session au retour).
+
+Le bon recopie la séance offerte (titre, description, durée, forfait,
+compris, image) et porte un code de 8 caractères sans 0/O ni 1/I. Il part
+aussitôt en PDF (A5 paysage, `pdf-lib`, QR code dessiné à partir de
+`qrcode`) à l'acheteur, au bénéficiaire éventuel, et le photographe est
+prévenu. Le QR code mène à la page privée du bon
+(`web/bon-cadeau.html`, jamais indexée) : sur l'adresse du studio quand il
+en a une (`julie.holypixx.com/bon-cadeau?c=…`), sinon sur
+`www.holypixx.com/bon-cadeau` ; l'adresse imprimée se tape aussi à la main,
+le code se saisit sur la page. Elle montre pour qui, de la part de qui, le
+petit mot, la séance (durée, photos, valeur, compris, image), la validité,
+comment réserver (contact du studio, lien vers son mini-site), le QR code
+et le PDF. Codes erronés limités (12 par quart d'heure et par IP) ; sous
+l'adresse d'un studio, seuls ses propres bons existent.
+
+Côté photographe : bons à utiliser et montant en circulation, « Utilisé »
+à la séance (annulable), « Annuler » (le remboursement d'un paiement en
+ligne se fait depuis Stripe), PDF et page de chaque bon, et bon émis à la
+main (vendu au studio, offert) : valable de suite, sans frais, envoyé par
+e-mail si une adresse est donnée. Achats jamais payés effacés après deux
+jours.
+
+**Mise en service sur une base existante** :
+
+```bash
+cd worker
+npm install
+npx wrangler d1 execute galerie-protegee --remote --file=migrations/2026-10-bons-cadeaux.sql
+npm run deploy
+```
+
+(`npm install` une fois : le Worker utilise désormais `qrcode`.)
+
 ### Devis et contrats signés en ligne
 
 Onglet **Devis & contrats** (formules Pro et Studio) :
@@ -1998,6 +2043,7 @@ node tests/subdomain.test.mjs         # sous-domaine par studio, autonome (PUBLI
 node tests/shop.test.mjs              # boutique de tirages côté client, autonome (PRODIGI_API_BASE=http://127.0.0.1:8790/v4.0 dans worker/.dev.vars)
 node tests/english.test.mjs           # galerie client en anglais : mot de passe, galerie, visionneuse, boutique, port hors d'Europe, autonome
 node tests/schoolshop.test.mjs        # commande des photos scolaires (gamme, panier famille, suivi, production), autonome
+node tests/giftcards.test.mjs         # bons cadeaux : vente sur le mini-site, page du bon, suivi et bon à la main, autonome (admin-server.mjs lancé)
 node tests/schoolpack.test.mjs        # pack « toutes les photos », ordre de la gamme, liste de prénoms collée, autonome
 node tests/schoolreminders.test.mjs   # rappels de commande aux familles, autonome (npm run dev:local -- --test-scheduled)
 node tests/schoollab.test.mjs         # lots, planches et envoi à un faux BePhoto, autonome (BEPHOTO_API_BASE et BEPHOTO_PREVIEW_BASE=http://127.0.0.1:8791 dans worker/.dev.vars)

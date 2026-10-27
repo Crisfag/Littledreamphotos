@@ -983,6 +983,101 @@ function studioContactLine({ studioName, studioEmail, studioPhone }) {
     : "";
 }
 
+/* ---------- Bons cadeaux (giftcards.js) ---------- */
+
+function giftSummaryHtml(p) {
+  const seance = p.offerTitle
+    ? `<strong>${escapeHtml(p.offerTitle)}</strong>${p.duration ? ` · ${escapeHtml(p.duration)}` : ""}${p.tierPhotos ? ` · ${p.tierPhotos} photo${p.tierPhotos > 1 ? "s" : ""}` : ""}`
+    : "<strong>Une séance photo, au choix</strong>";
+  return [
+    seance,
+    `Valeur : <strong>${escapeHtml(p.amount)}</strong>`,
+    `Pour ${escapeHtml(p.toName)}, de la part de ${escapeHtml(p.fromName)}`,
+    `Valable jusqu'au ${escapeHtml(p.validUntil)}`,
+    `Code : <strong style="letter-spacing:.06em;">${escapeHtml(p.code)}</strong>`,
+  ].join("<br>");
+}
+
+function giftSummaryText(p) {
+  return [
+    p.offerTitle ? `${p.offerTitle}${p.duration ? ` · ${p.duration}` : ""}${p.tierPhotos ? ` · ${p.tierPhotos} photos` : ""}` : "Une séance photo, au choix",
+    `Valeur : ${p.amount}`,
+    `Pour ${p.toName}, de la part de ${p.fromName}`,
+    `Valable jusqu'au ${p.validUntil}`,
+    `Code : ${p.code}`,
+  ].join("\n");
+}
+
+function giftMessageHtml(message) {
+  return message
+    ? `<div style="margin:0 0 14px;padding:14px 16px;background:${CREAM};border-radius:10px;font-family:${SERIF};font-style:italic;font-size:16px;line-height:1.6;color:${CHARCOAL};white-space:pre-wrap;">« ${escapeHtml(message)} »</div>`
+    : "";
+}
+
+export function buildGiftCardBuyerEmail(p) {
+  const subject = `Votre bon cadeau pour ${p.toName} — ${p.studioName}`;
+  const bodyHtml =
+    eyebrow(p.studioName || "Votre photographe") +
+    heading("Votre bon cadeau est prêt") +
+    paragraph(`Merci ! Voici le bon cadeau offert à ${escapeHtml(p.toName)}, en PDF dans cet e-mail : imprimez-le, ou transférez-le simplement.`) +
+    paragraph(giftSummaryHtml(p)) +
+    giftMessageHtml(p.message) +
+    paragraph(`En scannant le QR code du bon, ou sur ${escapeHtml(p.typedUrl)} avec le code, ${escapeHtml(p.toName)} découvrira ce qui lui est offert.`) +
+    emailButton(p.pageUrl, "Voir le bon cadeau") +
+    (studioContactLine(p) ? paragraph(studioContactLine(p), { small: true }) : "");
+  const text = [
+    `Votre bon cadeau pour ${p.toName} est prêt (PDF joint).`,
+    "",
+    giftSummaryText(p),
+    p.message ? `\n« ${p.message} »` : "",
+    "",
+    `Le bon en ligne : ${p.pageUrl}`,
+  ].join("\n");
+  return { subject, html: emailShell({ preheader: subject, bodyHtml }), text };
+}
+
+export function buildGiftCardRecipientEmail(p) {
+  const subject = `${p.fromName} vous offre une séance photo chez ${p.studioName}`;
+  const bodyHtml =
+    eyebrow(p.studioName || "Votre photographe") +
+    heading(`Un cadeau pour vous, ${escapeHtml(p.toName)} !`) +
+    paragraph(`${escapeHtml(p.fromName)} vous offre un bon cadeau chez ${escapeHtml(p.studioName)}.`) +
+    giftMessageHtml(p.message) +
+    paragraph(giftSummaryHtml(p)) +
+    emailButton(p.pageUrl, "Découvrir mon cadeau") +
+    paragraph("Le bon est joint en PDF. Pour réserver votre séance, contactez le studio en indiquant votre code.", { small: true });
+  const text = [
+    `${p.fromName} vous offre un bon cadeau chez ${p.studioName}.`,
+    p.message ? `\n« ${p.message} »` : "",
+    "",
+    giftSummaryText(p),
+    "",
+    `Votre bon : ${p.pageUrl}`,
+  ].join("\n");
+  return { subject, html: emailShell({ preheader: subject, bodyHtml }), text };
+}
+
+export function buildGiftCardSoldEmail(p) {
+  const subject = `Bon cadeau vendu : ${p.amount} pour ${p.toName}`;
+  const bodyHtml =
+    eyebrow("Bon cadeau") +
+    heading("Un bon cadeau vient d'être offert") +
+    paragraph(giftSummaryHtml(p)) +
+    giftMessageHtml(p.message) +
+    paragraph(`<strong>Acheteur :</strong> <a href="mailto:${escapeHtml(p.buyerEmail)}" style="color:${ROSE_DEEP};">${escapeHtml(p.buyerEmail)}</a>`) +
+    (p.adminUrl ? emailButton(p.adminUrl, "Voir mes bons cadeaux") : "") +
+    paragraph("Le montant arrive sur votre compte Stripe. À la séance, marquez le bon comme utilisé.", { small: true });
+  const text = [
+    "Un bon cadeau vient d'être offert.",
+    "",
+    giftSummaryText(p),
+    "",
+    `Acheteur : ${p.buyerEmail}`,
+    p.adminUrl ? `\nVos bons cadeaux : ${p.adminUrl}` : "",
+  ].join("\n");
+  return { subject, html: emailShell({ preheader: subject, bodyHtml }), text };
+}
+
 export function buildBookingConfirmationEmail(params) {
   const { studioName, clientName, offerTitle } = params;
   const subject = `Votre séance « ${offerTitle} » est réservée`;
@@ -1382,6 +1477,18 @@ export async function sendClientDateReminder(env, params) {
 
 export async function sendStudioSeasonReminder(env, params) {
   await sendEmail(env, { to: params.to, ...buildStudioSeasonReminderEmail(params) });
+}
+
+export async function sendGiftCardToBuyer(env, params) {
+  await sendEmail(env, { to: params.to, replyTo: params.replyTo, ...buildGiftCardBuyerEmail(params), ...withAttachment(params) });
+}
+
+export async function sendGiftCardToRecipient(env, params) {
+  await sendEmail(env, { to: params.to, replyTo: params.replyTo, ...buildGiftCardRecipientEmail(params), ...withAttachment(params) });
+}
+
+export async function sendGiftCardSoldNotice(env, params) {
+  await sendEmail(env, { to: params.to, replyTo: params.replyTo, ...buildGiftCardSoldEmail(params) });
 }
 
 export async function sendStoragePurgeNotice(env, params) {

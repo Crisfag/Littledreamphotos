@@ -1,0 +1,152 @@
+/* Page privée d'un bon cadeau (bon-cadeau.html) : même univers que le
+   mini-site du photographe (portfolio.css), en carte à imprimer. */
+
+:root {
+  --ivory: #fbf8f4;
+  --paper: #fffdfa;
+  --sand: #f1e9df;
+  --line: #e6dcd0;
+  --ink: #1f1915;
+  --text: #3d342e;
+  --muted: #7a6e66;
+  --rose: #c49380;
+  --rose-deep: #a46a57;
+  --sage: #5f7a62;
+  --danger: #a4423a;
+  --serif: "Cormorant Garamond", Georgia, serif;
+  --sans: "Jost", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+* { margin: 0; padding: 0; }
+[hidden] { display: none !important; }
+
+body {
+  font-family: var(--sans);
+  font-weight: 300;
+  font-size: 1.02rem;
+  line-height: 1.7;
+  color: var(--text);
+  background: var(--ivory);
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--rose-deep); }
+a:hover { color: var(--ink); }
+:focus-visible { outline: 2px solid var(--rose); outline-offset: 3px; border-radius: 4px; }
+img { display: block; max-width: 100%; }
+h1, h2 { font-family: var(--serif); font-weight: 500; color: var(--ink); letter-spacing: -.01em; line-height: 1.1; }
+
+.gc-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+.gc-shell { max-width: 880px; margin: 0 auto; padding: clamp(24px, 6vw, 64px) 16px 40px; }
+
+.gc-eyebrow, .gc-label {
+  font: 500 .74rem var(--sans); letter-spacing: .16em; text-transform: uppercase; color: var(--rose-deep);
+}
+.gc-label { color: var(--muted); margin-bottom: .5rem; }
+
+.gc-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
+  font: 500 .95rem var(--sans); letter-spacing: .02em;
+  color: #fff; background: var(--rose-deep); border: 1px solid var(--rose-deep);
+  padding: .8rem 1.5rem; border-radius: 999px; text-decoration: none; cursor: pointer;
+  min-height: 44px; transition: background .2s, border-color .2s, transform .2s;
+}
+.gc-btn:hover { color: #fff; background: #8c584a; border-color: #8c584a; transform: translateY(-1px); }
+.gc-btn:disabled { opacity: .6; cursor: progress; transform: none; }
+.gc-btn-ghost { background: transparent; color: var(--ink); border-color: var(--line); }
+.gc-btn-ghost:hover { background: var(--sand); color: var(--ink); border-color: var(--line); }
+
+/* ---------- Chargement, saisie du code ---------- */
+
+.gc-state { min-height: 60vh; display: grid; place-items: center; }
+.gc-spinner { width: 34px; height: 34px; border-radius: 50%; border: 2px solid var(--line); border-top-color: var(--rose-deep); animation: gc-spin .9s linear infinite; }
+@keyframes gc-spin { to { transform: rotate(360deg); } }
+
+.gc-enter { max-width: 30rem; margin: 10vh auto 0; text-align: center; }
+.gc-enter h1 { font-size: clamp(2.1rem, 6vw, 2.9rem); margin: .6rem 0 .8rem; }
+.gc-lede { color: var(--muted); margin-bottom: 1.6rem; }
+.gc-form { display: flex; gap: .6rem; flex-wrap: wrap; justify-content: center; }
+.gc-form input {
+  flex: 1 1 14rem; min-width: 0; min-height: 48px; padding: .7rem 1rem;
+  font: 500 1.25rem/1 ui-monospace, "SF Mono", Menlo, monospace; letter-spacing: .14em; text-align: center; text-transform: uppercase;
+  color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 12px;
+}
+.gc-form input:focus { outline: none; border-color: var(--rose); box-shadow: 0 0 0 3px rgba(196, 147, 128, .2); }
+.gc-error { margin-top: 1rem; color: var(--danger); font-size: .95rem; }
+
+/* ---------- La carte ---------- */
+
+.gc-card {
+  position: relative; background: var(--paper);
+  border: 1px solid var(--line); border-radius: 6px;
+  padding: clamp(28px, 6vw, 64px) clamp(20px, 6vw, 64px);
+  box-shadow: 0 1px 0 rgba(31, 25, 21, .03), 0 24px 60px -32px rgba(31, 25, 21, .25);
+  animation: gc-rise .6s cubic-bezier(.2, .7, .2, 1) both;
+}
+/* Double filet intérieur, comme sur le bon imprimé. */
+.gc-card::before {
+  content: ""; position: absolute; inset: 10px; border: 1px solid rgba(196, 147, 128, .45); border-radius: 3px; pointer-events: none;
+}
+@keyframes gc-rise { from { opacity: 0; transform: translateY(12px); } }
+@media (prefers-reduced-motion: reduce) { .gc-card { animation: none; } }
+
+.gc-head { text-align: center; }
+.gc-status {
+  display: inline-block; margin: .9rem 0 0; padding: .2rem .8rem; border-radius: 999px;
+  font: 500 .8rem var(--sans); letter-spacing: .03em; color: var(--sage); background: #eef3ee;
+}
+.gc-status[data-status="redeemed"], .gc-status[data-status="expired"], .gc-status[data-status="cancelled"] { color: var(--muted); background: var(--sand); }
+.gc-title { font-size: clamp(2.6rem, 9vw, 4.4rem); font-style: italic; font-weight: 400; margin: 1.1rem 0 .4rem; overflow-wrap: anywhere; }
+.gc-title-small { display: block; font: 300 1rem var(--sans); font-style: normal; letter-spacing: .04em; color: var(--muted); margin-bottom: .3rem; }
+.gc-from { color: var(--muted); }
+.gc-from strong { color: var(--text); font-weight: 400; }
+
+.gc-message {
+  max-width: 36rem; margin: clamp(24px, 5vw, 40px) auto 0; text-align: center;
+  font: italic 400 clamp(1.3rem, 3.6vw, 1.65rem)/1.45 var(--serif); color: var(--text);
+  white-space: pre-line; overflow-wrap: anywhere;
+}
+.gc-message::before { content: "«\00a0"; color: var(--rose); }
+.gc-message::after { content: "\00a0»"; color: var(--rose); }
+
+.gc-figure { margin: clamp(28px, 6vw, 48px) 0 0; border-radius: 4px; overflow: hidden; background: var(--sand); }
+.gc-figure img { width: 100%; max-height: 420px; object-fit: cover; }
+
+.gc-gift { margin-top: clamp(28px, 6vw, 48px); padding-top: clamp(24px, 5vw, 36px); border-top: 1px solid var(--line); }
+.gc-gift h2 { font-size: clamp(1.9rem, 5vw, 2.5rem); margin-bottom: .6rem; }
+.gc-description { margin-bottom: 1.2rem; max-width: 40rem; white-space: pre-line; }
+.gc-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; margin: 1rem 0 0; }
+.gc-facts > div { background: var(--paper); padding: .9rem 1rem; }
+.gc-facts dt { font: 500 .72rem var(--sans); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.gc-facts dd { font-family: var(--serif); font-size: 1.45rem; color: var(--ink); line-height: 1.25; margin-top: .15rem; }
+.gc-included { margin-top: 1.4rem; }
+.gc-included ul { list-style: none; display: flex; flex-wrap: wrap; gap: .4rem; }
+.gc-included li { padding: .25rem .8rem; border-radius: 999px; background: var(--sand); font-size: .92rem; }
+
+.gc-use {
+  display: grid; gap: clamp(20px, 5vw, 40px); align-items: center;
+  margin-top: clamp(28px, 6vw, 48px); padding-top: clamp(24px, 5vw, 36px); border-top: 1px solid var(--line);
+}
+@media (min-width: 640px) { .gc-use { grid-template-columns: 1fr auto; } }
+.gc-contact { list-style: none; margin: .6rem 0 0; }
+.gc-contact li { overflow-wrap: anywhere; }
+.gc-actions { display: flex; flex-wrap: wrap; gap: .6rem; margin-top: 1.3rem; }
+.gc-qr { text-align: center; justify-self: center; }
+.gc-qr svg { width: 168px; height: 168px; background: #fff; padding: 10px; border: 1px solid var(--line); border-radius: 4px; display: block; margin: 0 auto .8rem; }
+.gc-qr .gc-label { margin-bottom: 0; }
+.gc-code { font: 600 1.35rem ui-monospace, "SF Mono", Menlo, monospace; letter-spacing: .1em; color: var(--ink); }
+
+.gc-terms { margin-top: 1.8rem; font-size: .85rem; color: var(--muted); text-align: center; }
+.gc-foot { margin-top: 1.6rem; text-align: center; font-size: .82rem; color: var(--muted); }
+
+/* ---------- Impression : la carte seule, sur une page ---------- */
+
+@media print {
+  @page { margin: 12mm; }
+  body { background: #fff; font-size: 11pt; }
+  .gc-shell { padding: 0; max-width: none; }
+  .gc-card { box-shadow: none; animation: none; break-inside: avoid; }
+  .gc-actions, .gc-foot, .gc-status { display: none !important; }
+  .gc-figure img { max-height: 70mm; }
+}

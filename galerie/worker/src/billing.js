@@ -11,6 +11,7 @@ import { createInvoiceForPayment } from "./invoices.js";
 import { markSchoolOrderPaid } from "./schoolshop.js";
 import { markBookingPaid } from "./booking.js";
 import { markContractPaid } from "./contracts.js";
+import { markGiftCardPaid } from "./giftcards.js";
 import { sendInvoiceEmail } from "./notify.js";
 import { languageOf } from "./i18n.js";
 
@@ -166,6 +167,11 @@ export async function handleStripeWebhook(request, env) {
     // Acompte d'une réservation de séance (booking.js).
     if (session?.metadata?.kind === "booking") {
       await markBookingPaid(env, session);
+      return json({ received: true });
+    }
+    // Bon cadeau acheté sur le mini-site (giftcards.js).
+    if (session?.metadata?.kind === "giftcard") {
+      await markGiftCardPaid(env, session);
       return json({ received: true });
     }
     // Acompte d'un contrat signé en ligne (contracts.js).
