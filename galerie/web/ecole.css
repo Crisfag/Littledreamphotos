@@ -203,6 +203,7 @@ h3 { font-family: var(--serif); font-weight: 600; font-size: 1.35rem; color: var
 .ec-order-head span { color: var(--muted); font-size: .88rem; }
 .ec-order-lines { list-style: none; display: grid; gap: .2rem; font-size: .9rem; }
 .ec-order-lines li { display: flex; justify-content: space-between; gap: 1rem; }
+.ec-downloads { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .2rem .7rem; }
 
 /* Barre du panier */
 .ec-cartbar {

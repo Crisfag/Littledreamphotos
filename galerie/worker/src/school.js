@@ -539,6 +539,34 @@ async function updateChild(request, env, photographer, childId) {
   return json({ ok: true });
 }
 
+// POST …/groups/:id/names { text } — liste collée (un enfant par ligne,
+// dans l'ordre des numéros) : « Léo », « Léo Martin », ou une ligne de
+// tableur « Léo;Martin » / « Léo<tab>Martin ». Une ligne vide garde le
+// prénom déjà saisi ; les lignes en trop sont ignorées et signalées.
+export function parseNameList(textValue) {
+  return String(textValue || "").replace(/\r/g, "").split("\n").map((line) =>
+    line.split(/[;\t]|,(?=\s*\S)/).map((part) => part.trim()).filter(Boolean).join(" ").replace(/\s+/g, " ").slice(0, 60));
+}
+
+async function setChildNames(request, env, photographer, groupId) {
+  const group = await groupContext(env, photographer.id, groupId);
+  if (!group) return fail(404, "Groupe introuvable");
+  const body = await request.json().catch(() => null);
+  const names = parseNameList(body?.text);
+  // Ligne d'en-tête d'un tableur (« Prénom;Nom ») : sautée.
+  if (names.length && /^(pr[ée]nom|first ?name|nom|name)\b/i.test(names[0])) names.shift();
+  while (names.length && !names[names.length - 1]) names.pop();
+  if (!names.length) return fail(400, "Collez au moins un prénom");
+  const { results: children } = await env.DB.prepare("SELECT id, number FROM school_children WHERE group_id = ? ORDER BY number").bind(group.id).all();
+  if (!children.length) return fail(400, "Aucun enfant dans ce groupe : importez et rangez d'abord les photos.");
+  const statements = [];
+  children.forEach((child, i) => {
+    if (names[i]) statements.push(env.DB.prepare("UPDATE school_children SET first_name = ? WHERE id = ?").bind(names[i], child.id));
+  });
+  if (statements.length) await env.DB.batch(statements);
+  return json({ named: statements.length, children: children.length, extra: Math.max(0, names.length - children.length) });
+}
+
 // POST …/children/:id/merge { into } — les photos de cet enfant rejoignent
 // celles d'un autre enfant du même groupe (deux rafales du même enfant).
 async function mergeChild(request, env, photographer, childId) {
@@ -673,6 +701,7 @@ export async function handleSchoolAdmin(request, env, photographer, rest, helper
   if (kind === "groups" && sub === "gallery" && rest.length === 3 && method === "POST") return groupGallery(env, photographer, id);
   if (kind === "groups" && sub === "arrange" && rest.length === 3 && method === "POST") return arrangeGroup(env, photographer, id);
   if (kind === "groups" && sub === "assign" && rest.length === 3 && method === "POST") return assignPhotos(request, env, photographer, id);
+  if (kind === "groups" && sub === "names" && rest.length === 3 && method === "POST") return setChildNames(request, env, photographer, id);
   if (kind === "children" && rest.length === 2 && method === "POST") return updateChild(request, env, photographer, id);
   if (kind === "children" && rest.length === 2 && method === "DELETE") return deleteChild(env, photographer, id);
   if (kind === "children" && sub === "merge" && rest.length === 3 && method === "POST") return mergeChild(request, env, photographer, id);

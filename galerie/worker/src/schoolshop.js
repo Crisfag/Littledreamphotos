@@ -27,7 +27,11 @@ import { previewForLabItems, layoutForLabItems } from "./bephoto.js";
 import { reminderStats } from "./schoolreminders.js";
 
 export const PRODUCT_KINDS = { pochette: "Pochette", tirage: "Tirage", numerique: "Fichier numérique" };
-const SCOPES = ["portrait", "group"];
+// portrait : une photo de l'enfant au choix ; group : la photo de groupe ;
+// all : pack « toutes les photos de l'enfant » (chaque portrait en fichier
+// numérique, ou un tirage de chaque), sans choix de photo.
+const SCOPES = ["portrait", "group", "all"];
+export const SCOPE_LABELS = { portrait: "Une photo au choix", group: "Photo de groupe", all: "Toutes les photos de l'enfant (pack)" };
 const MAX_PRODUCTS = 40;
 const MAX_LINES = 60;
 const MAX_QTY = 20;
@@ -102,6 +106,7 @@ function productFields(body) {
   const name = text(body?.name, 80);
   const price = priceCents(body?.price);
   if (!kind) return { error: "Type de produit inconnu" };
+  if (scope === "all" && kind === "pochette") return { error: "Un pack « toutes les photos » se compose de fichiers numériques ou de tirages, pas de pochettes." };
   if (!name) return { error: "Nom du produit requis" };
   if (price === null) return { error: "Prix invalide (entre 0,50 € et 1 000 €)" };
   return { kind, scope, name, description: text(body?.description, 240), price };
@@ -154,6 +159,21 @@ async function updateProduct(request, env, photographer, productId) {
   return json({ ok: true });
 }
 
+// POST …/years/:id/products/order { ids } — ordre d'affichage de la gamme
+// (espace famille compris) ; les produits absents de la liste gardent leur
+// place après les autres.
+async function reorderProducts(request, env, year) {
+  const body = await request.json().catch(() => null);
+  const ids = Array.isArray(body?.ids) ? body.ids.map(String) : [];
+  const products = await listProducts(env, year.id);
+  const known = new Set(products.map((p) => p.id));
+  const ordered = [...new Set(ids.filter((id) => known.has(id)))];
+  if (!ordered.length) return fail(400, "Ordre invalide");
+  const rest = products.map((p) => p.id).filter((id) => !ordered.includes(id));
+  await env.DB.batch([...ordered, ...rest].map((id, i) => env.DB.prepare("UPDATE school_products SET sort = ? WHERE id = ?").bind(i, id)));
+  return json({ ok: true });
+}
+
 async function deleteProduct(env, photographer, productId) {
   if (!(await ownedProduct(env, photographer.id, productId))) return fail(404, "Produit introuvable");
   // Les commandes gardent le nom et le prix de l'article : rien ne se perd.
@@ -196,6 +216,7 @@ async function shopForAdmin(env, photographer, year) {
   return json({
     products,
     kinds: PRODUCT_KINDS,
+    scopes: SCOPE_LABELS,
     homeShippingCents: year.home_shipping_cents || 0,
     familyReminders: Boolean(year.family_reminders),
     reminders: await reminderStats(env, year.id),
@@ -263,7 +284,8 @@ export async function handleSchoolShopAdmin(request, env, photographer, rest) {
     const year = await ownedYear(env, photographer.id, id);
     if (!year) return fail(404, "Année introuvable");
     if (sub === "shop" && method === "GET") return shopForAdmin(env, photographer, year);
-    if (sub === "products" && method === "POST") return createProduct(request, env, year);
+    if (sub === "products" && method === "POST" && rest[3] === "order") return reorderProducts(request, env, year);
+    if (sub === "products" && method === "POST" && rest.length === 3) return createProduct(request, env, year);
     if (sub === "starter-products" && method === "POST") return addStarterProducts(env, year);
     if (sub === "shipping" && method === "POST") return setShipping(request, env, year);
     if (sub === "production" && method === "POST") return productionForYear(request, env, year);
@@ -324,7 +346,11 @@ export async function shopForFamily(env, family, children) {
     const { results: lines } = await env.DB.prepare("SELECT * FROM school_order_lines WHERE order_id = ?").bind(o.id).all();
     out.push({
       id: o.id, paidAt: o.paid_at, amountCents: o.amount_cents, delivery: o.delivery,
-      lines: lines.map((l) => ({ id: l.id, childId: l.child_id, name: l.name, quantity: l.quantity, priceCents: l.price_cents, kind: l.kind, photoId: l.photo_id })),
+      // Un pack redevient un article ; ses fichiers restent téléchargeables un à un.
+      lines: groupPackLines(lines).map((l) => ({
+        id: l.id, childId: l.child_id, name: l.name, quantity: l.quantity, priceCents: l.price_cents, kind: l.kind, photoId: l.photo_id,
+        ...(l.pack_size ? { pack: l.line_ids.length, lineIds: l.line_ids } : {}),
+      })),
     });
   }
   return { shops, orders: out };
@@ -343,6 +369,7 @@ export async function familyCheckout(request, env, family) {
   // l'année de cet enfant, et une photo de cet enfant (ou la photo de groupe
   // de son groupe, selon le produit).
   const lines = [];
+  const stripeItems = [];
   let year = null;
   for (const item of items) {
     const row = await env.DB.prepare(
@@ -359,12 +386,28 @@ export async function familyCheckout(request, env, family) {
     if (!row) return fail(400, "Un article du panier n'est plus disponible : videz le panier et recommencez.");
     if (year && year.id !== row.id) return fail(400, "Une commande ne peut porter que sur un même établissement et une même année : passez une commande par établissement.");
     year = row;
+    const quantity = Math.max(1, Math.min(MAX_QTY, Math.round(Number(item?.quantity) || 1)));
+    // Pack « toutes les photos » : une ligne par portrait de l'enfant, le
+    // prix du pack réparti au centime près (téléchargements, fichier de
+    // production et lots labo restent photo par photo).
+    if (row.scope === "all") {
+      const { results: portraits } = row.gallery_id ? await env.DB.prepare(
+        "SELECT id FROM photos WHERE gallery_id = ? AND child_id = ? AND school_role = '' ORDER BY position, created_at"
+      ).bind(row.gallery_id, row.child_id).all() : { results: [] };
+      if (!portraits.length) return fail(400, "Aucune photo pour ce pack.");
+      if (lines.length + portraits.length > MAX_LINES * 4) return fail(400, "Panier trop grand : passez deux commandes.");
+      const base = Math.floor(row.price_cents / portraits.length);
+      const remainder = row.price_cents - base * portraits.length;
+      portraits.forEach((photo, i) => lines.push({ ...row, photo_id: photo.id, quantity, price_cents: base + (i < remainder ? 1 : 0), packOf: portraits.length }));
+      stripeItems.push({ name: `${row.name} (${portraits.length} photos)`, unitAmountCents: row.price_cents, quantity, child: row });
+      continue;
+    }
     const photo = row.gallery_id && await env.DB.prepare(
       "SELECT id, school_role FROM photos WHERE id = ? AND gallery_id = ? AND ((child_id = ? AND school_role = '') OR school_role = 'group')"
     ).bind(String(item?.photoId || ""), row.gallery_id, row.child_id).first();
     if (!photo || (row.scope === "group") !== (photo.school_role === "group")) return fail(400, "La photo choisie ne correspond pas à cet article.");
-    const quantity = Math.max(1, Math.min(MAX_QTY, Math.round(Number(item?.quantity) || 1)));
     lines.push({ ...row, photo_id: photo.id, quantity });
+    stripeItems.push({ name: row.name, unitAmountCents: row.price_cents, quantity, child: row });
   }
 
   const delivery = deliveryFor(year);
@@ -384,9 +427,9 @@ export async function familyCheckout(request, env, family) {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`
     ).bind(orderId, year.id, family.id, family.email, delivery, shipping, amount, fee, now()),
     ...lines.map((l) => env.DB.prepare(
-      `INSERT INTO school_order_lines (id, order_id, child_id, group_id, product_id, photo_id, kind, name, description, price_cents, quantity)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).bind(newId("sol"), orderId, l.child_id, l.group_id, l.product_id, l.photo_id, l.kind, l.name, l.description, l.price_cents, l.quantity)),
+      `INSERT INTO school_order_lines (id, order_id, child_id, group_id, product_id, photo_id, kind, name, description, price_cents, quantity, pack_size)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(newId("sol"), orderId, l.child_id, l.group_id, l.product_id, l.photo_id, l.kind, l.name, l.description, l.price_cents, l.quantity, l.packOf || 0)),
   ];
   await env.DB.batch(statements);
 
@@ -394,7 +437,7 @@ export async function familyCheckout(request, env, family) {
   try {
     const session = await createSchoolCheckout(env, photographer.stripe_account_id, {
       lineItems: [
-        ...lines.map((l) => ({ name: `${l.name} — ${l.child_first_name || `enfant n° ${l.child_number}`}`, unitAmountCents: l.price_cents, quantity: l.quantity })),
+        ...stripeItems.map((l) => ({ name: `${l.name} — ${l.child.child_first_name || `enfant n° ${l.child.child_number}`}`, unitAmountCents: l.unitAmountCents, quantity: l.quantity })),
         ...(shipping ? [{ name: "Livraison à domicile", unitAmountCents: shipping, quantity: 1 }] : []),
       ],
       email: family.email,
@@ -413,6 +456,31 @@ export async function familyCheckout(request, env, family) {
     ]);
     return fail(502, err.stripeNotConfigured ? "Le paiement en ligne n'est pas encore configuré." : "Le paiement n'a pas pu démarrer. Réessayez dans un instant.");
   }
+}
+
+// Un pack s'enregistre en une ligne par photo (pack_size = nombre de
+// photos) ; pour le parent (e-mail, historique), il redevient un seul
+// article : même enfant, même produit, même quantité, prix additionnés.
+export function groupPackLines(lines) {
+  const out = [];
+  const packs = new Map();
+  for (const l of lines) {
+    if (!l.pack_size) {
+      out.push(l);
+      continue;
+    }
+    const key = `${l.order_id || ""}|${l.child_id}|${l.product_id}|${l.quantity}`;
+    const packed = packs.get(key);
+    if (packed) {
+      packed.price_cents += l.price_cents;
+      packed.line_ids.push(l.id);
+      continue;
+    }
+    const entry = { ...l, line_ids: [l.id] };
+    packs.set(key, entry);
+    out.push(entry);
+  }
+  return out;
 }
 
 // Marque une commande payée (webhook ou retour de Stripe) ; idempotent.
@@ -451,7 +519,7 @@ async function confirmToFamily(env, orderId) {
     studioName: order.studio_name || "",
     schoolName: order.school_name,
     delivery: order.delivery,
-    lines: lines.map((l) => ({ name: l.name, quantity: l.quantity, priceCents: l.price_cents, childName: l.first_name || `enfant n° ${l.number || "?"}` })),
+    lines: groupPackLines(lines).map((l) => ({ name: l.name, quantity: l.quantity, priceCents: l.price_cents, childName: l.first_name || `enfant n° ${l.number || "?"}` })),
     shippingCents: order.shipping_cents,
     totalCents: order.amount_cents,
     familyUrl: `${origin}/ecole`,

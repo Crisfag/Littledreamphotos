@@ -356,6 +356,9 @@
     el.view.querySelectorAll("[data-pick]").forEach(function (btn) {
       btn.addEventListener("click", function () { openPicker(child, { productId: btn.getAttribute("data-pick") }); });
     });
+    el.view.querySelectorAll("[data-pack]").forEach(function (btn) {
+      btn.addEventListener("click", function () { addPack(child, btn.getAttribute("data-pack")); });
+    });
     el.view.querySelectorAll("[data-download]").forEach(function (btn) {
       btn.addEventListener("click", function () { downloadFile(btn); });
     });
@@ -446,7 +449,10 @@
       if (!child || !shop || !shop.delivery) return null;
       var product = shop.products.find(function (p) { return p.id === item.productId; });
       if (!product) return null;
-      var photo = (product.scope === "group" ? child.groupPhotos : child.photos).find(function (p) { return p.id === item.photoId; });
+      // Pack « toutes les photos » : pas de photo choisie, tous les portraits.
+      var photo = product.scope === "all"
+        ? child.photos[0]
+        : (product.scope === "group" ? child.groupPhotos : child.photos).find(function (p) { return p.id === item.photoId; });
       if (!photo) return null;
       return { item: item, child: child, product: product, photo: photo, shop: shop };
     }).filter(Boolean);
@@ -503,15 +509,21 @@
           (p.layout && mockupPhotoFor(child, p)
             ? '<canvas class="ec-product-img ec-mockup" data-mockup="' + esc(p.id) + '" style="aspect-ratio:' + p.layout.ratio + '" role="img" aria-label="Aperçu : ' + esc(p.name) + " avec la photo de " + esc(childName(child)) + '"></canvas>'
             : p.preview ? '<img class="ec-product-img" src="' + esc(previewUrl(p.preview)) + '" alt="Composition : ' + esc(p.name) + '" loading="lazy" />' : "") +
-          '<p class="ec-product-kind">' + esc(p.scope === "group" ? child.vocabulary.groupPhoto : "Portrait") + "</p>" +
+          '<p class="ec-product-kind">' + esc(p.scope === "group" ? child.vocabulary.groupPhoto : p.scope === "all" ? "Pack · " + packCount(child) : "Portrait") + "</p>" +
           "<h4>" + esc(p.name) + "</h4>" +
           (p.description ? '<p class="ec-product-desc">' + esc(p.description) + "</p>" : "") +
           '<div class="ec-product-foot"><span class="ec-price">' + esc(euros(p.priceCents)) + "</span>" +
-          '<button type="button" class="ec-btn ec-btn-small ec-btn-ghost" data-pick="' + esc(p.id) + '" aria-label="Choisir ' + esc(p.name) + '">Choisir</button></div>' +
+          (p.scope === "all"
+            ? '<button type="button" class="ec-btn ec-btn-small ec-btn-ghost" data-pack="' + esc(p.id) + '" aria-label="Ajouter au panier : ' + esc(p.name) + '">Ajouter</button></div>'
+            : '<button type="button" class="ec-btn ec-btn-small ec-btn-ghost" data-pick="' + esc(p.id) + '" aria-label="Choisir ' + esc(p.name) + '">Choisir</button></div>') +
           "</article>"
         );
       }).join("") + "</div></section>"
     );
+  }
+
+  function packCount(child) {
+    return child.photos.length + " photo" + (child.photos.length > 1 ? "s" : "");
   }
 
   function ordersSectionHtml() {
@@ -525,9 +537,12 @@
           (o.delivery === "home" ? "livraison à domicile" : "livrée à l'établissement") + "</span></div>" +
           '<ul class="ec-order-lines">' + o.lines.map(function (l) {
             var child = childById(l.childId);
-            return "<li><span>" + l.quantity + " × " + esc(l.name) + (child ? " · " + esc(childName(child)) : "") + "</span>" +
+            var files = l.pack ? l.lineIds : [l.id];
+            return "<li><span>" + l.quantity + " × " + esc(l.name) + (l.pack ? " (" + l.pack + " photos)" : "") + (child ? " · " + esc(childName(child)) : "") + "</span>" +
               (l.kind === "numerique"
-                ? '<button type="button" class="ec-link-btn" data-download="' + esc(l.id) + '">Télécharger</button>'
+                ? '<span class="ec-downloads">' + files.map(function (id, i) {
+                    return '<button type="button" class="ec-link-btn" data-download="' + esc(id) + '">' + (l.pack ? "Photo " + (i + 1) : "Télécharger") + "</button>";
+                  }).join("") + "</span>"
                 : "") + "</li>";
           }).join("") + "</ul></li>"
         );
@@ -828,6 +843,23 @@
     });
   }
 
+  // Pack « toutes les photos de l'enfant » : rien à choisir, il part droit au
+  // panier (une seule fois par enfant).
+  function addPack(child, productId) {
+    var other = cartLines().find(function (l) { return l.child.yearId !== child.yearId; });
+    if (other) {
+      return window.alert("Votre panier contient déjà des photos de " + other.child.school.name + " : réglez-le d'abord, puis passez une seconde commande.");
+    }
+    if (!state.cart.some(function (i) { return i.childId === child.id && i.productId === productId; })) {
+      state.cart.push({ childId: child.id, productId: productId, photoId: "*", quantity: 1 });
+      saveCart();
+    }
+    updateCartBar();
+    el.cartbar.classList.remove("ec-bump");
+    void el.cartbar.offsetWidth;
+    el.cartbar.classList.add("ec-bump");
+  }
+
   function openCart() {
     var lines = cartLines();
     if (!lines.length) return closeSheet();
@@ -848,7 +880,8 @@
             var l = entry.line;
             return '<li data-index="' + entry.index + '">' +
               '<span class="ec-cart-thumb">' + miniPhotoHtml(l.photo) + "</span>" +
-              '<span class="ec-cart-name"><strong>' + esc(l.product.name) + "</strong>" + (l.product.description ? "<small>" + esc(l.product.description) + "</small>" : "") +
+              '<span class="ec-cart-name"><strong>' + esc(l.product.name) + "</strong>" + (l.product.scope === "all" ? "<small>Toutes les photos (" + l.child.photos.length + ")</small>" : "") +
+              (l.product.description ? "<small>" + esc(l.product.description) + "</small>" : "") +
               '<button type="button" class="ec-link-btn ec-cart-remove" data-remove>Retirer</button></span>' +
               '<span class="ec-qty ec-qty-small" role="group" aria-label="Quantité"><button type="button" data-step="-1" aria-label="Un de moins">−</button><output>' + l.item.quantity + '</output><button type="button" data-step="1" aria-label="Un de plus">+</button></span>' +
               '<span class="ec-price">' + esc(euros(l.product.priceCents * l.item.quantity)) + "</span></li>";
