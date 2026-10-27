@@ -5748,7 +5748,7 @@
 
   /* ---------- Boutique d'une année : gamme, prix, commandes ---------- */
 
-  var SCHOOL_SCOPES = { portrait: "Portrait de l'enfant", group: "Photo de groupe" };
+  var SCHOOL_SCOPES = { portrait: "Portrait de l'enfant", group: "Photo de groupe", all: "Toutes les photos de l'enfant (pack)" };
 
   async function loadSchoolShop(year, kind) {
     var host = document.getElementById("ad-sc-shop");
@@ -5772,9 +5772,11 @@
       '<input type="text" class="ad-sc-in" data-pfield="name" maxlength="80" value="' + esc(p.name) + '" aria-label="Nom du produit" />' +
       '<input type="text" class="ad-sc-in ad-sc-in-muted" data-pfield="description" maxlength="240" value="' + esc(p.description) + '" placeholder="Contenu, format…" aria-label="Description" />' +
       "</div>" +
-      '<span class="ad-sc-tag">' + esc(shop.kinds[p.kind] || p.kind) + " · " + esc(p.scope === "group" ? "groupe" : "portrait") + "</span>" +
+      '<span class="ad-sc-tag">' + esc(shop.kinds[p.kind] || p.kind) + " · " + esc(p.scope === "group" ? "groupe" : p.scope === "all" ? "pack toutes les photos" : "portrait") + "</span>" +
       '<label class="ad-sc-price"><input type="text" inputmode="decimal" class="ad-sc-in" data-pfield="price" value="' + eurosInput(p.priceCents).replace(".", ",") + '" aria-label="Prix en euros" /> €</label>' +
       '<label class="ad-sc-toggle"><input type="checkbox" data-pfield="active"' + (p.active ? " checked" : "") + " /> En vente</label>" +
+      '<span class="ad-sc-move" role="group" aria-label="Ordre d\'affichage"><button type="button" class="ad-link-btn" data-move="-1" aria-label="Monter ' + esc(p.name) + '">↑</button>' +
+      '<button type="button" class="ad-link-btn" data-move="1" aria-label="Descendre ' + esc(p.name) + '">↓</button></span>' +
       '<button type="button" class="ad-link-btn ad-sc-del" data-del-product aria-label="Supprimer ' + esc(p.name) + '">Supprimer</button>' +
       '<div class="ad-sc-prod-lab">' + (p.preview ? '<img class="ad-sc-prod-thumb" src="' + esc(labPreviewUrl(p.preview)) + '" alt="Visuel de la planche" loading="lazy" />' : "") + (p.kind === "numerique"
         ? '<span class="ad-hint">Labo : rien à imprimer (téléchargé par la famille)</span>'
@@ -6207,6 +6209,8 @@
       '<label class="ad-field"><span>Contenu <em>(facultatif)</em></span><input type="text" name="description" maxlength="240" placeholder="2 tirages 13×18" /></label>' +
       '<label class="ad-field"><span>Prix (€)</span><input type="text" name="price" required inputmode="decimal" placeholder="18,00" /></label>' +
       '<button type="submit" class="ad-btn">+ Ajouter</button></form>' +
+      '<p class="ad-hint">Les familles voient la gamme dans cet ordre (flèches ↑ ↓ pour mettre en avant ce que vous voulez vendre d\'abord). ' +
+      "« Toutes les photos de l'enfant (pack) » : tous ses portraits en fichiers numériques, ou un tirage de chacun, en un clic pour les parents, au prix que vous fixez.</p>" +
       '<div class="ad-sc-shipping"><label class="ad-field"><span>Frais de port, commande à domicile <em>(après la commande groupée)</em></span>' +
       '<span class="ad-sc-price"><input type="text" inputmode="decimal" id="ad-sc-shipping" value="' + eurosInput(shop.homeShippingCents).replace(".", ",") + '" /> €</span></label>' +
       '<p class="ad-hint">Jusqu\'à la date de commande groupée, tout est livré à l\'établissement, sans frais. Ensuite, et jusqu\'à la date de commande à domicile, les familles paient ces frais et donnent leur adresse.</p></div>' +
@@ -6264,6 +6268,21 @@
             await api("POST", "/school/products/" + encodeURIComponent(id), patch);
             if (field === "active") li.classList.toggle("ad-sc-off", !input.checked);
             toast("Enregistré.");
+          } catch (err) {
+            toast(err.message, true);
+          }
+        });
+      });
+      li.querySelectorAll("[data-move]").forEach(function (btn) {
+        btn.addEventListener("click", async function () {
+          var ids = shop.products.map(function (p) { return p.id; });
+          var from = ids.indexOf(id);
+          var to = from + Number(btn.getAttribute("data-move"));
+          if (from === -1 || to < 0 || to >= ids.length) return;
+          ids.splice(to, 0, ids.splice(from, 1)[0]);
+          try {
+            await api("POST", "/school/years/" + encodeURIComponent(year.id) + "/products/order", { ids: ids });
+            refresh();
           } catch (err) {
             toast(err.message, true);
           }
@@ -6412,7 +6431,12 @@
       '<section><div class="ad-section-header"><h3>Enfants (' + data.children.length + ")</h3></div>" +
       (data.children.length
         ? '<p class="ad-hint">Vérifiez d\'un coup d\'œil : chaque carte doit montrer un seul enfant. Cliquez sur des photos pour les choisir et les déplacer ; deux cartes du même enfant se fusionnent.</p>' +
-          '<div class="ad-sc-children">' + childrenHtml + "</div>"
+          '<div class="ad-sc-children">' + childrenHtml + "</div>" +
+          '<details class="ad-sc-names"><summary>Coller la liste des prénoms</summary>' +
+          '<p class="ad-hint">Un enfant par ligne, dans l\'ordre des numéros (enfant 1, enfant 2…). Copiez la colonne des prénoms de la liste de la ' + esc(kind.group.toLowerCase()) +
+          ', ou de votre tableur : « Léo », « Léo Martin » ou « Léo;Martin ». Une ligne vide garde le prénom déjà saisi.</p>' +
+          '<textarea id="ad-sc-names-text" rows="6" placeholder="Léo&#10;Emma Martin&#10;Jules"></textarea>' +
+          '<button type="button" class="ad-btn" id="ad-sc-names-save">Nommer les enfants</button></details>'
         : '<p class="ad-hint">Les enfants apparaîtront ici une fois les photos importées et regroupées.</p>') +
       "</section>";
 
@@ -6472,6 +6496,20 @@
         this.disabled = false;
       }
     });
+    var namesSave = document.getElementById("ad-sc-names-save");
+    if (namesSave) {
+      namesSave.addEventListener("click", async function () {
+        namesSave.disabled = true;
+        try {
+          var result = await api("POST", "/school/groups/" + encodeURIComponent(groupId) + "/names", { text: document.getElementById("ad-sc-names-text").value });
+          toast(result.named + " enfant" + (result.named > 1 ? "s nommés" : " nommé") + (result.extra ? " · " + result.extra + " ligne" + (result.extra > 1 ? "s" : "") + " en trop, ignorée" + (result.extra > 1 ? "s" : "") + " (plus de prénoms que d'enfants)" : "") + ".");
+          renderSchoolGroup(groupId);
+        } catch (err) {
+          namesSave.disabled = false;
+          toast(err.message, true);
+        }
+      });
+    }
     var arrange = document.getElementById("ad-sc-arrange");
     if (arrange) arrange.addEventListener("click", async function () {
       this.disabled = true;

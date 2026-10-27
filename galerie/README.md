@@ -606,6 +606,25 @@ Le tableau de bord s'organise en trois onglets, chacun avec son propre lien
     ligne par article) et `distribution.csv` (à cocher à la remise).
     Paniers jamais payés effacés après deux jours. Les fichiers numériques
     n'entrent ni dans la production ni dans les lots (rien à imprimer).
+    Le photographe range sa gamme (flèches ↑ ↓, `POST …/products/order`) :
+    les familles la voient dans cet ordre. *Pack « toutes les photos de
+    l'enfant »* (`scope = 'all'`, fichiers numériques ou tirages, jamais une
+    pochette) : ajouté d'un clic, sans choix de photo ; au paiement il
+    devient une ligne par portrait de l'enfant (photo de groupe exclue),
+    prix réparti au centime près, `pack_size` = nombre de photos. Un seul
+    article chez Stripe, dans l'e-mail et chez la famille
+    (`groupPackLines`), qui télécharge chaque photo une à une ; production,
+    lots et labo le traitent comme des lignes ordinaires.
+  - *Prénoms* : sur la page d'un groupe, « Coller la liste des prénoms »
+    (`POST …/groups/:id/names`) nomme les enfants dans l'ordre de leurs
+    numéros, une ligne par enfant (colonne copiée d'une liste ou d'un
+    tableur ; « Prénom;Nom » ou tabulation deviennent « Prénom Nom »,
+    ligne d'en-tête ignorée, ligne vide = prénom inchangé, lignes en trop
+    signalées).
+
+    Mise en service sur une base existante :
+    `npx wrangler d1 execute galerie-protegee --remote --file=migrations/2026-10-pack-scolaire.sql`
+    (colonne `school_order_lines.pack_size`), puis `npm run deploy`.
   - *Envois au labo* (`worker/src/schoollab.js`, `worker/src/bephoto.js`) :
     le photographe regroupe les articles payés pas encore partis en *lots*
     (conseil du labo : une ou deux fois pendant la vente), un pour
@@ -1979,6 +1998,7 @@ node tests/subdomain.test.mjs         # sous-domaine par studio, autonome (PUBLI
 node tests/shop.test.mjs              # boutique de tirages côté client, autonome (PRODIGI_API_BASE=http://127.0.0.1:8790/v4.0 dans worker/.dev.vars)
 node tests/english.test.mjs           # galerie client en anglais : mot de passe, galerie, visionneuse, boutique, port hors d'Europe, autonome
 node tests/schoolshop.test.mjs        # commande des photos scolaires (gamme, panier famille, suivi, production), autonome
+node tests/schoolpack.test.mjs        # pack « toutes les photos », ordre de la gamme, liste de prénoms collée, autonome
 node tests/schoolreminders.test.mjs   # rappels de commande aux familles, autonome (npm run dev:local -- --test-scheduled)
 node tests/schoollab.test.mjs         # lots, planches et envoi à un faux BePhoto, autonome (BEPHOTO_API_BASE et BEPHOTO_PREVIEW_BASE=http://127.0.0.1:8791 dans worker/.dev.vars)
 node tests/music.test.mjs             # musique côté client (bibliothèque, lien Spotify), autonome

@@ -850,7 +850,10 @@ CREATE TABLE IF NOT EXISTS school_order_lines (
   description TEXT NOT NULL DEFAULT '',
   price_cents INTEGER NOT NULL,
   quantity    INTEGER NOT NULL,
-  batch_id    TEXT NOT NULL DEFAULT ''  -- lot d'envoi au labo ('' = pas encore parti)
+  batch_id    TEXT NOT NULL DEFAULT '', -- lot d'envoi au labo ('' = pas encore parti)
+  -- Pack « toutes les photos de l'enfant » : une ligne par photo, chacune
+  -- marquée du nombre de photos du pack (0 = article ordinaire).
+  pack_size   INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_school_order_lines_order ON school_order_lines(order_id);
 CREATE INDEX IF NOT EXISTS idx_school_order_lines_group ON school_order_lines(group_id);
