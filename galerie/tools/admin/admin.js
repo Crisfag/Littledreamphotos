@@ -941,6 +941,380 @@
     );
   }
 
+  /* ---------- Factures libres (onglet Facturation) ---------- */
+
+  var CI_STATUS = {
+    draft: ["Brouillon", ""],
+    issued: ["À régler", "ad-badge-soon"],
+    partial: ["Acompte reçu", "ad-badge-soon"],
+    overdue: ["En retard", "ad-badge-due"],
+    paid: ["Réglée", "ad-badge-validated"],
+    credited: ["Annulée", "ad-badge-expired"],
+    credit: ["Note de crédit", "ad-badge-comment"],
+  };
+  // editing : facture en cours de rédaction (null : formulaire fermé).
+  var ciState = { data: null, editing: null, prefill: null };
+
+  function ciDay(day) {
+    return day ? new Date(day + "T12:00:00Z").toLocaleDateString("fr-BE", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }) : "";
+  }
+  function ciToday() {
+    return new Date().toLocaleDateString("en-CA", { timeZone: "Europe/Brussels" });
+  }
+  function ciAddDays(day, n) {
+    var d = new Date(day + "T12:00:00Z");
+    d.setUTCDate(d.getUTCDate() + n);
+    return d.toISOString().slice(0, 10);
+  }
+
+  // Ouvre une facture préremplie depuis un contrat, une réservation ou un bon cadeau.
+  async function openInvoiceFrom(kind, id) {
+    try {
+      var res = await api("GET", "/client-invoices/from/" + kind + "/" + encodeURIComponent(id));
+      ciState.prefill = res.prefill;
+      renderBilling();
+    } catch (err) {
+      toast(err.message, true);
+    }
+  }
+
+  async function loadClientInvoices() {
+    var box = document.getElementById("ad-ci");
+    if (!box) return;
+    try {
+      ciState.data = await api("GET", "/client-invoices");
+    } catch (err) {
+      box.innerHTML = '<p class="ad-hint">' + esc(err.message) + "</p>";
+      return;
+    }
+    if (ciState.prefill) {
+      ciState.editing = Object.assign({ id: "" }, ciState.prefill);
+      ciState.prefill = null;
+    }
+    paintClientInvoices();
+    if (ciState.editing) document.getElementById("ad-ci-editor").scrollIntoView({ block: "start" });
+  }
+
+  function ciRowHtml(f) {
+    var status = CI_STATUS[f.status] || [f.status, ""];
+    var actions = [];
+    if (f.status === "draft") {
+      actions.push('<button type="button" class="ad-btn ad-btn-small" data-ci-edit="' + esc(f.id) + '">Modifier</button>');
+      actions.push('<button type="button" class="ad-btn ad-btn-small ad-btn-primary" data-ci-issue="' + esc(f.id) + '">Émettre</button>');
+      actions.push('<button type="button" class="ad-btn ad-btn-small ad-btn-danger" data-ci-delete="' + esc(f.id) + '">Supprimer</button>');
+    } else {
+      actions.push('<a class="ad-btn ad-btn-small ad-btn-ghost" href="/local/client-invoices/' + encodeURIComponent(f.id) + '/pdf" download>PDF</a>');
+      if (f.kind === "invoice") actions.push('<a class="ad-btn ad-btn-small ad-btn-ghost" href="' + esc(f.pageUrl) + '" target="_blank" rel="noopener">Page client</a>');
+      if (f.client.email) actions.push('<button type="button" class="ad-btn ad-btn-small ad-btn-ghost" data-ci-send="' + esc(f.id) + '">Envoyer</button>');
+      if (f.kind === "invoice" && f.nextDue && f.status !== "credited") {
+        actions.push('<button type="button" class="ad-btn ad-btn-small" data-ci-paid="' + esc(f.id) + '" data-index="' + f.nextDue.index + '">' +
+          (f.schedule.length > 1 ? esc(f.nextDue.label) + " reçu" : "Réglée") + "</button>");
+      }
+      if (f.kind === "invoice" && f.status !== "credited") actions.push('<button type="button" class="ad-btn ad-btn-small ad-btn-danger" data-ci-credit="' + esc(f.id) + '">Note de crédit</button>');
+    }
+    var due = f.nextDue && f.kind === "invoice" && f.status !== "credited"
+      ? esc(formatEuros(f.nextDue.amountCents)) + '<br><span class="ad-hint">' + esc(ciDay(f.nextDue.dueDate)) + "</span>"
+      : "—";
+    return "<tr>" +
+      "<td><strong>" + esc(f.number || "—") + '</strong><br><span class="ad-hint">' + esc(f.issuedAt ? formatDate(f.issuedAt) : "brouillon") + "</span></td>" +
+      "<td>" + esc(f.client.name || f.client.email) + (f.title ? '<br><span class="ad-hint">' + esc(f.title) + "</span>" : "") + "</td>" +
+      '<td class="ad-num">' + esc(formatEuros(f.totalCents)) + (f.kind === "invoice" && f.paidCents && f.paidCents < f.totalCents ? '<br><span class="ad-hint">réglé ' + esc(formatEuros(f.paidCents)) + "</span>" : "") + "</td>" +
+      "<td>" + due + "</td>" +
+      '<td><span class="ad-badge ' + status[1] + '">' + esc(status[0]) + "</span>" +
+      (f.kind === "invoice" && f.issuedAt && f.status !== "paid" && f.status !== "credited"
+        ? '<label class="ad-ci-remind"><input type="checkbox" data-ci-remind="' + esc(f.id) + '"' + (f.reminders ? " checked" : "") + " /> relances</label>" : "") + "</td>" +
+      '<td class="ad-row-actions">' + actions.join("") + "</td></tr>";
+  }
+
+  function ciLineRowHtml(line, data) {
+    var rates = data.hasVat ? data.vatRates : [{ rate: 0, label: "0 % (franchise)" }];
+    return '<div class="ad-ci-line">' +
+      '<input class="ad-ci-desc" maxlength="200" placeholder="ex. Séance famille 1 h 30" value="' + esc(line.description || "") + '" aria-label="Description" />' +
+      '<input class="ad-ci-qty" inputmode="decimal" value="' + esc(String(line.quantity || 1).replace(".", ",")) + '" aria-label="Quantité" />' +
+      '<input class="ad-ci-unit" inputmode="decimal" placeholder="0" value="' + esc(line.unitCents ? bookingEurosInput(line.unitCents) : "") + '" aria-label="Prix unitaire TTC en euros" />' +
+      '<select class="ad-ci-vat" aria-label="Taux de TVA">' + rates.map(function (r) {
+        return '<option value="' + r.rate + '"' + (Number(line.vatRate) === r.rate ? " selected" : "") + ">" + esc(r.label) + "</option>";
+      }).join("") + "</select>" +
+      '<button type="button" class="ad-btn ad-btn-small ad-btn-icon" data-ci-remove-line aria-label="Retirer cette ligne">×</button></div>';
+  }
+
+  function ciStepRowHtml(step) {
+    return '<div class="ad-ci-step">' +
+      '<input class="ad-ci-step-label" maxlength="60" placeholder="ex. Acompte" value="' + esc(step.label || "") + '" aria-label="Libellé de l\'échéance" />' +
+      '<input type="date" class="ad-ci-step-date" value="' + esc(step.dueDate || "") + '" aria-label="Date de l\'échéance" />' +
+      '<input class="ad-ci-step-amount" inputmode="decimal" value="' + esc(step.amountCents ? bookingEurosInput(step.amountCents) : "") + '" aria-label="Montant en euros" />' +
+      (step.paidAt ? '<span class="ad-badge ad-badge-validated" data-paid-at="' + step.paidAt + '" data-method="' + esc(step.method || "") + '"' + (step.carried ? ' data-carried="1"' : "") + ">réglé</span>" : "<span></span>") +
+      '<button type="button" class="ad-btn ad-btn-small ad-btn-icon" data-ci-remove-step aria-label="Retirer cette échéance">×</button></div>';
+  }
+
+  function ciEditorHtml(data, f) {
+    var schedule = f.schedule && f.schedule.length > 1 ? f.schedule : null;
+    var single = f.schedule && f.schedule.length === 1 ? f.schedule[0] : null;
+    return '<section id="ad-ci-editor" class="ad-ci-editor"><div class="ad-section-header"><h3>' + (f.id ? "Modifier le brouillon" : "Nouvelle facture") + "</h3></div>" +
+      '<form id="ad-ci-form" novalidate>' +
+      '<div class="ad-field-row">' +
+      '<label class="ad-field"><span>Client</span><input name="clientName" maxlength="160" placeholder="ex. Camille Dubois" value="' + esc(f.clientName || (f.client && f.client.name) || "") + '" /></label>' +
+      '<label class="ad-field"><span>E-mail <em>(pour l\'envoyer et relancer)</em></span><input type="email" name="clientEmail" maxlength="200" value="' + esc(f.clientEmail || (f.client && f.client.email) || "") + '" /></label>' +
+      "</div>" +
+      '<div class="ad-field-row">' +
+      '<label class="ad-field"><span>Adresse <em>(facultatif)</em></span><textarea name="clientAddress" rows="2" maxlength="400">' + esc(f.clientAddress || (f.client && f.client.address) || "") + "</textarea></label>" +
+      '<label class="ad-field"><span>N° de TVA du client <em>(entreprise)</em></span><input name="clientVat" maxlength="40" value="' + esc(f.clientVat || (f.client && f.client.vat) || "") + '" /></label>' +
+      "</div>" +
+      '<label class="ad-field"><span>Objet <em>(facultatif)</em></span><input name="title" maxlength="160" placeholder="ex. Séance famille du 12 décembre" value="' + esc(f.title || "") + '" /></label>' +
+      '<div class="ad-field"><span>Lignes <em>(description · quantité · prix unitaire TTC · TVA)</em></span><div id="ad-ci-lines" class="ad-ci-lines">' +
+      (f.lines && f.lines.length ? f.lines : [{ description: "", quantity: 1, unitCents: 0, vatRate: data.hasVat ? 21 : 0 }]).map(function (l) { return ciLineRowHtml(l, data); }).join("") + "</div>" +
+      '<button type="button" class="ad-link-btn" id="ad-ci-add-line">+ Ajouter une ligne</button></div>' +
+      (data.hasVat ? "" : '<p class="ad-hint">Sans numéro de TVA (Paramètres), vous êtes au régime de la franchise : pas de TVA, et la mention légale est imprimée sur la facture.</p>') +
+      '<p class="ad-ct-total" id="ad-ci-totals">—</p>' +
+      '<fieldset class="ad-ci-pay"><legend>Paiement</legend>' +
+      '<label class="ad-check"><input type="radio" name="payMode" value="single"' + (schedule ? "" : " checked") + " /> En une fois, pour le " +
+      '<input type="date" name="dueDate" value="' + esc(single ? single.dueDate : ciAddDays(ciToday(), 14)) + '" /></label>' +
+      '<label class="ad-check"><input type="radio" name="payMode" value="schedule"' + (schedule ? " checked" : "") + " /> Échéancier (acompte, solde…)</label>" +
+      '<div id="ad-ci-schedule"' + (schedule ? "" : " hidden") + '><div id="ad-ci-steps">' + (schedule || []).map(ciStepRowHtml).join("") + "</div>" +
+      '<button type="button" class="ad-link-btn" id="ad-ci-add-step">+ Ajouter une échéance</button> · ' +
+      '<button type="button" class="ad-link-btn" id="ad-ci-split">Acompte 30 % + solde</button>' +
+      '<p class="ad-hint" id="ad-ci-steps-sum"></p></div>' +
+      (single && single.paidAt ? '<p class="ad-hint" id="ad-ci-single-paid" data-paid-at="' + single.paidAt + '" data-method="' + esc(single.method || "") + '"' + (single.carried ? ' data-carried="1"' : "") + ">Déjà réglé : la facture sera émise comme réglée.</p>" : "") +
+      "</fieldset>" +
+      '<label class="ad-field"><span>Note imprimée sur la facture <em>(facultatif)</em></span><textarea name="notes" rows="2" maxlength="1500" placeholder="ex. Merci pour votre confiance !">' + esc(f.notes || "") + "</textarea></label>" +
+      '<label class="ad-check"><input type="checkbox" name="reminders"' + (f.reminders === false ? "" : " checked") + " /> Relancer automatiquement le client (3 jours avant chaque échéance, le lendemain, puis une semaine après)</label>" +
+      '<div class="ad-sc-actions">' +
+      '<button type="submit" class="ad-btn ad-btn-primary" data-ci-submit="send">Émettre et envoyer</button>' +
+      '<button type="submit" class="ad-btn" data-ci-submit="issue">Émettre sans envoyer</button>' +
+      '<button type="submit" class="ad-btn" data-ci-submit="draft">Enregistrer le brouillon</button>' +
+      '<button type="button" class="ad-btn ad-btn-ghost" id="ad-ci-cancel">Annuler</button></div>' +
+      '<p class="ad-hint">Une facture émise prend le numéro suivant de votre série et ne se modifie plus : en cas d\'erreur, annulez-la par une note de crédit.</p>' +
+      "</form></section>";
+  }
+
+  function paintClientInvoices() {
+    var box = document.getElementById("ad-ci");
+    var data = ciState.data;
+    if (!box || !data) return;
+    var t = data.totals;
+    box.innerHTML =
+      '<div class="ad-section-header"><h3>Factures clients</h3>' +
+      (data.enabled && !ciState.editing ? '<button type="button" class="ad-btn ad-btn-primary" id="ad-ci-new">+ Nouvelle facture</button>' : "") + "</div>" +
+      (!data.enabled
+        ? '<p class="ad-banner ad-banner-muted">Les factures libres, échéanciers et relances de paiement sont inclus dans la formule Pro, avec les devis et contrats.</p>'
+        : '<p class="ad-hint">Facturez une séance, un album, une cession de droits (TVA 6 %)… avec un échéancier si besoin. Votre client règle en ligne ou par virement ; les relances partent toutes seules.</p>' +
+          (!data.seller.iban ? '<p class="ad-hint">Astuce : ajoutez votre IBAN dans Paramètres (coordonnées fiscales) pour qu\'il figure sur vos factures.</p>' : "") +
+          '<div class="ad-stats">' +
+          salesStatHtml("À encaisser", t.dueCents ? formatEuros(t.dueCents) : "—", "") +
+          salesStatHtml("En retard", t.overdueCount ? formatEuros(t.overdueCents) : "—", t.overdueCount ? t.overdueCount + " facture" + (t.overdueCount > 1 ? "s" : "") : "") +
+          salesStatHtml("Encaissé cette année", t.paidThisYearCents ? formatEuros(t.paidThisYearCents) : "—", "factures libres") +
+          "</div>" +
+          (ciState.editing ? ciEditorHtml(data, ciState.editing) : "") +
+          (data.invoices.length
+            ? '<div class="ad-table-wrap"><table class="ad-table ad-ci-table"><thead><tr><th>N°</th><th>Client</th><th class="ad-num">Total</th><th>Prochaine échéance</th><th>État</th><th><span class="ad-visually-hidden">Actions</span></th></tr></thead><tbody>' +
+              data.invoices.map(ciRowHtml).join("") + "</tbody></table></div>"
+            : (ciState.editing ? "" : '<p class="ad-hint">Aucune facture pour l\'instant.</p>')));
+    bindClientInvoices();
+  }
+
+  function ciReadForm(form) {
+    var problem = "";
+    var lines = [];
+    form.querySelectorAll(".ad-ci-line").forEach(function (row) {
+      var description = row.querySelector(".ad-ci-desc").value.trim();
+      var qty = Number(row.querySelector(".ad-ci-qty").value.replace(",", "."));
+      var unit = bookingCents(row.querySelector(".ad-ci-unit").value);
+      if (!description && !row.querySelector(".ad-ci-unit").value.trim()) return;
+      if (!problem && !description) problem = "Décrivez chaque ligne.";
+      if (!problem && !(qty > 0)) problem = "Quantité invalide : « " + description + " ».";
+      if (!problem && isNaN(unit)) problem = "Prix illisible : « " + description + " » (écrivez par exemple 120 ou 120,50).";
+      lines.push({ description: description, quantity: qty, unitCents: unit, vatRate: Number(row.querySelector(".ad-ci-vat").value) });
+    });
+    var schedule = [];
+    var mode = form.querySelector('[name="payMode"]:checked').value;
+    if (mode === "schedule") {
+      form.querySelectorAll(".ad-ci-step").forEach(function (row) {
+        var amount = bookingCents(row.querySelector(".ad-ci-step-amount").value);
+        if (!problem && (isNaN(amount) || !amount)) problem = "Indiquez le montant de chaque échéance.";
+        var paid = row.querySelector("[data-paid-at]");
+        schedule.push({
+          label: row.querySelector(".ad-ci-step-label").value.trim(),
+          dueDate: row.querySelector(".ad-ci-step-date").value,
+          amountCents: amount,
+          paidAt: paid ? Number(paid.getAttribute("data-paid-at")) : null,
+          method: paid ? paid.getAttribute("data-method") : "",
+          carried: Boolean(paid && paid.getAttribute("data-carried")),
+        });
+      });
+      if (!problem && !schedule.length) problem = "Ajoutez au moins une échéance, ou choisissez « En une fois ».";
+    } else {
+      var singlePaid = document.getElementById("ad-ci-single-paid");
+      if (singlePaid) {
+        schedule = [{ label: "Paiement", dueDate: form.elements.dueDate.value, amountCents: ciLinesTotal(lines),
+          paidAt: Number(singlePaid.getAttribute("data-paid-at")), method: singlePaid.getAttribute("data-method"), carried: Boolean(singlePaid.getAttribute("data-carried")) }];
+      }
+    }
+    return {
+      problem: problem || (lines.length ? "" : "Ajoutez au moins une ligne."),
+      body: {
+        clientName: form.elements.clientName.value, clientEmail: form.elements.clientEmail.value,
+        clientAddress: form.elements.clientAddress.value, clientVat: form.elements.clientVat.value,
+        title: form.elements.title.value, lines: lines, schedule: schedule, dueDate: form.elements.dueDate.value,
+        notes: form.elements.notes.value, reminders: form.elements.reminders.checked,
+        source: ciState.editing.source || "manual", sourceId: ciState.editing.sourceId || "",
+      },
+    };
+  }
+
+  function ciLinesTotal(lines) {
+    return lines.reduce(function (n, l) { return n + (isNaN(l.unitCents) ? 0 : Math.round(l.quantity * l.unitCents)); }, 0);
+  }
+
+  function ciRefreshTotals(form) {
+    var read = ciReadForm(form);
+    var lines = read.body.lines;
+    var byRate = {};
+    lines.forEach(function (l) { if (!isNaN(l.unitCents)) byRate[l.vatRate] = (byRate[l.vatRate] || 0) + Math.round(l.quantity * l.unitCents); });
+    var total = ciLinesTotal(lines);
+    var vat = Object.keys(byRate).reduce(function (n, r) { return n + byRate[r] - Math.round(byRate[r] / (1 + Number(r) / 100)); }, 0);
+    document.getElementById("ad-ci-totals").innerHTML = "Total TTC : <strong>" + esc(formatEuros(total)) + "</strong>" +
+      (vat ? ' <span class="ad-hint">dont TVA ' + esc(formatEuros(vat)) + "</span>" : "");
+    var sumBox = document.getElementById("ad-ci-steps-sum");
+    if (sumBox) {
+      var sum = read.body.schedule.reduce(function (n, st) { return n + (isNaN(st.amountCents) ? 0 : st.amountCents); }, 0);
+      sumBox.textContent = read.body.schedule.length ? "Échéances : " + formatEuros(sum) + (sum === total ? " ✓" : " — il manque " + formatEuros(total - sum)) : "";
+    }
+    return total;
+  }
+
+  function bindClientInvoices() {
+    var box = document.getElementById("ad-ci");
+    var data = ciState.data;
+    var newBtn = document.getElementById("ad-ci-new");
+    if (newBtn) newBtn.addEventListener("click", function () {
+      ciState.editing = { id: "", lines: [], schedule: [], reminders: true };
+      paintClientInvoices();
+      document.querySelector('#ad-ci-form [name="clientName"]').focus();
+    });
+    async function call(method, path, body, ok) {
+      try {
+        var res = await api(method, "/client-invoices" + path, body);
+        if (res && res.invoices) ciState.data = res;
+        if (ok) toast(ok);
+        paintClientInvoices();
+        return res;
+      } catch (err) {
+        toast(err.message, true);
+        return null;
+      }
+    }
+    box.querySelectorAll("[data-ci-edit]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var f = data.invoices.find(function (x) { return x.id === btn.getAttribute("data-ci-edit"); });
+        ciState.editing = Object.assign({}, f, { clientName: f.client.name, clientEmail: f.client.email, clientAddress: f.client.address, clientVat: f.client.vat });
+        paintClientInvoices();
+        document.getElementById("ad-ci-editor").scrollIntoView({ block: "start" });
+      });
+    });
+    box.querySelectorAll("[data-ci-issue]").forEach(function (btn) {
+      btn.addEventListener("click", function () { call("POST", "/" + encodeURIComponent(btn.getAttribute("data-ci-issue")) + "/issue", { send: true }, "Facture émise et envoyée."); });
+    });
+    box.querySelectorAll("[data-ci-delete]").forEach(function (btn) {
+      btn.addEventListener("click", function () { call("DELETE", "/" + encodeURIComponent(btn.getAttribute("data-ci-delete")), null, "Brouillon supprimé."); });
+    });
+    box.querySelectorAll("[data-ci-send]").forEach(function (btn) {
+      btn.addEventListener("click", function () { call("POST", "/" + encodeURIComponent(btn.getAttribute("data-ci-send")) + "/send", {}, "Facture envoyée au client."); });
+    });
+    box.querySelectorAll("[data-ci-paid]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        call("POST", "/" + encodeURIComponent(btn.getAttribute("data-ci-paid")) + "/paid", { index: Number(btn.getAttribute("data-index")) }, "Paiement noté.");
+      });
+    });
+    box.querySelectorAll("[data-ci-remind]").forEach(function (input) {
+      input.addEventListener("change", function () {
+        call("POST", "/" + encodeURIComponent(input.getAttribute("data-ci-remind")) + "/reminders", { on: input.checked }, input.checked ? "Relances activées." : "Relances coupées pour cette facture.");
+      });
+    });
+    box.querySelectorAll("[data-ci-credit]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        if (btn.getAttribute("data-confirm") !== "1") {
+          btn.setAttribute("data-confirm", "1");
+          btn.textContent = "Confirmer l'annulation";
+          return;
+        }
+        call("POST", "/" + encodeURIComponent(btn.getAttribute("data-ci-credit")) + "/credit", { send: true }, "Note de crédit émise : la facture est annulée.");
+      });
+    });
+
+    var form = document.getElementById("ad-ci-form");
+    if (!form) return;
+    var lines = document.getElementById("ad-ci-lines");
+    var steps = document.getElementById("ad-ci-steps");
+    var refresh = function () { ciRefreshTotals(form); };
+    form.addEventListener("input", refresh);
+    form.addEventListener("change", refresh);
+    document.getElementById("ad-ci-add-line").addEventListener("click", function () {
+      lines.insertAdjacentHTML("beforeend", ciLineRowHtml({ quantity: 1, vatRate: data.hasVat ? 21 : 0 }, data));
+      lines.lastElementChild.querySelector(".ad-ci-desc").focus();
+    });
+    lines.addEventListener("click", function (e) {
+      var btn = e.target.closest("[data-ci-remove-line]");
+      if (!btn) return;
+      if (lines.children.length > 1) btn.closest(".ad-ci-line").remove();
+      refresh();
+    });
+    form.querySelectorAll('[name="payMode"]').forEach(function (radio) {
+      radio.addEventListener("change", function () {
+        var scheduled = form.querySelector('[name="payMode"]:checked').value === "schedule";
+        document.getElementById("ad-ci-schedule").hidden = !scheduled;
+        if (scheduled && !steps.children.length) document.getElementById("ad-ci-split").click();
+        refresh();
+      });
+    });
+    document.getElementById("ad-ci-add-step").addEventListener("click", function () {
+      steps.insertAdjacentHTML("beforeend", ciStepRowHtml({ label: "", dueDate: ciAddDays(ciToday(), 30) }));
+      refresh();
+    });
+    document.getElementById("ad-ci-split").addEventListener("click", function () {
+      var total = ciRefreshTotals(form);
+      var deposit = Math.round(total * 0.3);
+      steps.innerHTML = ciStepRowHtml({ label: "Acompte", dueDate: ciToday(), amountCents: deposit }) +
+        ciStepRowHtml({ label: "Solde", dueDate: form.elements.dueDate.value || ciAddDays(ciToday(), 30), amountCents: total - deposit });
+      refresh();
+    });
+    steps.addEventListener("click", function (e) {
+      var btn = e.target.closest("[data-ci-remove-step]");
+      if (!btn) return;
+      btn.closest(".ad-ci-step").remove();
+      refresh();
+    });
+    document.getElementById("ad-ci-cancel").addEventListener("click", function () {
+      ciState.editing = null;
+      paintClientInvoices();
+    });
+    var submitter = "send";
+    form.querySelectorAll("[data-ci-submit]").forEach(function (btn) {
+      btn.addEventListener("click", function () { submitter = btn.getAttribute("data-ci-submit"); });
+    });
+    form.addEventListener("submit", async function (e) {
+      e.preventDefault();
+      var read = ciReadForm(form);
+      if (read.problem) { toast(read.problem, true); return; }
+      if (submitter === "send" && !read.body.clientEmail.trim()) { toast("Ajoutez l'e-mail du client pour lui envoyer la facture, ou choisissez « Émettre sans envoyer ».", true); return; }
+      var editingId = ciState.editing.id;
+      var res;
+      if (editingId) {
+        res = await call("POST", "/" + encodeURIComponent(editingId), read.body, submitter === "draft" ? "Brouillon enregistré." : "");
+        if (res && submitter !== "draft") {
+          res = await call("POST", "/" + encodeURIComponent(editingId) + "/issue", { send: submitter === "send" }, submitter === "send" ? "Facture émise et envoyée." : "Facture émise.");
+        }
+      } else {
+        res = await call("POST", "", Object.assign({}, read.body, { issue: submitter !== "draft", send: submitter === "send" }),
+          submitter === "send" ? "Facture émise et envoyée." : submitter === "issue" ? "Facture émise." : "Brouillon enregistré.");
+      }
+      if (res) {
+        ciState.editing = null;
+        paintClientInvoices();
+      }
+    });
+    refresh();
+  }
+
   async function renderBilling(skipHash) {
     var cameFromStripe = location.hash.indexOf("stripe=retour") !== -1 || location.hash.indexOf("stripe=repriser") !== -1;
     if (!skipHash && location.hash.indexOf("#/facturation") !== 0) history.pushState(null, "", "#/facturation");
@@ -970,6 +1344,7 @@
       '<p class="ad-hint">' + L("Paiement en ligne des suppléments, factures émises et montants encore dus, toutes galeries confondues.",
         "Online payment for extras, invoices issued and amounts still due, across all galleries.") + "</p>" +
       "</div></header>" +
+      '<section id="ad-ci"><p class="ad-loading">' + L("Chargement des factures…", "Loading invoices…") + "</p></section>" +
       '<section class="ad-stripe"><div class="ad-section-header"><h3>' + L("Paiement en ligne", "Online payment") + "</h3></div>" +
       stripeStatusHtml(photographer) +
       "</section>" +
@@ -987,6 +1362,7 @@
         renderDetail(btn.getAttribute("data-slug"));
       });
     });
+    loadClientInvoices();
 
     var connectBtn = document.getElementById("ad-stripe-connect");
     if (connectBtn) {
@@ -1110,6 +1486,8 @@
       '<textarea name="address" rows="3" placeholder="' + L("Rue…, code postal, ville, pays", "Street…, postcode, city, country") + '">' + esc(photographer.billingAddress) + "</textarea></label>" +
       '<label class="ad-field"><span>' + L("Numéro de TVA", "VAT number") + "</span>" +
       '<input type="text" name="vatNumber" value="' + esc(photographer.billingVatNumber) + '" placeholder="BE0123456789" /></label>' +
+      '<label class="ad-field"><span>' + L("IBAN <em>(imprimé sur vos factures, pour les virements)</em>", "IBAN <em>(printed on your invoices, for transfers)</em>") + "</span>" +
+      '<input type="text" name="iban" value="' + esc(photographer.billingIban || "") + '" placeholder="BE68 5390 0754 7034" /></label>' +
       '<button type="submit" class="ad-btn ad-btn-primary" id="ad-billing-save">' + L("Enregistrer", "Save") + "</button>" +
       "</form></section>" +
 
@@ -1294,6 +1672,7 @@
           companyName: form.companyName.value.trim(),
           address: form.address.value.trim(),
           vatNumber: form.vatNumber.value.trim(),
+          iban: form.iban.value.trim(),
         });
         toast(L("Coordonnées de facturation enregistrées.", "Billing details saved."));
       } catch (err) {
@@ -1641,6 +2020,10 @@
     { key: "supplementCents", label: "Suppléments photos", color: "#1f7fa8" },
     { key: "printCents", label: "Tirages", color: "#d0603a" },
     { key: "schoolCents", label: "Photos scolaires", color: "#7d58c0", school: true },
+    // Couleurs vérifiées avec les trois premières (daltonisme : légende et
+    // vue tableau en appui). Séries montrées seulement si elles ont vendu.
+    { key: "sessionCents", label: "Séances et factures", color: "#2e8b57", optional: true },
+    { key: "giftCents", label: "Bons cadeaux", color: "#b58900", optional: true },
   ];
   var salesData = null;
   var salesMode = "chart";
@@ -1649,11 +2032,14 @@
   // qu'une vente scolaire tombe dans la période).
   function salesSeries() {
     var school = salesData && (salesData.hasSchools || salesData.totals.schoolCents > 0);
-    return SALES_SERIES.filter(function (s) { return !s.school || school; });
+    return SALES_SERIES.filter(function (s) {
+      if (s.optional) return Boolean(salesData && salesData.totals[s.key] > 0);
+      return !s.school || school;
+    });
   }
 
   function monthTotal(m) {
-    return (m.supplementCents || 0) + (m.printCents || 0) + (m.schoolCents || 0);
+    return (m.supplementCents || 0) + (m.printCents || 0) + (m.schoolCents || 0) + (m.sessionCents || 0) + (m.giftCents || 0);
   }
 
   function formatEurosShort(cents) {
@@ -1741,7 +2127,7 @@
         series.map(function (s) { return "<td>" + esc(formatEuros(m[s.key])) + "</td>"; }).join("") +
         "<td><strong>" + esc(formatEuros(monthTotal(m))) + "</strong></td><td>" + m.orders + "</td></tr>";
     }).join("");
-    var heads = { supplementCents: "Suppléments", printCents: "Tirages", schoolCents: "Scolaire" };
+    var heads = { supplementCents: "Suppléments", printCents: "Tirages", schoolCents: "Scolaire", sessionCents: "Séances", giftCents: "Bons cadeaux" };
     return '<div class="ad-table-wrap"><table class="ad-table ad-sales-table"><thead><tr><th>Mois</th>' +
       series.map(function (s) { return "<th>" + heads[s.key] + "</th>"; }).join("") +
       "<th>Total</th><th>Paiements</th></tr></thead><tbody>" + rows + "</tbody></table></div>";
@@ -2009,7 +2395,7 @@
     if (location.hash !== "#/ventes") return;
     salesData = data;
     var t = data.totals;
-    var withSchool = salesSeries().length === SALES_SERIES.length;
+    var withSchool = salesSeries().some(function (x) { return x.school; });
     var margin = data.printMargin;
     var marginNote = margin.lineRevenueCents
       ? (margin.coverage < 0.999 ? "Sur " + percentText(margin.coverage) + " des tirages (coût connu), " : "") + "frais de paiement déduits, hors port"
@@ -2017,12 +2403,13 @@
 
     el.view.innerHTML =
       '<header class="ad-detail-header"><div><h2>Ventes</h2>' +
-      '<p class="ad-hint">Les 12 derniers mois, paiements encaissés (suppléments photos, commandes de tirages' + (withSchool ? ", commandes scolaires des familles" : "") + "), montants TTC.</p>" +
+      '<p class="ad-hint">Les 12 derniers mois, paiements encaissés (suppléments photos, commandes de tirages' + (withSchool ? ", commandes scolaires des familles" : "") +
+        ", acomptes de séance, factures et bons cadeaux), montants TTC.</p>" +
       "</div></header>" +
       '<div class="ad-stats">' +
       salesStatHtml("Chiffre d'affaires", formatEuros(t.revenueCents),
         // Seules les catégories qui ont vendu ; « 0 € tirages » n'apprend rien.
-        [[t.supplementCents, " suppléments"], [t.printCents, " tirages"], [t.schoolCents, " scolaire"]]
+        [[t.supplementCents, " suppléments"], [t.printCents, " tirages"], [t.schoolCents, " scolaire"], [t.sessionCents, " séances"], [t.giftCents, " bons cadeaux"]]
           .filter(function (part) { return part[0] > 0; })
           .map(function (part) { return formatEurosShort(part[0]) + part[1]; })
           .concat(t.feeCents ? [formatEuros(t.netCents) + " reçus après frais de paiement"] : [])
@@ -6856,7 +7243,9 @@
       (b.message ? '<span class="ad-bk-message">« ' + esc(b.message) + " »</span>" : "") + "</td>" +
       '<td class="ad-num">' + (b.depositCents ? formatEuros(b.depositCents) : "—") + "</td>" +
       '<td><span class="ad-badge ' + status[1] + '">' + esc(status[0]) + "</span></td>" +
-      '<td class="ad-row-actions">' + (actionable && b.status !== "cancelled"
+      '<td class="ad-row-actions">' + (b.status === "confirmed" && (b.priceCents || b.depositCents)
+        ? '<button type="button" class="ad-btn ad-btn-small ad-btn-ghost" data-invoice-from="booking" data-invoice-id="' + esc(b.id) + '">Facturer</button>'
+        : "") + (actionable && b.status !== "cancelled"
         ? '<button type="button" class="ad-btn ad-btn-small ad-btn-danger" data-bk-cancel="' + esc(b.id) + '">Annuler</button>'
         : "") + "</td></tr>";
   }
@@ -7248,6 +7637,7 @@
     if (c.status === "sent" || c.status === "viewed") actions.push('<button type="button" class="ad-btn ad-btn-small" data-ct-send="' + esc(c.id) + '">Renvoyer</button>');
     if (c.url) actions.push('<button type="button" class="ad-btn ad-btn-small" data-ct-copy="' + esc(c.url) + '">Copier le lien</button>');
     if (c.status === "signed" || c.status === "paid") actions.push('<a class="ad-btn ad-btn-small" href="/local/contracts/' + encodeURIComponent(c.id) + '/pdf" download>PDF signé</a>');
+    if (c.status === "signed" || c.status === "paid") actions.push('<button type="button" class="ad-btn ad-btn-small ad-btn-ghost" data-invoice-from="contract" data-invoice-id="' + esc(c.id) + '">Facturer</button>');
     if (["draft", "sent", "viewed"].indexOf(c.status) !== -1 && c.status !== "draft") actions.push('<button type="button" class="ad-btn ad-btn-small ad-btn-danger" data-ct-cancel="' + esc(c.id) + '">Retirer</button>');
     if (["draft", "cancelled", "declined"].indexOf(c.status) !== -1) actions.push('<button type="button" class="ad-btn ad-btn-small ad-btn-danger" data-ct-delete="' + esc(c.id) + '">Supprimer</button>');
     var detail = c.signedAt
@@ -7453,7 +7843,8 @@
 
   /* ---------- Clients : fiches, dates à retenir, relances ---------- */
 
-  var clientsState = { data: null, query: "", filter: "all", creating: false };
+  // filter : all | upcoming | dates | prospects ; tag : filtre par tag (vide : aucun).
+  var clientsState = { data: null, query: "", filter: "all", tag: "", creating: false };
   var CL_DATE_KINDS = [
     ["baby", "Suivi bébé (3 mois, 1 an…)", "Prénom"],
     ["birthday", "Naissance d'un enfant", "Prénom"],
@@ -7592,11 +7983,25 @@
     return digits.length >= 3 && /^[\d\s+().\/-]+$/.test(q) && phone.indexOf(digits) !== -1;
   }
 
+  function clVisible(c) {
+    if (clientsState.filter === "upcoming" && !c.upcomingSessionAt) return false;
+    if (clientsState.filter === "dates" && !c.nextDate) return false;
+    if (clientsState.filter === "prospects" && !c.prospect) return false;
+    if (clientsState.tag && (c.tags || []).indexOf(clientsState.tag) === -1) return false;
+    return clMatches(c, clientsState.query);
+  }
+
+  function clTagsHtml(tags) {
+    return (tags || []).map(function (t) { return '<span class="ad-cl-tag">' + esc(t) + "</span>"; }).join("");
+  }
+
   function clRowsHtml(list) {
     if (!list.length) return '<tr><td colspan="5" class="ad-cl-none">Aucun client ne correspond à cette recherche.</td></tr>';
     return list.map(function (c) {
       return '<tr class="ad-cl-row" tabindex="0" data-cl-email="' + esc(c.email) + '">' +
-        '<td><div class="ad-cl-who">' + clAvatar(c.name) + '<div><span class="ad-acc-name">' + esc(c.name) + '</span><span class="ad-acc-sub">' + esc(c.email) + "</span></div></div></td>" +
+        '<td><div class="ad-cl-who">' + clAvatar(c.name) + '<div><span class="ad-acc-name">' + esc(c.name) +
+        (c.prospect ? ' <span class="ad-badge ad-badge-soon">Prospect</span>' : "") + "</span>" +
+        '<span class="ad-acc-sub">' + esc(c.email) + "</span>" + (c.tags && c.tags.length ? '<span class="ad-cl-tags">' + clTagsHtml(c.tags) + "</span>" : "") + "</div></div></td>" +
         '<td class="ad-num">' + (c.sessions || "—") + "</td>" +
         '<td class="ad-num">' + (c.paidCents ? formatEuros(c.paidCents) : "—") + "</td>" +
         "<td>" + esc(c.upcomingSessionAt ? "Séance " + clAgo(c.upcomingSessionAt).replace("dans", "dans") : clAgo(c.lastAt)) + "</td>" +
@@ -7640,16 +8045,13 @@
 
   function paintClients() {
     var data = clientsState.data;
-    var list = data.clients.filter(function (c) {
-      if (clientsState.filter === "upcoming" && !c.upcomingSessionAt) return false;
-      if (clientsState.filter === "dates" && !c.nextDate) return false;
-      return clMatches(c, clientsState.query);
-    });
+    if (clientsState.tag && !(data.tags || []).some(function (t) { return t.tag === clientsState.tag; })) clientsState.tag = "";
+    var list = data.clients.filter(clVisible);
     var seasonsDue = (data.seasons || []).filter(function (x) { return x.remind && x.next && x.next.daysUntil <= Math.max(45, x.lead) && data.emails.length; });
     var remindCount = seasonsDue.length + data.upcoming.length + data.dormant.length;
     el.view.innerHTML =
       '<header class="ad-detail-header"><div><h2>Clients</h2>' +
-      '<p class="ad-hint">Tous ceux qui vous ont confié une séance, réunis par adresse e-mail : galeries, réservations, contrats et paiements. Ajoutez vos notes et les dates à retenir, Holypixx vous prévient au bon moment.</p></div>' +
+      '<p class="ad-hint">Tous ceux qui vous ont confié une séance, réunis par adresse e-mail : galeries, réservations, contrats, factures, bons cadeaux et paiements — et vos prospects, les demandes reçues par votre portfolio. Ajoutez vos notes et les dates à retenir, Holypixx vous prévient au bon moment.</p></div>' +
       '<button type="button" class="ad-btn ad-btn-primary" id="ad-cl-new">+ Nouveau client</button></header>' +
       (clientsState.creating
         ? '<section id="ad-cl-create"><div class="ad-section-header"><h3>Nouveau client</h3></div>' +
@@ -7672,9 +8074,14 @@
           '<label class="ad-cl-search"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>' +
           '<input type="search" id="ad-cl-search" placeholder="Rechercher un nom, un e-mail, un numéro" value="' + esc(clientsState.query) + '" aria-label="Rechercher un client" /><kbd>/</kbd></label>' +
           '<div class="ad-seg" role="group" aria-label="Filtrer">' +
-          [["all", "Tous (" + data.clients.length + ")"], ["upcoming", "Séance prévue"], ["dates", "Avec date à retenir"]].map(function (f) {
+          [["all", "Tous (" + data.clients.length + ")"], ["prospects", "Prospects (" + (data.prospects || 0) + ")"], ["upcoming", "Séance prévue"], ["dates", "Avec date à retenir"]].map(function (f) {
             return '<button type="button" class="ad-seg-btn" data-cl-filter="' + f[0] + '" aria-pressed="' + (clientsState.filter === f[0]) + '">' + esc(f[1]) + "</button>";
           }).join("") + "</div></div>" +
+          (data.tags && data.tags.length
+            ? '<div class="ad-cl-tagbar" role="group" aria-label="Filtrer par tag"><span class="ad-hint">Tags :</span>' + data.tags.map(function (t) {
+                return '<button type="button" class="ad-cl-tag ad-cl-tag-btn" data-cl-tag="' + esc(t.tag) + '" aria-pressed="' + (clientsState.tag === t.tag) + '">' + esc(t.tag) + " <span>" + t.count + "</span></button>";
+              }).join("") + "</div>"
+            : "") +
           '<div class="ad-table-wrap"><table class="ad-table ad-cl-table"><thead><tr><th>Client</th><th class="ad-num">Séances</th><th class="ad-num">Encaissé</th><th>Activité</th><th>Prochaine date</th></tr></thead>' +
           '<tbody id="ad-cl-rows">' + clRowsHtml(list) + "</tbody></table></div>"
         : '<div class="ad-cl-empty">' + clAvatar("?") + "<h3>Vos clients arrivent ici tout seuls</h3>" +
@@ -7789,12 +8196,7 @@
     if (search) {
       search.addEventListener("input", function () {
         clientsState.query = search.value.trim();
-        var list = data.clients.filter(function (c) {
-          if (clientsState.filter === "upcoming" && !c.upcomingSessionAt) return false;
-          if (clientsState.filter === "dates" && !c.nextDate) return false;
-          return clMatches(c, clientsState.query);
-        });
-        document.getElementById("ad-cl-rows").innerHTML = clRowsHtml(list);
+        document.getElementById("ad-cl-rows").innerHTML = clRowsHtml(data.clients.filter(clVisible));
       });
       // Échap vide la recherche, puis rend la main au clavier.
       search.addEventListener("keydown", function (e) {
@@ -7806,6 +8208,13 @@
     }
     el.view.querySelectorAll("[data-cl-filter]").forEach(function (b) {
       b.addEventListener("click", function () { clientsState.filter = b.getAttribute("data-cl-filter"); paintClients(); });
+    });
+    el.view.querySelectorAll("[data-cl-tag]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var tag = b.getAttribute("data-cl-tag");
+        clientsState.tag = clientsState.tag === tag ? "" : tag;
+        paintClients();
+      });
     });
     var rows = document.getElementById("ad-cl-rows");
     if (rows) {
@@ -7835,6 +8244,9 @@
     booking: ["Séance réservée", '<svg viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="16.5" rx="2"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/></svg>'],
     contract: ["Contrat", '<svg viewBox="0 0 24 24"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h3"/></svg>'],
     payment: ["Paiement", '<svg viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h4"/></svg>'],
+    message: ["Demande reçue", '<svg viewBox="0 0 24 24"><path d="M4 4h16v12H8l-4 4z"/></svg>'],
+    gift: ["Bon cadeau", '<svg viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/></svg>'],
+    invoice: ["Facture", '<svg viewBox="0 0 24 24"><path d="M5 3h14v18l-3-2-2 2-2-2-2 2-2-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg>'],
   };
 
   function clHistoryHtml(items) {
@@ -7844,14 +8256,18 @@
       var title = h.type === "gallery" ? '<a href="#/g/' + encodeURIComponent(h.slug) + '">' + esc(h.title) + "</a>"
         : h.type === "contract" ? '<a href="#/contrats">' + esc(h.title) + "</a> <span class=\"ad-hint\">n° " + esc(h.number) + "</span>"
         : h.type === "payment" ? esc(h.kind === "print" ? "Tirages" : "Suppléments") + " · " + (h.slug ? '<a href="#/g/' + encodeURIComponent(h.slug) + '">' + esc(h.title) + "</a>" : esc(h.title || ""))
+        : h.type === "message" ? "« " + esc(h.title) + " »" + (h.eventDate ? ' <span class="ad-hint">date souhaitée : ' + esc(h.eventDate) + "</span>" : "")
+        : h.type === "gift" ? '<a href="#/bons-cadeaux">' + esc(h.role === "buyer" ? "Offert à " + h.toName : "Reçu de " + h.fromName) + "</a>" + (h.title ? ' <span class="ad-hint">' + esc(h.title) + "</span>" : "")
+        : h.type === "invoice" ? '<a href="#/facturation">' + esc((h.kind === "credit" ? "Note de crédit " : "Facture ") + h.number) + "</a>" + (h.title ? ' <span class="ad-hint">' + esc(h.title) + "</span>" : "")
         : esc(h.title);
       var status = h.type === "booking" && h.status === "cancelled" ? ' <span class="ad-badge ad-badge-expired">Annulée</span>'
         : h.type === "contract" ? " " + contractStatusHtml({ status: h.status, depositCents: h.status === "paid" ? 1 : 0 })
+        : h.type === "invoice" && h.kind === "invoice" ? " " + (h.status === "paid" ? '<span class="ad-badge ad-badge-validated">Réglée</span>' : h.status === "credited" ? '<span class="ad-badge ad-badge-expired">Annulée</span>' : '<span class="ad-badge ad-badge-soon">À régler</span>')
         : "";
       return '<li class="ad-cl-event ad-cl-event-' + h.type + '"><span class="ad-cl-event-ico" aria-hidden="true">' + kind[1] + "</span>" +
         '<div class="ad-cl-event-main"><span class="ad-cl-event-kind">' + esc(kind[0]) + " · " + esc(formatDate(h.at)) + "</span>" +
         '<span class="ad-cl-event-title">' + title + status + "</span></div>" +
-        (h.amountCents ? '<span class="ad-cl-event-amount">' + formatEuros(h.amountCents) + "</span>" : "") + "</li>";
+        (h.amountCents && !(h.type === "gift" && h.role === "recipient") ? '<span class="ad-cl-event-amount">' + formatEuros(h.amountCents) + "</span>" : "") + "</li>";
     }).join("") + "</ol>";
   }
 
@@ -8001,17 +8417,18 @@
     el.view.innerHTML =
       '<button type="button" class="ad-back" id="ad-cl-back">&larr; Tous les clients</button>' +
       '<header class="ad-cl-head">' + clAvatar(c.name, true) +
-      '<div class="ad-cl-head-main"><h2>' + esc(c.name) + "</h2>" +
+      '<div class="ad-cl-head-main"><h2>' + esc(c.name) + "</h2>" + (c.prospect ? '<span class="ad-badge ad-badge-soon ad-cl-prospect">Prospect</span>' : "") +
       '<p class="ad-cl-contact"><span>' + esc(c.email) + '</span><button type="button" class="ad-link-btn" id="ad-cl-copy">Copier</button>' +
       (c.phone ? '<span aria-hidden="true">·</span><a href="tel:' + esc(c.phone.replace(/\s/g, "")) + '">' + esc(c.phone) + "</a>" : "") + "</p></div>" +
       '<div class="ad-cl-head-actions">' +
       '<a class="ad-btn" href="' + esc(data.contactMailto) + '">Écrire</a>' +
       '<button type="button" class="ad-btn" id="ad-cl-gallery">Nouvelle galerie</button>' +
+      '<button type="button" class="ad-btn" id="ad-cl-invoice">Nouvelle facture</button>' +
       '<button type="button" class="ad-btn ad-btn-primary" id="ad-cl-quote">Nouveau devis</button></div></header>' +
       '<div class="ad-stats">' +
       salesStatHtml("Client depuis", c.firstAt ? new Date(c.firstAt * 1000).toLocaleDateString("fr-BE", { month: "long", year: "numeric" }) : "—", c.firstAt ? clAgo(c.firstAt) : "") +
       salesStatHtml("Séances", String(c.sessions), c.galleries ? c.galleries + " galerie" + (c.galleries > 1 ? "s" : "") : "") +
-      salesStatHtml("Encaissé", c.paidCents ? formatEuros(c.paidCents) : "—", "Suppléments, tirages et acomptes") +
+      salesStatHtml("Encaissé", c.paidCents ? formatEuros(c.paidCents) : "—", "Suppléments, tirages, acomptes, factures et bons") +
       salesStatHtml("Prochaine séance", c.upcomingSessionAt ? new Date(c.upcomingSessionAt * 1000).toLocaleDateString("fr-BE", { day: "numeric", month: "short", timeZone: "Europe/Brussels" }) : "—",
         c.upcomingSessionAt ? clAgo(c.upcomingSessionAt) : (c.lastSessionAt ? "Dernière " + clAgo(c.lastSessionAt) : "")) +
       "</div>" +
@@ -8021,6 +8438,14 @@
       '<section><div class="ad-section-header"><h3>Historique</h3></div>' + clHistoryHtml(data.history) + "</section>" +
       "</div>" +
       '<div class="ad-cl-col">' +
+      '<section><div class="ad-section-header"><h3>Tags</h3></div>' +
+      '<div class="ad-cl-tags ad-cl-tags-edit" id="ad-cl-tags">' + (c.tags || []).map(function (t) {
+        return '<span class="ad-cl-tag">' + esc(t) + '<button type="button" data-cl-untag="' + esc(t) + '" aria-label="Retirer le tag ' + esc(t) + '">×</button></span>';
+      }).join("") + "</div>" +
+      '<form id="ad-cl-tag-form" class="ad-cl-tag-form" novalidate><input name="tag" maxlength="30" placeholder="ex. mariage, fidèle, salon 2027" list="ad-cl-tag-list" aria-label="Nouveau tag" />' +
+      '<datalist id="ad-cl-tag-list">' + ((clientsState.data && clientsState.data.tags) || []).map(function (t) { return '<option value="' + esc(t.tag) + '"></option>'; }).join("") + "</datalist>" +
+      '<button type="submit" class="ad-btn ad-btn-small">Ajouter</button></form>' +
+      '<p class="ad-hint">Pour retrouver vos clients par type de séance, origine, salon… Filtrez la liste par tag.</p></section>' +
       '<section><div class="ad-section-header"><h3>Notes</h3><span class="ad-cl-saved" id="ad-cl-saved" aria-live="polite"></span></div>' +
       '<textarea class="ad-cl-notes" id="ad-cl-notes" rows="9" maxlength="10000" placeholder="Prénoms et âges des enfants, préférences, allergies, le chien qui s\'appelle Pixel…">' + esc(c.notes || "") + "</textarea>" +
       '<p class="ad-hint">Enregistrées automatiquement, visibles par vous seul.</p></section>' +
@@ -8045,6 +8470,30 @@
       contractsState.editing = "new";
       contractsState.prefill = { clientName: c.name, clientEmail: c.email };
       renderContracts();
+    });
+    document.getElementById("ad-cl-invoice").addEventListener("click", function () {
+      ciState.prefill = { clientName: c.name, clientEmail: c.email, lines: [], schedule: [] };
+      renderBilling();
+    });
+    var saveTags = async function (tags, message) {
+      try {
+        refresh(await api("POST", "/clients", { email: c.email, tags: tags }));
+        if (clientsState.data) clientsState.data = null; // la liste relira les tags
+        toast(message);
+      } catch (err) { toast(err.message, true); }
+    };
+    document.getElementById("ad-cl-tag-form").addEventListener("submit", function (e) {
+      e.preventDefault();
+      var input = e.currentTarget.elements.tag;
+      var tag = input.value.trim().replace(/^#/, "");
+      if (!tag) return;
+      saveTags((c.tags || []).concat([tag]), "Tag « " + tag + " » ajouté.");
+    });
+    el.view.querySelectorAll("[data-cl-untag]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var tag = b.getAttribute("data-cl-untag");
+        saveTags((c.tags || []).filter(function (t) { return t !== tag; }), "Tag retiré.");
+      });
     });
     document.getElementById("ad-cl-gallery").addEventListener("click", function () {
       openCreateModal();
@@ -8519,6 +8968,7 @@
       '<a class="ad-btn ad-btn-small ad-btn-ghost" href="' + esc(c.pageUrl) + '" target="_blank" rel="noopener">Page</a>';
     if (c.status === "valid") actions += '<button type="button" class="ad-btn ad-btn-small" data-gift-redeem="' + esc(c.id) + '">Utilisé</button>';
     if (c.status === "redeemed") actions += '<button type="button" class="ad-btn ad-btn-small ad-btn-ghost" data-gift-undo="' + esc(c.id) + '">Pas encore utilisé</button>';
+    if (c.status !== "cancelled") actions += '<button type="button" class="ad-btn ad-btn-small ad-btn-ghost" data-invoice-from="gift" data-invoice-id="' + esc(c.id) + '">Facturer</button>';
     if (c.status === "valid" || c.status === "expired") actions += '<button type="button" class="ad-btn ad-btn-small ad-btn-danger" data-gift-cancel="' + esc(c.id) + '">Annuler</button>';
     return "<tr>" +
       '<td><strong class="ad-gift-code">' + esc(c.code) + "</strong><br>" + '<span class="ad-hint">' + esc(c.source === "manual" ? "Émis à la main" : "Vendu en ligne") + " · " + esc(formatDate(c.paidAt || c.createdAt)) + "</span></td>" +
@@ -8759,6 +9209,13 @@
   }
 
   window.addEventListener("popstate", routeFromHash);
+
+  // « Facturer » depuis un contrat, une réservation ou un bon cadeau : la
+  // facture s'ouvre préremplie dans l'onglet Facturation.
+  document.addEventListener("click", function (e) {
+    var btn = e.target.closest("[data-invoice-from]");
+    if (btn) openInvoiceFrom(btn.getAttribute("data-invoice-from"), btn.getAttribute("data-invoice-id"));
+  });
 
   function bootstrap() {
     return api("GET", "/config").then(function (cfg) {

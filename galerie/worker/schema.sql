@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS photographers (
   billing_company_name    TEXT NOT NULL DEFAULT '',
   billing_address         TEXT NOT NULL DEFAULT '',
   billing_vat_number      TEXT NOT NULL DEFAULT '',
+  billing_iban            TEXT NOT NULL DEFAULT '',  -- imprimé sur les factures libres (virement)
   -- Numérotation des factures : continue et sans trou par photographe, en
   -- séries annuelles (ex. 2026-0001) — remise à zéro dès le premier
   -- règlement d'une nouvelle année civile, jamais en cours d'année.
@@ -1088,6 +1089,7 @@ CREATE TABLE IF NOT EXISTS contracts (
   stripe_payment_intent_id TEXT NOT NULL DEFAULT '',
   paid_at          INTEGER,
   pdf_key          TEXT NOT NULL DEFAULT '',  -- PDF signé dans R2 (TILES, contracts/{id}.pdf)
+  deposit_reminded INTEGER NOT NULL DEFAULT 0, -- relances d'acompte non réglé envoyées (0, 1, 2)
   created_at       INTEGER NOT NULL,
   updated_at       INTEGER NOT NULL
 );
@@ -1115,6 +1117,7 @@ CREATE TABLE IF NOT EXISTS clients (
   name            TEXT NOT NULL DEFAULT '',
   phone           TEXT NOT NULL DEFAULT '',
   notes           TEXT NOT NULL DEFAULT '',
+  tags            TEXT NOT NULL DEFAULT '',   -- JSON ["mariage", "fidèle"…], posés par le photographe
   created_at      INTEGER NOT NULL,
   updated_at      INTEGER NOT NULL,
   UNIQUE (photographer_id, email)
@@ -1218,3 +1221,50 @@ CREATE TABLE IF NOT EXISTS funnel_daily (
   count  INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (day, step, page, source)
 );
+
+-- Factures libres (clientinvoices.js) : rédigées par le photographe, ou
+-- préparées depuis un contrat, une réservation ou un bon cadeau. Numéro tiré
+-- à l'émission dans la même série que les factures automatiques
+-- (nextInvoiceNumber) ; un brouillon n'en a pas. Une facture émise ne se
+-- modifie plus : elle s'annule par une note de crédit (kind = 'credit',
+-- credit_of = la facture annulée, montants négatifs).
+-- lines : JSON [{description, quantity, unitCents (TTC), vatRate (21|12|6|0)}].
+-- schedule : échéancier JSON [{label, dueDate (AAAA-MM-JJ), amountCents,
+-- paidAt, method ('online'|'manual'), reminded (0…3)}] ; une seule échéance
+-- pour une facture payable en une fois.
+-- status : draft | issued | paid | credited.
+CREATE TABLE IF NOT EXISTS client_invoices (
+  id               TEXT PRIMARY KEY,
+  photographer_id  TEXT NOT NULL REFERENCES photographers(id) ON DELETE CASCADE,
+  token            TEXT NOT NULL UNIQUE,
+  kind             TEXT NOT NULL DEFAULT 'invoice',
+  number           TEXT NOT NULL DEFAULT '',
+  status           TEXT NOT NULL DEFAULT 'draft',
+  credit_of        TEXT NOT NULL DEFAULT '',
+  source           TEXT NOT NULL DEFAULT 'manual',
+  source_id        TEXT NOT NULL DEFAULT '',
+  client_name      TEXT NOT NULL DEFAULT '',
+  client_email     TEXT NOT NULL DEFAULT '',
+  client_address   TEXT NOT NULL DEFAULT '',
+  client_vat       TEXT NOT NULL DEFAULT '',
+  title            TEXT NOT NULL DEFAULT '',
+  lines            TEXT NOT NULL DEFAULT '[]',
+  schedule         TEXT NOT NULL DEFAULT '[]',
+  net_cents        INTEGER NOT NULL DEFAULT 0,
+  vat_cents        INTEGER NOT NULL DEFAULT 0,
+  total_cents      INTEGER NOT NULL DEFAULT 0,
+  notes            TEXT NOT NULL DEFAULT '',
+  seller_name      TEXT NOT NULL DEFAULT '',
+  seller_address   TEXT NOT NULL DEFAULT '',
+  seller_vat       TEXT NOT NULL DEFAULT '',
+  seller_iban      TEXT NOT NULL DEFAULT '',
+  reminders        INTEGER NOT NULL DEFAULT 1,
+  issued_at        INTEGER,
+  paid_at          INTEGER,
+  viewed_at        INTEGER,
+  stripe_session_id TEXT NOT NULL DEFAULT '',
+  created_at       INTEGER NOT NULL,
+  updated_at       INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_client_invoices_photographer ON client_invoices(photographer_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_client_invoices_session ON client_invoices(stripe_session_id);

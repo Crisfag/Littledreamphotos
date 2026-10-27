@@ -3,6 +3,10 @@
 // marge estimée sur les tirages, formats, galeries et établissements qui
 // vendent le mieux.
 //
+// Séances (acomptes de réservation et de contrat, échéances de factures
+// libres) et bons cadeaux vendus forment deux séries de plus : un acompte
+// repris dans une facture n'est compté qu'une fois, à sa date de paiement.
+//
 // Tout part des paiements réglés (`payments.status = 'paid'`), la même
 // source que les factures : le tableau de bord ne peut jamais afficher un
 // montant différent de ce que le photographe a facturé. Les ventes
@@ -72,13 +76,16 @@ export function windowStart(nowSeconds, count = SALES_MONTHS, timeZone = SALES_T
 //   galleries : [{ id, slug, title, created_at }]                  (hors galeries de classe)
 //   schoolOrders : [{ id, amount_cents, fee_cents, paid_at, school_id, school_name, year_id, year_label }]
 //   schoolLines  : [{ order_id, name, quantity, price_cents }]      (prix unitaire)
-export function summarizeSales({ payments, orders, products, galleries, schoolOrders = [], schoolLines = [], nowSeconds, timeZone = SALES_TIME_ZONE, months = SALES_MONTHS }) {
+//   studio       : [{ kind: 'session'|'gift', amount_cents, fee_cents, paid_at }]
+export function summarizeSales({ payments, orders, products, galleries, schoolOrders = [], schoolLines = [], studio = [], nowSeconds, timeZone = SALES_TIME_ZONE, months = SALES_MONTHS }) {
   const monthList = lastMonths(nowSeconds, months, timeZone).map((m) => ({
     key: m.key,
     label: m.label,
     supplementCents: 0,
     printCents: 0,
     schoolCents: 0,
+    sessionCents: 0,
+    giftCents: 0,
     orders: 0,
   }));
   const byKey = new Map(monthList.map((m) => [m.key, m]));
@@ -105,14 +112,27 @@ export function summarizeSales({ payments, orders, products, galleries, schoolOr
     month.orders += 1;
   }
 
+  const studioInWindow = [];
+  for (const x of studio) {
+    if (!x.paid_at) continue;
+    const month = byKey.get(monthKey(calendarMonth(x.paid_at, timeZone)));
+    if (!month) continue;
+    studioInWindow.push(x);
+    if (x.kind === "gift") month.giftCents += x.amount_cents || 0;
+    else month.sessionCents += x.amount_cents || 0;
+    month.orders += 1;
+  }
+
   // Frais de paiement (ou commission scolaire) retenus sur ces ventes (voir fees.js).
-  const feeCents = [...inWindow, ...schoolInWindow].reduce((sum, p) => sum + (p.fee_cents || 0), 0);
+  const feeCents = [...inWindow, ...schoolInWindow, ...studioInWindow].reduce((sum, p) => sum + (p.fee_cents || 0), 0);
   const printFeeCents = inWindow.filter((p) => p.kind === "print").reduce((sum, p) => sum + (p.fee_cents || 0), 0);
   const supplementCents = monthList.reduce((s, m) => s + m.supplementCents, 0);
   const printCents = monthList.reduce((s, m) => s + m.printCents, 0);
   const schoolCents = monthList.reduce((s, m) => s + m.schoolCents, 0);
-  const revenueCents = supplementCents + printCents + schoolCents;
-  const orderCount = inWindow.length + schoolInWindow.length;
+  const sessionCents = monthList.reduce((s, m) => s + m.sessionCents, 0);
+  const giftCents = monthList.reduce((s, m) => s + m.giftCents, 0);
+  const revenueCents = supplementCents + printCents + schoolCents + sessionCents + giftCents;
+  const orderCount = inWindow.length + schoolInWindow.length + studioInWindow.length;
 
   // Lignes de tirage des commandes réglées dans la fenêtre.
   const paidIds = new Set(inWindow.filter((p) => p.kind === "print").map((p) => p.id));
@@ -199,6 +219,8 @@ export function summarizeSales({ payments, orders, products, galleries, schoolOr
       supplementCents,
       printCents,
       schoolCents,
+      sessionCents,
+      giftCents,
       orders: orderCount,
       averageOrderCents: orderCount ? Math.round(revenueCents / orderCount) : 0,
       feeCents,
@@ -223,7 +245,7 @@ export function summarizeSales({ payments, orders, products, galleries, schoolOr
 // GET /api/admin/sales
 export async function salesForAdmin(env, photographerId, nowSeconds = Math.floor(Date.now() / 1000)) {
   const since = windowStart(nowSeconds);
-  const [payments, orders, products, galleries, schoolOrders, schoolLines, schoolCount] = await Promise.all([
+  const [payments, orders, products, galleries, schoolOrders, schoolLines, schoolCount, bookings, contracts, gifts, invoices] = await Promise.all([
     env.DB.prepare(
       `SELECT p.id, p.gallery_id, p.kind, p.amount_cents, p.fee_cents, p.paid_at
          FROM payments p JOIN galleries g ON g.id = p.gallery_id
@@ -248,7 +270,28 @@ export async function salesForAdmin(env, photographerId, nowSeconds = Math.floor
         WHERE s.photographer_id = ? AND o.status = 'paid' AND o.paid_at >= ?`
     ).bind(photographerId, since).all(),
     env.DB.prepare("SELECT COUNT(*) AS n FROM schools WHERE photographer_id = ?").bind(photographerId).first(),
+    env.DB.prepare(
+      "SELECT deposit_cents AS amount_cents, fee_cents, paid_at FROM bookings WHERE photographer_id = ? AND status = 'confirmed' AND deposit_cents > 0 AND paid_at >= ?"
+    ).bind(photographerId, since).all(),
+    env.DB.prepare(
+      "SELECT deposit_cents AS amount_cents, deposit_fee_cents AS fee_cents, paid_at FROM contracts WHERE photographer_id = ? AND status = 'paid' AND paid_at >= ?"
+    ).bind(photographerId, since).all(),
+    env.DB.prepare(
+      "SELECT amount_cents, fee_cents, paid_at FROM gift_cards WHERE photographer_id = ? AND status IN ('paid', 'redeemed') AND paid_at >= ?"
+    ).bind(photographerId, since).all(),
+    env.DB.prepare(
+      "SELECT source, schedule FROM client_invoices WHERE photographer_id = ? AND kind = 'invoice' AND status IN ('issued', 'paid') AND source != 'gift'"
+    ).bind(photographerId).all(),
   ]);
+  // Échéances des factures libres : un acompte déjà payé (réservation,
+  // contrat), repris dans la facture (« carried »), est compté avec la
+  // réservation ou le contrat.
+  const invoicePayments = [];
+  for (const f of invoices.results || []) {
+    for (const step of parseJson(f.schedule, [])) {
+      if (step.paidAt && !step.carried) invoicePayments.push({ kind: "session", amount_cents: step.amountCents, fee_cents: 0, paid_at: step.paidAt });
+    }
+  }
   return json({
     ...summarizeSales({
       payments: payments.results || [],
@@ -257,6 +300,12 @@ export async function salesForAdmin(env, photographerId, nowSeconds = Math.floor
       galleries: galleries.results || [],
       schoolOrders: schoolOrders.results || [],
       schoolLines: schoolLines.results || [],
+      studio: [
+        ...(bookings.results || []).map((b) => ({ kind: "session", ...b })),
+        ...(contracts.results || []).map((c) => ({ kind: "session", ...c })),
+        ...invoicePayments,
+        ...(gifts.results || []).map((g) => ({ kind: "gift", ...g })),
+      ],
       nowSeconds,
     }),
     // Établissements créés : l'admin affiche alors la série scolaire, même vide.

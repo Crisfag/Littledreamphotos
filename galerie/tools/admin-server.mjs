@@ -895,6 +895,32 @@ async function handleApi(req, res, url) {
     }
   }
 
+  // /local/client-invoices/… — factures libres : relais JSON vers
+  // /api/admin/client-invoices/…, sauf le PDF, relayé tel quel.
+  if (parts[0] === "client-invoices" && parts.length === 3 && parts[2] === "pdf" && req.method === "GET") {
+    try {
+      const upstream = await client.rawGet(`/api/admin/client-invoices/${encodeURIComponent(parts[1])}/pdf`);
+      if (!upstream.ok) return json(res, upstream.status, { error: "Facture introuvable" });
+      res.writeHead(200, {
+        "content-type": "application/pdf",
+        "content-disposition": upstream.headers.get("content-disposition") || "attachment",
+        "cache-control": "no-store",
+      });
+      return res.end(Buffer.from(await upstream.arrayBuffer()));
+    } catch (err) {
+      return json(res, 502, { error: "Worker injoignable" });
+    }
+  }
+  if (parts[0] === "client-invoices" && ["GET", "POST", "DELETE"].includes(req.method)) {
+    const path = "/api/admin/client-invoices" + (parts.length > 1 ? "/" + parts.slice(1).map(encodeURIComponent).join("/") : "");
+    try {
+      const body = req.method === "POST" ? JSON.parse((await readBody(req)).toString("utf8") || "{}") : undefined;
+      return json(res, req.method === "POST" && parts.length === 1 ? 201 : 200, await client.request(req.method, path, body));
+    } catch (err) {
+      return relayError(res, err, "Les factures n'ont pas pu répondre");
+    }
+  }
+
   // /local/giftcards/… — bons cadeaux : relais JSON vers
   // /api/admin/giftcards/…, sauf le PDF d'un bon, relayé tel quel.
   if (parts[0] === "giftcards" && parts.length === 3 && parts[2] === "pdf" && req.method === "GET") {

@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Facture</title>
+  <meta name="robots" content="noindex, nofollow, noarchive" />
+  <meta name="referrer" content="no-referrer" />
+  <link rel="preload" href="/assets/fonts/geist-latin.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="stylesheet" href="/assets/fonts/geist.css" />
+  <link rel="stylesheet" href="contrat.css" />
+  <link rel="stylesheet" href="facture.css" />
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <script>
+    /* Adresse du Worker ; le lien secret de la facture est lu dans « ?t=… ». */
+    window.INVOICE_CONFIG = {
+      api: "https://galerie-protegee.littledreamphotos-be.workers.dev",
+    };
+  </script>
+</head>
+<body>
+  <main class="ct-shell">
+    <p class="ct-state" id="fa-loading" role="status">Chargement de la facture…</p>
+    <div class="ct-state" id="fa-missing" hidden>
+      <h1>Facture introuvable</h1>
+      <p>Le lien est incomplet, ou la facture a été retirée. Vérifiez l'adresse reçue par e-mail.</p>
+    </div>
+
+    <div id="fa-page" hidden>
+      <header class="ct-head">
+        <p class="ct-studio" id="fa-studio"></p>
+        <h1 id="fa-title"></h1>
+        <p class="ct-meta" id="fa-meta"></p>
+      </header>
+
+      <div class="ct-banner" id="fa-banner" role="status" hidden></div>
+
+      <section class="ct-done fa-pay" id="fa-pay-box" hidden>
+        <p id="fa-due-text"></p>
+        <div class="ct-actions">
+          <button type="button" class="ct-btn ct-btn-primary" id="fa-pay"></button>
+          <a class="ct-btn" id="fa-pdf-top" href="#" download>Télécharger (PDF)</a>
+        </div>
+        <p class="ct-fine" id="fa-iban" hidden></p>
+        <p class="ct-error" id="fa-error" role="alert" hidden></p>
+      </section>
+
+      <article class="ct-doc" aria-label="Facture">
+        <div class="ct-parties">
+          <div><p class="ct-label">Émise par</p><p class="ct-strong" id="fa-seller"></p><p id="fa-seller-lines"></p></div>
+          <div><p class="ct-label">Client</p><p class="ct-strong" id="fa-client"></p><p id="fa-client-lines"></p></div>
+        </div>
+        <div class="fa-table">
+          <table class="ct-lines">
+            <thead><tr><th scope="col">Description</th><th scope="col" class="ct-num">Qté</th><th scope="col" class="ct-num">Prix TTC</th><th scope="col" class="ct-num">TVA</th><th scope="col" class="ct-num">Total</th></tr></thead>
+            <tbody id="fa-lines"></tbody>
+          </table>
+        </div>
+        <dl class="fa-totals" id="fa-totals"></dl>
+        <section class="fa-schedule" id="fa-schedule-box" aria-labelledby="fa-schedule-title" hidden>
+          <h2 id="fa-schedule-title">Échéancier</h2>
+          <ul id="fa-schedule"></ul>
+        </section>
+        <p class="ct-fine fa-notes" id="fa-notes" hidden></p>
+      </article>
+
+      <div class="ct-actions fa-bottom">
+        <a class="ct-btn" id="fa-pdf" href="#" download>Télécharger la facture (PDF)</a>
+      </div>
+      <footer class="ct-foot">Facture établie via <a href="https://www.holypixx.com/" target="_blank" rel="noopener">Holypixx</a></footer>
+    </div>
+  </main>
+  <script src="facture.js"></script>
+</body>
+</html>

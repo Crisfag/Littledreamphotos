@@ -24,6 +24,7 @@ import { runSalesReminders } from "./campaigns.js";
 import { handlePortfolioPublic, purgeOldPortfolioMessages } from "./portfolio.js";
 import { handleBookingPublic, runBookingReminders } from "./booking.js";
 import { handleGiftShop, handleGiftPublic, purgeAbandonedGiftCards } from "./giftcards.js";
+import { handleInvoicePublic, runPaymentReminders } from "./clientinvoices.js";
 import { handleContractPublic } from "./contracts.js";
 import { runClientReminders } from "./clients.js";
 import { runStoragePurge } from "./storage.js";
@@ -124,6 +125,9 @@ export default {
       } else if (path.startsWith("/api/gift/")) {
         // Page privée d'un bon cadeau (son code), PDF, image de la séance.
         response = await handleGiftPublic(request, env, path);
+      } else if (path.startsWith("/api/invoice/")) {
+        // Facture libre envoyée au client (lien secret) : lecture, PDF, paiement.
+        response = await handleInvoicePublic(request, env, path);
       } else if (path.startsWith("/api/contract/")) {
         // Devis et contrat à signer (lien secret envoyé au client).
         response = await handleContractPublic(request, env, path);
@@ -205,6 +209,12 @@ export default {
     ctx.waitUntil(
       runBookingReminders(env).catch((err) => {
         console.error("Rappels de séance : échec :", err && err.stack ? err.stack : err);
+      })
+    );
+    // Relances de paiement : échéances des factures, acomptes de contrat.
+    ctx.waitUntil(
+      runPaymentReminders(env).catch((err) => {
+        console.error("Relances de paiement : échec :", err && err.stack ? err.stack : err);
       })
     );
     // Bons cadeaux jamais payés : effacés après deux jours.

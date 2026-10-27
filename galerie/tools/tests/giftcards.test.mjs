@@ -145,7 +145,7 @@ try {
   await page.click("#pf-gift-submit");
   await page.waitForFunction(() => /paiement en ligne/i.test(document.getElementById("pf-gift-error").textContent), null, { timeout: 10000 });
   check("paiement indisponible (pas de Stripe en local) : message clair, aucun bon fantôme",
-        (await client.request("GET", "/api/admin/giftcards")).cards.length === 0 && localSqlCount("SELECT COUNT(*) AS n FROM gift_cards WHERE status = 'pending'") === 0);
+        (await client.request("GET", "/api/admin/giftcards")).cards.length === 0 && (await localSqlCount("SELECT COUNT(*) AS n FROM gift_cards WHERE status = 'pending'")) === 0);
   if (SHOTS) await page.locator("#offrir").screenshot({ path: join(SHOTS, "bon-01-mini-site.png") });
 
   /* ---------- Retour du paiement (bon payé posé comme par le webhook) ---------- */
@@ -257,9 +257,14 @@ try {
   site.close();
 }
 
-function localSqlCount(sql) {
+async function localSqlCount(sql) {
   const out = execFileSync("npx", ["wrangler", "d1", "execute", "galerie-protegee", "--local", "--json", "--command", sql], { cwd: WORKER_DIR, stdio: "pipe" });
   const text = out.toString();
+  // Comme localSql : le Worker local coupe parfois ses connexions juste après.
+  for (let i = 0; i < 20; i++) {
+    try { if ((await fetch(`${API}/health`, { headers: { connection: "close" } })).ok) break; } catch { /* pas encore prêt */ }
+    await new Promise((r) => setTimeout(r, 500));
+  }
   return JSON.parse(text.slice(text.indexOf("[")))[0].results[0].n; // wrangler peut écrire une ligne avant le JSON
 }
 
