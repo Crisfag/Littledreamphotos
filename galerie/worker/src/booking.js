@@ -221,10 +221,13 @@ function isWebp(bytes) {
     String.fromCharCode(...bytes.subarray(8, 12)) === "WEBP";
 }
 
+// Un bon cadeau garde l'image de la séance offerte, même si la formule
+// change ou disparaît ensuite.
 async function imageInUse(env, photographerId, imageId) {
   const row = await env.DB.prepare(
     `SELECT (SELECT COUNT(*) FROM booking_offers WHERE photographer_id = ?1 AND image_id = ?2)
-          + (SELECT COUNT(*) FROM booking_templates WHERE photographer_id = ?1 AND image_id = ?2) AS n`
+          + (SELECT COUNT(*) FROM booking_templates WHERE photographer_id = ?1 AND image_id = ?2)
+          + (SELECT COUNT(*) FROM gift_cards WHERE photographer_id = ?1 AND image_id = ?2 AND status != 'cancelled') AS n`
   ).bind(photographerId, imageId).first();
   return (row?.n || 0) > 0;
 }
@@ -280,6 +283,9 @@ async function serveImage(env, photographerId, imageId, cacheControl) {
   if (!object) return fail(404, "Image introuvable");
   return new Response(object.body, { headers: { "content-type": "image/webp", "cache-control": cacheControl } });
 }
+
+// Image d'une formule, servie aussi sur la page d'un bon cadeau (giftcards.js).
+export const serveOfferImage = serveImage;
 
 // Fichiers R2 des réservations, effacés avec le compte (privacy.js).
 export async function deleteBookingFiles(env, photographerId) {

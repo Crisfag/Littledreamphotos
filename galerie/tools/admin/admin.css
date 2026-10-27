@@ -730,7 +730,8 @@ main section > p, .ad-share > p { max-width: 75ch; }
 
 /* ---------- Journal ---------- */
 
-.ad-table-wrap { overflow-x: auto; }
+/* position : les libellés masqués (« Actions ») restent dans le cadre qui défile, sans élargir la page. */
+.ad-table-wrap { overflow-x: auto; position: relative; }
 .ad-table { width: 100%; border-collapse: collapse; font-size: .86rem; font-variant-numeric: tabular-nums; }
 
 .ad-owner-steps { margin: .9rem 0; padding-left: 1.3rem; }
@@ -1972,3 +1973,50 @@ main section.ad-demo {
 .ad-sc-names { margin-top: 14px; border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; background: var(--paper); }
 .ad-sc-names summary { cursor: pointer; font-weight: 600; font-size: 14px; }
 .ad-sc-names textarea { display: block; width: 100%; margin: 8px 0 10px; font: inherit; font-size: 14px; padding: 8px 10px; border: 1px solid var(--line-2); border-radius: 8px; resize: vertical; box-sizing: border-box; }
+
+/* Bons cadeaux. */
+.ad-gift-settings, .ad-gift-manual { max-width: 640px; }
+.ad-gift-manual { margin: 0 0 1.4rem; padding: 1rem 1.2rem; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); }
+.ad-gift-settings .ad-hint { margin-top: .8rem; }
+.ad-gift-code { font-family: ui-monospace, "SF Mono", Menlo, monospace; letter-spacing: .06em; }
+.ad-gift-table .ad-row-actions { white-space: normal; }
+.ad-gift-table .ad-row-actions > * { margin: 2px; }
+
+
+/* Factures libres (onglet Facturation). */
+.ad-ci-editor { margin: 0 0 1.4rem; padding: 1rem 1.2rem; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); }
+.ad-ci-lines, #ad-ci-steps { display: grid; gap: .5rem; }
+.ad-ci-line { display: grid; grid-template-columns: minmax(0, 1fr) 4.5rem 7rem 13.5rem auto; gap: .5rem; align-items: center; }
+.ad-ci-step { display: grid; grid-template-columns: minmax(0, 1fr) 10rem 7rem auto auto; gap: .5rem; align-items: center; }
+.ad-ci-line input, .ad-ci-line select, .ad-ci-step input, .ad-ci-pay input[type="date"] {
+  width: 100%; min-height: 40px; font: inherit; font-size: .94rem; color: var(--ink);
+  padding: .5rem .7rem; border: 1px solid var(--line-2); border-radius: 10px; background: var(--paper);
+}
+.ad-ci-pay input[type="date"] { width: auto; min-height: 34px; padding: .3rem .5rem; margin-left: .3rem; }
+.ad-ci-qty, .ad-ci-unit, .ad-ci-step-amount { text-align: right; font-variant-numeric: tabular-nums; }
+.ad-ci-pay { border: 0; margin: 0 0 1rem; padding: 0; display: grid; gap: .3rem; }
+.ad-ci-pay legend { font-size: .84rem; font-weight: 500; color: var(--ink-2); margin-bottom: .35rem; }
+#ad-ci-schedule { padding: .6rem 0 0 1.6rem; }
+.ad-ci-remind { display: flex; align-items: center; gap: .3rem; margin-top: .3rem; font-size: .78rem; color: var(--muted); }
+.ad-ci-table .ad-row-actions { white-space: normal; }
+.ad-ci-table .ad-row-actions > * { margin: 2px; }
+@media (max-width: 720px) {
+  .ad-ci-line { grid-template-columns: 1fr 4rem 6rem; }
+  .ad-ci-line .ad-ci-desc { grid-column: 1 / -1; }
+  .ad-ci-line select { grid-column: 1 / 3; }
+  .ad-ci-step { grid-template-columns: 1fr 1fr; }
+}
+
+/* Fiches clients : tags. */
+.ad-cl-tags { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .25rem; }
+.ad-cl-tag { display: inline-flex; align-items: center; gap: .3rem; padding: .1rem .55rem; border-radius: 999px; background: var(--mist-2); color: var(--ink-2); font-size: .76rem; font-weight: 500; }
+.ad-cl-tag button { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: .95rem; line-height: 1; padding: 0 .1rem; }
+.ad-cl-tag button:hover { color: var(--alert, #c4282d); }
+.ad-cl-tags-edit { margin: 0 0 .6rem; }
+.ad-cl-tag-form { display: flex; gap: .5rem; }
+.ad-cl-tag-form input { flex: 1; min-width: 0; min-height: 36px; font: inherit; font-size: .9rem; padding: .35rem .6rem; border: 1px solid var(--line-2); border-radius: 10px; }
+.ad-cl-tagbar { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem; margin: -.2rem 0 .9rem; }
+.ad-cl-tag-btn { border: 1px solid transparent; cursor: pointer; min-height: 30px; font: inherit; font-size: .8rem; }
+.ad-cl-tag-btn span { color: var(--muted); font-weight: 400; }
+.ad-cl-tag-btn[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent-deep); border-color: var(--accent); }
+

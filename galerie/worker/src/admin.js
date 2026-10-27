@@ -17,6 +17,8 @@ import { galleryQuotaRefusal, subscriptionForAdmin, startSubscriptionCheckout, o
 import { handleSchoolAdmin } from "./school.js";
 import { referralForAdmin } from "./referral.js";
 import { handleBookingAdmin, deleteBookingFiles } from "./booking.js";
+import { handleGiftAdmin } from "./giftcards.js";
+import { handleClientInvoicesAdmin } from "./clientinvoices.js";
 import { THEMES, themeOf, readPresentation, linkOfEmbed } from "./presentation.js";
 import { LANGUAGES, languageOf } from "./i18n.js";
 import { handleContractsAdmin } from "./contracts.js";
@@ -955,6 +957,20 @@ export async function handleAdmin(request, env, ctx, path) {
     const photographer = await env.DB.prepare("SELECT * FROM photographers WHERE id = ?").bind(photographerId).first();
     if (!photographer) return fail(401, "Session invalide");
     return handleBookingAdmin(request, env, photographer, parts.slice(3));
+  }
+
+  // Factures libres, échéanciers, notes de crédit (clientinvoices.js).
+  if (section === "client-invoices") {
+    const photographer = await env.DB.prepare("SELECT * FROM photographers WHERE id = ?").bind(photographerId).first();
+    if (!photographer) return fail(401, "Session invalide");
+    return handleClientInvoicesAdmin(request, env, photographer, parts.slice(3));
+  }
+
+  // Bons cadeaux vendus sur le mini-site ou émis à la main (giftcards.js).
+  if (section === "giftcards") {
+    const photographer = await env.DB.prepare("SELECT * FROM photographers WHERE id = ?").bind(photographerId).first();
+    if (!photographer) return fail(401, "Session invalide");
+    return handleGiftAdmin(request, env, photographer, parts.slice(3));
   }
 
   // Fiches clients et dates à retenir (clients.js).

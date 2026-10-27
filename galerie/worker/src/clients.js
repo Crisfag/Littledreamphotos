@@ -291,7 +291,7 @@ export async function bookingPageUrl(env, photographer) {
 
 // Tout ce que Holypixx sait des clients d'un photographe, regroupé par e-mail.
 export async function collect(env, photographerId) {
-  const [galleries, bookings, contracts, payments, records, dates] = await Promise.all([
+  const [galleries, bookings, contracts, payments, records, dates, messages, gifts, invoices] = await Promise.all([
     env.DB.prepare(
       "SELECT id, slug, title, client_name, client_email, created_at, expires_at FROM galleries WHERE photographer_id = ? AND kind != 'school' AND client_email != ''"
     ).bind(photographerId).all(),
@@ -308,6 +308,14 @@ export async function collect(env, photographerId) {
     ).bind(photographerId).all(),
     env.DB.prepare("SELECT * FROM clients WHERE photographer_id = ?").bind(photographerId).all(),
     env.DB.prepare("SELECT * FROM client_dates WHERE photographer_id = ? ORDER BY date ASC").bind(photographerId).all(),
+    // Prospects : demandes reçues par le formulaire de contact du portfolio.
+    env.DB.prepare("SELECT id, name, email, phone, event_date, message, created_at FROM portfolio_messages WHERE photographer_id = ?").bind(photographerId).all(),
+    env.DB.prepare(
+      "SELECT id, code, status, source, amount_cents, offer_title, from_name, to_name, buyer_email, recipient_email, paid_at, created_at FROM gift_cards WHERE photographer_id = ? AND status != 'pending'"
+    ).bind(photographerId).all(),
+    env.DB.prepare(
+      "SELECT id, kind, number, status, source, client_name, client_email, title, total_cents, schedule, issued_at, created_at FROM client_invoices WHERE photographer_id = ? AND issued_at IS NOT NULL AND client_email != ''"
+    ).bind(photographerId).all(),
   ]);
 
   const map = new Map();
@@ -315,8 +323,8 @@ export async function collect(env, photographerId) {
     const key = normEmail(email);
     if (!map.has(key)) {
       map.set(key, {
-        email: key, name: "", phone: "", notes: "", recordId: "", createdAt: null,
-        galleries: [], bookings: [], contracts: [], payments: [], dates: [],
+        email: key, name: "", phone: "", notes: "", tags: [], recordId: "", createdAt: null,
+        galleries: [], bookings: [], contracts: [], payments: [], dates: [], messages: [], gifts: [], invoices: [],
         paidCents: 0, firstAt: null, lastAt: null, lastSessionAt: null, upcomingSessionAt: null,
       });
     }
@@ -361,12 +369,48 @@ export async function collect(env, photographerId) {
     c.payments.push({ id: p.id, kind: p.kind, amountCents: p.amount_cents, paidAt: p.paid_at, gallery: p.title, slug: p.slug });
     seen(c, p.paid_at);
   }
+  for (const m of messages.results || []) {
+    const c = get(m.email);
+    if (m.name) c.name = c.name || m.name;
+    if (m.phone) c.phone = c.phone || m.phone;
+    c.messages.push({ id: m.id, at: m.created_at, message: m.message, eventDate: m.event_date });
+    seen(c, m.created_at);
+  }
+  for (const g of gifts.results || []) {
+    // L'acheteur paie ; le bénéficiaire, s'il a une adresse, devient un contact.
+    if (g.buyer_email) {
+      const c = get(g.buyer_email);
+      if (g.from_name) c.name = c.name || g.from_name;
+      c.gifts.push({ id: g.id, role: "buyer", code: g.code, status: g.status, amountCents: g.amount_cents, title: g.offer_title, toName: g.to_name, at: g.paid_at || g.created_at });
+      if (g.status !== "cancelled" && g.source === "online") c.paidCents += g.amount_cents;
+      seen(c, g.paid_at || g.created_at);
+    }
+    if (g.recipient_email) {
+      const c = get(g.recipient_email);
+      if (g.to_name) c.name = c.name || g.to_name;
+      c.gifts.push({ id: g.id, role: "recipient", code: g.code, status: g.status, amountCents: g.amount_cents, title: g.offer_title, fromName: g.from_name, at: g.paid_at || g.created_at });
+      seen(c, g.paid_at || g.created_at);
+    }
+  }
+  for (const f of invoices.results || []) {
+    const c = get(f.client_email);
+    if (f.client_name) c.name = c.name || f.client_name;
+    let schedule = [];
+    try { schedule = JSON.parse(f.schedule || "[]") || []; } catch { schedule = []; }
+    const paid = schedule.filter((x) => x.paidAt).reduce((n, x) => n + x.amountCents, 0);
+    c.invoices.push({ id: f.id, kind: f.kind, number: f.number, status: f.status, title: f.title, totalCents: f.total_cents, paidCents: paid, at: f.issued_at });
+    // Les factures préparées depuis une réservation, un contrat ou un bon
+    // cadeau reprennent des montants déjà comptés : seules les libres s'ajoutent.
+    if (f.kind === "invoice" && f.source === "manual") c.paidCents += paid;
+    seen(c, f.issued_at);
+  }
   for (const r of records.results || []) {
     const c = get(r.email);
     c.recordId = r.id;
     if (r.name) c.name = r.name;
     if (r.phone) c.phone = r.phone;
     c.notes = r.notes;
+    c.tags = parseTags(r.tags);
     c.createdAt = r.created_at;
     seen(c, r.created_at);
   }
@@ -408,6 +452,32 @@ function bccMailto(emails, message) {
   return `mailto:?${bcc}subject=${encodeURIComponent(message.subject)}&body=${encodeURIComponent(message.body)}`;
 }
 
+// Tags posés par le photographe : JSON en base, 12 au plus, 30 caractères.
+export function parseTags(raw) {
+  let list = raw;
+  if (typeof raw === "string") {
+    try { list = raw ? JSON.parse(raw) : []; } catch { list = []; }
+  }
+  if (!Array.isArray(list)) return [];
+  const out = [];
+  for (const t of list) {
+    const tag = cleanLine(t, 30).replace(/^#/, "");
+    if (tag && !out.some((x) => x.toLowerCase() === tag.toLowerCase())) out.push(tag);
+  }
+  return out.slice(0, 12);
+}
+
+// Prospect : un contact sans séance, ni contrat signé, ni achat — souvent
+// une demande reçue par le formulaire du portfolio.
+function isProspect(c) {
+  return !c.galleries.length &&
+    !c.bookings.some((b) => b.status === "confirmed") &&
+    !c.contracts.some((k) => ["signed", "paid"].includes(k.status)) &&
+    !c.payments.length &&
+    !c.gifts.some((g) => g.role === "buyer" && g.status !== "cancelled") &&
+    !c.invoices.some((f) => f.kind === "invoice");
+}
+
 function summaryOut(c, today) {
   const dates = c.dates.map((d) => dateOut(d, today)).filter((d) => d.next);
   dates.sort((a, b) => a.next.daysUntil - b.next.daysUntil);
@@ -424,6 +494,9 @@ function summaryOut(c, today) {
     upcomingSessionAt: c.upcomingSessionAt,
     nextDate: dates[0] || null,
     hasNotes: Boolean(c.notes),
+    tags: c.tags,
+    prospect: isProspect(c),
+    messages: c.messages.length,
   };
 }
 
@@ -465,7 +538,11 @@ async function listForAdmin(env, photographer) {
       lastSessionAt: c.lastSessionAt,
       mailto: mailtoUrl(c.email, suggestedMessage({ clientName: c.name, studioName, bookingUrl, dormant: true })),
     }));
-  return { clients, upcoming, dormant, seasons, emails, bookingUrl };
+  // Tous les tags utilisés, du plus fréquent au plus rare (filtres de la liste).
+  const tagCounts = new Map();
+  for (const c of clients) for (const t of c.tags) tagCounts.set(t, (tagCounts.get(t) || 0) + 1);
+  const tags = [...tagCounts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "fr")).map(([tag, count]) => ({ tag, count }));
+  return { clients, upcoming, dormant, seasons, emails, bookingUrl, tags, prospects: clients.filter((c) => c.prospect).length };
 }
 
 async function detailForAdmin(env, photographer, email) {
@@ -488,6 +565,9 @@ async function detailForAdmin(env, photographer, email) {
     ...c.bookings.map((b) => ({ type: "booking", at: b.startsAt, title: b.title, status: b.status, amountCents: b.paidAt ? b.depositCents : 0 })),
     ...c.contracts.map((k) => ({ type: "contract", at: k.signedAt || k.createdAt, title: k.title, number: k.number, status: k.status, amountCents: k.totalCents })),
     ...c.payments.map((p) => ({ type: "payment", at: p.paidAt, title: p.gallery, kind: p.kind, amountCents: p.amountCents, slug: p.slug })),
+    ...c.messages.map((m) => ({ type: "message", at: m.at, title: m.message.slice(0, 200), eventDate: m.eventDate })),
+    ...c.gifts.map((g) => ({ type: "gift", at: g.at, role: g.role, title: g.title, code: g.code, status: g.status, amountCents: g.amountCents, toName: g.toName || "", fromName: g.fromName || "" })),
+    ...c.invoices.map((f) => ({ type: "invoice", at: f.at, kind: f.kind, number: f.number, title: f.title, status: f.status, amountCents: f.totalCents, paidCents: f.paidCents })),
   ].filter((h) => h.at).sort((a, b) => b.at - a.at);
 
   return {
@@ -505,16 +585,17 @@ async function detailForAdmin(env, photographer, email) {
 async function upsertRecord(env, photographerId, email, fields) {
   const ts = now();
   const existing = await env.DB.prepare("SELECT * FROM clients WHERE photographer_id = ? AND email = ?").bind(photographerId, email).first();
+  const tags = fields.tags === undefined ? undefined : JSON.stringify(parseTags(fields.tags));
   if (existing) {
-    await env.DB.prepare("UPDATE clients SET name = ?, phone = ?, notes = ?, updated_at = ? WHERE id = ?").bind(
-      fields.name ?? existing.name, fields.phone ?? existing.phone, fields.notes ?? existing.notes, ts, existing.id
+    await env.DB.prepare("UPDATE clients SET name = ?, phone = ?, notes = ?, tags = ?, updated_at = ? WHERE id = ?").bind(
+      fields.name ?? existing.name, fields.phone ?? existing.phone, fields.notes ?? existing.notes, tags ?? existing.tags, ts, existing.id
     ).run();
     return existing.id;
   }
   const id = newId("cli");
   await env.DB.prepare(
-    "INSERT INTO clients (id, photographer_id, email, name, phone, notes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
-  ).bind(id, photographerId, email, fields.name || "", fields.phone || "", fields.notes || "", ts, ts).run();
+    "INSERT INTO clients (id, photographer_id, email, name, phone, notes, tags, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+  ).bind(id, photographerId, email, fields.name || "", fields.phone || "", fields.notes || "", tags || "", ts, ts).run();
   return id;
 }
 
@@ -545,6 +626,10 @@ export async function handleClientsAdmin(request, env, photographer, parts, url)
       fields.phone = phone.phone;
     }
     if (body.notes !== undefined) fields.notes = cleanText(body.notes, 10000);
+    if (body.tags !== undefined) {
+      if (!Array.isArray(body.tags)) return fail(400, "Tags illisibles");
+      fields.tags = body.tags;
+    }
     if (body.create) {
       // Un client déjà connu garde sa fiche (et son nom) : on la rouvre.
       if (await detailForAdmin(env, photographer, email)) return fail(409, "Ce client a déjà une fiche");

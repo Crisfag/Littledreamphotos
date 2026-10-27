@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Votre bon cadeau</title>
+  <meta name="robots" content="noindex, nofollow, noarchive" />
+  <meta name="referrer" content="no-referrer" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Jost:wght@300;400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="bon-cadeau.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%23b98a7a'/><text y='72' x='50' text-anchor='middle' font-size='60' font-family='Georgia'>H</text></svg>" />
+
+  <script>
+    /* Adresse du Worker (remplacée automatiquement sous l'adresse d'un
+       studio). Le code du bon est lu dans « ?c=… », ou saisi sur la page. */
+    window.GIFT_CONFIG = {
+      api: "https://galerie-protegee.littledreamphotos-be.workers.dev",
+    };
+  </script>
+</head>
+<body>
+
+  <main class="gc-shell">
+
+    <div class="gc-state" id="gc-loading" role="status" hidden>
+      <span class="gc-spinner" aria-hidden="true"></span>
+      <span class="gc-sr">Ouverture de votre bon cadeau…</span>
+    </div>
+
+    <!-- Saisie du code (adresse tapée à la main) -->
+    <section class="gc-enter" id="gc-enter" hidden>
+      <p class="gc-eyebrow">Bon cadeau</p>
+      <h1>Découvrez ce qui vous est offert</h1>
+      <p class="gc-lede">Entrez le code imprimé sur votre bon, sous le QR code.</p>
+      <form id="gc-form" class="gc-form" novalidate>
+        <label class="gc-sr" for="gc-code">Code du bon cadeau</label>
+        <input id="gc-code" name="code" type="text" inputmode="text" autocomplete="off" autocapitalize="characters" spellcheck="false"
+               maxlength="12" placeholder="ABCD-2345" required />
+        <button type="submit" class="gc-btn">Ouvrir mon bon</button>
+      </form>
+      <p class="gc-error" id="gc-error" role="alert" hidden></p>
+    </section>
+
+    <!-- Le bon -->
+    <article class="gc-card" id="gc-card" hidden>
+      <header class="gc-head">
+        <p class="gc-eyebrow" id="gc-studio"></p>
+        <p class="gc-status" id="gc-status"></p>
+        <h1 class="gc-title"><span class="gc-title-small">Un cadeau pour</span> <span id="gc-to"></span></h1>
+        <p class="gc-from" id="gc-from"></p>
+      </header>
+
+      <blockquote class="gc-message" id="gc-message" hidden></blockquote>
+
+      <figure class="gc-figure" id="gc-figure" hidden>
+        <img id="gc-image" alt="" />
+      </figure>
+
+      <section class="gc-gift" aria-labelledby="gc-gift-title">
+        <p class="gc-label">Ce qui vous est offert</p>
+        <h2 id="gc-gift-title"></h2>
+        <p class="gc-description" id="gc-description" hidden></p>
+        <dl class="gc-facts" id="gc-facts"></dl>
+        <div class="gc-included" id="gc-included" hidden>
+          <p class="gc-label">Compris</p>
+          <ul id="gc-included-list"></ul>
+        </div>
+      </section>
+
+      <section class="gc-use" aria-labelledby="gc-use-title">
+        <div class="gc-use-text">
+          <p class="gc-label" id="gc-use-title">Comment en profiter</p>
+          <p id="gc-use-lede"></p>
+          <ul class="gc-contact" id="gc-contact"></ul>
+          <div class="gc-actions">
+            <a class="gc-btn" id="gc-book" href="#" hidden>Réserver ma séance</a>
+            <a class="gc-btn gc-btn-ghost" id="gc-pdf" href="#" download>Télécharger le bon (PDF)</a>
+            <button type="button" class="gc-btn gc-btn-ghost" id="gc-print">Imprimer</button>
+          </div>
+        </div>
+        <div class="gc-qr">
+          <svg id="gc-qr" role="img" aria-label="QR code du bon cadeau" shape-rendering="crispEdges"></svg>
+          <p class="gc-label">Code</p>
+          <p class="gc-code" id="gc-code-text"></p>
+        </div>
+      </section>
+
+      <p class="gc-terms" id="gc-terms" hidden></p>
+    </article>
+
+    <p class="gc-foot">Bon cadeau propulsé par <a href="https://www.holypixx.com/" target="_blank" rel="noopener">Holypixx</a></p>
+  </main>
+
+  <script src="bon-cadeau.js"></script>
+</body>
+</html>
