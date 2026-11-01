@@ -582,18 +582,21 @@
   }
 
   // Serveur momentanément indisponible (redémarrage, mise à jour : connexion
-  // coupée, 502, 503, 504) : la photo est renvoyée d'elle-même, deux fois au
-  // plus, plutôt que de rester en échec. Une photo refusée (fichier
-  // illisible, quota) ne l'est pas.
+  // coupée, 502, 503, 504) : la photo est renvoyée d'elle-même, quatre fois au
+  // plus, sur près d'une minute et demie — le temps qu'un serveur redémarré
+  // réponde à nouveau —, plutôt que de rester en échec. Une photo refusée
+  // (fichier illisible, quota) ne l'est pas.
+  var UPLOAD_RETRY_DELAYS = [5000, 15000, 30000, 45000];
   function uploadPhotoWithRetry(slug, file, position, onProgress, onRetry) {
     var attempt = 0;
     function tryOnce() {
       return uploadPhoto(slug, file, position, onProgress).catch(function (err) {
         var transient = err.status === 0 || err.status === 502 || err.status === 503 || err.status === 504;
-        if (!transient || attempt >= 2) throw err;
+        if (!transient || attempt >= UPLOAD_RETRY_DELAYS.length) throw err;
+        var wait = UPLOAD_RETRY_DELAYS[attempt];
         attempt++;
         if (onRetry) onRetry(attempt);
-        return new Promise(function (resolve) { setTimeout(resolve, 4000 * attempt); }).then(tryOnce);
+        return new Promise(function (resolve) { setTimeout(resolve, wait); }).then(tryOnce);
       });
     }
     return tryOnce();
@@ -5502,7 +5505,8 @@
     });
   }
 
-  function queueUploads(slug, files, startPosition) {
+  // positions : place d'origine de chaque photo (nouvel essai), sinon à la suite.
+  function queueUploads(slug, files, startPosition, positions) {
     var queue = document.getElementById("ad-upload-queue");
     var photosSection = document.getElementById("ad-photos");
     var items = files.map(function (file, index) {
@@ -5513,7 +5517,7 @@
         '<div class="ad-upload-bar"><div class="ad-upload-fill"></div></div>' +
         '<span class="ad-upload-state">' + L("en attente", "waiting") + '</span>';
       queue.appendChild(row);
-      return { file: file, row: row, position: startPosition + index };
+      return { file: file, row: row, position: positions ? positions[index] : startPosition + index };
     });
 
     var fill = function (row, ratio, label) {
@@ -5547,14 +5551,35 @@
           fill(item.row, 1, L("échec", "failed"));
           item.row.classList.add("ad-upload-failed");
           item.row.title = err.message;
+          // La raison, lisible sans survoler (téléphone compris).
+          var reason = document.createElement("span");
+          reason.className = "ad-upload-reason";
+          reason.textContent = err.message;
+          item.row.appendChild(reason);
+          failedItems.push(item);
           failed++;
         })
         .then(next);
     }
 
+    var failedItems = [];
     var workers = [];
     for (var i = 0; i < UPLOAD_CONCURRENCY; i++) workers.push(next());
     Promise.all(workers).then(function () {
+      // Photos en échec : un bouton les renvoie, sans redéposer les autres.
+      if (failedItems.length) {
+        var retry = document.createElement("button");
+        retry.type = "button";
+        retry.className = "ad-btn ad-upload-retry";
+        retry.textContent = L("Réessayer les " + failedItems.length + " photo" + (failedItems.length > 1 ? "s" : "") + " en échec",
+          "Retry " + failedItems.length + " failed photo" + (failedItems.length > 1 ? "s" : ""));
+        retry.addEventListener("click", function () {
+          var again = failedItems.map(function (it) { it.row.remove(); return it; });
+          retry.remove();
+          queueUploads(slug, again.map(function (it) { return it.file; }), 0, again.map(function (it) { return it.position; }));
+        });
+        queue.appendChild(retry);
+      }
       if (failed === 0) toast(L(succeeded + " photo(s) envoyée(s).", succeeded + (succeeded === 1 ? " photo uploaded." : " photos uploaded.")));
       else toast(L(succeeded + " envoyée(s), " + failed + " en échec — survolez la ligne pour le détail.", succeeded + " uploaded, " + failed + " failed — hover the row for details."), failed > 0);
       var photos = document.querySelectorAll("#ad-photos .ad-photo").length;

@@ -692,7 +692,7 @@ async function handleApi(req, res, url) {
       const meta = await sharp(input).metadata();
       const takenAt = takenAtFromExif(meta.exif);
       const watermarkText = galleryInfo.gallery.watermark_text || (await brandFor(client));
-      const position = Number(form.get("position")) || galleryInfo.photos.length;
+      const position = formPosition(form, galleryInfo.photos.length);
       const { photo } = await withProcessingSlot(async () => {
         const result = await processPhoto(input, { galleryId: galleryInfo.gallery.id, forensicKey: config.forensicKey, watermarkText, position });
         await client.addPhoto(slug, { ...result.photo, takenAt, sourceName: String(file.name || "").slice(0, 200) });
@@ -1716,7 +1716,7 @@ async function handleApi(req, res, url) {
 
     const file = form.get("file");
     if (!file || typeof file.arrayBuffer !== "function") return json(res, 400, { error: "Aucun fichier reçu" });
-    const position = Number(form.get("position")) || galleryInfo.photos.length;
+    const position = formPosition(form, galleryInfo.photos.length);
     const watermarkText = galleryInfo.gallery.watermark_text || (await brandFor(client));
 
     try {
@@ -1789,6 +1789,13 @@ async function profileFor(client) {
 // côté (≈ 60 × 90 cm à 200 ppp, de quoi couvrir tous les formats proposés),
 // JPEG de haute qualité. Les métadonnées (GPS, appareil…) sont retirées.
 const PRINT_MASTER_MAX = 7200;
+// Position envoyée avec une photo ; 0 est valable (première photo, renvoyée
+// après un échec), seule une valeur absente ou illisible prend la suite.
+function formPosition(form, fallback) {
+  const raw = form.get("position");
+  return raw !== null && raw !== "" && Number.isInteger(Number(raw)) ? Number(raw) : fallback;
+}
+
 async function makePrintMaster(input) {
   return sharp(input)
     .rotate()

@@ -15,9 +15,17 @@ WORKDIR /app
 
 # Polices pour le texte dessiné par sharp (filigrane, fiches parents du
 # module scolaire) : l'image slim n'en contient aucune.
+#
+# jemalloc remplace l'allocateur de la glibc : avec sharp (libvips), ce
+# dernier fragmente la mémoire envoi après envoi, jusqu'à frôler les 512 Mo
+# d'une petite instance (constaté : 518 Mo sur 537 lors d'un long envoi,
+# fichiers d'impression compris) ; c'est la recommandation de sharp sous
+# Linux. Lien stable quelle que soit l'architecture.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends fonts-dejavu-core fontconfig \
+ && apt-get install -y --no-install-recommends fonts-dejavu-core fontconfig libjemalloc2 \
+ && ln -s "$(find /usr/lib -name libjemalloc.so.2 | head -n 1)" /usr/local/lib/libjemalloc.so.2 \
  && rm -rf /var/lib/apt/lists/*
+ENV LD_PRELOAD=/usr/local/lib/libjemalloc.so.2
 
 COPY package.json package-lock.json ./
 RUN npm install --omit=dev

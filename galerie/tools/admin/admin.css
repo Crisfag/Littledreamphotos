@@ -2020,3 +2020,7 @@ main section.ad-demo {
 .ad-cl-tag-btn span { color: var(--muted); font-weight: 400; }
 .ad-cl-tag-btn[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent-deep); border-color: var(--accent); }
 
+/* Envoi de photos : raison d'un échec, bouton pour réessayer. */
+.ad-upload-reason { grid-column: 1 / -1; font-size: .78rem; color: var(--alert, #c4282d); }
+.ad-upload-retry { margin-top: .6rem; }
+
