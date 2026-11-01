@@ -1863,6 +1863,18 @@ const server = createServer(async (req, res) => {
   }
 });
 
+// Délais adaptés à un hébergement derrière un proxy (Render) et à de gros
+// fichiers envoyés depuis une connexion lente :
+// - keepAliveTimeout plus long que celui du proxy, sinon Node ferme une
+//   connexion que le proxy réutilise au même instant (502) ;
+// - headersTimeout au-delà de keepAliveTimeout, comme Node l'exige ;
+// - requestTimeout de 30 min : par défaut, Node coupe en 408 toute requête
+//   reçue en plus de 5 min, ce qui arrive vite avec deux photos de 25 Mo
+//   envoyées en même temps sur une petite connexion montante.
+server.keepAliveTimeout = 120_000;
+server.headersTimeout = 125_000;
+server.requestTimeout = 30 * 60_000;
+
 server.listen(PORT, HOST, () => {
   console.log(`Interface d'administration sur http://${HOST}:${PORT}`);
   console.log(`Worker : ${config.api}`);

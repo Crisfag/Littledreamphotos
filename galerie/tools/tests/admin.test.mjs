@@ -306,6 +306,16 @@ const dataTransfer = await page.evaluateHandle(
   },
   [buffers.map((b) => b.toString("base64")), PHOTOS.map((p) => p.split("/").pop())]
 );
+// Le premier envoi reçoit un 408 (délai dépassé côté serveur) : la photo
+// doit être renvoyée d'elle-même, pas rester en échec.
+let timedOut = 0;
+await page.route("**/local/galleries/*/photos", (route) => {
+  if (route.request().method() === "POST" && timedOut === 0) {
+    timedOut++;
+    return route.fulfill({ status: 408, contentType: "text/plain", body: "Request Timeout" });
+  }
+  return route.continue();
+});
 await page.dispatchEvent("#ad-dropzone", "drop", { dataTransfer });
 
 await page.waitForSelector(".ad-upload-item", { timeout: 5000 });
@@ -324,6 +334,8 @@ await page.waitForFunction(
 );
 const failedUploads = await page.locator(".ad-upload-failed").count();
 check("les 3 photos sont envoyées sans échec", failedUploads === 0, `${failedUploads} échec(s)`);
+check("un envoi coupé en 408 est renvoyé automatiquement", timedOut === 1 && failedUploads === 0);
+await page.unroute("**/local/galleries/*/photos");
 
 await page.waitForFunction(
   () => document.querySelectorAll("#ad-photos .ad-photo").length === 3,

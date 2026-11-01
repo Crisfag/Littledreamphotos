@@ -572,6 +572,7 @@
           /* réponse illisible : traité ci-dessous comme une erreur */
         }
         if (xhr.status >= 200 && xhr.status < 300) resolve(data);
+        else if (xhr.status === 408) reject(Object.assign(new Error(L("Envoi trop lent : délai dépassé (408). Vérifiez la connexion puis réessayez.", "Upload too slow: timed out (408). Check your connection and retry.")), { status: 408 }));
         else reject(Object.assign(new Error(serverText(data && data.error) || L("Échec de l'envoi (", "Upload failed (") + xhr.status + ")"), { status: xhr.status }));
       };
       xhr.onerror = function () {
@@ -582,16 +583,18 @@
   }
 
   // Serveur momentanément indisponible (redémarrage, mise à jour : connexion
-  // coupée, 502, 503, 504) : la photo est renvoyée d'elle-même, quatre fois au
+  // coupée, 502, 503, 504), délai dépassé (408) ou trop de requêtes (429) :
+  // la photo est renvoyée d'elle-même, quatre fois au
   // plus, sur près d'une minute et demie — le temps qu'un serveur redémarré
   // réponde à nouveau —, plutôt que de rester en échec. Une photo refusée
   // (fichier illisible, quota) ne l'est pas.
   var UPLOAD_RETRY_DELAYS = [5000, 15000, 30000, 45000];
+  var TRANSIENT_UPLOAD_STATUSES = [0, 408, 429, 502, 503, 504];
   function uploadPhotoWithRetry(slug, file, position, onProgress, onRetry) {
     var attempt = 0;
     function tryOnce() {
       return uploadPhoto(slug, file, position, onProgress).catch(function (err) {
-        var transient = err.status === 0 || err.status === 502 || err.status === 503 || err.status === 504;
+        var transient = TRANSIENT_UPLOAD_STATUSES.indexOf(err.status) !== -1;
         if (!transient || attempt >= UPLOAD_RETRY_DELAYS.length) throw err;
         var wait = UPLOAD_RETRY_DELAYS[attempt];
         attempt++;
