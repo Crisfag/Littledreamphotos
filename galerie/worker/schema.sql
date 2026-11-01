@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS photographers (
   billing_company_name    TEXT NOT NULL DEFAULT '',
   billing_address         TEXT NOT NULL DEFAULT '',
   billing_vat_number      TEXT NOT NULL DEFAULT '',
+  billing_iban            TEXT NOT NULL DEFAULT '',  -- imprimé sur les factures libres (virement)
   -- Numérotation des factures : continue et sans trou par photographe, en
   -- séries annuelles (ex. 2026-0001) — remise à zéro dès le premier
   -- règlement d'une nouvelle année civile, jamais en cours d'année.
@@ -928,6 +929,57 @@ CREATE TABLE IF NOT EXISTS booking_offers (
 );
 CREATE INDEX IF NOT EXISTS idx_booking_offers_photographer ON booking_offers(photographer_id, position);
 
+-- Bons cadeaux (giftcards.js) : réglages de vente du photographe (valeur
+-- minimum, validité en mois, conditions imprimées sur le bon) et bons émis.
+-- Un bon recopie la séance offerte (titre, durée, forfait, compris, image)
+-- pour rester lisible même si la formule change ensuite.
+-- status : pending (paiement en cours) | paid (valable, ou périmé une fois
+-- valid_until passé) | redeemed (utilisé) | cancelled ; source : online | manual.
+-- code : 8 caractères sans 0/O ni 1/I, unique, clé de la page privée du bon.
+CREATE TABLE IF NOT EXISTS gift_settings (
+  photographer_id TEXT PRIMARY KEY REFERENCES photographers(id) ON DELETE CASCADE,
+  enabled         INTEGER NOT NULL DEFAULT 0,
+  min_cents       INTEGER NOT NULL DEFAULT 5000,
+  validity_months INTEGER NOT NULL DEFAULT 12,
+  terms           TEXT NOT NULL DEFAULT '',
+  updated_at      INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS gift_cards (
+  id                TEXT PRIMARY KEY,
+  photographer_id   TEXT NOT NULL REFERENCES photographers(id) ON DELETE CASCADE,
+  code              TEXT NOT NULL UNIQUE,
+  status            TEXT NOT NULL DEFAULT 'pending',
+  source            TEXT NOT NULL DEFAULT 'online',
+  amount_cents      INTEGER NOT NULL,
+  fee_cents         INTEGER NOT NULL DEFAULT 0,
+  offer_id          TEXT NOT NULL DEFAULT '',
+  offer_title       TEXT NOT NULL DEFAULT '',
+  offer_description TEXT NOT NULL DEFAULT '',
+  duration_min      INTEGER,
+  tier_label        TEXT NOT NULL DEFAULT '',
+  tier_photos       INTEGER,
+  included          TEXT NOT NULL DEFAULT '',
+  image_id          TEXT NOT NULL DEFAULT '',
+  from_name         TEXT NOT NULL DEFAULT '',
+  to_name           TEXT NOT NULL DEFAULT '',
+  message           TEXT NOT NULL DEFAULT '',
+  buyer_email       TEXT NOT NULL DEFAULT '',
+  recipient_email   TEXT NOT NULL DEFAULT '',
+  terms             TEXT NOT NULL DEFAULT '',
+  valid_until       INTEGER NOT NULL,
+  stripe_session_id TEXT NOT NULL DEFAULT '',
+  stripe_payment_intent_id TEXT NOT NULL DEFAULT '',
+  paid_at           INTEGER,
+  redeemed_at       INTEGER,
+  redeemed_note     TEXT NOT NULL DEFAULT '',
+  cancelled_at      INTEGER,
+  ip_hash           TEXT NOT NULL DEFAULT '',
+  created_at        INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_gift_cards_photographer ON gift_cards(photographer_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_gift_cards_ip ON gift_cards(ip_hash, created_at);
+
 -- Prestations enregistrées : le réglage complet d'une formule (JSON des
 -- champs, image comprise), gardé pour la recréer d'un clic la fois suivante,
 -- même après la suppression de la formule. Un nom par prestation.
@@ -1037,6 +1089,7 @@ CREATE TABLE IF NOT EXISTS contracts (
   stripe_payment_intent_id TEXT NOT NULL DEFAULT '',
   paid_at          INTEGER,
   pdf_key          TEXT NOT NULL DEFAULT '',  -- PDF signé dans R2 (TILES, contracts/{id}.pdf)
+  deposit_reminded INTEGER NOT NULL DEFAULT 0, -- relances d'acompte non réglé envoyées (0, 1, 2)
   created_at       INTEGER NOT NULL,
   updated_at       INTEGER NOT NULL
 );
@@ -1064,6 +1117,7 @@ CREATE TABLE IF NOT EXISTS clients (
   name            TEXT NOT NULL DEFAULT '',
   phone           TEXT NOT NULL DEFAULT '',
   notes           TEXT NOT NULL DEFAULT '',
+  tags            TEXT NOT NULL DEFAULT '',   -- JSON ["mariage", "fidèle"…], posés par le photographe
   created_at      INTEGER NOT NULL,
   updated_at      INTEGER NOT NULL,
   UNIQUE (photographer_id, email)
@@ -1167,3 +1221,50 @@ CREATE TABLE IF NOT EXISTS funnel_daily (
   count  INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (day, step, page, source)
 );
+
+-- Factures libres (clientinvoices.js) : rédigées par le photographe, ou
+-- préparées depuis un contrat, une réservation ou un bon cadeau. Numéro tiré
+-- à l'émission dans la même série que les factures automatiques
+-- (nextInvoiceNumber) ; un brouillon n'en a pas. Une facture émise ne se
+-- modifie plus : elle s'annule par une note de crédit (kind = 'credit',
+-- credit_of = la facture annulée, montants négatifs).
+-- lines : JSON [{description, quantity, unitCents (TTC), vatRate (21|12|6|0)}].
+-- schedule : échéancier JSON [{label, dueDate (AAAA-MM-JJ), amountCents,
+-- paidAt, method ('online'|'manual'), reminded (0…3)}] ; une seule échéance
+-- pour une facture payable en une fois.
+-- status : draft | issued | paid | credited.
+CREATE TABLE IF NOT EXISTS client_invoices (
+  id               TEXT PRIMARY KEY,
+  photographer_id  TEXT NOT NULL REFERENCES photographers(id) ON DELETE CASCADE,
+  token            TEXT NOT NULL UNIQUE,
+  kind             TEXT NOT NULL DEFAULT 'invoice',
+  number           TEXT NOT NULL DEFAULT '',
+  status           TEXT NOT NULL DEFAULT 'draft',
+  credit_of        TEXT NOT NULL DEFAULT '',
+  source           TEXT NOT NULL DEFAULT 'manual',
+  source_id        TEXT NOT NULL DEFAULT '',
+  client_name      TEXT NOT NULL DEFAULT '',
+  client_email     TEXT NOT NULL DEFAULT '',
+  client_address   TEXT NOT NULL DEFAULT '',
+  client_vat       TEXT NOT NULL DEFAULT '',
+  title            TEXT NOT NULL DEFAULT '',
+  lines            TEXT NOT NULL DEFAULT '[]',
+  schedule         TEXT NOT NULL DEFAULT '[]',
+  net_cents        INTEGER NOT NULL DEFAULT 0,
+  vat_cents        INTEGER NOT NULL DEFAULT 0,
+  total_cents      INTEGER NOT NULL DEFAULT 0,
+  notes            TEXT NOT NULL DEFAULT '',
+  seller_name      TEXT NOT NULL DEFAULT '',
+  seller_address   TEXT NOT NULL DEFAULT '',
+  seller_vat       TEXT NOT NULL DEFAULT '',
+  seller_iban      TEXT NOT NULL DEFAULT '',
+  reminders        INTEGER NOT NULL DEFAULT 1,
+  issued_at        INTEGER,
+  paid_at          INTEGER,
+  viewed_at        INTEGER,
+  stripe_session_id TEXT NOT NULL DEFAULT '',
+  created_at       INTEGER NOT NULL,
+  updated_at       INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_client_invoices_photographer ON client_invoices(photographer_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_client_invoices_session ON client_invoices(stripe_session_id);

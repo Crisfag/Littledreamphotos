@@ -78,6 +78,18 @@ export async function exportAccount(env, photographerId) {
     portfolio_photos: await all(env, "SELECT id, position, width, height, bytes, created_at FROM portfolio_photos WHERE photographer_id = ? ORDER BY position ASC", photographerId),
     portfolio_messages: await all(env,
       "SELECT id, name, email, phone, event_date, message, read_at, created_at FROM portfolio_messages WHERE photographer_id = ? ORDER BY created_at ASC", photographerId),
+    // Factures libres et notes de crédit (lignes et échéancier lisibles).
+    client_invoices: (await all(env,
+      `SELECT id, kind, number, status, credit_of, source, client_name, client_email, client_address, client_vat, title, lines, schedule,
+              net_cents, vat_cents, total_cents, notes, issued_at, paid_at, created_at
+         FROM client_invoices WHERE photographer_id = ? ORDER BY created_at ASC`, photographerId))
+      .map((f) => ({ ...f, lines: parseJson(f.lines || "[]", []), schedule: parseJson(f.schedule || "[]", []) })),
+    gift_cards: await all(env,
+      `SELECT id, code, status, source, amount_cents, offer_title, tier_photos, from_name, to_name, message, buyer_email, recipient_email,
+              valid_until, paid_at, redeemed_at, cancelled_at, created_at
+         FROM gift_cards WHERE photographer_id = ? AND status != 'pending' ORDER BY created_at ASC`, photographerId),
+    clients: (await all(env, "SELECT email, name, phone, notes, tags, created_at FROM clients WHERE photographer_id = ? ORDER BY created_at ASC", photographerId))
+      .map((c) => ({ ...c, tags: parseJson(c.tags || "[]", []) })),
   };
   const day = new Date().toISOString().slice(0, 10);
   return new Response(JSON.stringify(data, null, 2), {

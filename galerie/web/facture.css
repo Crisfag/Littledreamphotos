@@ -1,0 +1,21 @@
+/* Facture libre (facture.html) : la feuille du contrat (contrat.css), avec
+   un tableau à plusieurs colonnes, les totaux et l'échéancier. */
+
+.fa-pay { margin: 0 0 1.5rem; }
+.fa-pay p:first-child { font-weight: 500; }
+.fa-table { overflow-x: auto; }
+.fa-table .ct-lines { min-width: 520px; }
+.fa-totals { display: grid; grid-template-columns: 1fr auto; gap: .3rem 1.5rem; max-width: 340px; margin-left: auto; font-variant-numeric: tabular-nums; }
+.fa-totals dt { color: var(--muted); font-size: .92rem; }
+.fa-totals dd { text-align: right; }
+.fa-totals .fa-grand { font-weight: 600; color: var(--ink); font-size: 1.05rem; padding-top: .35rem; }
+.fa-schedule { margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px solid var(--line); }
+.fa-schedule h2 { font-size: 1.06rem; margin-bottom: .6rem; }
+.fa-schedule ul { list-style: none; display: grid; gap: .45rem; }
+.fa-schedule li { display: grid; grid-template-columns: 1fr auto; gap: .2rem 1rem; align-items: baseline; font-variant-numeric: tabular-nums; }
+.fa-schedule .fa-state { font-size: .84rem; color: var(--muted); }
+.fa-schedule .fa-state-paid { color: var(--ok); }
+.fa-schedule .fa-state-late { color: var(--alert); }
+.fa-notes { margin-top: 1.25rem; white-space: pre-line; }
+.fa-bottom { margin-top: 1.25rem; }
+@media print { .fa-pay, .fa-bottom { display: none !important; } }

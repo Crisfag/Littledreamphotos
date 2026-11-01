@@ -587,6 +587,231 @@
     }
   });
 
+  /* ---------- Bons cadeaux ---------- */
+
+  // Une séance du photographe (et son forfait s'il en a plusieurs), ou une
+  // valeur libre ; montant au choix, au moins le minimum du studio.
+  var gift = { settings: null, offer: null, tier: 0, amountTouched: false };
+
+  function giftApi(path) {
+    return API + "/api/giftcard/" + encodeURIComponent(handle) + path;
+  }
+  function parseAmount(value) {
+    var text = String(value || "").replace(/[€\s]/g, "").replace(",", ".");
+    return /^\d+(\.\d{1,2})?$/.test(text) ? Math.round(Number(text) * 100) : NaN;
+  }
+  function amountInput(cents) {
+    return (cents / 100).toLocaleString("fr-BE", { minimumFractionDigits: cents % 100 ? 2 : 0, maximumFractionDigits: 2, useGrouping: false });
+  }
+  function giftSuggestedCents() {
+    var o = gift.offer;
+    var min = gift.settings.minCents;
+    if (!o) return min;
+    var price = o.tiers.length ? o.tiers[gift.tier].priceCents : o.priceCents;
+    return Math.max(price || 0, min);
+  }
+
+  function renderGiftTiers() {
+    var o = gift.offer;
+    var tiers = o ? o.tiers : [];
+    var box = $("pf-gift-tiers");
+    box.textContent = "";
+    $("pf-gift-tier-step").hidden = !tiers.length;
+    if (gift.tier >= tiers.length) gift.tier = 0;
+    tiers.forEach(function (t, i) {
+      var b = el("button", "pf-bk-tier");
+      b.type = "button";
+      b.setAttribute("aria-pressed", String(i === gift.tier));
+      b.appendChild(el("strong", "", photosText(t.photos)));
+      b.appendChild(el("span", "pf-bk-tier-price", euros(t.priceCents)));
+      if (t.label) b.appendChild(el("span", "pf-bk-tier-label", t.label));
+      b.addEventListener("click", function () {
+        gift.tier = i;
+        pressOnly(box, ".pf-bk-tier", b);
+        gift.amountTouched = false;
+        updateGift();
+      });
+      box.appendChild(b);
+    });
+  }
+
+  function updateGift() {
+    var form = $("pf-gift-form");
+    if (!gift.amountTouched) form.elements.amount.value = amountInput(giftSuggestedCents());
+    var cents = parseAmount(form.elements.amount.value);
+    var o = gift.offer;
+    var tier = o && o.tiers.length ? o.tiers[gift.tier] : null;
+    $("pf-gift-summary").textContent = [
+      o ? o.title + (o.durationMin ? " (" + duration(o.durationMin) + ")" : "") + (tier ? ", " + photosText(tier.photos) : "") : "Une séance au choix",
+      isNaN(cents) ? "" : "bon de " + euros(cents),
+      "valable " + gift.settings.validityMonths + " mois",
+    ].filter(Boolean).join(" · ");
+    $("pf-gift-submit").textContent = isNaN(cents) ? "Offrir ce bon" : "Payer " + euros(cents) + " et recevoir le bon";
+  }
+
+  function chooseGiftOffer(offer, button) {
+    gift.offer = offer;
+    gift.tier = 0;
+    gift.amountTouched = false;
+    pressOnly($("pf-gift-offers"), ".pf-gift-offer", button);
+    renderGiftTiers();
+    updateGift();
+  }
+
+  function renderGift(settings) {
+    gift.settings = settings;
+    var list = $("pf-gift-offers");
+    list.textContent = "";
+    var choices = settings.offers.concat([null]);
+    choices.forEach(function (o) {
+      var b = el("button", "pf-gift-offer");
+      b.type = "button";
+      b.setAttribute("aria-pressed", "false");
+      if (o) {
+        b.appendChild(el("strong", "", o.title));
+        var tiers = o.tiers || [];
+        b.appendChild(el("span", "pf-bk-meta", [
+          o.durationMin ? duration(o.durationMin) : "",
+          tiers.length ? "à partir de " + euros(tiers[0].priceCents) : (o.priceCents ? euros(o.priceCents) : ""),
+        ].filter(Boolean).join(" · ")));
+      } else {
+        b.appendChild(el("strong", "", "Un montant libre"));
+        b.appendChild(el("span", "pf-bk-meta", "La séance de son choix, à partir de " + euros(settings.minCents)));
+      }
+      b.addEventListener("click", function () { chooseGiftOffer(o, b); });
+      list.appendChild(b);
+    });
+    $("pf-gift-min").textContent = "Au moins " + euros(settings.minCents) + ". Vous pouvez offrir plus.";
+    $("pf-gift-terms").textContent = "Le bon est valable " + settings.validityMonths + " mois à partir de l'achat. Vous le recevez aussitôt par e-mail, en PDF à imprimer." +
+      (settings.terms ? " " + settings.terms : "");
+    chooseGiftOffer(settings.offers[0] || null, list.firstChild);
+    $("offrir").hidden = false;
+    $("pf-nav-gift").hidden = false;
+  }
+
+  function loadGift() {
+    return fetch(giftApi(""))
+      .then(function (res) { return res.ok ? res.json() : { enabled: false }; })
+      .then(function (json) {
+        if (!json.enabled) return false;
+        renderGift(json);
+        return true;
+      })
+      .catch(function () { return false; });
+  }
+
+  function showGiftResult(title, lines, done) {
+    var box = $("pf-gift-result");
+    box.textContent = "";
+    box.appendChild(el("h3", "", title));
+    lines.filter(Boolean).forEach(function (line) {
+      if (typeof line === "string") box.appendChild(el("p", "", line));
+      else box.appendChild(line);
+    });
+    box.hidden = false;
+    $("pf-gift-form").hidden = Boolean(done);
+    $("offrir").hidden = false;
+  }
+
+  // Retour de Stripe : le bon payé, son code et ses liens.
+  function handleGiftReturn() {
+    var params = new URLSearchParams(location.search);
+    var id = params.get("bon");
+    if (!id) return false;
+    history.replaceState(null, "", location.pathname + (handle && !CONFIG.handle ? "?s=" + encodeURIComponent(handle) : "") + "#offrir");
+    if (params.get("annule")) {
+      loadGift().then(function () {
+        showGiftResult("Paiement interrompu", ["Votre bon cadeau n'a pas été acheté. Vous pouvez recommencer quand vous voulez."]);
+        $("offrir").scrollIntoView();
+      });
+      return true;
+    }
+    var session = params.get("session_id") || "";
+    var attempts = 0;
+    (function poll() {
+      fetch(giftApi("/order/" + encodeURIComponent(id) + "?session_id=" + encodeURIComponent(session)))
+        .then(function (res) { return res.json(); })
+        .then(function (r) {
+          if (r.code) {
+            var code = el("p", "", "Code du bon : ");
+            code.appendChild(el("span", "pf-gift-code", r.code));
+            var actions = el("div", "pf-gift-actions");
+            var view = el("a", "pf-btn", "Voir le bon cadeau");
+            view.href = r.pageUrl;
+            var pdf = el("a", "pf-btn pf-btn-ghost", "Télécharger le PDF");
+            pdf.href = API + "/api/gift/" + encodeURIComponent(r.code.replace(/[^A-Z0-9]/g, "")) + "/pdf";
+            actions.appendChild(view);
+            actions.appendChild(pdf);
+            showGiftResult("Merci ! Le bon cadeau pour " + r.toName + " est prêt", [
+              "Il vient de partir par e-mail à " + r.email + (r.recipientEmail ? ", et à " + r.recipientEmail : "") + ", en PDF à imprimer.",
+              code,
+              actions,
+            ], true);
+          } else if (r.status === "pending" && attempts++ < 5) {
+            showGiftResult("Confirmation du paiement…", ["Un instant, nous attendons la confirmation de votre banque."], true);
+            setTimeout(poll, 2000);
+            return;
+          } else {
+            showGiftResult("Paiement en cours de confirmation", ["Vous recevrez le bon par e-mail dès que votre banque aura confirmé le paiement."], true);
+          }
+          $("offrir").scrollIntoView();
+        })
+        .catch(function () {
+          showGiftResult("Bon cadeau introuvable", ["Contactez directement le studio si vous avez réglé un bon."], true);
+        });
+    })();
+    return true;
+  }
+
+  $("pf-gift-form").elements.amount.addEventListener("input", function () {
+    gift.amountTouched = true;
+    updateGift();
+  });
+
+  $("pf-gift-form").addEventListener("submit", async function (e) {
+    e.preventDefault();
+    var form = e.currentTarget;
+    var error = $("pf-gift-error");
+    var cents = parseAmount(form.elements.amount.value);
+    var fields = {
+      offerId: gift.offer ? gift.offer.id : "",
+      tier: gift.offer && gift.offer.tiers.length ? gift.tier : undefined,
+      amount: form.elements.amount.value.trim(),
+      fromName: form.elements.fromName.value.trim(),
+      toName: form.elements.toName.value.trim(),
+      message: form.elements.message.value.trim(),
+      email: form.elements.email.value.trim(),
+      recipientEmail: form.elements.recipientEmail.value.trim(),
+      website: form.elements.website.value,
+      returnUrl: location.origin + location.pathname + (handle && !CONFIG.handle ? "?s=" + encodeURIComponent(handle) : ""),
+    };
+    var emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    var problem = isNaN(cents) ? "Indiquez la valeur du bon, par exemple 80."
+      : cents < gift.settings.minCents ? "La valeur d'un bon cadeau est d'au moins " + euros(gift.settings.minCents) + "."
+      : !fields.fromName ? "Indiquez de la part de qui est le bon."
+      : !fields.toName ? "Indiquez à qui vous l'offrez."
+      : !emailRe.test(fields.email) ? "Indiquez votre adresse e-mail : le bon vous y sera envoyé."
+      : fields.recipientEmail && !emailRe.test(fields.recipientEmail) ? "L'e-mail de la personne gâtée semble incomplet."
+      : "";
+    if (problem) { error.textContent = problem; error.hidden = false; return; }
+    error.hidden = true;
+    var submit = $("pf-gift-submit");
+    var label = submit.textContent;
+    submit.disabled = true;
+    submit.textContent = "Un instant…";
+    try {
+      var res = await fetch(giftApi("/buy"), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(fields) });
+      var body = await res.json().catch(function () { return {}; });
+      if (!res.ok) throw new Error(body.error || "Le bon n'a pas pu être préparé.");
+      location.href = body.url;
+    } catch (err) {
+      error.textContent = err.message || "Le bon n'a pas pu être préparé. Réessayez dans un instant.";
+      error.hidden = false;
+      submit.disabled = false;
+      submit.textContent = label;
+    }
+  });
+
   /* ---------- Démarrage ---------- */
 
   if (!handle || !API) {
@@ -605,6 +830,7 @@
       document.querySelectorAll(".pf-bk-studio").forEach(function (n) { n.textContent = data.studioName; });
       if (new URLSearchParams(location.search).get("reservation")) handleBookingReturn();
       else loadBooking();
+      if (!handleGiftReturn()) loadGift();
     })
     .catch(showMissing);
 })();

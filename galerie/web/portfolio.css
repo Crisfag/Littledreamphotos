@@ -244,4 +244,24 @@ h3 { font-size: 1.4rem; margin-bottom: .8rem; }
 .pf-bk-result p { color: var(--text); }
 .pf-bk-result .pf-btn { margin-top: 1rem; }
 #pf-bk-when, .pf-bk-form { margin-top: 2.4rem; }
+
+/* ---------- Bons cadeaux ---------- */
+
+.pf-gift-lede { max-width: 40rem; margin: -.6rem 0 2rem; color: var(--muted); }
+.pf-gift-form { max-width: 720px; }
+.pf-gift-offers { display: grid; gap: .6rem; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); }
+.pf-gift-offer {
+  display: grid; gap: .2rem; text-align: left; font: inherit; color: var(--text); cursor: pointer;
+  padding: 1rem 1.1rem; background: #fff; border: 1px solid var(--line); border-radius: 12px; min-height: 44px;
+  transition: border-color .2s, box-shadow .2s;
+}
+.pf-gift-offer:hover { border-color: var(--rose); }
+.pf-gift-offer[aria-pressed="true"] { border-color: var(--rose-deep); box-shadow: 0 0 0 1px var(--rose-deep); }
+.pf-gift-offer strong { font-family: var(--serif); font-size: 1.25rem; font-weight: 500; color: var(--ink); line-height: 1.2; }
+.pf-gift-amount { max-width: 260px; margin-top: 1.4rem; }
+.pf-gift-amount small { font-size: .82rem; color: var(--muted); }
+.pf-gift-form .pf-bk-summary { margin-top: 1.4rem; }
+.pf-gift-code { font: 600 1.3rem ui-monospace, "SF Mono", Menlo, monospace; letter-spacing: .1em; color: var(--ink); }
+.pf-gift-actions { display: flex; flex-wrap: wrap; gap: .6rem; margin-top: 1rem; }
+.pf-gift-actions .pf-btn { margin-top: 0; }
 .pf-bk-form .pf-bk-step { margin-bottom: 0; }

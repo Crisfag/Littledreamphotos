@@ -983,6 +983,101 @@ function studioContactLine({ studioName, studioEmail, studioPhone }) {
     : "";
 }
 
+/* ---------- Bons cadeaux (giftcards.js) ---------- */
+
+function giftSummaryHtml(p) {
+  const seance = p.offerTitle
+    ? `<strong>${escapeHtml(p.offerTitle)}</strong>${p.duration ? ` · ${escapeHtml(p.duration)}` : ""}${p.tierPhotos ? ` · ${p.tierPhotos} photo${p.tierPhotos > 1 ? "s" : ""}` : ""}`
+    : "<strong>Une séance photo, au choix</strong>";
+  return [
+    seance,
+    `Valeur : <strong>${escapeHtml(p.amount)}</strong>`,
+    `Pour ${escapeHtml(p.toName)}, de la part de ${escapeHtml(p.fromName)}`,
+    `Valable jusqu'au ${escapeHtml(p.validUntil)}`,
+    `Code : <strong style="letter-spacing:.06em;">${escapeHtml(p.code)}</strong>`,
+  ].join("<br>");
+}
+
+function giftSummaryText(p) {
+  return [
+    p.offerTitle ? `${p.offerTitle}${p.duration ? ` · ${p.duration}` : ""}${p.tierPhotos ? ` · ${p.tierPhotos} photos` : ""}` : "Une séance photo, au choix",
+    `Valeur : ${p.amount}`,
+    `Pour ${p.toName}, de la part de ${p.fromName}`,
+    `Valable jusqu'au ${p.validUntil}`,
+    `Code : ${p.code}`,
+  ].join("\n");
+}
+
+function giftMessageHtml(message) {
+  return message
+    ? `<div style="margin:0 0 14px;padding:14px 16px;background:${CREAM};border-radius:10px;font-family:${SERIF};font-style:italic;font-size:16px;line-height:1.6;color:${CHARCOAL};white-space:pre-wrap;">« ${escapeHtml(message)} »</div>`
+    : "";
+}
+
+export function buildGiftCardBuyerEmail(p) {
+  const subject = `Votre bon cadeau pour ${p.toName} — ${p.studioName}`;
+  const bodyHtml =
+    eyebrow(p.studioName || "Votre photographe") +
+    heading("Votre bon cadeau est prêt") +
+    paragraph(`Merci ! Voici le bon cadeau offert à ${escapeHtml(p.toName)}, en PDF dans cet e-mail : imprimez-le, ou transférez-le simplement.`) +
+    paragraph(giftSummaryHtml(p)) +
+    giftMessageHtml(p.message) +
+    paragraph(`En scannant le QR code du bon, ou sur ${escapeHtml(p.typedUrl)} avec le code, ${escapeHtml(p.toName)} découvrira ce qui lui est offert.`) +
+    emailButton(p.pageUrl, "Voir le bon cadeau") +
+    (studioContactLine(p) ? paragraph(studioContactLine(p), { small: true }) : "");
+  const text = [
+    `Votre bon cadeau pour ${p.toName} est prêt (PDF joint).`,
+    "",
+    giftSummaryText(p),
+    p.message ? `\n« ${p.message} »` : "",
+    "",
+    `Le bon en ligne : ${p.pageUrl}`,
+  ].join("\n");
+  return { subject, html: emailShell({ preheader: subject, bodyHtml }), text };
+}
+
+export function buildGiftCardRecipientEmail(p) {
+  const subject = `${p.fromName} vous offre une séance photo chez ${p.studioName}`;
+  const bodyHtml =
+    eyebrow(p.studioName || "Votre photographe") +
+    heading(`Un cadeau pour vous, ${escapeHtml(p.toName)} !`) +
+    paragraph(`${escapeHtml(p.fromName)} vous offre un bon cadeau chez ${escapeHtml(p.studioName)}.`) +
+    giftMessageHtml(p.message) +
+    paragraph(giftSummaryHtml(p)) +
+    emailButton(p.pageUrl, "Découvrir mon cadeau") +
+    paragraph("Le bon est joint en PDF. Pour réserver votre séance, contactez le studio en indiquant votre code.", { small: true });
+  const text = [
+    `${p.fromName} vous offre un bon cadeau chez ${p.studioName}.`,
+    p.message ? `\n« ${p.message} »` : "",
+    "",
+    giftSummaryText(p),
+    "",
+    `Votre bon : ${p.pageUrl}`,
+  ].join("\n");
+  return { subject, html: emailShell({ preheader: subject, bodyHtml }), text };
+}
+
+export function buildGiftCardSoldEmail(p) {
+  const subject = `Bon cadeau vendu : ${p.amount} pour ${p.toName}`;
+  const bodyHtml =
+    eyebrow("Bon cadeau") +
+    heading("Un bon cadeau vient d'être offert") +
+    paragraph(giftSummaryHtml(p)) +
+    giftMessageHtml(p.message) +
+    paragraph(`<strong>Acheteur :</strong> <a href="mailto:${escapeHtml(p.buyerEmail)}" style="color:${ROSE_DEEP};">${escapeHtml(p.buyerEmail)}</a>`) +
+    (p.adminUrl ? emailButton(p.adminUrl, "Voir mes bons cadeaux") : "") +
+    paragraph("Le montant arrive sur votre compte Stripe. À la séance, marquez le bon comme utilisé.", { small: true });
+  const text = [
+    "Un bon cadeau vient d'être offert.",
+    "",
+    giftSummaryText(p),
+    "",
+    `Acheteur : ${p.buyerEmail}`,
+    p.adminUrl ? `\nVos bons cadeaux : ${p.adminUrl}` : "",
+  ].join("\n");
+  return { subject, html: emailShell({ preheader: subject, bodyHtml }), text };
+}
+
 export function buildBookingConfirmationEmail(params) {
   const { studioName, clientName, offerTitle } = params;
   const subject = `Votre séance « ${offerTitle} » est réservée`;
@@ -1162,6 +1257,97 @@ export function buildContractDeclinedEmail(params) {
     (adminUrl ? emailButton(adminUrl, "Voir mes devis et contrats") : "");
   const text = `${clientName} a refusé le devis n° ${number} (${title}).${reason ? "\n\n" + reason : ""}`;
   return { subject, html: emailShell({ preheader: subject, bodyHtml }), text };
+}
+
+/* ---------- Factures libres et relances de paiement (clientinvoices.js) ---------- */
+
+function invoiceDay(day) {
+  return day ? new Date(day + "T12:00:00Z").toLocaleDateString("fr-BE", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }) : "";
+}
+
+function scheduleHtml(schedule) {
+  if (!schedule || schedule.length < 2) return "";
+  return paragraph(schedule.map((s) =>
+    `${escapeHtml(s.label)} : ${escapeHtml(formatEuros(s.amountCents))} — ${s.paidAt ? "réglé" : `pour le ${escapeHtml(invoiceDay(s.dueDate))}`}`
+  ).join("<br>"));
+}
+
+function howToPayHtml(p) {
+  return paragraph([
+    p.canPayOnline ? "Réglez en ligne (carte, Bancontact) depuis la facture." : "",
+    p.iban ? `Ou par virement : ${escapeHtml(p.iban)}, communication « facture ${escapeHtml(p.number)} ».` : "",
+  ].filter(Boolean).join(" "), { small: true });
+}
+
+export function buildClientInvoiceEmail(p) {
+  if (p.credit) {
+    const subject = `Note de crédit ${p.number} — ${p.studioName}`;
+    const bodyHtml = eyebrow(p.studioName || "Votre photographe") + heading("Note de crédit") +
+      paragraph(`Voici la note de crédit n° ${escapeHtml(p.number)}${p.title ? ` (« ${escapeHtml(p.title)} »)` : ""}, en PDF dans cet e-mail.`) +
+      paragraph("Une question ? Répondez simplement à cet e-mail.", { small: true });
+    return { subject, html: emailShell({ preheader: subject, bodyHtml }), text: `Note de crédit n° ${p.number} (PDF joint).` };
+  }
+  const subject = `Facture ${p.number} — ${p.studioName}`;
+  const due = p.nextDue;
+  const bodyHtml =
+    eyebrow(p.studioName || "Votre photographe") +
+    heading(`Votre facture${p.clientName ? `, ${escapeHtml(p.clientName)}` : ""}`) +
+    paragraph(`Facture n° ${escapeHtml(p.number)}${p.title ? ` — ${escapeHtml(p.title)}` : ""} : <strong>${escapeHtml(formatEuros(p.totalCents))}</strong>.` +
+      (due ? `<br>À régler : ${escapeHtml(formatEuros(due.amountCents))} pour le ${escapeHtml(invoiceDay(due.dueDate))}.` : "<br>Elle est déjà réglée, merci !")) +
+    scheduleHtml(p.schedule) +
+    emailButton(p.pageUrl, due && p.canPayOnline ? "Voir et régler la facture" : "Voir la facture") +
+    (due ? howToPayHtml(p) : "") +
+    paragraph("La facture est aussi jointe en PDF.", { small: true });
+  const text = [
+    `Facture n° ${p.number} — ${formatEuros(p.totalCents)}.`,
+    due ? `À régler : ${formatEuros(due.amountCents)} pour le ${invoiceDay(due.dueDate)}.` : "Déjà réglée, merci !",
+    "",
+    `La facture : ${p.pageUrl}`,
+  ].join("\n");
+  return { subject, html: emailShell({ preheader: subject, bodyHtml }), text };
+}
+
+// Étapes : 1 = trois jours avant l'échéance, 2 = le lendemain, 3 = une semaine après.
+export function buildClientInvoiceReminderEmail(p) {
+  const i = p.installment;
+  const amount = formatEuros(i.amountCents);
+  const subject = p.stage === 1
+    ? `Rappel : ${amount} à régler le ${invoiceDay(i.dueDate)} — facture ${p.number}`
+    : p.stage === 2
+      ? `Facture ${p.number} : échéance du ${invoiceDay(i.dueDate)} dépassée`
+      : `Second rappel : facture ${p.number} en attente de paiement`;
+  const lede = p.stage === 1
+    ? `Petit rappel : l'échéance « ${escapeHtml(i.label)} » de la facture n° ${escapeHtml(p.number)}, soit <strong>${escapeHtml(amount)}</strong>, est à régler le ${escapeHtml(invoiceDay(i.dueDate))}.`
+    : `Sauf erreur de notre part, l'échéance « ${escapeHtml(i.label)} » de la facture n° ${escapeHtml(p.number)}, soit <strong>${escapeHtml(amount)}</strong>, prévue le ${escapeHtml(invoiceDay(i.dueDate))}, n'est pas encore réglée.`;
+  const bodyHtml =
+    eyebrow(p.studioName || "Votre photographe") +
+    heading(p.stage === 1 ? "Petit rappel" : p.stage === 2 ? "Échéance dépassée" : "Second rappel") +
+    paragraph(lede) +
+    emailButton(p.pageUrl, p.canPayOnline ? "Régler en ligne" : "Voir la facture") +
+    howToPayHtml(p) +
+    paragraph("Si le paiement est déjà parti, merci de ne pas tenir compte de ce message. Une question ? Répondez simplement à cet e-mail.", { small: true });
+  const text = [`${p.stage === 1 ? "Rappel" : "Échéance dépassée"} : ${i.label}, ${amount}, facture n° ${p.number}, pour le ${invoiceDay(i.dueDate)}.`, "", `La facture : ${p.pageUrl}`].join("\n");
+  return { subject, html: emailShell({ preheader: subject, bodyHtml }), text };
+}
+
+export function buildClientInvoicePaidEmail(p) {
+  const subject = `Paiement reçu : ${formatEuros(p.amountCents)}, facture ${p.number}`;
+  const bodyHtml =
+    eyebrow("Facturation") + heading("Paiement reçu") +
+    paragraph(`${escapeHtml(p.clientName || p.clientEmail)} a réglé en ligne « ${escapeHtml(p.label)} » de la facture n° ${escapeHtml(p.number)} : <strong>${escapeHtml(formatEuros(p.amountCents))}</strong>.`) +
+    (p.adminUrl ? emailButton(p.adminUrl, "Voir mes factures") : "");
+  return { subject, html: emailShell({ preheader: subject, bodyHtml }), text: `${p.clientName || p.clientEmail} a réglé ${formatEuros(p.amountCents)} (facture ${p.number}).` };
+}
+
+export function buildContractDepositReminderEmail(p) {
+  const subject = `Rappel : acompte à régler pour « ${p.title} »`;
+  const bodyHtml =
+    eyebrow(p.studioName || "Votre photographe") +
+    heading(p.stage === 1 ? "Votre acompte" : "Dernier rappel pour votre acompte") +
+    paragraph(`Merci d'avoir signé le contrat « ${escapeHtml(p.title)} » ! L'acompte de <strong>${escapeHtml(formatEuros(p.depositCents))}</strong> confirme votre date : il n'est pas encore réglé.`) +
+    emailButton(p.url, "Régler l'acompte") +
+    paragraph("Si c'est déjà fait, merci de ne pas tenir compte de ce message. Une question ? Répondez simplement à cet e-mail.", { small: true });
+  return { subject, html: emailShell({ preheader: subject, bodyHtml }), text: `Acompte de ${formatEuros(p.depositCents)} à régler : ${p.url}` };
 }
 
 /* ---------- Fiches clients (clients.js) ---------- */
@@ -1382,6 +1568,35 @@ export async function sendClientDateReminder(env, params) {
 
 export async function sendStudioSeasonReminder(env, params) {
   await sendEmail(env, { to: params.to, ...buildStudioSeasonReminderEmail(params) });
+}
+
+export async function sendClientInvoice(env, params) {
+  await sendEmail(env, { to: params.to, replyTo: params.replyTo, ...buildClientInvoiceEmail(params), ...withAttachment(params) });
+}
+
+export async function sendClientInvoiceReminder(env, params) {
+  await sendEmail(env, { to: params.to, replyTo: params.replyTo, ...buildClientInvoiceReminderEmail(params), ...withAttachment(params) });
+}
+
+export async function sendClientInvoicePaidNotice(env, params) {
+  if (!params.to) return;
+  await sendEmail(env, { to: params.to, ...buildClientInvoicePaidEmail(params) });
+}
+
+export async function sendContractDepositReminder(env, params) {
+  await sendEmail(env, { to: params.to, replyTo: params.replyTo, ...buildContractDepositReminderEmail(params) });
+}
+
+export async function sendGiftCardToBuyer(env, params) {
+  await sendEmail(env, { to: params.to, replyTo: params.replyTo, ...buildGiftCardBuyerEmail(params), ...withAttachment(params) });
+}
+
+export async function sendGiftCardToRecipient(env, params) {
+  await sendEmail(env, { to: params.to, replyTo: params.replyTo, ...buildGiftCardRecipientEmail(params), ...withAttachment(params) });
+}
+
+export async function sendGiftCardSoldNotice(env, params) {
+  await sendEmail(env, { to: params.to, replyTo: params.replyTo, ...buildGiftCardSoldEmail(params) });
 }
 
 export async function sendStoragePurgeNotice(env, params) {

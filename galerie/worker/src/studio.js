@@ -12,6 +12,7 @@
 
 import { hasFeature } from "./subscription.js";
 import { json, fail } from "./http.js";
+import { handleGiftPublic } from "./giftcards.js";
 import { portfolioSeo, injectPortfolioSeo } from "./portfolio.js";
 
 export const RESERVED_SUBDOMAINS = new Set([
@@ -66,6 +67,10 @@ const PAGE_FILES = {
   "/gallery.js": { file: "gallery.js", type: "text/javascript; charset=utf-8" },
   "/portfolio.css": { file: "portfolio.css", type: "text/css; charset=utf-8" },
   "/portfolio.js": { file: "portfolio.js", type: "text/javascript; charset=utf-8" },
+  "/bon-cadeau": { file: "bon-cadeau.html", type: "text/html; charset=utf-8" },
+  "/bon-cadeau.html": { file: "bon-cadeau.html", type: "text/html; charset=utf-8" },
+  "/bon-cadeau.css": { file: "bon-cadeau.css", type: "text/css; charset=utf-8" },
+  "/bon-cadeau.js": { file: "bon-cadeau.js", type: "text/javascript; charset=utf-8" },
 };
 const PORTFOLIO_PAGE = { file: "portfolio.html", type: "text/html; charset=utf-8" };
 
@@ -121,8 +126,8 @@ async function servePage(request, env, url, { entry = PAGE_FILES[url.pathname], 
     "content-type": entry.type,
     "cache-control": isHtml ? "no-store" : "public, max-age=300",
   };
-  // Une galerie client n'est jamais indexée, même si son lien circule.
-  if (entry.file === "galerie.html") headers["x-robots-tag"] = "noindex, nofollow, noarchive, noimageindex";
+  // Une galerie client ou un bon cadeau n'est jamais indexé, même si son lien circule.
+  if (entry.file === "galerie.html" || entry.file === "bon-cadeau.html") headers["x-robots-tag"] = "noindex, nofollow, noarchive, noimageindex";
   return new Response(body, { headers });
 }
 
@@ -148,10 +153,12 @@ export async function handleStudioHost(request, env, url, subdomain, path) {
 
   // Une galerie (ou un portfolio) d'un autre studio n'existe pas sous cette adresse.
   const parts = path.split("/").filter(Boolean); // api, gallery, slug, …
-  if ((parts[1] === "portfolio" || parts[1] === "booking") && parts[2]) {
+  if ((parts[1] === "portfolio" || parts[1] === "booking" || parts[1] === "giftcard") && parts[2]) {
     const own = await env.DB.prepare("SELECT photographer_id FROM portfolios WHERE handle = ?").bind(decodeURIComponent(parts[2])).first();
     if (!own || own.photographer_id !== studio.id) return fail(404, "Portfolio introuvable");
   }
+  // Un bon cadeau d'un autre studio n'existe pas sous cette adresse.
+  if (parts[1] === "gift" && parts[2]) return handleGiftPublic(request, env, path, { studioId: studio.id });
   if (parts[1] === "gallery" && parts[2]) {
     const gallery = await env.DB.prepare("SELECT photographer_id FROM galleries WHERE slug = ?")
       .bind(parts[2])

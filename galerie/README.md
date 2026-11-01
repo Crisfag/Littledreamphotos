@@ -1098,6 +1098,103 @@ npx wrangler d1 execute galerie-protegee --remote --file=migrations/2026-10-rese
 npm run deploy
 ```
 
+### Bons cadeaux (mini-site)
+
+Le photographe (formule Pro, comme la réservation) ouvre la vente dans
+l'onglet **Bons cadeaux** : valeur minimum, validité (3 à 36 mois),
+conditions courtes imprimées sur le bon. Sur son mini-site, une section
+« Offrir une séance » (`#offrir`) propose ses formules actives avec leurs
+forfaits, ou un montant libre : le client choisit, ajuste la valeur (au
+moins le minimum), remplit « de la part de », « pour », un petit mot, son
+e-mail (et, s'il veut, celui de la personne gâtée), puis paie par Stripe,
+en charge de destination vers le photographe, aux frais des acomptes
+(`worker/src/giftcards.js`, webhook `metadata.kind = "giftcard"`, ou
+relecture de la session au retour).
+
+Le bon recopie la séance offerte (titre, description, durée, forfait,
+compris, image) et porte un code de 8 caractères sans 0/O ni 1/I. Il part
+aussitôt en PDF (A5 paysage, `pdf-lib`, QR code dessiné à partir de
+`qrcode`) à l'acheteur, au bénéficiaire éventuel, et le photographe est
+prévenu. Le QR code mène à la page privée du bon
+(`web/bon-cadeau.html`, jamais indexée) : sur l'adresse du studio quand il
+en a une (`julie.holypixx.com/bon-cadeau?c=…`), sinon sur
+`www.holypixx.com/bon-cadeau` ; l'adresse imprimée se tape aussi à la main,
+le code se saisit sur la page. Elle montre pour qui, de la part de qui, le
+petit mot, la séance (durée, photos, valeur, compris, image), la validité,
+comment réserver (contact du studio, lien vers son mini-site), le QR code
+et le PDF. Codes erronés limités (12 par quart d'heure et par IP) ; sous
+l'adresse d'un studio, seuls ses propres bons existent.
+
+Côté photographe : bons à utiliser et montant en circulation, « Utilisé »
+à la séance (annulable), « Annuler » (le remboursement d'un paiement en
+ligne se fait depuis Stripe), PDF et page de chaque bon, et bon émis à la
+main (vendu au studio, offert) : valable de suite, sans frais, envoyé par
+e-mail si une adresse est donnée. Achats jamais payés effacés après deux
+jours.
+
+**Mise en service sur une base existante** :
+
+```bash
+cd worker
+npm install
+npx wrangler d1 execute galerie-protegee --remote --file=migrations/2026-10-bons-cadeaux.sql
+npm run deploy
+```
+
+(`npm install` une fois : le Worker utilise désormais `qrcode`.)
+
+### Factures libres, échéanciers et relances de paiement
+
+Dans l'onglet **Facturation** (formule Pro, comme les devis et contrats),
+le photographe rédige une facture ligne par ligne
+(`worker/src/clientinvoices.js`) : description, quantité, prix TTC et taux
+de TVA (21, 12, 6 ou 0 % ; 6 % pour une cession de droits d'auteur). Par
+taux, le TTC fait foi ; la base et la TVA s'en déduisent. Sans numéro de
+TVA (régime de la franchise), tout est à 0 % et la mention de l'article
+56bis est imprimée. Paiement en une fois, ou **échéancier** (acompte 30 % +
+solde en un clic, ou échéances libres) dont la somme doit faire le total.
+
+Un brouillon se corrige ; émise, la facture prend son numéro dans la même
+série que les factures automatiques (`nextInvoiceNumber`), fige les
+coordonnées du photographe (avec son **IBAN**, à renseigner dans
+Paramètres) et ne se modifie plus : elle s'annule par une **note de
+crédit** (numéro suivant, montants négatifs). Le client reçoit un lien
+secret (`web/facture.html?t=…`, jamais indexé) : lignes, TVA par taux,
+échéancier, PDF (A4, `pdf-lib`), paiement en ligne de l'échéance suivante
+(Stripe, charge de destination, webhook `metadata.kind = "invoice"`) et
+virement (IBAN, communication « facture n° »). Le photographe peut noter
+une échéance reçue à la main (virement, espèces), et l'annuler.
+
+**Facturer** d'un clic depuis un contrat signé, une réservation ou un bon
+cadeau : lignes, client et paiements déjà reçus repris (marqués
+`carried`, pour n'être comptés qu'une fois dans les ventes).
+
+**Relances** (passe quotidienne `runPaymentReminders`) : chaque échéance
+non réglée d'une facture émise est rappelée au client 3 jours avant, le
+lendemain, puis une semaine après — une fois par étape, jamais un rappel
+« avant l'échéance » une fois celle-ci passée ; coupables facture par
+facture. L'acompte d'un contrat signé mais pas réglé est rappelé à 3 puis
+8 jours (`contracts.deposit_reminded`).
+
+### Fiches clients : tags et prospects
+
+Chaque fiche peut porter des **tags** (12 au plus : « mariage », « salon
+2027 »…), qui filtrent la liste. Une demande reçue par le formulaire du
+portfolio crée un **prospect** : un contact sans séance, contrat signé ni
+achat, avec sa demande dans l'historique (filtre « Prospects »). Les bons
+cadeaux (acheteur et bénéficiaire) et les factures libres rejoignent aussi
+la fiche et son historique ; l'onglet **Ventes** compte désormais les
+acomptes de séance et de contrat, les échéances de factures et les bons
+cadeaux.
+
+**Mise en service sur une base existante** :
+
+```bash
+cd worker
+npx wrangler d1 execute galerie-protegee --remote --file=migrations/2026-10-facturation.sql
+npm run deploy
+```
+
 ### Devis et contrats signés en ligne
 
 Onglet **Devis & contrats** (formules Pro et Studio) :
@@ -1998,6 +2095,8 @@ node tests/subdomain.test.mjs         # sous-domaine par studio, autonome (PUBLI
 node tests/shop.test.mjs              # boutique de tirages côté client, autonome (PRODIGI_API_BASE=http://127.0.0.1:8790/v4.0 dans worker/.dev.vars)
 node tests/english.test.mjs           # galerie client en anglais : mot de passe, galerie, visionneuse, boutique, port hors d'Europe, autonome
 node tests/schoolshop.test.mjs        # commande des photos scolaires (gamme, panier famille, suivi, production), autonome
+node tests/invoicing.test.mjs         # factures libres (TVA par ligne, échéancier, note de crédit, depuis un contrat), prospects et tags, ventes, autonome (admin-server.mjs lancé)
+node tests/giftcards.test.mjs         # bons cadeaux : vente sur le mini-site, page du bon, suivi et bon à la main, autonome (admin-server.mjs lancé)
 node tests/schoolpack.test.mjs        # pack « toutes les photos », ordre de la gamme, liste de prénoms collée, autonome
 node tests/schoolreminders.test.mjs   # rappels de commande aux familles, autonome (npm run dev:local -- --test-scheduled)
 node tests/schoollab.test.mjs         # lots, planches et envoi à un faux BePhoto, autonome (BEPHOTO_API_BASE et BEPHOTO_PREVIEW_BASE=http://127.0.0.1:8791 dans worker/.dev.vars)

@@ -692,7 +692,7 @@ async function handleApi(req, res, url) {
       const meta = await sharp(input).metadata();
       const takenAt = takenAtFromExif(meta.exif);
       const watermarkText = galleryInfo.gallery.watermark_text || (await brandFor(client));
-      const position = Number(form.get("position")) || galleryInfo.photos.length;
+      const position = formPosition(form, galleryInfo.photos.length);
       const { photo } = await withProcessingSlot(async () => {
         const result = await processPhoto(input, { galleryId: galleryInfo.gallery.id, forensicKey: config.forensicKey, watermarkText, position });
         await client.addPhoto(slug, { ...result.photo, takenAt, sourceName: String(file.name || "").slice(0, 200) });
@@ -892,6 +892,58 @@ async function handleApi(req, res, url) {
       return json(res, 200, await client.request(req.method, path, body));
     } catch (err) {
       return relayError(res, err, "Les devis et contrats n'ont pas pu répondre");
+    }
+  }
+
+  // /local/client-invoices/… — factures libres : relais JSON vers
+  // /api/admin/client-invoices/…, sauf le PDF, relayé tel quel.
+  if (parts[0] === "client-invoices" && parts.length === 3 && parts[2] === "pdf" && req.method === "GET") {
+    try {
+      const upstream = await client.rawGet(`/api/admin/client-invoices/${encodeURIComponent(parts[1])}/pdf`);
+      if (!upstream.ok) return json(res, upstream.status, { error: "Facture introuvable" });
+      res.writeHead(200, {
+        "content-type": "application/pdf",
+        "content-disposition": upstream.headers.get("content-disposition") || "attachment",
+        "cache-control": "no-store",
+      });
+      return res.end(Buffer.from(await upstream.arrayBuffer()));
+    } catch (err) {
+      return json(res, 502, { error: "Worker injoignable" });
+    }
+  }
+  if (parts[0] === "client-invoices" && ["GET", "POST", "DELETE"].includes(req.method)) {
+    const path = "/api/admin/client-invoices" + (parts.length > 1 ? "/" + parts.slice(1).map(encodeURIComponent).join("/") : "");
+    try {
+      const body = req.method === "POST" ? JSON.parse((await readBody(req)).toString("utf8") || "{}") : undefined;
+      return json(res, req.method === "POST" && parts.length === 1 ? 201 : 200, await client.request(req.method, path, body));
+    } catch (err) {
+      return relayError(res, err, "Les factures n'ont pas pu répondre");
+    }
+  }
+
+  // /local/giftcards/… — bons cadeaux : relais JSON vers
+  // /api/admin/giftcards/…, sauf le PDF d'un bon, relayé tel quel.
+  if (parts[0] === "giftcards" && parts.length === 3 && parts[2] === "pdf" && req.method === "GET") {
+    try {
+      const upstream = await client.rawGet(`/api/admin/giftcards/${encodeURIComponent(parts[1])}/pdf`);
+      if (!upstream.ok) return json(res, upstream.status, { error: "Bon cadeau introuvable" });
+      res.writeHead(200, {
+        "content-type": "application/pdf",
+        "content-disposition": upstream.headers.get("content-disposition") || "attachment",
+        "cache-control": "no-store",
+      });
+      return res.end(Buffer.from(await upstream.arrayBuffer()));
+    } catch (err) {
+      return json(res, 502, { error: "Worker injoignable" });
+    }
+  }
+  if (parts[0] === "giftcards" && ["GET", "POST"].includes(req.method)) {
+    const path = "/api/admin/giftcards" + (parts.length > 1 ? "/" + parts.slice(1).map(encodeURIComponent).join("/") : "");
+    try {
+      const body = req.method === "POST" ? JSON.parse((await readBody(req)).toString("utf8") || "{}") : undefined;
+      return json(res, path.endsWith("/manual") ? 201 : 200, await client.request(req.method, path, body));
+    } catch (err) {
+      return relayError(res, err, "Les bons cadeaux n'ont pas pu répondre");
     }
   }
 
@@ -1664,7 +1716,7 @@ async function handleApi(req, res, url) {
 
     const file = form.get("file");
     if (!file || typeof file.arrayBuffer !== "function") return json(res, 400, { error: "Aucun fichier reçu" });
-    const position = Number(form.get("position")) || galleryInfo.photos.length;
+    const position = formPosition(form, galleryInfo.photos.length);
     const watermarkText = galleryInfo.gallery.watermark_text || (await brandFor(client));
 
     try {
@@ -1737,6 +1789,13 @@ async function profileFor(client) {
 // côté (≈ 60 × 90 cm à 200 ppp, de quoi couvrir tous les formats proposés),
 // JPEG de haute qualité. Les métadonnées (GPS, appareil…) sont retirées.
 const PRINT_MASTER_MAX = 7200;
+// Position envoyée avec une photo ; 0 est valable (première photo, renvoyée
+// après un échec), seule une valeur absente ou illisible prend la suite.
+function formPosition(form, fallback) {
+  const raw = form.get("position");
+  return raw !== null && raw !== "" && Number.isInteger(Number(raw)) ? Number(raw) : fallback;
+}
+
 async function makePrintMaster(input) {
   return sharp(input)
     .rotate()

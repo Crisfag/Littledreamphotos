@@ -11,6 +11,8 @@ import { createInvoiceForPayment } from "./invoices.js";
 import { markSchoolOrderPaid } from "./schoolshop.js";
 import { markBookingPaid } from "./booking.js";
 import { markContractPaid } from "./contracts.js";
+import { markGiftCardPaid } from "./giftcards.js";
+import { markInvoicePaid } from "./clientinvoices.js";
 import { sendInvoiceEmail } from "./notify.js";
 import { languageOf } from "./i18n.js";
 
@@ -94,13 +96,17 @@ export async function setBillingProfile(request, env, photographer) {
   const companyName = String(body.companyName || "").trim().slice(0, 200);
   const address = String(body.address || "").trim().slice(0, 500);
   const vatNumber = String(body.vatNumber || "").trim().slice(0, 40);
+  // IBAN imprimé sur les factures libres : espaces regroupés par 4.
+  const ibanRaw = body.iban === undefined ? photographer.billing_iban || "" : String(body.iban).toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (ibanRaw && !/^[A-Z]{2}\d{2}[A-Z0-9]{8,30}$/.test(ibanRaw)) return fail(400, "IBAN invalide");
+  const iban = ibanRaw.replace(/(.{4})/g, "$1 ").trim();
 
   await env.DB.prepare(
     `UPDATE photographers
-     SET billing_company_name = ?, billing_address = ?, billing_vat_number = ?
+     SET billing_company_name = ?, billing_address = ?, billing_vat_number = ?, billing_iban = ?
      WHERE id = ?`
   )
-    .bind(companyName, address, vatNumber, photographer.id)
+    .bind(companyName, address, vatNumber, iban, photographer.id)
     .run();
 
   return json({ ok: true });
@@ -166,6 +172,16 @@ export async function handleStripeWebhook(request, env) {
     // Acompte d'une réservation de séance (booking.js).
     if (session?.metadata?.kind === "booking") {
       await markBookingPaid(env, session);
+      return json({ received: true });
+    }
+    // Échéance d'une facture libre réglée en ligne (clientinvoices.js).
+    if (session?.metadata?.kind === "invoice") {
+      await markInvoicePaid(env, session);
+      return json({ received: true });
+    }
+    // Bon cadeau acheté sur le mini-site (giftcards.js).
+    if (session?.metadata?.kind === "giftcard") {
+      await markGiftCardPaid(env, session);
       return json({ received: true });
     }
     // Acompte d'un contrat signé en ligne (contracts.js).

@@ -89,6 +89,7 @@ function profileOf(photographer, env) {
     billingCompanyName: photographer.billing_company_name || "",
     billingAddress: photographer.billing_address || "",
     billingVatNumber: photographer.billing_vat_number || "",
+    billingIban: photographer.billing_iban || "",
     defaultLayout: photographer.default_layout || "grille",
     defaultTheme: photographer.default_theme || "classique",
     remindersEnabled: photographer.reminders_enabled !== 0,
