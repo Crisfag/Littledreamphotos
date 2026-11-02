@@ -1195,6 +1195,42 @@ npx wrangler d1 execute galerie-protegee --remote --file=migrations/2026-10-fact
 npm run deploy
 ```
 
+### Suppléments réglés en espèces ou par virement
+
+En plus du paiement en ligne (Stripe), le photographe peut laisser ses
+clients régler leurs **photos supplémentaires** de la main à la main —
+uniquement les suppléments : les tirages restent payés en ligne, puisqu'ils
+partent au labo dès le paiement. Disponible dans toutes les formules (rien
+ne passe par Stripe).
+
+- **Paramètres → Suppléments : espèces et virement** : deux cases.
+  « Espèces » demande l'adresse où passer (et les horaires si besoin) ;
+  « Virement » ne demande rien : le numéro de compte est communiqué par le
+  photographe lui-même.
+- **Galerie du client** : sous le montant dû, « Payer en espèces » et/ou
+  « Payer par virement » (après « Régler le supplément » s'il est proposé).
+  Un clic enregistre une **demande** (`payments.status = 'awaiting'`,
+  `method = 'cash' | 'transfer'`) et affiche la suite : l'adresse pour les
+  espèces, ou l'annonce du numéro de compte à venir. Le photographe reçoit
+  un e-mail (y répondre écrit directement au client, pratique pour envoyer
+  l'IBAN) ; le client reçoit un récapitulatif. Une seule demande en cours
+  par galerie : un autre moyen ou une sélection qui change la remplace, un
+  paiement par carte confirmé l'efface.
+- **Fiche de la galerie** : la demande apparaît « À recevoir en espèces /
+  par virement » dans l'historique des paiements, avec **Marquer comme
+  reçu** (le supplément passe en réglé, la facture — « Réglé en espèces »
+  ou « Réglé par virement bancaire » — part au client, et la vente compte
+  dans l'onglet Ventes, sans frais de paiement) ou **Annuler la demande**.
+  Tant que rien n'est marqué reçu, le supplément reste dû.
+
+**Mise en service sur une base existante** :
+
+```bash
+cd worker
+npx wrangler d1 execute galerie-protegee --remote --file=migrations/2026-11-paiement-hors-ligne.sql
+npm run deploy
+```
+
 ### Devis et contrats signés en ligne
 
 Onglet **Devis & contrats** (formules Pro et Studio) :
@@ -2096,6 +2132,7 @@ node tests/shop.test.mjs              # boutique de tirages côté client, auton
 node tests/english.test.mjs           # galerie client en anglais : mot de passe, galerie, visionneuse, boutique, port hors d'Europe, autonome
 node tests/schoolshop.test.mjs        # commande des photos scolaires (gamme, panier famille, suivi, production), autonome
 node tests/invoicing.test.mjs         # factures libres (TVA par ligne, échéancier, note de crédit, depuis un contrat), prospects et tags, ventes, autonome (admin-server.mjs lancé)
+node tests/offlinepay.test.mjs        # suppléments réglés en espèces ou par virement : réglages, demande du client, « Marquer comme reçu », autonome (admin-server.mjs lancé)
 node tests/giftcards.test.mjs         # bons cadeaux : vente sur le mini-site, page du bon, suivi et bon à la main, autonome (admin-server.mjs lancé)
 node tests/schoolpack.test.mjs        # pack « toutes les photos », ordre de la gamme, liste de prénoms collée, autonome
 node tests/schoolreminders.test.mjs   # rappels de commande aux familles, autonome (npm run dev:local -- --test-scheduled)

@@ -2024,3 +2024,10 @@ main section.ad-demo {
 .ad-upload-reason { grid-column: 1 / -1; font-size: .78rem; color: var(--alert, #c4282d); }
 .ad-upload-retry { margin-top: .6rem; }
 
+
+/* ---------- Suppléments réglés en espèces ou par virement ---------- */
+
+.ad-badge-awaiting { background: var(--warn-bg); color: var(--warn-ink); }
+.ad-offline-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem .75rem; margin-top: .45rem; }
+.ad-offline-address { margin: .2rem 0 .8rem 1.7rem; }
+#ad-offline-form .ad-toggle { display: flex; margin-bottom: .5rem; }

@@ -90,6 +90,10 @@ function profileOf(photographer, env) {
     billingAddress: photographer.billing_address || "",
     billingVatNumber: photographer.billing_vat_number || "",
     billingIban: photographer.billing_iban || "",
+    // Suppléments réglés sans carte (offlinepay.js).
+    offlineCash: Boolean(photographer.offline_cash),
+    offlineCashAddress: photographer.offline_cash_address || "",
+    offlineTransfer: Boolean(photographer.offline_transfer),
     defaultLayout: photographer.default_layout || "grille",
     defaultTheme: photographer.default_theme || "classique",
     remindersEnabled: photographer.reminders_enabled !== 0,

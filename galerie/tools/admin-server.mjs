@@ -1299,6 +1299,19 @@ async function handleApi(req, res, url) {
     }
   }
 
+  // POST /local/account/offline-payments — suppléments réglés en espèces
+  // (adresse) ou par virement.
+  if (parts.length === 2 && parts[0] === "account" && parts[1] === "offline-payments" && req.method === "POST") {
+    const body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
+    try {
+      return json(res, 200, await client.request("POST", "/api/admin/account/offline-payments", {
+        cash: body.cash === true, cashAddress: String(body.cashAddress || ""), transfer: body.transfer === true,
+      }));
+    } catch (err) {
+      return relayError(res, err, "Impossible d'enregistrer les moyens de paiement");
+    }
+  }
+
   // POST /local/owner/reminders/run — lance la passe de relances tout de
   // suite (propriétaire seulement, revérifié par le Worker).
   if (parts.length === 3 && parts[0] === "owner" && parts[1] === "reminders" && parts[2] === "run" && req.method === "POST") {
@@ -1689,6 +1702,16 @@ async function handleApi(req, res, url) {
       return json(res, 200, { ok: true });
     } catch (err) {
       return relayError(res, err, "Impossible d'enregistrer le forfait");
+    }
+  }
+
+  // POST /local/galleries/:slug/payments/:id/(received|cancel) — supplément
+  // réglé en espèces ou par virement : reçu, ou demande annulée.
+  if (parts.length === 5 && parts[2] === "payments" && ["received", "cancel"].includes(parts[4]) && req.method === "POST") {
+    try {
+      return json(res, 200, await client.request("POST", `/api/admin/galleries/${encodeURIComponent(slug)}/payments/${encodeURIComponent(parts[3])}/${parts[4]}`, {}));
+    } catch (err) {
+      return relayError(res, err, "Impossible d'enregistrer ce paiement");
     }
   }
 

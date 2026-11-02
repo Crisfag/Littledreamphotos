@@ -127,6 +127,15 @@
         <p class="gp-toolbar-quota" id="gp-toolbar-quota" hidden></p>
         <button type="button" class="gp-pay-btn" id="gp-pay-supplement" hidden data-en="Pay the extra">Régler le supplément</button>
         <p class="gp-pay-error" id="gp-pay-error" hidden></p>
+        <div class="gp-offline" id="gp-offline" hidden>
+          <p class="gp-offline-lead" id="gp-offline-lead"></p>
+          <div class="gp-offline-buttons" id="gp-offline-buttons">
+            <button type="button" class="gp-invoice-btn gp-offline-btn" id="gp-pay-cash" hidden data-en="Pay in cash">Payer en espèces</button>
+            <button type="button" class="gp-invoice-btn gp-offline-btn" id="gp-pay-transfer" hidden data-en="Pay by bank transfer">Payer par virement</button>
+          </div>
+          <div class="gp-offline-pending" id="gp-offline-pending" hidden aria-live="polite"></div>
+          <p class="gp-pay-error" id="gp-offline-error" hidden></p>
+        </div>
         <button type="button" class="gp-invoice-btn" id="gp-download-invoice" hidden data-en="Download my invoice">Télécharger ma facture</button>
         <div class="gp-shop-bar" id="gp-shop-bar" hidden>
           <button type="button" class="gp-cart-btn" id="gp-cart-btn"><span data-en="My prints">Mes tirages</span> <span id="gp-cart-count">(0)</span></button>

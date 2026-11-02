@@ -14,6 +14,7 @@ import { deliveryForClient, createDownloadLink, downloadFile, downloadZip } from
 import { saveCart } from "./campaigns.js";
 import { presentationForClient } from "./presentation.js";
 import { hasFeature } from "./subscription.js";
+import { offlineForClient, handleOfflineRequest } from "./offlinepay.js";
 
 const SESSION_TTL_SECONDS = 2 * 60 * 60; // 2 h
 const MAX_FAILED_LOGINS = 10;
@@ -195,6 +196,8 @@ async function openSession(env, gallery, token, expiresIn, preview) {
       extraPhotoPriceCents: gallery.extra_photo_price_cents || 0,
       paidExtraCount: await paidExtraCount(env, gallery.id),
       canPayOnline: Boolean(photographer?.stripe_account_id) && Boolean(photographer?.stripe_charges_enabled) && hasFeature(env, photographer, "extras"),
+      // Espèces / virement, si le photographe les propose (offlinepay.js).
+      offline: await offlineForClient(env, gallery, photographer),
       invoices: invoices.map((i) => ({
         id: i.id,
         number: i.number,
@@ -234,7 +237,7 @@ async function authorize(request, env, slug) {
 // Actions qui écrivent (sélection, couleurs, commentaires, validation,
 // panier, paiements, journal, liens de téléchargement) : refusées à une
 // session d'aperçu, quoi que fasse la page.
-const WRITE_ACTIONS = new Set(["select", "comment", "tag", "marks", "validate", "cart", "print-order", "event", "checkout", "delivery"]);
+const WRITE_ACTIONS = new Set(["select", "comment", "tag", "marks", "validate", "cart", "print-order", "event", "checkout", "offline-payment", "delivery"]);
 async function isPreviewSession(request, env) {
   const header = request.headers.get("Authorization") || "";
   const payload = header.startsWith("Bearer ") ? await verifyToken(env.TOKEN_SECRET, header.slice(7)) : null;
@@ -783,6 +786,12 @@ export async function handleViewer(request, env, ctx, path) {
   }
   if (action === "checkout" && request.method === "POST") {
     return handleCheckout(request, env, slug);
+  }
+  // Supplément réglé en espèces ou par virement : demande au photographe.
+  if (action === "offline-payment" && request.method === "POST") {
+    const auth = await authorize(request, env, slug);
+    if (auth.error) return auth.error;
+    return handleOfflineRequest(request, env, ctx, auth.gallery);
   }
   // Livraison des photos définitives : lien signé, puis téléchargement.
   if (action === "delivery") {

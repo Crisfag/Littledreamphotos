@@ -212,6 +212,10 @@ export async function handleStripeWebhook(request, env) {
           // Commande de tirages : envoi au labo, facture et e-mails (shop.js).
           await handlePrintPaymentConfirmed(env, payment, new URL(request.url).origin);
         } else {
+          // Supplément réglé par carte : une demande de règlement en
+          // espèces ou par virement encore en attente n'a plus lieu d'être.
+          await env.DB.prepare("DELETE FROM payments WHERE gallery_id = ? AND status = 'awaiting' AND kind = 'supplement'")
+            .bind(payment.gallery_id).run();
           await issueInvoice(env, session.id);
         }
       }
@@ -226,7 +230,7 @@ export async function handleStripeWebhook(request, env) {
 // incident ici (génération de PDF, R2, e-mail) est consigné mais ne doit
 // jamais faire échouer la réponse au webhook : Stripe réessaierait sinon
 // indéfiniment, alors que le paiement lui, est bel et bien confirmé.
-async function issueInvoice(env, stripeCheckoutSessionId) {
+export async function issueInvoice(env, stripeCheckoutSessionId) {
   try {
     const payment = await env.DB.prepare("SELECT * FROM payments WHERE stripe_checkout_session_id = ?")
       .bind(stripeCheckoutSessionId)

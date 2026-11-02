@@ -251,6 +251,35 @@ h1 { font-family: var(--title, var(--serif)); font-weight: 500; font-size: clamp
 }
 .gp-invoice-btn:hover:not(:disabled) { background: var(--cream); transform: translateY(-1px); }
 .gp-invoice-btn:disabled { opacity: .6; cursor: default; }
+/* Supplément réglé en espèces ou par virement (offlinepay.js côté Worker). */
+.gp-offline { margin-top: .55rem; max-width: 34rem; }
+.gp-offline-lead { font-size: .8rem; color: var(--muted); }
+.gp-offline-buttons { display: flex; flex-wrap: wrap; gap: .4rem; }
+.gp-offline-buttons .gp-offline-btn { margin: .3rem 0 0; }
+.gp-offline-pending {
+  margin-top: .5rem;
+  padding: .75rem .9rem;
+  font-size: .84rem;
+  line-height: 1.55;
+  color: var(--ink);
+  background: var(--cream);
+  border-left: 2px solid var(--rose);
+}
+.gp-offline-pending p + p { margin-top: .35rem; }
+.gp-offline-pending address { font-style: normal; white-space: pre-line; font-weight: 500; }
+.gp-offline-pending a { color: var(--rose-deep); }
+.gp-offline-change {
+  margin-top: .35rem;
+  padding: 0;
+  font: inherit;
+  font-size: .8rem;
+  color: var(--rose-deep);
+  background: none;
+  border: 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
 
 /* « Valider ma sélection » : le client signale que son choix est fait. */
 .gp-validate { margin-top: .6rem; }

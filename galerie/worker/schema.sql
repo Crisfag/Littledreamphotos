@@ -48,6 +48,12 @@ CREATE TABLE IF NOT EXISTS photographers (
   billing_address         TEXT NOT NULL DEFAULT '',
   billing_vat_number      TEXT NOT NULL DEFAULT '',
   billing_iban            TEXT NOT NULL DEFAULT '',  -- imprimé sur les factures libres (virement)
+  -- Suppléments réglés sans carte (offlinepay.js) : en espèces à cette
+  -- adresse, et/ou par virement (numéro de compte communiqué par le
+  -- photographe lui-même, prévenu par e-mail).
+  offline_cash            INTEGER NOT NULL DEFAULT 0,
+  offline_cash_address    TEXT NOT NULL DEFAULT '',
+  offline_transfer        INTEGER NOT NULL DEFAULT 0,
   -- Numérotation des factures : continue et sans trou par photographe, en
   -- séries annuelles (ex. 2026-0001) — remise à zéro dès le premier
   -- règlement d'une nouvelle année civile, jamais en cours d'année.
@@ -360,7 +366,12 @@ CREATE TABLE IF NOT EXISTS payments (
   stripe_payment_intent_id    TEXT NOT NULL DEFAULT '',
   extra_count                 INTEGER NOT NULL,
   amount_cents                INTEGER NOT NULL,
-  status                      TEXT NOT NULL DEFAULT 'pending', -- pending, paid
+  -- pending (Stripe pas terminé), awaiting (demande de règlement en
+  -- espèces ou par virement, en attente du photographe), paid.
+  status                      TEXT NOT NULL DEFAULT 'pending',
+  -- card (Stripe), cash ou transfer (confirmés à la main, voir offlinepay.js).
+  -- stripe_checkout_session_id vaut alors « offline_<id> ».
+  method                      TEXT NOT NULL DEFAULT 'card',
   -- 'supplement' (photos au-delà du forfait) ou 'print' (commande de
   -- tirages, détaillée dans print_orders). extra_count vaut 0 pour 'print' :
   -- une commande de tirages ne change jamais le décompte des suppléments.

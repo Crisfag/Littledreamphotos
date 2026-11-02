@@ -1483,6 +1483,20 @@
       "<span>" + L("Envoyer les relances automatiques", "Send automatic reminders") + "</span></label>" +
       "</section>" +
 
+      '<section id="ad-offline-section"><div class="ad-section-header"><h3>' + L("Suppléments : espèces et virement", "Extras: cash and bank transfer") + "</h3></div>" +
+      '<p class="ad-hint">' + L("En plus du paiement en ligne, vos clients peuvent choisir de régler leurs photos supplémentaires de la main à la main. Un e-mail vous prévient, et vous cliquez « Marquer comme reçu » dans la galerie une fois l'argent reçu : les suppléments passent alors en réglé et la facture part au client. Les tirages restent payés en ligne.",
+        "On top of online payment, your clients can choose to settle their extra photos directly with you. You're notified by email, and you click “Mark as received” in the gallery once you have the money: the extras then show as paid and the invoice goes to the client. Prints are still paid online.") + "</p>" +
+      '<form id="ad-offline-form">' +
+      '<label class="ad-toggle"><input type="checkbox" name="cash"' + (photographer.offlineCash ? " checked" : "") + " /><span>" + L("Paiement en espèces", "Cash payment") + "</span></label>" +
+      '<label class="ad-field ad-offline-address"><span>' + L("Adresse où vos clients viennent régler <em>(et vos horaires si besoin)</em>", "Address where your clients come to pay <em>(and your opening hours if needed)</em>") + "</span>" +
+      '<textarea name="cashAddress" rows="3" placeholder="' + L("Rue…, code postal, ville — sur rendez-vous", "Street…, postcode, city — by appointment") + '">' + esc(photographer.offlineCashAddress || photographer.billingAddress || "") + "</textarea></label>" +
+      '<label class="ad-toggle"><input type="checkbox" name="transfer"' + (photographer.offlineTransfer ? " checked" : "") + " /><span>" + L("Paiement par virement bancaire", "Bank transfer") + "</span></label>" +
+      '<p class="ad-hint">' + L("Virement : le client vous fait signe depuis sa galerie, et vous lui envoyez votre numéro de compte en répondant simplement à l'e-mail reçu.",
+        "Transfer: the client lets you know from their gallery, and you send them your bank account number by simply replying to the email you get.") + "</p>" +
+      '<p class="ad-error" id="ad-offline-error" hidden></p>' +
+      '<button type="submit" class="ad-btn ad-btn-primary" id="ad-offline-save">' + L("Enregistrer", "Save") + "</button>" +
+      "</form></section>" +
+
       '<section><div class="ad-section-header"><h3>' + L("Coordonnées fiscales", "Billing details") + "</h3></div>" +
       '<p class="ad-hint">' + L("Ces informations apparaissent sur les factures émises pour vos clients.", "These details appear on the invoices issued to your clients.") + "</p>" +
       '<form id="ad-billing-form">' +
@@ -1683,6 +1697,33 @@
         toast(L("Coordonnées de facturation enregistrées.", "Billing details saved."));
       } catch (err) {
         toast(err.message, true);
+      } finally {
+        saveBtn.disabled = false;
+      }
+    });
+
+    var offlineForm = document.getElementById("ad-offline-form");
+    var syncOfflineAddress = function () {
+      offlineForm.querySelector(".ad-offline-address").hidden = !offlineForm.cash.checked;
+    };
+    syncOfflineAddress();
+    offlineForm.cash.addEventListener("change", syncOfflineAddress);
+    offlineForm.addEventListener("submit", async function (event) {
+      event.preventDefault();
+      var errorBox = document.getElementById("ad-offline-error");
+      var saveBtn = document.getElementById("ad-offline-save");
+      errorBox.hidden = true;
+      saveBtn.disabled = true;
+      try {
+        await api("POST", "/account/offline-payments", {
+          cash: offlineForm.cash.checked,
+          cashAddress: offlineForm.cashAddress.value.trim(),
+          transfer: offlineForm.transfer.checked,
+        });
+        toast(L("Moyens de paiement enregistrés.", "Payment methods saved."));
+      } catch (err) {
+        errorBox.textContent = err.message;
+        errorBox.hidden = false;
       } finally {
         saveBtn.disabled = false;
       }
@@ -4649,17 +4690,26 @@
     }
     if (paid > 0) {
       html +=
-        '<p class="ad-quota-paid">✓ ' + paid + L(" supplément" + (paid > 1 ? "s" : "") + " déjà réglé" + (paid > 1 ? "s" : "") + " en ligne",
-          (paid === 1 ? " extra" : " extras") + " already paid online") + "</p>";
+        '<p class="ad-quota-paid">✓ ' + paid + L(" supplément" + (paid > 1 ? "s" : "") + " déjà réglé" + (paid > 1 ? "s" : ""),
+          (paid === 1 ? " extra" : " extras") + " already paid") + "</p>";
     }
     return html;
   }
 
   function paymentsHistoryHtml(payments) {
     if (!payments || !payments.length) return "";
+    var methodLabel = { cash: L("en espèces", "in cash"), transfer: L("par virement", "by transfer") };
     var rows = payments.map(function (p) {
-      var statusLabel = p.status === "paid" ? L("Réglé", "Paid") : L("En attente", "Pending");
-      var statusCls = p.status === "paid" ? "ad-badge-selected" : "";
+      var offline = p.method === "cash" || p.method === "transfer";
+      var statusLabel = p.status === "paid" ? L("Réglé", "Paid") + (offline ? " " + methodLabel[p.method] : "")
+        : p.status === "awaiting" ? L("À recevoir ", "To collect ") + methodLabel[p.method]
+        : L("En attente", "Pending");
+      var statusCls = p.status === "paid" ? "ad-badge-selected" : p.status === "awaiting" ? "ad-badge-awaiting" : "";
+      var actions = p.status === "awaiting"
+        ? '<div class="ad-offline-actions">' +
+          '<button type="button" class="ad-btn ad-btn-primary ad-btn-small" data-offline-received="' + esc(p.id) + '">' + L("Marquer comme reçu", "Mark as received") + "</button>" +
+          '<button type="button" class="ad-link-btn" data-offline-cancel="' + esc(p.id) + '">' + L("Annuler la demande", "Cancel the request") + "</button></div>"
+        : "";
       var invoiceCell = p.invoice_id
         ? '<a href="/local/invoices/' + encodeURIComponent(p.invoice_id) + '" target="_blank" rel="noopener">' +
           esc(p.invoice_number) + "</a>" +
@@ -4671,7 +4721,7 @@
         "<td>" + (p.kind === "print" ? L("Tirages", "Prints") : p.extra_count + (p.extra_count === 1 ? " photo" : " photos")) + "</td>" +
         "<td>" + formatEuros(p.amount_cents) +
         (p.fee_cents ? '<br><span class="ad-hint">' + L("dont " + formatEuros(p.fee_cents) + " de frais de paiement", "incl. " + formatEuros(p.fee_cents) + " payment fees") + "</span>" : "") + "</td>" +
-        "<td><span class=\"ad-badge " + statusCls + "\">" + statusLabel + "</span></td>" +
+        "<td><span class=\"ad-badge " + statusCls + "\">" + statusLabel + "</span>" + actions + "</td>" +
         "<td>" + invoiceCell + "</td>" +
         "</tr>"
       );
@@ -5314,6 +5364,23 @@
         toast(err.message, true);
       } finally {
         saveBtn.disabled = false;
+      }
+    });
+    // Supplément réglé en espèces ou par virement : reçu, ou demande annulée.
+    el.view.querySelector(".ad-quota").addEventListener("click", async function (event) {
+      var received = event.target.closest("[data-offline-received]");
+      var cancel = event.target.closest("[data-offline-cancel]");
+      if (!received && !cancel) return;
+      var id = (received || cancel).getAttribute(received ? "data-offline-received" : "data-offline-cancel");
+      if (cancel && !confirm(L("Annuler cette demande de règlement ? Le client pourra en refaire une depuis sa galerie.", "Cancel this payment request? The client can make a new one from their gallery."))) return;
+      (received || cancel).disabled = true;
+      try {
+        await api("POST", "/galleries/" + encodeURIComponent(slug) + "/payments/" + encodeURIComponent(id) + (received ? "/received" : "/cancel"));
+        toast(received ? L("Paiement reçu : suppléments réglés, facture envoyée au client.", "Payment received: extras paid, invoice sent to the client.") : L("Demande annulée.", "Request cancelled."));
+        renderDetail(slug, true);
+      } catch (err) {
+        toast(err.message, true);
+        (received || cancel).disabled = false;
       }
     });
     bindPresentation(slug, data);

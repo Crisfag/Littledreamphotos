@@ -84,7 +84,7 @@
     "/cart": function () { return { ok: true }; },
     "/event": function () { return { ok: true }; },
   };
-  var PREVIEW_BLOCKED = ["/checkout", "/print-order", "/delivery/link"];
+  var PREVIEW_BLOCKED = ["/checkout", "/offline-payment", "/print-order", "/delivery/link"];
   function fetch(url, options) {
     var method = (options && options.method) || "GET";
     if (state.preview && method !== "GET" && typeof url === "string" && url.indexOf(API + "/api/gallery/") === 0) {
@@ -119,6 +119,8 @@
     // (codes couleur), comment (photos commentées).
     filter: "all",
     drawn: {},
+    // Choix d'un autre moyen alors qu'une demande espèces/virement est en cours.
+    offlineChoosing: false,
   };
 
   /* ---------- Langue (choisie par le photographe, galerie par galerie) ---------- */
@@ -164,6 +166,8 @@
     "Le paiement en ligne n'est pas encore activé": "Online payment isn't enabled yet",
     "Stripe a refusé la demande de paiement": "The payment couldn't start. Please try again in a moment.",
     "La boutique de tirages n'est pas ouverte sur cette galerie": "The print shop isn't open on this gallery",
+    "Ce moyen de paiement n'est pas proposé par le studio": "This payment method isn't offered by the studio",
+    "Moyen de paiement inconnu": "Unknown payment method",
   };
 
   function serverText(message, fallbackEn) {
@@ -310,6 +314,7 @@
     if (el.payButton) {
       el.payButton.hidden = !(due > 0 && state.gallery.canPayOnline);
     }
+    updateOfflineUI(due);
     if (el.invoiceButton) {
       var invoices = state.gallery.invoices || [];
       el.invoiceButton.hidden = invoices.length === 0;
@@ -397,6 +402,114 @@
           el.payError.textContent = err.message || L("Le paiement n'a pas pu démarrer. Réessayez dans un instant.", "The payment couldn't start. Please try again in a moment.");
           el.payError.hidden = false;
         }
+      });
+  }
+
+  // Espèces / virement : boutons proposés par le studio, puis, une fois la
+  // demande faite, ce qu'il reste à faire (adresse, numéro de compte à
+  // venir). Une demande faite pour un autre montant (sélection changée
+  // depuis) n'est plus montrée : le client choisit à nouveau.
+  function updateOfflineUI(due) {
+    if (!el.offline) return;
+    var off = state.gallery && state.gallery.offline;
+    if (!off || due <= 0) {
+      el.offline.hidden = true;
+      return;
+    }
+    var pending = off.pending && off.pending.extraCount === due ? off.pending : null;
+    var stale = off.pending && !pending;
+    var choosing = !pending || state.offlineChoosing;
+    el.offline.hidden = !(off.cash || off.transfer || pending);
+    el.offlineLead.textContent = stale
+      ? L("Votre sélection a changé : choisissez à nouveau comment régler le supplément.", "Your selection has changed: choose again how to pay the extra.")
+      : state.gallery.canPayOnline ? L("Ou réglez directement le studio :", "Or pay the studio directly:") : L("Régler le supplément :", "Pay the extra:");
+    el.offlineLead.hidden = !choosing;
+    el.payCash.hidden = !(choosing && off.cash);
+    el.payTransfer.hidden = !(choosing && off.transfer);
+    renderOfflinePending(pending, off, due);
+  }
+
+  function renderOfflinePending(pending, off, due) {
+    var box = el.offlinePending;
+    box.textContent = "";
+    box.hidden = !pending;
+    if (!pending) return;
+    var amount = formatEuros(pending.amountCents);
+    var line = function (html) {
+      var p = document.createElement("p");
+      if (html) p.appendChild(html);
+      box.appendChild(p);
+      return p;
+    };
+    var strong = document.createElement("strong");
+    strong.textContent = pending.method === "cash"
+      ? L("Règlement en espèces demandé : ", "Cash payment requested: ") + amount
+      : L("Règlement par virement demandé : ", "Bank transfer requested: ") + amount;
+    line(strong);
+    if (pending.method === "cash") {
+      var p = line();
+      p.appendChild(document.createTextNode(L("Rendez-vous à l'adresse : ", "Please pay at: ")));
+      var address = document.createElement("address");
+      address.textContent = off.cashAddress || "";
+      p.appendChild(address);
+    } else {
+      line().textContent = (state.gallery.studioName || L("Le studio", "The studio")) +
+        L(" a été prévenu et vous communique son numéro de compte par e-mail.", " has been notified and will email you their bank account number.");
+    }
+    line().textContent = L("Vos suppléments seront marqués réglés dès réception du paiement, et votre facture vous sera envoyée.",
+      "Your extras will show as paid as soon as the payment is received, and your invoice will be sent to you.");
+    if (off.contactEmail) {
+      var contact = line();
+      contact.appendChild(document.createTextNode(L("Une question ? ", "A question? ")));
+      var link = document.createElement("a");
+      link.href = "mailto:" + off.contactEmail;
+      link.textContent = off.contactEmail;
+      contact.appendChild(link);
+    }
+    var others = (off.cash && pending.method !== "cash") || (off.transfer && pending.method !== "transfer");
+    if (others && !state.offlineChoosing) {
+      var change = document.createElement("button");
+      change.type = "button";
+      change.className = "gp-offline-change";
+      change.textContent = L("Choisir un autre moyen de paiement", "Choose another payment method");
+      change.addEventListener("click", function () {
+        state.offlineChoosing = true;
+        updateOfflineUI(due);
+      });
+      box.appendChild(change);
+    }
+  }
+
+  function requestOfflinePayment(method) {
+    var button = method === "cash" ? el.payCash : el.payTransfer;
+    button.disabled = true;
+    el.offlineError.hidden = true;
+    fetch(apiUrl("/offline-payment"), {
+      method: "POST",
+      headers: Object.assign({ "content-type": "application/json" }, authHeaders()),
+      body: JSON.stringify({ method: method }),
+    })
+      .then(function (response) {
+        if (response.status === 401) throw new Error("session");
+        return response.json().then(function (data) {
+          if (!response.ok) throw new Error(serverText(data.error || "", "The request couldn't be sent.") || L("La demande n'a pas pu être envoyée.", "The request couldn't be sent."));
+          return data;
+        });
+      })
+      .then(function (data) {
+        button.disabled = false;
+        state.gallery.offline.pending = data.pending;
+        state.offlineChoosing = false;
+        updateSelectionUI();
+      })
+      .catch(function (err) {
+        button.disabled = false;
+        if (err.message === "session") {
+          sessionLost(SESSION_EXPIRED());
+          return;
+        }
+        el.offlineError.textContent = err.message;
+        el.offlineError.hidden = false;
       });
   }
 
@@ -2330,6 +2443,12 @@
       toolbarQuota: $("gp-toolbar-quota"),
       payButton: $("gp-pay-supplement"),
       payError: $("gp-pay-error"),
+      offline: $("gp-offline"),
+      offlineLead: $("gp-offline-lead"),
+      payCash: $("gp-pay-cash"),
+      payTransfer: $("gp-pay-transfer"),
+      offlinePending: $("gp-offline-pending"),
+      offlineError: $("gp-offline-error"),
       invoiceButton: $("gp-download-invoice"),
       filters: Array.prototype.slice.call(document.querySelectorAll("#gp-filters [data-filter]")),
       validateBlock: $("gp-validate-block"),
@@ -2435,6 +2554,10 @@
         updateFilterUI();
       });
     });
+    if (el.payCash) {
+      el.payCash.addEventListener("click", function () { requestOfflinePayment("cash"); });
+      el.payTransfer.addEventListener("click", function () { requestOfflinePayment("transfer"); });
+    }
     if (el.payButton) {
       el.payButton.addEventListener("click", payForSupplement);
     }

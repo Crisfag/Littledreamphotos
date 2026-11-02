@@ -65,13 +65,15 @@ const INVOICE_TEXT = {
   fr: {
     number: "Facture n°", issuedBy: "Émise par", vat: "TVA", to: "Destinataire", client: "Client",
     description: "Description", net: "Montant HT", gross: "Total TTC", paid: "Total réglé",
-    exemptTranslation: [], paidOnline: "Réglé en ligne (carte, Bancontact ou Apple Pay) via Stripe.", date: "fr-BE",
+    exemptTranslation: [], paidOnline: "Réglé en ligne (carte, Bancontact ou Apple Pay) via Stripe.",
+    paidCash: "Réglé en espèces.", paidTransfer: "Réglé par virement bancaire.", date: "fr-BE",
   },
   en: {
     number: "Invoice no.", issuedBy: "Issued by", vat: "VAT", to: "Billed to", client: "Client",
     description: "Description", net: "Net amount", gross: "Total incl. VAT", paid: "Total paid",
     exemptTranslation: ["(Small business VAT exemption scheme: VAT not applicable, article 56bis of the Belgian VAT Code.)"],
-    paidOnline: "Paid online (card, Bancontact or Apple Pay) via Stripe.", date: "en-GB",
+    paidOnline: "Paid online (card, Bancontact or Apple Pay) via Stripe.",
+    paidCash: "Paid in cash.", paidTransfer: "Paid by bank transfer.", date: "en-GB",
   },
 };
 
@@ -152,7 +154,9 @@ export async function buildInvoicePdf(data) {
     y -= 20;
   }
 
-  text(t.paidOnline, left, { size: 9, color: MUTED });
+  // Moyen de règlement : en ligne par défaut, espèces ou virement quand le
+  // photographe a confirmé un supplément réglé de la main à la main.
+  text(data.paidBy === "cash" ? t.paidCash : data.paidBy === "transfer" ? t.paidTransfer : t.paidOnline, left, { size: 9, color: MUTED });
 
   return doc.save();
 }
@@ -185,6 +189,7 @@ export async function createInvoiceForPayment(env, { payment, gallery, photograp
     netCents,
     vatCents,
     vatRate: ratePercent,
+    paidBy: payment.method || "card",
   });
 
   const id = newInvoiceId();
