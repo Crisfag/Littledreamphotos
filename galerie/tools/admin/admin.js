@@ -2814,9 +2814,23 @@
     return Math.max(1, Math.round(bytes / 1024)) + L(" Ko", " KB");
   }
 
-  function deliverySectionHtml(gallery) {
+  // Menu « photo de la galerie » d'une HD livrée : celle qu'elle remplace
+  // (galerie et boutique de tirages), ou aucune.
+  function deliveryLinkSelect(f, photos) {
+    var options = '<option value="">' + L("Non reliée", "Not linked") + "</option>" +
+      photos.map(function (p, i) {
+        var other = p.delivery_file_id && p.delivery_file_id !== f.id;
+        var label = L("Photo n° ", "Photo no. ") + (i + 1) + (p.source_name ? " · " + p.source_name : "") + (other ? L(" (déjà reliée)", " (already linked)") : "");
+        return '<option value="' + esc(p.id) + '"' + (p.id === f.photoId ? " selected" : "") + (other ? " disabled" : "") + ">" + esc(label) + "</option>";
+      }).join("");
+    return '<select class="ad-delivery-link' + (f.photoId ? " ad-delivery-linked" : "") + '" data-link-delivery="' + esc(f.id) + '" aria-label="' +
+      L("Photo de la galerie remplacée par ", "Gallery photo replaced by ") + esc(f.name) + '">' + options + "</select>";
+  }
+  function deliverySectionHtml(gallery, photos) {
     var d = gallery.delivery || { open: false, files: [], totalBytes: 0 };
     var n = d.files.length;
+    photos = photos || [];
+    var linkedCount = d.files.filter(function (f) { return f.photoId; }).length;
     var status = d.open
       ? '<span class="ad-badge ad-badge-selected">' + L("✓ Livraison ouverte", "✓ Delivery open") + "</span>" + L(" depuis le ", " since ") + esc(formatDate(d.openedAt)) +
         (d.notifiedAt ? L(" · client prévenu par e-mail le ", " · client emailed on ") + esc(formatDate(d.notifiedAt)) : "")
@@ -2824,6 +2838,7 @@
     var rows = d.files.map(function (f) {
       return (
         '<li data-delivery-file="' + esc(f.id) + '"><span class="ad-delivery-name">' + esc(f.name) + "</span>" +
+        (photos.length ? deliveryLinkSelect(f, photos) : "") +
         '<span class="ad-hint">' + esc(formatBytes(f.size)) + "</span>" +
         '<button type="button" class="ad-delivery-remove" data-remove-delivery="' + esc(f.id) + '" aria-label="' + L("Retirer ", "Remove ") + esc(f.name) + '">&times;</button></li>'
       );
@@ -2844,6 +2859,13 @@
       '<div class="ad-bg-custom"><label class="ad-btn">' + L("Ajouter des photos", "Add photos") +
       '<input type="file" id="ad-delivery-input" accept="image/jpeg,image/png,image/tiff,image/webp,.heic,.tif,.tiff" multiple hidden /></label>' +
       '<span class="ad-hint" id="ad-delivery-progress">' + (n ? n + (n === 1 ? " photo" : " photos") + " · " + esc(formatBytes(d.totalBytes)) : L("Aucune photo déposée.", "No photos uploaded.")) + "</span></div>" +
+      (n && photos.length
+        ? '<div class="ad-delivery-links"><p class="ad-hint">' +
+          L("Reliées à leur photo de la galerie : <strong>" + linkedCount + " / " + n + "</strong>. Une HD reliée remplace l'épreuve : la galerie montre la retouche (filigranée), et la boutique de tirages ne propose plus que ces photos-là, imprimées depuis la HD. Le lien se fait tout seul d'après le nom du fichier ou l'heure de prise de vue ; sinon, choisissez la photo dans le menu.",
+            "Linked to their gallery photo: <strong>" + linkedCount + " / " + n + "</strong>. A linked HD file replaces the proof: the gallery shows the retouched version (watermarked), and the print shop only offers those photos, printed from the HD file. Links are made automatically from the file name or capture time; otherwise, pick the photo in the menu.") + "</p>" +
+          (linkedCount < n ? '<button type="button" class="ad-btn ad-btn-small" id="ad-delivery-autolink">' + L("Relier automatiquement", "Link automatically") + "</button>" : "") +
+          "</div>"
+        : "") +
       (n ? '<ul class="ad-delivery-list">' + rows + "</ul>" : "") +
       (d.open
         ? '<button type="button" class="ad-btn" id="ad-delivery-close">' + L("Fermer la livraison", "Close delivery") + "</button>"
@@ -2861,6 +2883,7 @@
       if (!files.length) return;
       var progress = document.getElementById("ad-delivery-progress");
       var failed = [];
+      var linked = 0;
       for (var i = 0; i < files.length; i++) {
         progress.textContent = L("Envoi ", "Uploading ") + (i + 1) + " / " + files.length + " : " + files[i].name + "…";
         try {
@@ -2871,15 +2894,55 @@
           });
           var result = await response.json().catch(function () { return {}; });
           if (!response.ok) throw new Error(serverText(result.error) || L("Échec de l'envoi", "Upload failed"));
+          if (result.linked) linked++;
         } catch (err) {
           failed.push(files[i].name + " (" + err.message + ")");
         }
       }
       if (failed.length) toast(L("Non envoyées : ", "Not uploaded: ") + failed.join(", "), true);
-      else toast(L(files.length + " photo" + (files.length > 1 ? "s" : "") + " ajoutée" + (files.length > 1 ? "s" : "") + " à la livraison.",
-        files.length + (files.length === 1 ? " photo" : " photos") + " added to the delivery."));
+      else toast(L(files.length + " photo" + (files.length > 1 ? "s" : "") + " ajoutée" + (files.length > 1 ? "s" : "") + " à la livraison" +
+          (linked ? ", dont " + linked + " reliée" + (linked > 1 ? "s" : "") + " à leur épreuve (galerie et boutique)." : "."),
+        files.length + (files.length === 1 ? " photo" : " photos") + " added to the delivery" + (linked ? ", " + linked + " linked to their proof (gallery and shop)." : ".")));
       renderDetail(slug, true);
     });
+    // Relier une HD à l'épreuve choisie (ou défaire le lien) : aperçus et
+    // fichier d'impression refaits par l'outil d'administration.
+    document.querySelectorAll("[data-link-delivery]").forEach(function (select) {
+      select.addEventListener("change", async function () {
+        select.disabled = true;
+        var progress = document.getElementById("ad-delivery-progress");
+        if (select.value) progress.textContent = L("Mise à jour de la photo dans la galerie…", "Updating the photo in the gallery…");
+        try {
+          await api("POST", "/galleries/" + encodeURIComponent(slug) + "/delivery/files/" + encodeURIComponent(select.getAttribute("data-link-delivery")) + "/link", { photoId: select.value });
+          toast(select.value ? L("Photo reliée : la galerie et la boutique montrent la retouche.", "Photo linked: the gallery and shop show the retouched version.") : L("Lien retiré.", "Link removed."));
+        } catch (err) {
+          toast(err.message, true);
+        }
+        renderDetail(slug, true);
+      });
+    });
+    var autoBtn = document.getElementById("ad-delivery-autolink");
+    if (autoBtn) {
+      autoBtn.addEventListener("click", async function () {
+        var pending = Array.prototype.filter.call(document.querySelectorAll("[data-link-delivery]"), function (s) { return !s.value; });
+        var progress = document.getElementById("ad-delivery-progress");
+        autoBtn.disabled = true;
+        var done = 0;
+        for (var i = 0; i < pending.length; i++) {
+          progress.textContent = L("Recherche de l'épreuve ", "Finding the proof ") + (i + 1) + " / " + pending.length + "…";
+          try {
+            var result = await api("POST", "/galleries/" + encodeURIComponent(slug) + "/delivery/files/" + encodeURIComponent(pending[i].getAttribute("data-link-delivery")) + "/link", {});
+            if (result.linked) done++;
+          } catch (err) {
+            /* fichier illisible : reste à relier à la main */
+          }
+        }
+        var left = pending.length - done;
+        toast(L(done + " photo" + (done > 1 ? "s" : "") + " reliée" + (done > 1 ? "s" : "") + (left ? " ; " + left + " à relier à la main (menu sur chaque ligne)." : "."),
+          done + (done === 1 ? " photo" : " photos") + " linked" + (left ? "; " + left + " to link by hand (menu on each row)." : ".")), left > 0 && done === 0);
+        renderDetail(slug, true);
+      });
+    }
     document.querySelectorAll("[data-remove-delivery]").forEach(function (btn) {
       btn.addEventListener("click", async function () {
         try {
@@ -5203,7 +5266,7 @@
       '<div class="ad-layout-options" id="ad-layout-options">' + layoutOptionsHtml(data.gallery) + "</div>" +
       "</section>" +
       musicSectionHtml(data.gallery) +
-      deliverySectionHtml(data.gallery) +
+      deliverySectionHtml(data.gallery, data.photos) +
       gallerySectionShopHtml(data) +
       '<section class="ad-dropzone" id="ad-dropzone">' +
       "<p>" + L("<strong>Glissez vos photos ici</strong>, ou", "<strong>Drag your photos here</strong>, or") + "</p>" +

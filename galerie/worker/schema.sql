@@ -229,6 +229,10 @@ CREATE TABLE IF NOT EXISTS photos (
   source_name  TEXT NOT NULL DEFAULT '',
   child_id     TEXT NOT NULL DEFAULT '',
   school_role  TEXT NOT NULL DEFAULT '',
+  -- Fichier HD livré (delivery_files.id) qui remplace cette épreuve : ses
+  -- aperçus sont refaits à partir de la retouche, et c'est lui que le labo
+  -- imprime (voir delivery.js, linkDeliveredFile). '' = pas encore livrée.
+  delivery_file_id TEXT NOT NULL DEFAULT '',
   created_at   INTEGER NOT NULL
 );
 

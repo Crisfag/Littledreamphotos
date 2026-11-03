@@ -175,8 +175,25 @@ async function listFiles(env, galleryId) {
   return results;
 }
 
-function fileOut(row) {
-  return { id: row.id, name: row.name, size: row.size, createdAt: row.created_at };
+function fileOut(row, linked) {
+  const photo = linked?.get(row.id);
+  return {
+    id: row.id, name: row.name, size: row.size, createdAt: row.created_at,
+    // Épreuve que ce fichier remplace dans la galerie et la boutique.
+    ...(linked ? { photoId: photo?.id || "", photoNumber: photo ? photo.number : null } : {}),
+  };
+}
+
+// Fichier livré → épreuve qu'il remplace (numéro tel que vu dans la galerie).
+async function linkedPhotos(env, galleryId) {
+  const { results } = await env.DB.prepare(
+    "SELECT id, delivery_file_id FROM photos WHERE gallery_id = ? ORDER BY position ASC, created_at ASC"
+  ).bind(galleryId).all();
+  const map = new Map();
+  results.forEach((p, i) => {
+    if (p.delivery_file_id) map.set(p.delivery_file_id, { id: p.id, number: i + 1 });
+  });
+  return map;
 }
 
 // Ce que la page client reçoit à la connexion.
@@ -195,11 +212,12 @@ export async function deliveryForClient(env, gallery) {
 
 export async function deliveryForAdmin(env, gallery) {
   const files = await listFiles(env, gallery.id);
+  const linked = await linkedPhotos(env, gallery.id);
   return {
     open: Boolean(gallery.delivery_open),
     openedAt: gallery.delivery_opened_at || null,
     notifiedAt: gallery.delivery_notified_at || null,
-    files: files.map(fileOut),
+    files: files.map((f) => fileOut(f, linked)),
     totalBytes: files.reduce((n, f) => n + f.size, 0),
   };
 }
@@ -249,7 +267,55 @@ async function deleteFile(env, gallery, fileId) {
   if (!row) return fail(404, "Fichier introuvable");
   await env.TILES.delete(deliveryKey(gallery.id, row.id));
   await env.DB.prepare("DELETE FROM delivery_files WHERE id = ?").bind(row.id).run();
+  // L'épreuve garde ses aperçus et son fichier d'impression retouchés : seul
+  // le lien vers le fichier livré disparaît.
+  await env.DB.prepare("UPDATE photos SET delivery_file_id = '' WHERE gallery_id = ? AND delivery_file_id = ?").bind(gallery.id, row.id).run();
   return json({ ok: true });
+}
+
+// GET …/delivery/files/<id> — le fichier lui-même, pour l'outil
+// d'administration (relier après coup une HD à son épreuve).
+async function readFileForAdmin(env, gallery, fileId) {
+  const row = await env.DB.prepare("SELECT * FROM delivery_files WHERE id = ? AND gallery_id = ?").bind(fileId, gallery.id).first();
+  if (!row) return fail(404, "Fichier introuvable");
+  const object = await env.TILES.get(deliveryKey(gallery.id, row.id));
+  if (!object) return fail(404, "Fichier introuvable");
+  return new Response(object.body, {
+    headers: { "content-type": row.content_type || "application/octet-stream", "content-length": String(object.size), "cache-control": "private, no-store" },
+  });
+}
+
+// POST …/delivery/files/<id>/link — la HD remplace une épreuve : nouvelles
+// dimensions (les tuiles retouchées, filigranées, ont déjà été envoyées
+// sous le même identifiant de photo par l'outil d'administration, puis le
+// fichier d'impression). Sélection, commentaires et codes couleur restent.
+// { photoId: "" } défait le lien (les aperçus ne sont pas rétablis).
+export async function linkDeliveredFile(request, env, gallery, fileId) {
+  const body = await request.json().catch(() => null);
+  if (!body) return fail(400, "Requête invalide");
+  const file = await env.DB.prepare("SELECT id FROM delivery_files WHERE id = ? AND gallery_id = ?").bind(fileId, gallery.id).first();
+  if (!file) return fail(404, "Fichier introuvable");
+  const photoId = String(body.photoId || "");
+  if (!photoId) {
+    await env.DB.prepare("UPDATE photos SET delivery_file_id = '' WHERE gallery_id = ? AND delivery_file_id = ?").bind(gallery.id, file.id).run();
+    return json({ ok: true, photoId: "" });
+  }
+  const photo = await env.DB.prepare("SELECT id FROM photos WHERE id = ? AND gallery_id = ?").bind(photoId, gallery.id).first();
+  if (!photo) return fail(404, "Photo introuvable");
+  const width = Number(body.width);
+  const height = Number(body.height);
+  const cols = Number(body.cols);
+  const rows = Number(body.rows);
+  if (![width, height, cols, rows].every((n) => Number.isInteger(n) && n > 0) || cols > 12 || rows > 12) {
+    return fail(400, "Dimensions invalides");
+  }
+  // Une HD ne remplace qu'une épreuve, et une épreuve n'a qu'une HD.
+  await env.DB.prepare("UPDATE photos SET delivery_file_id = '' WHERE gallery_id = ? AND delivery_file_id = ? AND id != ?").bind(gallery.id, file.id, photo.id).run();
+  await env.DB.prepare(
+    `UPDATE photos SET width = ?, height = ?, cols = ?, rows = ?, preview_width = ?, preview_height = ?, delivery_file_id = ?
+     WHERE id = ?`
+  ).bind(width, height, cols, rows, Number(body.previewWidth) || 0, Number(body.previewHeight) || 0, file.id, photo.id).run();
+  return json({ ok: true, photoId: photo.id });
 }
 
 // POST …/delivery { open: true|false, notify: true|false }
@@ -279,6 +345,8 @@ export async function handleDeliveryAdmin(request, env, gallery, rest, helpers) 
   if (rest.length === 0 && request.method === "POST") return setOpen(request, env, gallery, helpers);
   if (rest.length === 1 && rest[0] === "files" && request.method === "PUT") return addFile(request, env, gallery);
   if (rest.length === 2 && rest[0] === "files" && request.method === "DELETE") return deleteFile(env, gallery, decodeURIComponent(rest[1]));
+  if (rest.length === 2 && rest[0] === "files" && request.method === "GET") return readFileForAdmin(env, gallery, decodeURIComponent(rest[1]));
+  if (rest.length === 3 && rest[0] === "files" && rest[2] === "link" && request.method === "POST") return linkDeliveredFile(request, env, gallery, decodeURIComponent(rest[1]));
   return fail(404, "Route inconnue");
 }
 

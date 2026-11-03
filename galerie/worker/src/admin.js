@@ -234,7 +234,8 @@ async function getGallery(env, photographerId, slug) {
   const account = await env.DB.prepare("SELECT * FROM photographers WHERE id = ?").bind(photographerId).first();
   const { results: photos } = await env.DB.prepare(
     `SELECT id, position, width, height, cols, rows, preview_width, preview_height,
-            forensic_id, selected, selected_at, comment, comment_at, tag, marks, has_original, source_name, created_at
+            forensic_id, selected, selected_at, comment, comment_at, tag, marks, has_original, source_name, taken_at,
+            delivery_file_id, created_at
      FROM photos WHERE gallery_id = ? ORDER BY position ASC, created_at ASC`
   )
     .bind(gallery.id)

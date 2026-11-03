@@ -25,6 +25,7 @@ import { fileURLToPath } from "node:url";
 import sharp from "sharp";
 import { processPhoto, DEFAULTS } from "./lib/pipeline.mjs";
 import { takenAtFromExif } from "./lib/exif.mjs";
+import { matchDeliveredFile } from "./lib/hdmatch.mjs";
 import { renderCoupon, renderPacketSheet, composeA4, formatDeadline, COUPON_MM, LAB_MM } from "./lib/coupons.mjs";
 import { PdfImageWriter, A4_LANDSCAPE_PT } from "./lib/pdf.mjs";
 import { ZipWriter } from "./lib/zip.mjs";
@@ -1628,7 +1629,36 @@ async function handleApi(req, res, url) {
         }
         if (!buffer.length) return json(res, 400, { error: "Fichier vide" });
         const crc = crc32(buffer).toString(16).padStart(8, "0");
-        return json(res, 201, await client.request("PUT", `${base}/files?name=${encodeURIComponent(name)}&crc=${crc}`, buffer, true));
+        const result = await client.request("PUT", `${base}/files?name=${encodeURIComponent(name)}&crc=${crc}`, buffer, true);
+        // La HD retouchée remplace son épreuve dans la galerie et la boutique
+        // (aperçus refaits, fichier d'impression) — au mieux : un échec ici
+        // ne remet jamais en cause la livraison elle-même.
+        let linked = null;
+        try {
+          linked = await linkDeliveredHd(client, slug, { fileId: result.file.id, name: result.file.name, buffer });
+        } catch (err) {
+          console.error(`HD ${name} non reliée à son épreuve :`, err.message || err);
+        }
+        return json(res, 201, { ...result, linked });
+      }
+      // POST …/delivery/files/:id/link { photoId? } — relier après coup une HD
+      // déjà déposée : à la photo choisie, sinon d'après le nom ou l'heure de
+      // prise de vue ; { photoId: "" } défait le lien.
+      if (parts.length === 6 && parts[3] === "files" && parts[5] === "link" && req.method === "POST") {
+        const fileId = decodeURIComponent(parts[4]);
+        const body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
+        if (body.photoId === "") {
+          await client.request("POST", `${base}/files/${encodeURIComponent(fileId)}/link`, { photoId: "" });
+          return json(res, 200, { linked: null });
+        }
+        const delivery = await client.request("GET", base);
+        const file = delivery.files.find((f) => f.id === fileId);
+        if (!file) return json(res, 404, { error: "Fichier introuvable" });
+        const upstream = await client.rawGet(`${base}/files/${encodeURIComponent(fileId)}`);
+        if (!upstream.ok) return json(res, upstream.status, { error: "Fichier introuvable" });
+        const buffer = Buffer.from(await upstream.arrayBuffer());
+        const linked = await linkDeliveredHd(client, slug, { fileId, name: file.name, buffer, photoId: typeof body.photoId === "string" ? body.photoId : undefined });
+        return json(res, 200, { linked });
       }
       if (parts.length === 5 && parts[3] === "files" && req.method === "DELETE") {
         return json(res, 200, await client.request("DELETE", `${base}/files/${encodeURIComponent(decodeURIComponent(parts[4]))}`));
@@ -1744,6 +1774,9 @@ async function handleApi(req, res, url) {
 
     try {
       const input = Buffer.from(await file.arrayBuffer());
+      // Heure de prise de vue : sert à retrouver l'épreuve d'une HD livrée
+      // renommée à l'export (voir lib/hdmatch.mjs).
+      const takenAt = await sharp(input).metadata().then((m) => takenAtFromExif(m.exif)).catch(() => null);
       const { photo, tiles, stats } = await withProcessingSlot(() =>
         processPhoto(input, {
           galleryId: galleryInfo.gallery.id,
@@ -1758,7 +1791,7 @@ async function handleApi(req, res, url) {
 
       // Nom du fichier d'origine : sert à retrouver la sélection du client
       // dans Lightroom (« Copier pour Lightroom » dans l'admin).
-      await client.addPhoto(slug, { ...photo, sourceName: String(file.name || "").slice(0, 200) });
+      await client.addPhoto(slug, { ...photo, takenAt, sourceName: String(file.name || "").slice(0, 200) });
       for (const tile of tiles) {
         await client.putTile(photo.id, tile.level, tile.col, tile.row, tile.buffer);
       }
@@ -1817,6 +1850,42 @@ const PRINT_MASTER_MAX = 7200;
 function formPosition(form, fallback) {
   const raw = form.get("position");
   return raw !== null && raw !== "" && Number.isInteger(Number(raw)) ? Number(raw) : fallback;
+}
+
+// Une HD livrée remplace son épreuve : aperçus filigranés refaits à partir
+// de la retouche (même identifiant de photo, donc même empreinte, sélection
+// et commentaires gardés), puis fichier d'impression = la HD. Renvoie
+// { photoId, number, by } ou null si aucune épreuve ne correspond sûrement.
+async function linkDeliveredHd(client, slug, { fileId, name, buffer, photoId }) {
+  const info = await client.getGallery(slug);
+  let photo;
+  let by = "manual";
+  if (photoId !== undefined) {
+    photo = info.photos.find((p) => p.id === photoId);
+    if (!photo) throw Object.assign(new Error("Photo introuvable"), { status: 404 });
+  } else {
+    const takenAt = await sharp(buffer).metadata().then((m) => takenAtFromExif(m.exif)).catch(() => null);
+    const match = matchDeliveredFile({ name, takenAt }, info.photos, { fileId });
+    if (!match) return null;
+    photo = match.photo;
+    by = match.by;
+  }
+  const watermarkText = info.gallery.watermark_text || (await brandFor(client));
+  const base = `/api/admin/galleries/${encodeURIComponent(slug)}/delivery/files/${encodeURIComponent(fileId)}/link`;
+  await withProcessingSlot(async () => {
+    const { photo: proof, tiles } = await processPhoto(buffer, {
+      galleryId: info.gallery.id, forensicKey: config.forensicKey, watermarkText, position: photo.position, photoId: photo.id,
+    });
+    // Dimensions d'abord (les tuiles sont vérifiées contre la grille de la
+    // photo), puis les tuiles retouchées, puis le fichier d'impression.
+    await client.request("POST", base, {
+      photoId: photo.id, width: proof.width, height: proof.height, cols: proof.cols, rows: proof.rows,
+      previewWidth: proof.previewWidth, previewHeight: proof.previewHeight,
+    });
+    for (const tile of tiles) await client.putTile(photo.id, tile.level, tile.col, tile.row, tile.buffer);
+    await client.putOriginal(photo.id, await makePrintMaster(buffer));
+  });
+  return { photoId: photo.id, number: info.photos.indexOf(photo) + 1, by };
 }
 
 async function makePrintMaster(input) {

@@ -446,6 +446,21 @@ Le tableau de bord s'organise en trois onglets, chacun avec son propre lien
   propres à un fichier (ou au ZIP) et signés avec une clé distincte des
   sessions ; fermer la livraison les coupe aussitôt. Chaque téléchargement
   est inscrit au journal d'accès. Les fichiers sont effacés avec la galerie.
+- **HD livrées reliées à leur épreuve (galerie et boutique de tirages)** :
+  chaque HD déposée est rattachée à la photo de la galerie qu'elle
+  remplace — d'après le nom du fichier (« DSC_3662.jpg » ↔
+  « DSC_3662-Edit.jpg », « Client_DSC_3662 (retouche).tif ») ou, si le
+  fichier a été renommé à l'export, d'après l'heure de prise de vue EXIF
+  (enregistrée au chargement des épreuves) ; sinon, le photographe choisit
+  la photo dans le menu de la ligne, ou clique « Relier automatiquement »
+  pour les HD déposées avant cette fonction (`tools/lib/hdmatch.mjs`). Une
+  HD reliée remplace l'épreuve : aperçus filigranés refaits à partir de la
+  retouche (même identifiant, donc sélection, commentaires et empreinte
+  gardés — `photos.delivery_file_id`), et fichier d'impression = la HD. Dès
+  qu'une HD est reliée, la boutique ne propose plus que les photos reliées
+  (`isPrintable`, shop.js) : on n'imprime pas une épreuve brute à côté des
+  retouches. Mise en service :
+  `npx wrangler d1 execute galerie-protegee --remote --file=migrations/2026-11-hd-boutique.sql`.
 - **Volet légal (RGPD)** : pages *Conditions d'utilisation*,
   *Politique de confidentialité* et *Mentions légales* (`web/conditions.html`,
   `web/confidentialite.html`, `web/mentions-legales.html`), liées depuis le
@@ -2139,6 +2154,8 @@ node tests/schoolreminders.test.mjs   # rappels de commande aux familles, autono
 node tests/schoollab.test.mjs         # lots, planches et envoi à un faux BePhoto, autonome (BEPHOTO_API_BASE et BEPHOTO_PREVIEW_BASE=http://127.0.0.1:8791 dans worker/.dev.vars)
 node tests/music.test.mjs             # musique côté client (bibliothèque, lien Spotify), autonome
 node tests/delivery.test.mjs          # livraison des photos définitives côté client, autonome
+node tests/hdmatch.test.mjs           # HD livrée ↔ épreuve : nom de fichier, heure de prise de vue
+node tests/hddelivery.test.mjs        # HD livrées reliées à leur épreuve : dépôt, menu, boutique sur les retouches, autonome (admin-server.mjs lancé)
 node tests/sales.test.mjs             # onglet Ventes, autonome (admin-server.mjs lancé)
 node tests/portfolio.test.mjs         # portfolio (admin, page publique, contact, sous-domaine), autonome (admin-server.mjs lancé)
 node tests/storage.test.mjs           # espace de stockage, quota et purge, autonome

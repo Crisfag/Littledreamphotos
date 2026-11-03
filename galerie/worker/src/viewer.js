@@ -6,7 +6,7 @@ import { isValidTag, parseMarks, normalizeMarks } from "./marks.js";
 import { verifyPassword, signToken, verifyToken, hashIp, randomBytes, b64url } from "./auth.js";
 import { sendCaptureAlert, sendSelectionValidated } from "./notify.js";
 import { supplementFor } from "./admin.js";
-import { shopForClient, handlePrintOrder } from "./shop.js";
+import { shopForClient, handlePrintOrder, isPrintable } from "./shop.js";
 import { createCheckoutSession } from "./stripe.js";
 import { paymentFeeCents } from "./fees.js";
 import { musicForClient, audioKeyFor, serveAudio, getTrack } from "./music.js";
@@ -153,7 +153,7 @@ const PREVIEW_SESSION_SECONDS = 3600;
 // boutique. `preview` : session du photographe, qui n'écrit rien.
 async function openSession(env, gallery, token, expiresIn, preview) {
   const { results: photos } = await env.DB.prepare(
-    `SELECT id, width, height, cols, rows, preview_width, preview_height, selected, comment, tag, marks, has_original FROM photos
+    `SELECT id, width, height, cols, rows, preview_width, preview_height, selected, comment, tag, marks, has_original, delivery_file_id FROM photos
      WHERE gallery_id = ? ORDER BY position ASC, created_at ASC`
   )
     .bind(gallery.id)
@@ -172,6 +172,7 @@ async function openSession(env, gallery, token, expiresIn, preview) {
     .all();
 
   const { shop, printOrders } = await shopForClient(env, gallery);
+  const delivered = photos.some((p) => p.delivery_file_id);
   const music = musicForClient(gallery, gallery.music_track_id ? await getTrack(env, gallery.music_track_id) : null);
 
   return json({
@@ -217,7 +218,7 @@ async function openSession(env, gallery, token, expiresIn, preview) {
       comment: p.comment || "",
       tag: p.tag || "",
       marks: parseMarks(p.marks),
-      printable: Boolean(shop) && Boolean(p.has_original),
+      printable: Boolean(shop) && isPrintable(p, delivered),
     })),
   });
 }

@@ -227,7 +227,8 @@ export async function runSalesReminders(env, shopState, options = {}) {
   //    commandé : une seule relance par galerie (reminders_sent).
   const { results: galleries } = await env.DB.prepare(
     `SELECT g.*, p.studio_name AS studio_name_p,
-            (SELECT COUNT(*) FROM photos ph WHERE ph.gallery_id = g.id AND ph.selected = 1 AND ph.has_original = 1) AS printable_favorites
+            (SELECT COUNT(*) FROM photos ph WHERE ph.gallery_id = g.id AND ph.selected = 1 AND ph.has_original = 1
+               AND (ph.delivery_file_id != '' OR NOT EXISTS (SELECT 1 FROM photos d WHERE d.gallery_id = g.id AND d.delivery_file_id != ''))) AS printable_favorites
      FROM galleries g JOIN photographers p ON p.id = g.photographer_id
      WHERE g.shop_enabled = 1 AND g.client_email != '' AND g.selection_done_at IS NOT NULL AND g.selection_done_at <= ?
        AND (g.expires_at IS NULL OR g.expires_at > ?) AND p.reminders_enabled = 1
