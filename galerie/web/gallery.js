@@ -1485,7 +1485,11 @@
     })
       .then(function (response) {
         if (response.status === 401) throw new Error("session");
-        if (!response.ok) throw new Error(L("Téléchargement impossible pour le moment.", "Download unavailable right now."));
+        if (!response.ok) {
+          // Aperçu du photographe : le dire, plutôt qu'une panne apparente.
+          if (state.preview) throw new Error(L("Aperçu : le téléchargement est désactivé. Votre client, lui, pourra télécharger ses photos.", "Preview: downloads are turned off. Your client will be able to download their photos."));
+          throw new Error(L("Téléchargement impossible pour le moment.", "Download unavailable right now."));
+        }
         return response.json();
       })
       .then(function (data) {
