@@ -6,7 +6,7 @@ import { isValidTag, parseMarks, normalizeMarks } from "./marks.js";
 import { verifyPassword, signToken, verifyToken, hashIp, randomBytes, b64url } from "./auth.js";
 import { sendCaptureAlert, sendSelectionValidated } from "./notify.js";
 import { supplementFor } from "./admin.js";
-import { shopForClient, handlePrintOrder } from "./shop.js";
+import { shopForClient, handlePrintOrder, isPrintable } from "./shop.js";
 import { createCheckoutSession } from "./stripe.js";
 import { paymentFeeCents } from "./fees.js";
 import { musicForClient, audioKeyFor, serveAudio, getTrack } from "./music.js";
@@ -14,6 +14,7 @@ import { deliveryForClient, createDownloadLink, downloadFile, downloadZip } from
 import { saveCart } from "./campaigns.js";
 import { presentationForClient } from "./presentation.js";
 import { hasFeature } from "./subscription.js";
+import { offlineForClient, handleOfflineRequest } from "./offlinepay.js";
 
 const SESSION_TTL_SECONDS = 2 * 60 * 60; // 2 h
 const MAX_FAILED_LOGINS = 10;
@@ -152,7 +153,7 @@ const PREVIEW_SESSION_SECONDS = 3600;
 // boutique. `preview` : session du photographe, qui n'écrit rien.
 async function openSession(env, gallery, token, expiresIn, preview) {
   const { results: photos } = await env.DB.prepare(
-    `SELECT id, width, height, cols, rows, preview_width, preview_height, selected, comment, tag, marks, has_original FROM photos
+    `SELECT id, width, height, cols, rows, preview_width, preview_height, selected, comment, tag, marks, has_original, delivery_file_id FROM photos
      WHERE gallery_id = ? ORDER BY position ASC, created_at ASC`
   )
     .bind(gallery.id)
@@ -171,6 +172,7 @@ async function openSession(env, gallery, token, expiresIn, preview) {
     .all();
 
   const { shop, printOrders } = await shopForClient(env, gallery);
+  const delivered = photos.some((p) => p.delivery_file_id);
   const music = musicForClient(gallery, gallery.music_track_id ? await getTrack(env, gallery.music_track_id) : null);
 
   return json({
@@ -195,6 +197,8 @@ async function openSession(env, gallery, token, expiresIn, preview) {
       extraPhotoPriceCents: gallery.extra_photo_price_cents || 0,
       paidExtraCount: await paidExtraCount(env, gallery.id),
       canPayOnline: Boolean(photographer?.stripe_account_id) && Boolean(photographer?.stripe_charges_enabled) && hasFeature(env, photographer, "extras"),
+      // Espèces / virement, si le photographe les propose (offlinepay.js).
+      offline: await offlineForClient(env, gallery, photographer),
       invoices: invoices.map((i) => ({
         id: i.id,
         number: i.number,
@@ -214,7 +218,7 @@ async function openSession(env, gallery, token, expiresIn, preview) {
       comment: p.comment || "",
       tag: p.tag || "",
       marks: parseMarks(p.marks),
-      printable: Boolean(shop) && Boolean(p.has_original),
+      printable: Boolean(shop) && isPrintable(p, delivered),
     })),
   });
 }
@@ -234,7 +238,7 @@ async function authorize(request, env, slug) {
 // Actions qui écrivent (sélection, couleurs, commentaires, validation,
 // panier, paiements, journal, liens de téléchargement) : refusées à une
 // session d'aperçu, quoi que fasse la page.
-const WRITE_ACTIONS = new Set(["select", "comment", "tag", "marks", "validate", "cart", "print-order", "event", "checkout", "delivery"]);
+const WRITE_ACTIONS = new Set(["select", "comment", "tag", "marks", "validate", "cart", "print-order", "event", "checkout", "offline-payment", "delivery"]);
 async function isPreviewSession(request, env) {
   const header = request.headers.get("Authorization") || "";
   const payload = header.startsWith("Bearer ") ? await verifyToken(env.TOKEN_SECRET, header.slice(7)) : null;
@@ -783,6 +787,12 @@ export async function handleViewer(request, env, ctx, path) {
   }
   if (action === "checkout" && request.method === "POST") {
     return handleCheckout(request, env, slug);
+  }
+  // Supplément réglé en espèces ou par virement : demande au photographe.
+  if (action === "offline-payment" && request.method === "POST") {
+    const auth = await authorize(request, env, slug);
+    if (auth.error) return auth.error;
+    return handleOfflineRequest(request, env, ctx, auth.gallery);
   }
   // Livraison des photos définitives : lien signé, puis téléchargement.
   if (action === "delivery") {

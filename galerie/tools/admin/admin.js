@@ -1483,6 +1483,20 @@
       "<span>" + L("Envoyer les relances automatiques", "Send automatic reminders") + "</span></label>" +
       "</section>" +
 
+      '<section id="ad-offline-section"><div class="ad-section-header"><h3>' + L("Suppléments : espèces et virement", "Extras: cash and bank transfer") + "</h3></div>" +
+      '<p class="ad-hint">' + L("En plus du paiement en ligne, vos clients peuvent choisir de régler leurs photos supplémentaires de la main à la main. Un e-mail vous prévient, et vous cliquez « Marquer comme reçu » dans la galerie une fois l'argent reçu : les suppléments passent alors en réglé et la facture part au client. Les tirages restent payés en ligne.",
+        "On top of online payment, your clients can choose to settle their extra photos directly with you. You're notified by email, and you click “Mark as received” in the gallery once you have the money: the extras then show as paid and the invoice goes to the client. Prints are still paid online.") + "</p>" +
+      '<form id="ad-offline-form">' +
+      '<label class="ad-toggle"><input type="checkbox" name="cash"' + (photographer.offlineCash ? " checked" : "") + " /><span>" + L("Paiement en espèces", "Cash payment") + "</span></label>" +
+      '<label class="ad-field ad-offline-address"><span>' + L("Adresse où vos clients viennent régler <em>(et vos horaires si besoin)</em>", "Address where your clients come to pay <em>(and your opening hours if needed)</em>") + "</span>" +
+      '<textarea name="cashAddress" rows="3" placeholder="' + L("Rue…, code postal, ville — sur rendez-vous", "Street…, postcode, city — by appointment") + '">' + esc(photographer.offlineCashAddress || photographer.billingAddress || "") + "</textarea></label>" +
+      '<label class="ad-toggle"><input type="checkbox" name="transfer"' + (photographer.offlineTransfer ? " checked" : "") + " /><span>" + L("Paiement par virement bancaire", "Bank transfer") + "</span></label>" +
+      '<p class="ad-hint">' + L("Virement : le client vous fait signe depuis sa galerie, et vous lui envoyez votre numéro de compte en répondant simplement à l'e-mail reçu.",
+        "Transfer: the client lets you know from their gallery, and you send them your bank account number by simply replying to the email you get.") + "</p>" +
+      '<p class="ad-error" id="ad-offline-error" hidden></p>' +
+      '<button type="submit" class="ad-btn ad-btn-primary" id="ad-offline-save">' + L("Enregistrer", "Save") + "</button>" +
+      "</form></section>" +
+
       '<section><div class="ad-section-header"><h3>' + L("Coordonnées fiscales", "Billing details") + "</h3></div>" +
       '<p class="ad-hint">' + L("Ces informations apparaissent sur les factures émises pour vos clients.", "These details appear on the invoices issued to your clients.") + "</p>" +
       '<form id="ad-billing-form">' +
@@ -1683,6 +1697,33 @@
         toast(L("Coordonnées de facturation enregistrées.", "Billing details saved."));
       } catch (err) {
         toast(err.message, true);
+      } finally {
+        saveBtn.disabled = false;
+      }
+    });
+
+    var offlineForm = document.getElementById("ad-offline-form");
+    var syncOfflineAddress = function () {
+      offlineForm.querySelector(".ad-offline-address").hidden = !offlineForm.cash.checked;
+    };
+    syncOfflineAddress();
+    offlineForm.cash.addEventListener("change", syncOfflineAddress);
+    offlineForm.addEventListener("submit", async function (event) {
+      event.preventDefault();
+      var errorBox = document.getElementById("ad-offline-error");
+      var saveBtn = document.getElementById("ad-offline-save");
+      errorBox.hidden = true;
+      saveBtn.disabled = true;
+      try {
+        await api("POST", "/account/offline-payments", {
+          cash: offlineForm.cash.checked,
+          cashAddress: offlineForm.cashAddress.value.trim(),
+          transfer: offlineForm.transfer.checked,
+        });
+        toast(L("Moyens de paiement enregistrés.", "Payment methods saved."));
+      } catch (err) {
+        errorBox.textContent = err.message;
+        errorBox.hidden = false;
       } finally {
         saveBtn.disabled = false;
       }
@@ -2773,9 +2814,23 @@
     return Math.max(1, Math.round(bytes / 1024)) + L(" Ko", " KB");
   }
 
-  function deliverySectionHtml(gallery) {
+  // Menu « photo de la galerie » d'une HD livrée : celle qu'elle remplace
+  // (galerie et boutique de tirages), ou aucune.
+  function deliveryLinkSelect(f, photos) {
+    var options = '<option value="">' + L("Non reliée", "Not linked") + "</option>" +
+      photos.map(function (p, i) {
+        var other = p.delivery_file_id && p.delivery_file_id !== f.id;
+        var label = L("Photo n° ", "Photo no. ") + (i + 1) + (p.source_name ? " · " + p.source_name : "") + (other ? L(" (déjà reliée)", " (already linked)") : "");
+        return '<option value="' + esc(p.id) + '"' + (p.id === f.photoId ? " selected" : "") + (other ? " disabled" : "") + ">" + esc(label) + "</option>";
+      }).join("");
+    return '<select class="ad-delivery-link' + (f.photoId ? " ad-delivery-linked" : "") + '" data-link-delivery="' + esc(f.id) + '" aria-label="' +
+      L("Photo de la galerie remplacée par ", "Gallery photo replaced by ") + esc(f.name) + '">' + options + "</select>";
+  }
+  function deliverySectionHtml(gallery, photos) {
     var d = gallery.delivery || { open: false, files: [], totalBytes: 0 };
     var n = d.files.length;
+    photos = photos || [];
+    var linkedCount = d.files.filter(function (f) { return f.photoId; }).length;
     var status = d.open
       ? '<span class="ad-badge ad-badge-selected">' + L("✓ Livraison ouverte", "✓ Delivery open") + "</span>" + L(" depuis le ", " since ") + esc(formatDate(d.openedAt)) +
         (d.notifiedAt ? L(" · client prévenu par e-mail le ", " · client emailed on ") + esc(formatDate(d.notifiedAt)) : "")
@@ -2783,6 +2838,7 @@
     var rows = d.files.map(function (f) {
       return (
         '<li data-delivery-file="' + esc(f.id) + '"><span class="ad-delivery-name">' + esc(f.name) + "</span>" +
+        (photos.length ? deliveryLinkSelect(f, photos) : "") +
         '<span class="ad-hint">' + esc(formatBytes(f.size)) + "</span>" +
         '<button type="button" class="ad-delivery-remove" data-remove-delivery="' + esc(f.id) + '" aria-label="' + L("Retirer ", "Remove ") + esc(f.name) + '">&times;</button></li>'
       );
@@ -2803,6 +2859,13 @@
       '<div class="ad-bg-custom"><label class="ad-btn">' + L("Ajouter des photos", "Add photos") +
       '<input type="file" id="ad-delivery-input" accept="image/jpeg,image/png,image/tiff,image/webp,.heic,.tif,.tiff" multiple hidden /></label>' +
       '<span class="ad-hint" id="ad-delivery-progress">' + (n ? n + (n === 1 ? " photo" : " photos") + " · " + esc(formatBytes(d.totalBytes)) : L("Aucune photo déposée.", "No photos uploaded.")) + "</span></div>" +
+      (n && photos.length
+        ? '<div class="ad-delivery-links"><p class="ad-hint">' +
+          L("Reliées à leur photo de la galerie : <strong>" + linkedCount + " / " + n + "</strong>. Une HD reliée remplace l'épreuve : la galerie montre la retouche (filigranée), et la boutique de tirages ne propose plus que ces photos-là, imprimées depuis la HD. Le lien se fait tout seul d'après le nom du fichier ou l'heure de prise de vue ; sinon, choisissez la photo dans le menu.",
+            "Linked to their gallery photo: <strong>" + linkedCount + " / " + n + "</strong>. A linked HD file replaces the proof: the gallery shows the retouched version (watermarked), and the print shop only offers those photos, printed from the HD file. Links are made automatically from the file name or capture time; otherwise, pick the photo in the menu.") + "</p>" +
+          (linkedCount < n ? '<button type="button" class="ad-btn ad-btn-small" id="ad-delivery-autolink">' + L("Relier automatiquement", "Link automatically") + "</button>" : "") +
+          "</div>"
+        : "") +
       (n ? '<ul class="ad-delivery-list">' + rows + "</ul>" : "") +
       (d.open
         ? '<button type="button" class="ad-btn" id="ad-delivery-close">' + L("Fermer la livraison", "Close delivery") + "</button>"
@@ -2820,6 +2883,7 @@
       if (!files.length) return;
       var progress = document.getElementById("ad-delivery-progress");
       var failed = [];
+      var linked = 0;
       for (var i = 0; i < files.length; i++) {
         progress.textContent = L("Envoi ", "Uploading ") + (i + 1) + " / " + files.length + " : " + files[i].name + "…";
         try {
@@ -2830,15 +2894,55 @@
           });
           var result = await response.json().catch(function () { return {}; });
           if (!response.ok) throw new Error(serverText(result.error) || L("Échec de l'envoi", "Upload failed"));
+          if (result.linked) linked++;
         } catch (err) {
           failed.push(files[i].name + " (" + err.message + ")");
         }
       }
       if (failed.length) toast(L("Non envoyées : ", "Not uploaded: ") + failed.join(", "), true);
-      else toast(L(files.length + " photo" + (files.length > 1 ? "s" : "") + " ajoutée" + (files.length > 1 ? "s" : "") + " à la livraison.",
-        files.length + (files.length === 1 ? " photo" : " photos") + " added to the delivery."));
+      else toast(L(files.length + " photo" + (files.length > 1 ? "s" : "") + " ajoutée" + (files.length > 1 ? "s" : "") + " à la livraison" +
+          (linked ? ", dont " + linked + " reliée" + (linked > 1 ? "s" : "") + " à leur épreuve (galerie et boutique)." : "."),
+        files.length + (files.length === 1 ? " photo" : " photos") + " added to the delivery" + (linked ? ", " + linked + " linked to their proof (gallery and shop)." : ".")));
       renderDetail(slug, true);
     });
+    // Relier une HD à l'épreuve choisie (ou défaire le lien) : aperçus et
+    // fichier d'impression refaits par l'outil d'administration.
+    document.querySelectorAll("[data-link-delivery]").forEach(function (select) {
+      select.addEventListener("change", async function () {
+        select.disabled = true;
+        var progress = document.getElementById("ad-delivery-progress");
+        if (select.value) progress.textContent = L("Mise à jour de la photo dans la galerie…", "Updating the photo in the gallery…");
+        try {
+          await api("POST", "/galleries/" + encodeURIComponent(slug) + "/delivery/files/" + encodeURIComponent(select.getAttribute("data-link-delivery")) + "/link", { photoId: select.value });
+          toast(select.value ? L("Photo reliée : la galerie et la boutique montrent la retouche.", "Photo linked: the gallery and shop show the retouched version.") : L("Lien retiré.", "Link removed."));
+        } catch (err) {
+          toast(err.message, true);
+        }
+        renderDetail(slug, true);
+      });
+    });
+    var autoBtn = document.getElementById("ad-delivery-autolink");
+    if (autoBtn) {
+      autoBtn.addEventListener("click", async function () {
+        var pending = Array.prototype.filter.call(document.querySelectorAll("[data-link-delivery]"), function (s) { return !s.value; });
+        var progress = document.getElementById("ad-delivery-progress");
+        autoBtn.disabled = true;
+        var done = 0;
+        for (var i = 0; i < pending.length; i++) {
+          progress.textContent = L("Recherche de l'épreuve ", "Finding the proof ") + (i + 1) + " / " + pending.length + "…";
+          try {
+            var result = await api("POST", "/galleries/" + encodeURIComponent(slug) + "/delivery/files/" + encodeURIComponent(pending[i].getAttribute("data-link-delivery")) + "/link", {});
+            if (result.linked) done++;
+          } catch (err) {
+            /* fichier illisible : reste à relier à la main */
+          }
+        }
+        var left = pending.length - done;
+        toast(L(done + " photo" + (done > 1 ? "s" : "") + " reliée" + (done > 1 ? "s" : "") + (left ? " ; " + left + " à relier à la main (menu sur chaque ligne)." : "."),
+          done + (done === 1 ? " photo" : " photos") + " linked" + (left ? "; " + left + " to link by hand (menu on each row)." : ".")), left > 0 && done === 0);
+        renderDetail(slug, true);
+      });
+    }
     document.querySelectorAll("[data-remove-delivery]").forEach(function (btn) {
       btn.addEventListener("click", async function () {
         try {
@@ -4649,17 +4753,26 @@
     }
     if (paid > 0) {
       html +=
-        '<p class="ad-quota-paid">✓ ' + paid + L(" supplément" + (paid > 1 ? "s" : "") + " déjà réglé" + (paid > 1 ? "s" : "") + " en ligne",
-          (paid === 1 ? " extra" : " extras") + " already paid online") + "</p>";
+        '<p class="ad-quota-paid">✓ ' + paid + L(" supplément" + (paid > 1 ? "s" : "") + " déjà réglé" + (paid > 1 ? "s" : ""),
+          (paid === 1 ? " extra" : " extras") + " already paid") + "</p>";
     }
     return html;
   }
 
   function paymentsHistoryHtml(payments) {
     if (!payments || !payments.length) return "";
+    var methodLabel = { cash: L("en espèces", "in cash"), transfer: L("par virement", "by transfer") };
     var rows = payments.map(function (p) {
-      var statusLabel = p.status === "paid" ? L("Réglé", "Paid") : L("En attente", "Pending");
-      var statusCls = p.status === "paid" ? "ad-badge-selected" : "";
+      var offline = p.method === "cash" || p.method === "transfer";
+      var statusLabel = p.status === "paid" ? L("Réglé", "Paid") + (offline ? " " + methodLabel[p.method] : "")
+        : p.status === "awaiting" ? L("À recevoir ", "To collect ") + methodLabel[p.method]
+        : L("En attente", "Pending");
+      var statusCls = p.status === "paid" ? "ad-badge-selected" : p.status === "awaiting" ? "ad-badge-awaiting" : "";
+      var actions = p.status === "awaiting"
+        ? '<div class="ad-offline-actions">' +
+          '<button type="button" class="ad-btn ad-btn-primary ad-btn-small" data-offline-received="' + esc(p.id) + '">' + L("Marquer comme reçu", "Mark as received") + "</button>" +
+          '<button type="button" class="ad-link-btn" data-offline-cancel="' + esc(p.id) + '">' + L("Annuler la demande", "Cancel the request") + "</button></div>"
+        : "";
       var invoiceCell = p.invoice_id
         ? '<a href="/local/invoices/' + encodeURIComponent(p.invoice_id) + '" target="_blank" rel="noopener">' +
           esc(p.invoice_number) + "</a>" +
@@ -4671,7 +4784,7 @@
         "<td>" + (p.kind === "print" ? L("Tirages", "Prints") : p.extra_count + (p.extra_count === 1 ? " photo" : " photos")) + "</td>" +
         "<td>" + formatEuros(p.amount_cents) +
         (p.fee_cents ? '<br><span class="ad-hint">' + L("dont " + formatEuros(p.fee_cents) + " de frais de paiement", "incl. " + formatEuros(p.fee_cents) + " payment fees") + "</span>" : "") + "</td>" +
-        "<td><span class=\"ad-badge " + statusCls + "\">" + statusLabel + "</span></td>" +
+        "<td><span class=\"ad-badge " + statusCls + "\">" + statusLabel + "</span>" + actions + "</td>" +
         "<td>" + invoiceCell + "</td>" +
         "</tr>"
       );
@@ -5153,7 +5266,7 @@
       '<div class="ad-layout-options" id="ad-layout-options">' + layoutOptionsHtml(data.gallery) + "</div>" +
       "</section>" +
       musicSectionHtml(data.gallery) +
-      deliverySectionHtml(data.gallery) +
+      deliverySectionHtml(data.gallery, data.photos) +
       gallerySectionShopHtml(data) +
       '<section class="ad-dropzone" id="ad-dropzone">' +
       "<p>" + L("<strong>Glissez vos photos ici</strong>, ou", "<strong>Drag your photos here</strong>, or") + "</p>" +
@@ -5314,6 +5427,23 @@
         toast(err.message, true);
       } finally {
         saveBtn.disabled = false;
+      }
+    });
+    // Supplément réglé en espèces ou par virement : reçu, ou demande annulée.
+    el.view.querySelector(".ad-quota").addEventListener("click", async function (event) {
+      var received = event.target.closest("[data-offline-received]");
+      var cancel = event.target.closest("[data-offline-cancel]");
+      if (!received && !cancel) return;
+      var id = (received || cancel).getAttribute(received ? "data-offline-received" : "data-offline-cancel");
+      if (cancel && !confirm(L("Annuler cette demande de règlement ? Le client pourra en refaire une depuis sa galerie.", "Cancel this payment request? The client can make a new one from their gallery."))) return;
+      (received || cancel).disabled = true;
+      try {
+        await api("POST", "/galleries/" + encodeURIComponent(slug) + "/payments/" + encodeURIComponent(id) + (received ? "/received" : "/cancel"));
+        toast(received ? L("Paiement reçu : suppléments réglés, facture envoyée au client.", "Payment received: extras paid, invoice sent to the client.") : L("Demande annulée.", "Request cancelled."));
+        renderDetail(slug, true);
+      } catch (err) {
+        toast(err.message, true);
+        (received || cancel).disabled = false;
       }
     });
     bindPresentation(slug, data);

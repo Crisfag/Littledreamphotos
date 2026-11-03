@@ -26,6 +26,7 @@ import { handleClientsAdmin } from "./clients.js";
 import { handlePlanningAdmin } from "./planning.js";
 import { setPromo, sendPromoToClient, promoForAdmin } from "./campaigns.js";
 import { galleryUrlFor } from "./reminders.js";
+import { updateOfflineSettings, confirmOfflinePayment, cancelOfflinePayment } from "./offlinepay.js";
 import { salesForAdmin } from "./sales.js";
 import { insightsForAdmin, setSessionType, cleanSessionType, guessSessionType } from "./insights.js";
 import { handlePortfolioAdmin, deletePortfolioFiles } from "./portfolio.js";
@@ -233,7 +234,8 @@ async function getGallery(env, photographerId, slug) {
   const account = await env.DB.prepare("SELECT * FROM photographers WHERE id = ?").bind(photographerId).first();
   const { results: photos } = await env.DB.prepare(
     `SELECT id, position, width, height, cols, rows, preview_width, preview_height,
-            forensic_id, selected, selected_at, comment, comment_at, tag, marks, has_original, source_name, created_at
+            forensic_id, selected, selected_at, comment, comment_at, tag, marks, has_original, source_name, taken_at,
+            delivery_file_id, created_at
      FROM photos WHERE gallery_id = ? ORDER BY position ASC, created_at ASC`
   )
     .bind(gallery.id)
@@ -247,7 +249,7 @@ async function getGallery(env, photographerId, slug) {
 
   const { results: payments } = await env.DB.prepare(
     `SELECT payments.id, payments.extra_count, payments.amount_cents, payments.fee_cents, payments.status, payments.kind,
-            payments.created_at, payments.paid_at,
+            payments.method, payments.created_at, payments.paid_at,
             invoices.id AS invoice_id, invoices.number AS invoice_number, invoices.emailed_to AS invoice_emailed_to
      FROM payments LEFT JOIN invoices ON invoices.payment_id = payments.id
      WHERE payments.gallery_id = ? ORDER BY payments.created_at DESC`
@@ -892,6 +894,12 @@ export async function handleAdmin(request, env, ctx, path) {
     if (parts.length === 5 && parts[4] === "quota" && request.method === "POST") {
       return setQuota(request, env, photographerId, slug);
     }
+    // Supplément réglé en espèces ou par virement : reçu, ou demande annulée.
+    if (parts.length === 7 && parts[4] === "payments" && ["received", "cancel"].includes(parts[6]) && request.method === "POST") {
+      const gallery = await ownedGallery(env, photographerId, slug);
+      if (!gallery) return fail(404, "Galerie introuvable");
+      return parts[6] === "received" ? confirmOfflinePayment(env, gallery, parts[5]) : cancelOfflinePayment(env, gallery, parts[5]);
+    }
   }
 
   // Table des empreintes : c'est la liste des candidats que l'outil de
@@ -1038,6 +1046,9 @@ export async function handleAdmin(request, env, ctx, path) {
   }
   if (section === "account" && parts[3] === "reminders" && parts.length === 4 && request.method === "POST") {
     return updateReminders(request, env, photographerId);
+  }
+  if (section === "account" && parts[3] === "offline-payments" && parts.length === 4 && request.method === "POST") {
+    return updateOfflineSettings(request, env, photographerId);
   }
   if (section === "account" && parts[3] === "defaults" && parts.length === 4 && request.method === "POST") {
     return updateDefaults(request, env, photographerId);

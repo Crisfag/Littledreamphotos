@@ -37,6 +37,13 @@ function newId(prefix) {
   return `${prefix}_${b64url(randomBytes(9))}`;
 }
 
+// Photos proposées en tirage : celles qui ont un fichier d'impression — et,
+// dès qu'une HD retouchée a été livrée et reliée à son épreuve, seulement
+// celles-là : on n'imprime pas une épreuve brute à côté des retouches.
+export function isPrintable(photo, deliveredInGallery) {
+  return Boolean(photo.has_original) && (!deliveredInGallery || Boolean(photo.delivery_file_id));
+}
+
 // Clé R2 du fichier d'impression : définie avec la mesure du stockage.
 export { originalKey };
 
@@ -565,11 +572,12 @@ export async function handlePrintOrder(request, env, gallery) {
   if (shippingCents === null) return fail(400, "Pays de livraison non proposé");
   const lang = languageOf(gallery.language);
 
-  const { results: photos } = await env.DB.prepare("SELECT id, position, has_original FROM photos WHERE gallery_id = ?")
+  const { results: photos } = await env.DB.prepare("SELECT id, position, has_original, delivery_file_id FROM photos WHERE gallery_id = ?")
     .bind(gallery.id)
     .all();
+  const delivered = photos.some((p) => p.delivery_file_id);
   const built = buildOrderLines(body.lines, {
-    photosById: new Map(photos.map((p) => [p.id, p])),
+    photosById: new Map(photos.map((p) => [p.id, { ...p, has_original: isPrintable(p, delivered) ? 1 : 0 }])),
     // Libellés figés dans la langue de la galerie : ceux que le client a vus.
     productsById: new Map(state.products.map((p) => [p.id, { ...p, label: productLabelFor(p, lang) }])),
   });
