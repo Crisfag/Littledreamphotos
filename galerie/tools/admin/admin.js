@@ -924,27 +924,100 @@
   // Rien n'agrège encore les suppléments dus toutes galeries confondues côté
   // Worker : la liste des galeries porte déjà due_extra_count/due_total_cents
   // par galerie (voir admin.js du Worker), il suffit de les additionner ici.
-  function dueSummaryHtml(galleries) {
-    var due = galleries.filter(function (g) { return g.due_extra_count > 0; });
+  // Suppléments dus, toutes galeries : où en est chaque client, et deux
+  // boutons pour noter un règlement fait hors galerie (virement fait d'office
+  // sur le compte du studio, espèces remises en main propre).
+  var SETTLE_ICON = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>';
+
+  function settleButtonsHtml(s) {
+    var attrs = ' data-settle-slug="' + esc(s.slug) + '" data-settle-title="' + esc(s.title) + '" data-settle-amount="' + s.dueTotalCents +
+      '" data-settle-count="' + s.dueExtraCount + '" data-settle-email="' + esc(s.clientEmail || "") + '"';
+    return '<div class="ad-settle">' +
+      '<button type="button" class="ad-btn ad-btn-small ad-settle-btn" data-settle="transfer"' + attrs + ">" + SETTLE_ICON + L("Réglé par virement", "Paid by transfer") + "</button>" +
+      '<button type="button" class="ad-btn ad-btn-small ad-settle-btn" data-settle="cash"' + attrs + ">" + SETTLE_ICON + L("Réglé en espèces", "Paid in cash") + "</button>" +
+      "</div>";
+  }
+
+  // Confirme, enregistre, prévient. `done` : rafraîchir l'écran ensuite.
+  async function settleSupplementFrom(btn, done) {
+    var method = btn.getAttribute("data-settle");
+    var title = btn.getAttribute("data-settle-title");
+    var count = Number(btn.getAttribute("data-settle-count"));
+    var amount = Number(btn.getAttribute("data-settle-amount"));
+    var email = btn.getAttribute("data-settle-email");
+    var how = method === "cash" ? L("en espèces", "in cash") : L("par virement", "by bank transfer");
+    var photos = count + (count === 1 ? " photo" : " photos");
+    var question = L("« " + title + " » : " + photos + ", " + formatEuros(amount) + " réglé" + (count > 1 ? "s" : "") + " " + how + " ?",
+      "“" + title + "”: " + photos + ", " + formatEuros(amount) + " paid " + how + "?") + "\n\n" +
+      (email ? L("La facture sera émise et envoyée à " + email + ".", "The invoice will be issued and sent to " + email + ".")
+        : L("La facture sera émise (aucune adresse e-mail client sur cette galerie : vous la retrouverez dans l'historique des factures).",
+          "The invoice will be issued (no client email on this gallery: you'll find it in the invoice history)."));
+    if (!confirm(question)) return;
+    var group = btn.closest(".ad-settle");
+    var buttons = group ? group.querySelectorAll("button") : [btn];
+    buttons.forEach(function (b) { b.disabled = true; });
+    try {
+      var result = await api("POST", "/galleries/" + encodeURIComponent(btn.getAttribute("data-settle-slug")) + "/supplement/settle", { method: method, amountCents: amount });
+      toast(L("Supplément réglé " + how + " : " + formatEuros(result.amountCents) +
+        (result.invoiceNumber ? ", facture " + result.invoiceNumber + (result.emailedTo ? " envoyée à " + result.emailedTo : " émise") : "") + ".",
+        "Extras paid " + how + ": " + formatEuros(result.amountCents) +
+        (result.invoiceNumber ? ", invoice " + result.invoiceNumber + (result.emailedTo ? " sent to " + result.emailedTo : " issued") : "") + "."));
+      done();
+    } catch (err) {
+      toast(err.message, true);
+      buttons.forEach(function (b) { b.disabled = false; });
+    }
+  }
+
+  function dueSupplementsHtml(data) {
+    var due = data.supplements || [];
     if (!due.length) {
       return '<p class="ad-hint">' + L("Aucun supplément en attente de règlement pour l'instant.", "No extras awaiting payment for now.") + "</p>";
     }
-    var totalCents = due.reduce(function (sum, g) { return sum + g.due_total_cents; }, 0);
-    var rows = due.map(function (g) {
+    var rows = due.map(function (s) {
+      var status;
+      if (s.awaiting) {
+        status = '<span class="ad-badge ad-badge-awaiting">' + (s.awaiting.method === "cash"
+          ? L("Viendra régler en espèces", "Will pay in cash") : L("A demandé à payer par virement", "Asked to pay by transfer")) + "</span>" +
+          '<span class="ad-due-when">' + L("le ", "on ") + esc(formatDate(s.awaiting.createdAt)) + "</span>";
+      } else if (s.cardStartedAt) {
+        status = '<span class="ad-badge">' + L("Paiement par carte commencé", "Card payment started") + "</span>" +
+          '<span class="ad-due-when">' + L("pas terminé", "not completed") + "</span>";
+      } else {
+        status = '<span class="ad-due-when">' + (s.selectionDoneAt
+          ? L("Sélection validée le ", "Selection confirmed on ") + esc(formatDate(s.selectionDoneAt))
+          : L("Sélection en cours", "Still choosing")) + "</span>";
+      }
       return (
         "<tr>" +
-        '<td><button type="button" class="ad-link-btn" data-slug="' + esc(g.slug) + '">' + esc(g.title) + "</button></td>" +
-        "<td>" + g.due_extra_count + (g.due_extra_count === 1 ? " photo" : " photos") + "</td>" +
-        "<td>" + formatEuros(g.due_total_cents) + "</td>" +
+        '<td><a href="#/g/' + encodeURIComponent(s.slug) + '">' + esc(s.title) + "</a>" +
+        (s.clientName ? '<span class="ad-due-client">' + esc(s.clientName) + "</span>" : "") + "</td>" +
+        '<td class="ad-due-amount"><strong>' + formatEuros(s.dueTotalCents) + "</strong>" +
+        '<span class="ad-due-detail">' + s.dueExtraCount + (s.dueExtraCount === 1 ? " photo" : " photos") + " × " + formatEuros(s.unitPriceCents) + "</span></td>" +
+        '<td class="ad-due-status">' + status + "</td>" +
+        "<td>" + settleButtonsHtml(s) + "</td>" +
         "</tr>"
       );
     });
     return (
-      '<p class="ad-quota-due">' + formatEuros(totalCents) + L(" au total, sur " + due.length + " galerie" + (due.length > 1 ? "s" : ""),
+      '<p class="ad-quota-due">' + formatEuros(data.totalCents) + L(" au total, sur " + due.length + " galerie" + (due.length > 1 ? "s" : ""),
         " in total, across " + due.length + " galler" + (due.length > 1 ? "ies" : "y")) + "</p>" +
-      '<div class="ad-table-wrap"><table class="ad-table"><thead><tr><th>' + L("Galerie", "Gallery") + "</th><th>" + L("Suppléments", "Extras") + "</th><th>" + L("Montant", "Amount") + "</th></tr></thead><tbody>" +
+      '<p class="ad-hint">' + L("Un client vous a réglé par virement ou en espèces sans passer par sa galerie ? Notez-le ici : le supplément passe en réglé et sa facture lui est envoyée.",
+        "A client paid you by transfer or in cash without going through their gallery? Record it here: the extras are marked as paid and the invoice is sent to them.") + "</p>" +
+      '<div class="ad-table-wrap"><table class="ad-table ad-due-table"><thead><tr><th>' + L("Galerie", "Gallery") + "</th><th>" + L("À régler", "Due") + "</th><th>" +
+      L("Où en est le client", "Client status") + "</th><th>" + L("Réglé hors galerie", "Paid outside the gallery") + "</th></tr></thead><tbody>" +
       rows.join("") + "</tbody></table></div>"
     );
+  }
+
+  async function loadDueSupplements() {
+    var box = document.getElementById("ad-due");
+    if (!box) return;
+    try {
+      box.innerHTML = dueSupplementsHtml(await api("GET", "/supplements"));
+    } catch (err) {
+      box.innerHTML = '<p class="ad-hint">' + esc(err.message) + "</p>";
+    }
   }
 
   /* ---------- Factures libres (onglet Facturation) ---------- */
@@ -1334,12 +1407,11 @@
       try { await api("POST", "/stripe/refresh"); } catch (err) { /* la relecture manuelle reste possible depuis l'écran */ }
     }
 
-    var photographer, invoicesData, galleriesData;
+    var photographer, invoicesData;
     try {
       var me = await api("GET", "/auth/me");
       photographer = me.photographer;
       invoicesData = await api("GET", "/invoices");
-      galleriesData = await api("GET", "/galleries");
     } catch (err) {
       toast(err.message, true);
       return renderList();
@@ -1354,8 +1426,8 @@
       '<section class="ad-stripe"><div class="ad-section-header"><h3>' + L("Paiement en ligne", "Online payment") + "</h3></div>" +
       stripeStatusHtml(photographer) +
       "</section>" +
-      '<section><div class="ad-section-header"><h3>' + L("Suppléments dus", "Extras due") + "</h3></div>" +
-      dueSummaryHtml(galleriesData.galleries) +
+      '<section><div class="ad-section-header"><h3>' + L("Suppléments en attente de règlement", "Extras awaiting payment") + "</h3></div>" +
+      '<div id="ad-due"><p class="ad-loading">' + L("Chargement…", "Loading…") + "</p></div>" +
       "</section>" +
       '<section><div class="ad-section-header"><h3>' + L("Historique des factures", "Invoice history") + "</h3>" +
       (invoicesData.invoices.length ? "<p class=\"ad-hint\">" + formatEuros(invoicesData.totalCents) + L(" au total", " in total") + "</p>" : "") +
@@ -1369,6 +1441,11 @@
       });
     });
     loadClientInvoices();
+    loadDueSupplements();
+    document.getElementById("ad-due").addEventListener("click", function (event) {
+      var btn = event.target.closest("[data-settle]");
+      if (btn) settleSupplementFrom(btn, function () { renderBilling(true); });
+    });
 
     var connectBtn = document.getElementById("ad-stripe-connect");
     if (connectBtn) {
@@ -4731,7 +4808,7 @@
     return LANG === "en" ? "€" + amount : amount + " €";
   }
 
-  function quotaSummaryHtml(gallery) {
+  function quotaSummaryHtml(gallery, payments) {
     if (gallery.included_photos === null || gallery.included_photos === undefined) {
       return '<p class="ad-hint">' + L("Aucun forfait défini pour l'instant — les coups de cœur du client ne déclenchent aucun supplément.", "No package set yet — the client's favourites don't trigger any extras.") + "</p>";
     }
@@ -4750,6 +4827,13 @@
         "+" + due + L(" supplément" + (due > 1 ? "s" : ""), due === 1 ? " extra" : " extras") + " × " + formatEuros(gallery.extra_photo_price_cents) +
         " = <strong>" + formatEuros(gallery.due_total_cents) + L(" à régler", " due") + "</strong>" +
         "</p>";
+      // Une demande en espèces ou par virement en cours a déjà son bouton
+      // « Marquer comme reçu » dans l'historique, juste en dessous.
+      var awaiting = (payments || []).some(function (p) { return p.status === "awaiting" && p.kind !== "print"; });
+      if (!awaiting) {
+        html += '<p class="ad-hint ad-settle-hint">' + L("Déjà réglé directement avec vous ?", "Already settled directly with you?") + "</p>" +
+          settleButtonsHtml({ slug: gallery.slug, title: gallery.title, dueTotalCents: gallery.due_total_cents, dueExtraCount: due, clientEmail: gallery.client_email });
+      }
     }
     if (paid > 0) {
       html +=
@@ -5239,7 +5323,7 @@
       ((data.gallery.extra_photo_price_cents || 0) / 100) + '" /></label>' +
       '<button type="submit" class="ad-btn ad-btn-primary" id="ad-quota-save">' + L("Enregistrer", "Save") + "</button>" +
       "</form>" +
-      '<div id="ad-quota-summary">' + quotaSummaryHtml(data.gallery) + "</div>" +
+      '<div id="ad-quota-summary">' + quotaSummaryHtml(data.gallery, data.payments) + "</div>" +
       (data.payments && data.payments.length
         ? '<h4 class="ad-payments-heading">' + L("Historique des paiements", "Payment history") + "</h4>" + paymentsHistoryHtml(data.payments)
         : "") +
@@ -5431,6 +5515,8 @@
     });
     // Supplément réglé en espèces ou par virement : reçu, ou demande annulée.
     el.view.querySelector(".ad-quota").addEventListener("click", async function (event) {
+      var settle = event.target.closest("[data-settle]");
+      if (settle) return settleSupplementFrom(settle, function () { renderDetail(slug, true); });
       var received = event.target.closest("[data-offline-received]");
       var cancel = event.target.closest("[data-offline-cancel]");
       if (!received && !cancel) return;

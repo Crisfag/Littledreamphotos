@@ -2157,6 +2157,7 @@ node tests/english.test.mjs           # galerie client en anglais : mot de passe
 node tests/schoolshop.test.mjs        # commande des photos scolaires (gamme, panier famille, suivi, production), autonome
 node tests/invoicing.test.mjs         # factures libres (TVA par ligne, échéancier, note de crédit, depuis un contrat), prospects et tags, ventes, autonome (admin-server.mjs lancé)
 node tests/offlinepay.test.mjs        # suppléments réglés en espèces ou par virement : réglages, demande du client, « Marquer comme reçu », autonome (admin-server.mjs lancé)
+node tests/settlesupplement.test.mjs  # Facturation : suppléments en attente de règlement, « Réglé par virement » / « Réglé en espèces » hors galerie, autonome (admin-server.mjs lancé)
 node tests/giftcards.test.mjs         # bons cadeaux : vente sur le mini-site, page du bon, suivi et bon à la main, autonome (admin-server.mjs lancé)
 node tests/schoolpack.test.mjs        # pack « toutes les photos », ordre de la gamme, liste de prénoms collée, autonome
 node tests/schoolreminders.test.mjs   # rappels de commande aux familles, autonome (npm run dev:local -- --test-scheduled)

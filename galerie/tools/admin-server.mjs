@@ -1160,6 +1160,15 @@ async function handleApi(req, res, url) {
     }
   }
 
+  // GET /local/supplements — suppléments dus, toutes galeries (Facturation).
+  if (parts.length === 1 && parts[0] === "supplements" && req.method === "GET") {
+    try {
+      return json(res, 200, await client.request("GET", "/api/admin/supplements"));
+    } catch (err) {
+      return relayError(res, err, "Impossible de lire les suppléments dus");
+    }
+  }
+
   // GET /local/stats — compteurs globaux du compte (galeries, ventes, suppléments).
   if (parts.length === 1 && parts[0] === "stats" && req.method === "GET") {
     try {
@@ -1742,6 +1751,20 @@ async function handleApi(req, res, url) {
       return json(res, 200, await client.request("POST", `/api/admin/galleries/${encodeURIComponent(slug)}/payments/${encodeURIComponent(parts[3])}/${parts[4]}`, {}));
     } catch (err) {
       return relayError(res, err, "Impossible d'enregistrer ce paiement");
+    }
+  }
+
+  // POST /local/galleries/:slug/supplement/settle — supplément réglé hors
+  // galerie (virement sur le compte du studio, espèces).
+  if (parts.length === 4 && parts[2] === "supplement" && parts[3] === "settle" && req.method === "POST") {
+    const body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
+    try {
+      return json(res, 200, await client.request("POST", `/api/admin/galleries/${encodeURIComponent(slug)}/supplement/settle`, {
+        method: String(body.method || ""),
+        ...(Number.isFinite(body.amountCents) ? { amountCents: body.amountCents } : {}),
+      }));
+    } catch (err) {
+      return relayError(res, err, "Impossible d'enregistrer ce règlement");
     }
   }
 
