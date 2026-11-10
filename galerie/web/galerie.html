@@ -125,6 +125,9 @@
       <div>
         <p class="gp-toolbar-count" id="gp-selection-count" data-en="No photos selected yet">Aucune photo sélectionnée pour l'instant</p>
         <p class="gp-toolbar-quota" id="gp-toolbar-quota" hidden></p>
+        <div class="gp-options-bar" id="gp-options-bar" hidden>
+          <button type="button" class="gp-invoice-btn gp-options-btn" id="gp-options-open" aria-haspopup="dialog" aria-controls="gp-options" data-en="Add options">Ajouter des options</button>
+        </div>
         <button type="button" class="gp-pay-btn" id="gp-pay-supplement" hidden data-en="Pay the extra">Régler le supplément</button>
         <p class="gp-pay-error" id="gp-pay-error" hidden></p>
         <div class="gp-offline" id="gp-offline" hidden>
@@ -274,6 +277,19 @@
   </div>
 
   <!-- ============ Voile de dissuasion ============ -->
+  <div class="gp-options" id="gp-options" hidden role="dialog" aria-modal="true" aria-labelledby="gp-options-title">
+    <div class="gp-options-card">
+      <p class="gp-capture-eyebrow" data-en="To go further">Pour aller plus loin</p>
+      <h2 id="gp-options-title" data-en="Options">Les options</h2>
+      <p class="gp-options-lead" data-en="Tick what you'd like: it's added to the amount to pay on this page.">Cochez ce qui vous ferait plaisir : c'est ajouté au montant à régler sur cette page.</p>
+      <ul class="gp-options-list" id="gp-options-list"></ul>
+      <p class="gp-options-paid" id="gp-options-paid" hidden></p>
+      <p class="gp-options-total" id="gp-options-total" aria-live="polite"></p>
+      <p class="gp-pay-error" id="gp-options-error" hidden></p>
+      <button type="button" class="gp-capture-ok" id="gp-options-done" data-en="Done">Terminé</button>
+    </div>
+  </div>
+
   <div class="gp-capture" id="gp-capture" hidden role="alertdialog" aria-modal="true" aria-labelledby="gp-capture-title" aria-describedby="gp-capture-text">
     <div class="gp-capture-card">
       <p class="gp-capture-eyebrow" data-en="Screenshot detected">Capture d'écran détectée</p>

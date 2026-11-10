@@ -1140,7 +1140,7 @@ const checkoutNoQuota = await fetch(`${BASE}/api/gallery/${noQuotaSlug}/checkout
   headers: { ...noQuotaBearer, "content-type": "application/json" },
   body: JSON.stringify({ successUrl: "https://example.test/succes", cancelUrl: "https://example.test/annule" }),
 });
-check("régler un supplément est refusé quand la galerie n'a aucun forfait défini",
+check("régler un supplément est refusé quand la galerie n'a aucun forfait défini (ni option cochée)",
       checkoutNoQuota.status === 400, `HTTP ${checkoutNoQuota.status}`);
 await admin("DELETE", `/api/admin/galleries/${noQuotaSlug}`);
 

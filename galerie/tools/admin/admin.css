@@ -2047,6 +2047,36 @@ main section.ad-demo {
   .ad-due-table td { border: 0; padding: .2rem 0; }
 }
 
+/* Options payantes : catalogue (Paramètres), choix du client (fiche galerie). */
+.ad-options-catalog { list-style: none; margin: 0 0 1rem; padding: 0; border-top: 1px solid var(--line); }
+.ad-options-catalog li {
+  display: grid; grid-template-columns: 1fr auto auto auto; align-items: center; gap: .4rem 1rem;
+  padding: .75rem 0; border-bottom: 1px solid var(--line);
+}
+.ad-options-catalog .ad-option-off .ad-option-text, .ad-options-catalog .ad-option-off .ad-option-price { opacity: .5; }
+.ad-option-text { display: grid; gap: .1rem; min-width: 0; }
+.ad-option-text span { font-size: .82rem; color: var(--muted); }
+.ad-option-price { font-variant-numeric: tabular-nums; white-space: nowrap; font-weight: 500; }
+.ad-option-row-actions { display: inline-flex; gap: .8rem; }
+.ad-options-catalog .ad-toggle { font-size: .85rem; }
+.ad-option-form { margin-top: .5rem; padding: 1rem; border: 1px solid var(--line); border-radius: var(--radius); background: var(--mist); }
+.ad-option-ideas { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; margin: 0 0 .9rem; font-size: .85rem; color: var(--muted); }
+.ad-option-form .ad-field-row { grid-template-columns: 1fr 9rem; }
+.ad-option-form .ad-toggle { display: flex; margin: .2rem 0 .8rem; }
+.ad-option-actions { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.ad-options-chosen { list-style: none; margin: .6rem 0; padding: 0; }
+.ad-options-chosen li { display: grid; grid-template-columns: 1fr auto auto; gap: .8rem; align-items: center; padding: .35rem 0; border-bottom: 1px dashed var(--line); font-size: .9rem; }
+.ad-options-chosen li span:nth-child(2) { font-variant-numeric: tabular-nums; }
+.ad-options-toggle { display: flex; margin: .6rem 0; font-size: .88rem; }
+.ad-due-remind { display: block; margin-top: .35rem; font-size: .8rem; }
+.ad-link-danger { color: var(--alert-ink); }
+.ad-unpaid-hint { margin-top: 1rem; }
+@media (max-width: 720px) {
+  .ad-options-catalog li { grid-template-columns: 1fr auto; }
+  .ad-options-catalog .ad-toggle, .ad-option-row-actions { grid-column: span 1; }
+  .ad-option-form .ad-field-row { grid-template-columns: 1fr; }
+}
+
 /* ---------- HD livrées reliées à leur épreuve (galerie et boutique) ---------- */
 
 .ad-delivery-links { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1rem; margin: 0 0 .7rem; }

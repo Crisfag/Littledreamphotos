@@ -27,6 +27,11 @@ import { handlePlanningAdmin } from "./planning.js";
 import { setPromo, sendPromoToClient, promoForAdmin } from "./campaigns.js";
 import { galleryUrlFor } from "./reminders.js";
 import { updateOfflineSettings, confirmOfflinePayment, cancelOfflinePayment, listDueSupplements, settleSupplement } from "./offlinepay.js";
+import {
+  getOptionsCatalog, createOption, updateOption, deleteOption, setGalleryOptionsEnabled,
+  unpaidOptionsByGallery, unpaidOptions, optionsForAdmin,
+} from "./options.js";
+import { remindUnpaidNow, updateUnpaidReminders } from "./unpaidreminders.js";
 import { salesForAdmin } from "./sales.js";
 import { insightsForAdmin, setSessionType, cleanSessionType, guessSessionType } from "./insights.js";
 import { handlePortfolioAdmin, deletePortfolioFiles } from "./portfolio.js";
@@ -214,14 +219,18 @@ async function listGalleries(env, photographerId) {
     .bind(photographerId)
     .all();
 
+  const optionsDue = await unpaidOptionsByGallery(env, photographerId);
   const galleries = results.map((g) => {
     const supplement = supplementFor(g.included_photos, g.extra_photo_price_cents, g.selected_count, g.paid_extra_count);
+    const options = optionsDue.get(g.id) || { cents: 0, count: 0 };
     return {
       ...g,
       extra_count: supplement.extraCount,
       extra_total_cents: supplement.extraTotalCents,
       due_extra_count: supplement.dueExtraCount,
-      due_total_cents: supplement.dueTotalCents,
+      // Suppléments + options cochées pas encore réglées (options.js).
+      due_options_cents: options.cents,
+      due_total_cents: supplement.dueTotalCents + options.cents,
     };
   });
   return json({ galleries });
@@ -249,7 +258,7 @@ async function getGallery(env, photographerId, slug) {
 
   const { results: payments } = await env.DB.prepare(
     `SELECT payments.id, payments.extra_count, payments.amount_cents, payments.fee_cents, payments.status, payments.kind,
-            payments.method, payments.created_at, payments.paid_at,
+            payments.method, payments.options_json, payments.created_at, payments.paid_at,
             invoices.id AS invoice_id, invoices.number AS invoice_number, invoices.emailed_to AS invoice_emailed_to
      FROM payments LEFT JOIN invoices ON invoices.payment_id = payments.id
      WHERE payments.gallery_id = ? ORDER BY payments.created_at DESC`
@@ -259,6 +268,7 @@ async function getGallery(env, photographerId, slug) {
   const paidExtraCountTotal = payments
     .filter((p) => p.status === "paid")
     .reduce((sum, p) => sum + p.extra_count, 0);
+  const dueOptionsCents = (await unpaidOptions(env, gallery)).reduce((sum, o) => sum + o.totalCents, 0);
 
   const supplement = supplementFor(gallery.included_photos, gallery.extra_photo_price_cents, selectedCount, paidExtraCountTotal);
 
@@ -307,7 +317,10 @@ async function getGallery(env, photographerId, slug) {
       extra_total_cents: supplement.extraTotalCents,
       paid_extra_count: supplement.paidExtraCount,
       due_extra_count: supplement.dueExtraCount,
-      due_total_cents: supplement.dueTotalCents,
+      due_extras_cents: supplement.dueTotalCents,
+      due_options_cents: dueOptionsCents,
+      due_total_cents: supplement.dueTotalCents + dueOptionsCents,
+      options: await optionsForAdmin(env, gallery),
     },
     photos,
     payments,
@@ -742,6 +755,11 @@ async function getStats(env, photographerId) {
     dueExtraCount += supplement.dueExtraCount;
     dueTotalCents += supplement.dueTotalCents;
   }
+  // Options cochées pas encore réglées : comptées dans le montant à régler.
+  for (const [, options] of await unpaidOptionsByGallery(env, photographerId)) {
+    dueExtraCount += options.count;
+    dueTotalCents += options.cents;
+  }
 
   return json({
     galleriesCount: galleriesRow?.n || 0,
@@ -900,6 +918,18 @@ export async function handleAdmin(request, env, ctx, path) {
       if (!gallery) return fail(404, "Galerie introuvable");
       return parts[6] === "received" ? confirmOfflinePayment(env, gallery, parts[5]) : cancelOfflinePayment(env, gallery, parts[5]);
     }
+    // Options payantes proposées ou non dans cette galerie.
+    if (parts.length === 5 && parts[4] === "options" && request.method === "POST") {
+      const gallery = await ownedGallery(env, photographerId, slug);
+      if (!gallery) return fail(404, "Galerie introuvable");
+      return setGalleryOptionsEnabled(request, env, gallery);
+    }
+    // Relancer le client tout de suite (supplément ou options à régler).
+    if (parts.length === 6 && parts[4] === "supplement" && parts[5] === "remind" && request.method === "POST") {
+      const gallery = await ownedGallery(env, photographerId, slug);
+      if (!gallery) return fail(404, "Galerie introuvable");
+      return remindUnpaidNow(env, gallery);
+    }
     // Supplément réglé hors galerie (virement sur le compte, espèces) : coché
     // depuis le tableau des suppléments dus ou la fiche de la galerie.
     if (parts.length === 6 && parts[4] === "supplement" && parts[5] === "settle" && request.method === "POST") {
@@ -957,6 +987,19 @@ export async function handleAdmin(request, env, ctx, path) {
     return getInvoice(env, photographerId, parts[3]);
   }
 
+  // Catalogue des options payantes (options.js).
+  if (section === "options" && parts.length === 3 && request.method === "GET") {
+    return getOptionsCatalog(env, photographerId);
+  }
+  if (section === "options" && parts.length === 3 && request.method === "POST") {
+    return createOption(request, env, photographerId);
+  }
+  if (section === "options" && parts.length === 4 && request.method === "POST") {
+    return updateOption(request, env, photographerId, parts[3]);
+  }
+  if (section === "options" && parts.length === 4 && request.method === "DELETE") {
+    return deleteOption(env, photographerId, parts[3]);
+  }
   if (section === "supplements" && parts.length === 3 && request.method === "GET") {
     return listDueSupplements(env, photographerId);
   }
@@ -1056,6 +1099,9 @@ export async function handleAdmin(request, env, ctx, path) {
   }
   if (section === "account" && parts[3] === "reminders" && parts.length === 4 && request.method === "POST") {
     return updateReminders(request, env, photographerId);
+  }
+  if (section === "account" && parts[3] === "unpaid-reminders" && parts.length === 4 && request.method === "POST") {
+    return updateUnpaidReminders(request, env, photographerId);
   }
   if (section === "account" && parts[3] === "offline-payments" && parts.length === 4 && request.method === "POST") {
     return updateOfflineSettings(request, env, photographerId);

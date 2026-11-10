@@ -97,6 +97,7 @@ function profileOf(photographer, env) {
     defaultLayout: photographer.default_layout || "grille",
     defaultTheme: photographer.default_theme || "classique",
     remindersEnabled: photographer.reminders_enabled !== 0,
+    unpaidRemindersEnabled: photographer.unpaid_reminders_enabled !== 0,
     subdomain: photographer.subdomain || "",
     studioDomain: env?.STUDIO_DOMAIN || "",
     // Donne droit à l'onglet Admin (toutes galeries/comptes confondus, voir

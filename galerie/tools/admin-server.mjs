@@ -1160,6 +1160,27 @@ async function handleApi(req, res, url) {
     }
   }
 
+  // /local/options[/:id] — catalogue des options payantes (Paramètres).
+  if (parts[0] === "options" && (parts.length === 1 || parts.length === 2) && ["GET", "POST", "DELETE"].includes(req.method)) {
+    const path = `/api/admin/options${parts[1] ? "/" + encodeURIComponent(parts[1]) : ""}`;
+    try {
+      const body = req.method === "POST" ? JSON.parse((await readBody(req)).toString("utf8") || "{}") : undefined;
+      return json(res, 200, await client.request(req.method, path, body));
+    } catch (err) {
+      return relayError(res, err, "Impossible d'enregistrer l'option");
+    }
+  }
+
+  // POST /local/account/unpaid-reminders — relance des suppléments impayés.
+  if (parts.length === 2 && parts[0] === "account" && parts[1] === "unpaid-reminders" && req.method === "POST") {
+    const body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
+    try {
+      return json(res, 200, await client.request("POST", "/api/admin/account/unpaid-reminders", { enabled: body.enabled === true }));
+    } catch (err) {
+      return relayError(res, err, "Impossible d'enregistrer le réglage des relances");
+    }
+  }
+
   // GET /local/supplements — suppléments dus, toutes galeries (Facturation).
   if (parts.length === 1 && parts[0] === "supplements" && req.method === "GET") {
     try {
@@ -1751,6 +1772,25 @@ async function handleApi(req, res, url) {
       return json(res, 200, await client.request("POST", `/api/admin/galleries/${encodeURIComponent(slug)}/payments/${encodeURIComponent(parts[3])}/${parts[4]}`, {}));
     } catch (err) {
       return relayError(res, err, "Impossible d'enregistrer ce paiement");
+    }
+  }
+
+  // POST /local/galleries/:slug/supplement/remind — relancer le client.
+  if (parts.length === 4 && parts[2] === "supplement" && parts[3] === "remind" && req.method === "POST") {
+    try {
+      return json(res, 200, await client.request("POST", `/api/admin/galleries/${encodeURIComponent(slug)}/supplement/remind`, {}));
+    } catch (err) {
+      return relayError(res, err, "Impossible d'envoyer la relance");
+    }
+  }
+
+  // POST /local/galleries/:slug/options — options proposées ou non ici.
+  if (parts.length === 3 && parts[2] === "options" && req.method === "POST") {
+    const body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
+    try {
+      return json(res, 200, await client.request("POST", `/api/admin/galleries/${encodeURIComponent(slug)}/options`, { enabled: body.enabled === true }));
+    } catch (err) {
+      return relayError(res, err, "Impossible d'enregistrer ce réglage");
     }
   }
 

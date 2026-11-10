@@ -14,6 +14,7 @@ import { json, fail } from "./http.js";
 import { authenticatePhotographer } from "./authPhotographer.js";
 import { supplementFor } from "./admin.js";
 import { runReminders } from "./reminders.js";
+import { runUnpaidReminders } from "./unpaidreminders.js";
 import { handleOwnerMusic } from "./music.js";
 import { runSalesReminders } from "./campaigns.js";
 import { shopState } from "./shop.js";
@@ -201,7 +202,8 @@ export async function handleOwner(request, env, path) {
     if (!owner) return fail(403, "Accès réservé");
     const result = await runReminders(env);
     const sales = await runSalesReminders(env, shopState);
-    return json({ ...result, sent: [...result.sent, ...sales.sent] });
+    const unpaid = await runUnpaidReminders(env);
+    return json({ ...result, sent: [...result.sent, ...sales.sent, ...unpaid.sent] });
   }
   // Purge du stockage tout de suite (préavis puis effacement des fichiers HD
   // et d'impression des galeries expirées), même passe que le déclencheur.

@@ -10,8 +10,9 @@
 // nouvelle demande (autre moyen, ou sélection qui a changé) remplace la
 // précédente ; un paiement par carte confirmé les efface.
 //
-// Uniquement les suppléments (photos au-delà du forfait) : les tirages
-// restent payés en ligne, ils partent au labo dès le paiement.
+// Uniquement les suppléments (photos au-delà du forfait) et les options
+// cochées (options.js) : les tirages restent payés en ligne, ils partent au
+// labo dès le paiement.
 
 import { json, fail } from "./http.js";
 import { randomBytes, b64url } from "./auth.js";
@@ -20,6 +21,7 @@ import { issueInvoice } from "./billing.js";
 import { expireCheckoutSession } from "./stripe.js";
 import { sendOfflinePaymentRequest, sendOfflinePaymentInstructions } from "./notify.js";
 import { galleryUrlFor } from "./reminders.js";
+import { amountDueFor, unpaidOptionsByGallery, optionsSnapshot, markOptionsPaid } from "./options.js";
 
 export const OFFLINE_METHODS = ["cash", "transfer"];
 
@@ -37,7 +39,7 @@ export function offlineOptionsFor(photographer) {
 
 export async function awaitingOfflinePayment(env, galleryId) {
   return env.DB.prepare(
-    `SELECT id, method, extra_count, amount_cents, created_at FROM payments
+    `SELECT id, method, extra_count, amount_cents, options_json, created_at FROM payments
      WHERE gallery_id = ? AND status = 'awaiting' AND kind = 'supplement'
      ORDER BY created_at DESC LIMIT 1`
   ).bind(galleryId).first();
@@ -63,14 +65,7 @@ function pendingForClient(row) {
   return { method: row.method, extraCount: row.extra_count, amountCents: row.amount_cents, createdAt: row.created_at };
 }
 
-async function outstandingFor(env, gallery) {
-  const selected = await env.DB.prepare("SELECT COUNT(*) AS n FROM photos WHERE gallery_id = ? AND selected = 1")
-    .bind(gallery.id).first();
-  const paid = await env.DB.prepare(
-    "SELECT COALESCE(SUM(extra_count), 0) AS n FROM payments WHERE gallery_id = ? AND status = 'paid'"
-  ).bind(gallery.id).first();
-  return supplementFor(gallery.included_photos, gallery.extra_photo_price_cents, selected?.n || 0, paid?.n || 0);
-}
+const outstandingFor = amountDueFor;
 
 // POST /api/galleries/:slug/offline-payment { method } — demande du client.
 export async function handleOfflineRequest(request, env, ctx, gallery) {
@@ -82,21 +77,18 @@ export async function handleOfflineRequest(request, env, ctx, gallery) {
   }
   const method = String(body?.method || "");
   if (!OFFLINE_METHODS.includes(method)) return fail(400, "Moyen de paiement inconnu");
-  if (gallery.included_photos === null || gallery.included_photos === undefined) {
-    return fail(400, "Aucun forfait n'est défini pour cette galerie");
-  }
-
   const photographer = await env.DB.prepare("SELECT * FROM photographers WHERE id = ?").bind(gallery.photographer_id).first();
   const options = offlineOptionsFor(photographer);
   if (!options[method]) return fail(400, "Ce moyen de paiement n'est pas proposé par le studio");
 
   const supplement = await outstandingFor(env, gallery);
-  if (supplement.dueExtraCount <= 0) return fail(400, "Rien à régler pour le moment");
+  if (supplement.totalCents <= 0) return fail(400, "Rien à régler pour le moment");
+  const snapshot = optionsSnapshot(supplement.options);
 
   // Même demande déjà en cours (double clic, page rechargée) : rien à
   // refaire, et surtout pas de second e-mail au photographe.
   const current = await awaitingOfflinePayment(env, gallery.id);
-  if (current && current.method === method && current.extra_count === supplement.dueExtraCount && current.amount_cents === supplement.dueTotalCents) {
+  if (current && current.method === method && current.extra_count === supplement.dueExtraCount && current.amount_cents === supplement.totalCents && (current.options_json || "") === snapshot) {
     return json({ pending: pendingForClient(current) });
   }
 
@@ -105,9 +97,9 @@ export async function handleOfflineRequest(request, env, ctx, gallery) {
   const id = `pay_${b64url(randomBytes(9))}`;
   const ts = now();
   await env.DB.prepare(
-    `INSERT INTO payments (id, gallery_id, stripe_checkout_session_id, extra_count, amount_cents, fee_cents, status, kind, method, created_at)
-     VALUES (?, ?, ?, ?, ?, 0, 'awaiting', 'supplement', ?, ?)`
-  ).bind(id, gallery.id, `offline_${id}`, supplement.dueExtraCount, supplement.dueTotalCents, method, ts).run();
+    `INSERT INTO payments (id, gallery_id, stripe_checkout_session_id, extra_count, amount_cents, fee_cents, status, kind, method, options_json, created_at)
+     VALUES (?, ?, ?, ?, ?, 0, 'awaiting', 'supplement', ?, ?, ?)`
+  ).bind(id, gallery.id, `offline_${id}`, supplement.dueExtraCount, supplement.totalCents, method, snapshot, ts).run();
 
   const params = {
     method,
@@ -117,7 +109,8 @@ export async function handleOfflineRequest(request, env, ctx, gallery) {
     clientEmail: gallery.client_email || "",
     photographerEmail: photographer.email,
     extraCount: supplement.dueExtraCount,
-    amountCents: supplement.dueTotalCents,
+    amountCents: supplement.totalCents,
+    options: supplement.options,
     cashAddress: options.cashAddress,
   };
   const mails = (async () => {
@@ -129,7 +122,7 @@ export async function handleOfflineRequest(request, env, ctx, gallery) {
   if (ctx?.waitUntil) ctx.waitUntil(mails);
   else await mails;
 
-  return json({ pending: { method, extraCount: supplement.dueExtraCount, amountCents: supplement.dueTotalCents, createdAt: ts } });
+  return json({ pending: { method, extraCount: supplement.dueExtraCount, amountCents: supplement.totalCents, createdAt: ts } });
 }
 
 // POST /api/admin/account/offline-payments — réglages du photographe.
@@ -158,7 +151,8 @@ export async function confirmOfflinePayment(env, gallery, paymentId) {
      WHERE id = ? AND gallery_id = ? AND status = 'awaiting'`
   ).bind(now(), paymentId, gallery.id).run();
   if (!(result.meta && result.meta.changes > 0)) return fail(404, "Demande de paiement introuvable ou déjà traitée");
-  const payment = await env.DB.prepare("SELECT stripe_checkout_session_id FROM payments WHERE id = ?").bind(paymentId).first();
+  const payment = await env.DB.prepare("SELECT * FROM payments WHERE id = ?").bind(paymentId).first();
+  await markOptionsPaid(env, payment);
   await issueInvoice(env, payment.stripe_checkout_session_id);
   return json({ ok: true });
 }
@@ -190,17 +184,20 @@ export async function listDueSupplements(env, photographerId) {
             (SELECT COALESCE(SUM(extra_count), 0) FROM payments WHERE payments.gallery_id = g.id AND payments.status = 'paid') AS paid_extra_count,
             (SELECT method FROM payments WHERE payments.gallery_id = g.id AND payments.status = 'awaiting' AND payments.kind = 'supplement' ORDER BY created_at DESC LIMIT 1) AS awaiting_method,
             (SELECT created_at FROM payments WHERE payments.gallery_id = g.id AND payments.status = 'awaiting' AND payments.kind = 'supplement' ORDER BY created_at DESC LIMIT 1) AS awaiting_at,
-            (SELECT MAX(created_at) FROM payments WHERE payments.gallery_id = g.id AND payments.status = 'pending' AND payments.kind = 'supplement') AS card_started_at
+            (SELECT MAX(created_at) FROM payments WHERE payments.gallery_id = g.id AND payments.status = 'pending' AND payments.kind = 'supplement') AS card_started_at,
+            (SELECT MAX(sent_at) FROM reminders_sent WHERE reminders_sent.gallery_id = g.id AND reminders_sent.kind LIKE 'unpaid_%') AS reminded_at
      FROM galleries g
-     WHERE g.photographer_id = ? AND g.demo = 0 AND g.kind != 'school' AND g.included_photos IS NOT NULL
+     WHERE g.photographer_id = ? AND g.demo = 0 AND g.kind != 'school'
      ORDER BY g.created_at DESC`
   ).bind(photographerId).all();
+  const optionsDue = await unpaidOptionsByGallery(env, photographerId);
 
   const cardCutoff = now() - CARD_SESSION_LIFETIME;
   const supplements = [];
   for (const g of results) {
     const due = supplementFor(g.included_photos, g.extra_photo_price_cents, g.selected_count, g.paid_extra_count);
-    if (due.dueExtraCount <= 0) continue;
+    const options = optionsDue.get(g.id) || { cents: 0, count: 0 };
+    if (due.dueExtraCount <= 0 && options.cents <= 0) continue;
     supplements.push({
       slug: g.slug,
       title: g.title,
@@ -208,8 +205,12 @@ export async function listDueSupplements(env, photographerId) {
       clientEmail: g.client_email || "",
       selectionDoneAt: g.selection_done_at || null,
       dueExtraCount: due.dueExtraCount,
-      dueTotalCents: due.dueTotalCents,
+      extrasCents: due.dueTotalCents,
+      optionsCount: options.count,
+      optionsCents: options.cents,
+      dueTotalCents: due.dueTotalCents + options.cents,
       unitPriceCents: g.extra_photo_price_cents || 0,
+      remindedAt: g.reminded_at || null,
       awaiting: g.awaiting_method ? { method: g.awaiting_method, createdAt: g.awaiting_at } : null,
       cardStartedAt: g.card_started_at && g.card_started_at > cardCutoff ? g.card_started_at : null,
     });
@@ -236,13 +237,9 @@ export async function settleSupplement(request, env, gallery) {
   }
   const method = String(body?.method || "");
   if (!OFFLINE_METHODS.includes(method)) return fail(400, "Moyen de paiement inconnu");
-  if (gallery.included_photos === null || gallery.included_photos === undefined) {
-    return fail(400, "Aucun forfait n'est défini pour cette galerie");
-  }
-
   const supplement = await outstandingFor(env, gallery);
-  if (supplement.dueExtraCount <= 0) return fail(409, "Plus rien à régler sur cette galerie : la page n'était plus à jour");
-  if (Number.isFinite(body?.amountCents) && body.amountCents !== supplement.dueTotalCents) {
+  if (supplement.totalCents <= 0) return fail(409, "Plus rien à régler sur cette galerie : la page n'était plus à jour");
+  if (Number.isFinite(body?.amountCents) && body.amountCents !== supplement.totalCents) {
     return fail(409, "Le client a changé sa sélection : le montant dû n'est plus le même. Rechargez la page et vérifiez avant de confirmer.");
   }
 
@@ -252,9 +249,10 @@ export async function settleSupplement(request, env, gallery) {
   const id = `pay_${b64url(randomBytes(9))}`;
   const ts = now();
   await env.DB.prepare(
-    `INSERT INTO payments (id, gallery_id, stripe_checkout_session_id, extra_count, amount_cents, fee_cents, status, kind, method, created_at, paid_at)
-     VALUES (?, ?, ?, ?, ?, 0, 'paid', 'supplement', ?, ?, ?)`
-  ).bind(id, gallery.id, `offline_${id}`, supplement.dueExtraCount, supplement.dueTotalCents, method, ts, ts).run();
+    `INSERT INTO payments (id, gallery_id, stripe_checkout_session_id, extra_count, amount_cents, fee_cents, status, kind, method, options_json, created_at, paid_at)
+     VALUES (?, ?, ?, ?, ?, 0, 'paid', 'supplement', ?, ?, ?, ?)`
+  ).bind(id, gallery.id, `offline_${id}`, supplement.dueExtraCount, supplement.totalCents, method, optionsSnapshot(supplement.options), ts, ts).run();
+  await markOptionsPaid(env, await env.DB.prepare("SELECT * FROM payments WHERE id = ?").bind(id).first());
 
   // Un paiement par carte commencé puis abandonné ne doit plus pouvoir
   // aboutir : le client paierait deux fois. On ferme sa session Stripe ;
@@ -279,7 +277,7 @@ export async function settleSupplement(request, env, gallery) {
   return json({
     ok: true,
     extraCount: supplement.dueExtraCount,
-    amountCents: supplement.dueTotalCents,
+    amountCents: supplement.totalCents,
     invoiceNumber: invoice?.number || "",
     emailedTo: invoice?.emailed_to || "",
   });

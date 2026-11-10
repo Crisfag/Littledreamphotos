@@ -1405,12 +1405,21 @@ function bytesToBase64(bytes) {
 // écrit directement au client (reply_to), pour lui envoyer le numéro de
 // compte par exemple. Rien n'est réglé tant que le photographe n'a pas
 // cliqué « Marquer comme reçu ».
-export function buildOfflinePaymentRequestEmail({ method, galleryTitle, clientName, clientEmail, extraCount, amountCents, cashAddress, adminUrl, lang }) {
+// « 3 photos en supplément + Retouche avancée × 2, Clé USB » : ce qui est
+// dû, suppléments et options payantes (options.js) confondus.
+function dueParts(extraCount, options, en) {
+  const parts = [];
+  if (extraCount > 0) {
+    parts.push(en ? `${extraCount} extra photo${extraCount > 1 ? "s" : ""}` : `${extraCount} photo${extraCount > 1 ? "s" : ""} en supplément`);
+  }
+  for (const o of options || []) parts.push(o.quantity > 1 ? `${o.label} × ${o.quantity}` : o.label);
+  return parts.join(en ? " + " : " + ");
+}
+
+export function buildOfflinePaymentRequestEmail({ method, galleryTitle, clientName, clientEmail, extraCount, amountCents, options, cashAddress, adminUrl, lang }) {
   const en = lang === "en";
   const who = clientName || (en ? "Your client" : "Votre client");
-  const what = en
-    ? `${extraCount} extra photo${extraCount > 1 ? "s" : ""}, ${formatEuros(amountCents)}`
-    : `${extraCount} photo${extraCount > 1 ? "s" : ""} en supplément, soit ${formatEuros(amountCents)}`;
+  const what = `${dueParts(extraCount, options, en)}${en ? ", " : ", soit "}${formatEuros(amountCents)}`;
   const how = method === "cash" ? (en ? "in cash" : "en espèces") : (en ? "by bank transfer" : "par virement");
   const subject = en ? `${who} wants to pay ${how} — “${galleryTitle}”` : `${who} souhaite régler ${how} — « ${galleryTitle} »`;
   const next = method === "transfer"
@@ -1434,16 +1443,18 @@ export function buildOfflinePaymentRequestEmail({ method, galleryTitle, clientNa
 
 // Au client : récapitulatif de sa demande, avec l'adresse (espèces) ou
 // l'annonce du numéro de compte à venir (virement).
-export function buildOfflinePaymentInstructionsEmail({ method, studioName, galleryTitle, extraCount, amountCents, cashAddress, photographerEmail, galleryUrl, lang }) {
+export function buildOfflinePaymentInstructionsEmail({ method, studioName, galleryTitle, extraCount, amountCents, options, cashAddress, photographerEmail, galleryUrl, lang }) {
   const en = lang === "en";
   const studio = studioName || (en ? "Your photographer" : "Votre photographe");
   const amount = formatEuros(amountCents);
   const subject = en
     ? `Your extras for “${galleryTitle}”: ${amount} ${method === "cash" ? "in cash" : "by bank transfer"}`
     : `Vos suppléments « ${galleryTitle} » : ${amount} ${method === "cash" ? "en espèces" : "par virement"}`;
-  const what = en
-    ? `${extraCount} extra photo${extraCount > 1 ? "s" : ""} beyond your package: ${amount}.`
-    : `${extraCount} photo${extraCount > 1 ? "s" : ""} au-delà de votre forfait : ${amount}.`;
+  const what = options && options.length
+    ? `${dueParts(extraCount, options, en)} : ${amount}.`.replace(" : ", en ? ": " : " : ")
+    : en
+      ? `${extraCount} extra photo${extraCount > 1 ? "s" : ""} beyond your package: ${amount}.`
+      : `${extraCount} photo${extraCount > 1 ? "s" : ""} au-delà de votre forfait : ${amount}.`;
   const how = method === "cash"
     ? (en ? `Please pay in cash at: ${cashAddress}.` : `Le règlement se fait en espèces à l'adresse : ${cashAddress}.`)
     : (en ? `${studio} will send you their bank account number shortly.` : `${studio} vous communique son numéro de compte très vite.`);
@@ -1522,6 +1533,55 @@ export async function sendFamilyLoginLink(env, params) {
 
 export async function sendEmailChangeConfirmation(env, params) {
   await sendEmail(env, { to: params.to, ...buildEmailChangeConfirmationEmail(params) });
+}
+
+// Au client : un supplément (ou une option) reste à régler quelques jours
+// après la validation de sa sélection (unpaidreminders.js). Toutes les
+// façons de régler que propose le studio, et le numéro de compte s'il est
+// renseigné — beaucoup de clients paient directement par virement.
+export function buildUnpaidReminderEmail({ studioName, galleryTitle, clientName, extraCount, options, amountCents, canPayOnline, transfer, iban, accountHolder, cashAddress, awaitingMethod, galleryUrl, lang }) {
+  const en = lang === "en";
+  const studio = studioName || (en ? "Your photographer" : "Votre photographe");
+  const amount = en ? formatEurosEn(amountCents) : formatEuros(amountCents);
+  const subject = en
+    ? `Reminder: ${amount} left to pay for “${galleryTitle}”`
+    : `Petit rappel : ${amount} à régler pour « ${galleryTitle} »`;
+  const hello = clientName ? (en ? `Hello ${clientName},` : `Bonjour ${clientName},`) : (en ? "Hello," : "Bonjour,");
+  const intro = en
+    ? `Thank you for confirming your selection! One thing is still open: ${dueParts(extraCount, options, true)}, for a total of ${amount}.`
+    : `Merci pour votre sélection ! Il reste un petit point en suspens : ${dueParts(extraCount, options, false)}, soit ${amount}.`;
+  const already = awaitingMethod === "transfer"
+    ? (en ? "You told us you would pay by bank transfer: if it's already on its way, please ignore this email." : "Vous nous avez indiqué régler par virement : s'il est déjà parti, ne tenez pas compte de cet e-mail.")
+    : awaitingMethod === "cash"
+      ? (en ? "You told us you would pay in cash: if it's already done, please ignore this email." : "Vous nous avez indiqué régler en espèces : si c'est déjà fait, ne tenez pas compte de cet e-mail.")
+      : (en ? "If you've already paid, please ignore this email." : "Si c'est déjà réglé, ne tenez pas compte de cet e-mail.");
+  const ways = [];
+  if (canPayOnline) ways.push(en ? "Online, by card, from your gallery (“Pay” button)." : "En ligne, par carte, depuis votre galerie (bouton « Régler »).");
+  if (transfer) {
+    ways.push(iban
+      ? (en
+        ? `By bank transfer to ${iban}${accountHolder ? ` (${accountHolder})` : ""}, reference “${galleryTitle}”.`
+        : `Par virement sur le compte ${iban}${accountHolder ? ` (${accountHolder})` : ""}, communication « ${galleryTitle} ».`)
+      : (en ? "By bank transfer: reply to this email and we'll send you our account number." : "Par virement : répondez à cet e-mail, nous vous envoyons notre numéro de compte."));
+  }
+  if (cashAddress) ways.push(en ? `In cash, at: ${cashAddress}.` : `En espèces, à l'adresse : ${cashAddress}.`);
+  const waysTitle = ways.length > 1 ? (en ? "You can pay:" : "Vous pouvez régler :") : (en ? "How to pay:" : "Pour régler :");
+  const contact = en ? "A question? Simply reply to this email." : "Une question ? Répondez simplement à cet e-mail.";
+  const bodyHtml =
+    eyebrow(studio) +
+    heading(escapeHtml(subject)) +
+    paragraph(escapeHtml(hello)) +
+    paragraph(escapeHtml(intro)) +
+    (ways.length ? paragraph(`<strong>${escapeHtml(waysTitle)}</strong><br>` + ways.map((w) => "• " + escapeHtml(w)).join("<br>")) : "") +
+    paragraph(escapeHtml(already), { small: true }) +
+    paragraph(escapeHtml(contact), { small: true }) +
+    (galleryUrl ? emailButton(galleryUrl, en ? "Open my gallery" : "Ouvrir ma galerie") : "");
+  const text = [subject, "", hello, "", intro, "", ...(ways.length ? [waysTitle, ...ways.map((w) => "- " + w), ""] : []), already, contact, galleryUrl || ""].join("\n");
+  return { subject, html: emailShell({ preheader: intro, bodyHtml, lang }), text };
+}
+
+export async function sendUnpaidReminder(env, params) {
+  await sendEmail(env, { to: params.to, ...buildUnpaidReminderEmail(params), ...(params.photographerEmail ? { replyTo: params.photographerEmail } : {}) });
 }
 
 export async function sendClientReminder(env, params) {

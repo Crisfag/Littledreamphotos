@@ -148,7 +148,7 @@ try {
   await page.locator(".gp-item .gp-heart").nth(2).click();
   await page.waitForTimeout(400);
   check("sélection réduite : l'ancienne demande n'est plus montrée, choix à refaire",
-        await page.isHidden("#gp-offline-pending") && /a changé/.test(await page.textContent("#gp-offline-lead")));
+        await page.isHidden("#gp-offline-pending") && /ont changé/.test(await page.textContent("#gp-offline-lead")));
   await page.locator(".gp-item .gp-heart").nth(2).click();
   await page.waitForTimeout(400);
   check("sélection rétablie : la demande en cours réapparaît", /virement demandé/.test(await page.innerText("#gp-offline-pending")));
