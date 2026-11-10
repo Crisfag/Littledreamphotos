@@ -82,7 +82,11 @@
     "/marks": function (body) { return { marks: Array.isArray(body.marks) ? body.marks : [] }; },
     "/validate": function () { return { selectionDoneAt: Math.floor(Date.now() / 1000) }; },
     "/cart": function () { return { ok: true }; },
-    "/event": function () { return { ok: true }; },
+    // Aperçu : la fenêtre « capture détectée » s'affiche comme chez le client,
+    // sans rien envoyer (voir showCaptureNotice).
+    "/event": function (body) {
+      return { ok: true, reported: body.event === "capture_suspected" && ["impr-ecran", "capture-macos", "absence-breve"].indexOf(body.detail) !== -1 };
+    },
   };
   var PREVIEW_BLOCKED = ["/checkout", "/offline-payment", "/print-order", "/delivery/link"];
   function fetch(url, options) {
@@ -1729,7 +1733,27 @@
       headers: Object.assign({ "content-type": "application/json" }, authHeaders()),
       body: JSON.stringify({ event: event, detail: detail || "", photoId: photoId || "" }),
       keepalive: true,
-    }).catch(function () {});
+    })
+      .then(function (response) { return response.ok ? response.json() : null; })
+      .then(function (data) {
+        // Capture signalée au photographe : le client en est prévenu.
+        if (data && data.reported) showCaptureNotice();
+      })
+      .catch(function () {});
+  }
+
+  function showCaptureNotice() {
+    if (!el.capture) return;
+    var studio = (state.gallery && state.gallery.studioName) || "";
+    el.captureText.textContent = (state.preview
+      ? L("Aperçu : rien n'est envoyé. Votre client, lui, verrait ce message, et vous recevriez un e-mail. ", "Preview: nothing is sent. Your client would see this message, and you would get an email. ")
+      : "") +
+      L("Un signalement a été envoyé à votre photographe" + (studio ? " (" + studio + ")" : "") + ". ",
+        "A report has been sent to your photographer" + (studio ? " (" + studio + ")" : "") + ". ") +
+      L("Ces photos sont des épreuves protégées : merci de ne pas les enregistrer ni les partager.", "These photos are protected proofs: please don't save or share them.") +
+      (state.gallery && state.gallery.delivery ? "" : L(" Vos fichiers définitifs vous seront livrés après votre sélection.", " Your final files will be delivered after your selection."));
+    el.capture.hidden = false;
+    el.captureOk.focus();
   }
 
   function sessionLost(message) {
@@ -2445,6 +2469,9 @@
       toolbar: $("gp-toolbar"),
       selectionCount: $("gp-selection-count"),
       toolbarQuota: $("gp-toolbar-quota"),
+      capture: $("gp-capture"),
+      captureText: $("gp-capture-text"),
+      captureOk: $("gp-capture-ok"),
       payButton: $("gp-pay-supplement"),
       payError: $("gp-pay-error"),
       offline: $("gp-offline"),
@@ -2558,6 +2585,12 @@
         updateFilterUI();
       });
     });
+    if (el.captureOk) {
+      el.captureOk.addEventListener("click", function () { el.capture.hidden = true; });
+      el.capture.addEventListener("keydown", function (event) {
+        if (event.key === "Escape") el.capture.hidden = true;
+      });
+    }
     if (el.payCash) {
       el.payCash.addEventListener("click", function () { requestOfflinePayment("cash"); });
       el.payTransfer.addEventListener("click", function () { requestOfflinePayment("transfer"); });

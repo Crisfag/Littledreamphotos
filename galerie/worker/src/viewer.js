@@ -679,6 +679,9 @@ async function handleEvent(request, env, ctx, slug) {
         });
       })()
     );
+    // La page prévient le client qu'un signalement est parti (ou était
+    // déjà parti il y a quelques minutes : le photographe est au courant).
+    return json({ ok: true, reported: true });
   }
 
   return json({ ok: true });

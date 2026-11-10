@@ -22,7 +22,7 @@ Ce projet vise donc autre chose : **rendre le vol peu rentable et traçable.**
 | | Résultat |
 |---|---|
 | Télécharger le fichier | **Empêché.** Les photos sont découpées en tuiles réassemblées dans un canvas : aucune URL ne renvoie une image entière, « enregistrer l'image sous » ne propose rien, un aspirateur de site ne trouve rien. |
-| Capture d'écran | **Non empêchée** — impossible. Découragée (voile au moindre changement de focus, presse-papiers remplacé) et consignée au journal. Pour les raccourcis de capture sans ambiguïté (Impr. écran, capture clavier macOS), le photographe reçoit en plus un **e-mail immédiat avec la référence de la photo affichée**. |
+| Capture d'écran | **Non empêchée** — impossible. Découragée (voile au moindre changement de focus, presse-papiers remplacé) et consignée au journal. Pour les raccourcis de capture sans ambiguïté (Impr. écran, capture clavier macOS), le photographe reçoit en plus un **e-mail immédiat avec la référence de la photo affichée**, et le client voit une fenêtre « Vous venez de faire une capture d'écran — un signalement a été envoyé à votre photographe ». |
 | Qualité du butin | **Inexploitable.** 1600 px de large, filigranés : bon pour un écran, sans valeur pour un tirage. |
 | Filigrane retiré par IA | **Coûteux.** Trame dense traversant tout le sujet, visages compris : l'IA doit reconstruire ce qu'elle ne voit pas, et ça se remarque. |
 | Retrouver l'origine d'une fuite | **Oui.** Empreinte invisible propre à chaque galerie, lisible après capture d'écran, recadrage, redimensionnement, noir et blanc ou ré-encodage JPEG. |
@@ -2163,6 +2163,7 @@ node tests/schoolreminders.test.mjs   # rappels de commande aux familles, autono
 node tests/schoollab.test.mjs         # lots, planches et envoi à un faux BePhoto, autonome (BEPHOTO_API_BASE et BEPHOTO_PREVIEW_BASE=http://127.0.0.1:8791 dans worker/.dev.vars)
 node tests/music.test.mjs             # musique côté client (bibliothèque, lien Spotify), autonome
 node tests/delivery.test.mjs          # livraison des photos définitives côté client, autonome
+node tests/capturenotice.test.mjs     # fenêtre « Vous venez de faire une capture d'écran » côté client, autonome
 node tests/backgroundupload.test.mjs  # envois de photos en arrière-plan : changer de galerie pendant un envoi, panneau de suivi, file partagée entre galeries, autonome (admin-server.mjs lancé)
 node tests/hdmatch.test.mjs           # HD livrée ↔ épreuve : nom de fichier, heure de prise de vue
 node tests/hddelivery.test.mjs        # HD livrées reliées à leur épreuve : dépôt, menu, boutique sur les retouches, autonome (admin-server.mjs lancé)
