@@ -5271,7 +5271,7 @@
       '<section class="ad-dropzone" id="ad-dropzone">' +
       "<p>" + L("<strong>Glissez vos photos ici</strong>, ou", "<strong>Drag your photos here</strong>, or") + "</p>" +
       '<label class="ad-btn ad-btn-primary">' + L("Choisir des fichiers", "Choose files") + '<input type="file" id="ad-file-input" accept="image/*" multiple hidden /></label>' +
-      '<div id="ad-upload-queue" class="ad-upload-queue"></div>' +
+      '<div id="ad-upload-queue" class="ad-upload-queue" data-slug="' + esc(slug) + '"></div>' +
       "</section>" +
       '<section><div class="ad-section-header">' +
       '<h3 id="ad-photos-heading">Photos (' + data.photos.length + ")</h3>" +
@@ -5554,7 +5554,10 @@
       });
     });
 
-    wireUploads(slug, data.photos.length);
+    uploads.titles[slug] = data.gallery.title;
+    wireUploads(slug, data.photos.length + pendingUploadsFor(slug));
+    attachUploadRows(slug);
+    renderUploadPanel();
     wirePhotoRemoval(slug, data.photos);
     wireDemoGuide(slug, data);
     if (keepScroll !== null) window.scrollTo(0, keepScroll);
@@ -5638,88 +5641,268 @@
     });
   }
 
+  /* ---------- Envois de photos en arrière-plan ----------
+   * Une seule file pour tout l'espace photographe, indépendante de l'écran
+   * affiché : on lance l'envoi dans une galerie puis on travaille ailleurs
+   * (autre galerie, réservations…) pendant qu'il continue. Un panneau en bas
+   * de l'écran suit les envois ; la fiche de la galerie retrouve ses lignes
+   * en cours quand on y revient. Deux photos à la fois, toutes galeries
+   * confondues, pour ne pas surcharger le serveur de traitement. Seul un
+   * rechargement ou la fermeture de la page les interromprait : le
+   * navigateur le signale alors. */
+
+  var uploads = { jobs: [], queue: [], active: 0, titles: {}, collapsed: false };
+
+  function uploadJobFor(slug) {
+    for (var i = 0; i < uploads.jobs.length; i++) {
+      var job = uploads.jobs[i];
+      if (job.slug === slug && !job.settled) return job;
+    }
+    var created = { slug: slug, title: uploads.titles[slug] || slug, items: [], settled: false };
+    uploads.jobs.push(created);
+    return created;
+  }
+
+  function uploadPending(item) {
+    return item.status !== "done" && item.status !== "failed";
+  }
+
+  // Photos de cette galerie encore à envoyer : la suivante se place après.
+  function pendingUploadsFor(slug) {
+    var n = 0;
+    uploads.jobs.forEach(function (job) {
+      if (job.slug === slug) job.items.forEach(function (item) { if (uploadPending(item)) n++; });
+    });
+    return n;
+  }
+
   // positions : place d'origine de chaque photo (nouvel essai), sinon à la suite.
   function queueUploads(slug, files, startPosition, positions) {
-    var queue = document.getElementById("ad-upload-queue");
-    var photosSection = document.getElementById("ad-photos");
-    var items = files.map(function (file, index) {
+    var job = uploadJobFor(slug);
+    files.forEach(function (file, index) {
       var row = document.createElement("div");
       row.className = "ad-upload-item";
       row.innerHTML =
         '<span class="ad-upload-name">' + esc(file.name) + "</span>" +
         '<div class="ad-upload-bar"><div class="ad-upload-fill"></div></div>' +
-        '<span class="ad-upload-state">' + L("en attente", "waiting") + '</span>';
-      queue.appendChild(row);
-      return { file: file, row: row, position: positions ? positions[index] : startPosition + index };
+        '<span class="ad-upload-state">' + L("en attente", "waiting") + "</span>";
+      var item = { job: job, file: file, row: row, status: "waiting", position: positions ? positions[index] : startPosition + index };
+      job.items.push(item);
+      uploads.queue.push(item);
     });
+    attachUploadRows(slug);
+    renderUploadPanel();
+    pumpUploads();
+  }
 
-    var fill = function (row, ratio, label) {
-      row.querySelector(".ad-upload-fill").style.width = Math.round(ratio * 100) + "%";
-      row.querySelector(".ad-upload-state").textContent = label;
-    };
+  function fillUpload(item, ratio, label) {
+    item.row.querySelector(".ad-upload-fill").style.width = Math.round(ratio * 100) + "%";
+    item.row.querySelector(".ad-upload-state").textContent = label;
+  }
 
-    var cursor = 0;
-    var succeeded = 0;
-    var failed = 0;
-
-    function next() {
-      if (cursor >= items.length) return Promise.resolve();
-      var item = items[cursor++];
-      fill(item.row, 0, L("envoi…", "uploading…"));
-      return uploadPhotoWithRetry(slug, item.file, item.position, function (ratio) {
-        fill(item.row, ratio * 0.5, ratio < 1 ? L("envoi…", "uploading…") : L("traitement…", "processing…"));
-      }, function () {
-        fill(item.row, 0, L("nouvel essai…", "retrying…"));
-      })
-        .then(function (result) {
-          fill(item.row, 1, L("terminé", "done"));
-          item.row.classList.add("ad-upload-done");
-          succeeded++;
-          if (photosSection) photosSection.insertAdjacentHTML("beforeend", photoThumb(result.photo));
-          setTimeout(function () {
-            item.row.remove();
-          }, 2500);
-        })
-        .catch(function (err) {
-          fill(item.row, 1, L("échec", "failed"));
-          item.row.classList.add("ad-upload-failed");
-          item.row.title = err.message;
-          // La raison, lisible sans survoler (téléphone compris).
-          var reason = document.createElement("span");
-          reason.className = "ad-upload-reason";
-          reason.textContent = err.message;
-          item.row.appendChild(reason);
-          failedItems.push(item);
-          failed++;
-        })
-        .then(next);
+  // Partage équitable : la photo suivante vient de la galerie qui a le
+  // moins d'envois en cours — un petit envoi dans une autre galerie n'attend
+  // pas la fin d'une grosse séance.
+  function nextQueuedUpload() {
+    var best = -1;
+    for (var i = 0; i < uploads.queue.length; i++) {
+      if (best === -1 || (uploads.queue[i].job.active || 0) < (uploads.queue[best].job.active || 0)) best = i;
     }
+    return uploads.queue.splice(best, 1)[0];
+  }
 
-    var failedItems = [];
-    var workers = [];
-    for (var i = 0; i < UPLOAD_CONCURRENCY; i++) workers.push(next());
-    Promise.all(workers).then(function () {
-      // Photos en échec : un bouton les renvoie, sans redéposer les autres.
-      if (failedItems.length) {
+  function pumpUploads() {
+    while (uploads.active < UPLOAD_CONCURRENCY && uploads.queue.length) {
+      var item = nextQueuedUpload();
+      uploads.active++;
+      item.job.active = (item.job.active || 0) + 1;
+      runUpload(item).then(function (done) {
+        uploads.active--;
+        done.job.active--;
+        settleUploadJob(done.job);
+        pumpUploads();
+        renderUploadPanel();
+      });
+    }
+  }
+
+  function runUpload(item) {
+    var slug = item.job.slug;
+    item.status = "uploading";
+    fillUpload(item, 0, L("envoi…", "uploading…"));
+    return uploadPhotoWithRetry(slug, item.file, item.position, function (ratio) {
+      item.status = ratio < 1 ? "uploading" : "processing";
+      fillUpload(item, ratio * 0.5, ratio < 1 ? L("envoi…", "uploading…") : L("traitement…", "processing…"));
+    }, function () {
+      item.status = "retrying";
+      fillUpload(item, 0, L("nouvel essai…", "retrying…"));
+    })
+      .then(function (result) {
+        item.status = "done";
+        fillUpload(item, 1, L("terminé", "done"));
+        item.row.classList.add("ad-upload-done");
+        // Fiche de cette galerie affichée : la vignette apparaît aussitôt
+        // (sauf si la liste relue entre-temps la contient déjà).
+        var photosSection = document.getElementById("ad-photos");
+        var queue = document.getElementById("ad-upload-queue");
+        if (photosSection && queue && queue.getAttribute("data-slug") === slug && result && result.photo &&
+            !photosSection.querySelector('[data-photo-id="' + result.photo.id + '"]')) {
+          photosSection.insertAdjacentHTML("beforeend", photoThumb(result.photo));
+          var heading = document.getElementById("ad-photos-heading");
+          if (heading) heading.textContent = "Photos (" + photosSection.querySelectorAll(".ad-photo").length + ")";
+        }
+        setTimeout(function () { item.row.remove(); }, 2500);
+        return item;
+      })
+      .catch(function (err) {
+        item.status = "failed";
+        item.error = err.message;
+        fillUpload(item, 1, L("échec", "failed"));
+        item.row.classList.add("ad-upload-failed");
+        item.row.title = err.message;
+        // La raison, lisible sans survoler (téléphone compris).
+        var reason = document.createElement("span");
+        reason.className = "ad-upload-reason";
+        reason.textContent = err.message;
+        item.row.appendChild(reason);
+        return item;
+      });
+  }
+
+  // Galerie terminée : bilan (avec son nom si on est ailleurs), bouton
+  // « Réessayer » s'il y a des échecs, retrait du panneau sinon.
+  function settleUploadJob(job) {
+    if (job.settled || job.items.some(uploadPending)) return;
+    job.settled = true;
+    var failed = job.items.filter(function (item) { return item.status === "failed"; });
+    var succeeded = job.items.length - failed.length;
+    var queue = document.getElementById("ad-upload-queue");
+    var here = queue && queue.getAttribute("data-slug") === job.slug;
+    var where = here ? "" : L(" — « " + job.title + " »", " — “" + job.title + "”");
+    if (failed.length === 0) {
+      toast(L(succeeded + " photo(s) envoyée(s)", succeeded + (succeeded === 1 ? " photo uploaded" : " photos uploaded")) + where + ".");
+      setTimeout(function () {
+        uploads.jobs = uploads.jobs.filter(function (j) { return j !== job; });
+        renderUploadPanel();
+      }, 4000);
+    } else {
+      toast(L(succeeded + " envoyée(s), " + failed.length + " en échec", succeeded + " uploaded, " + failed.length + " failed") + where +
+        L(" — la raison est indiquée sous chaque photo.", " — the reason is shown under each photo."), true);
+    }
+    attachUploadRows(job.slug);
+  }
+
+  function retryFailedUploads(job) {
+    var failed = job.items.filter(function (item) { return item.status === "failed"; });
+    failed.forEach(function (item) { item.row.remove(); });
+    uploads.jobs = uploads.jobs.filter(function (j) { return j !== job; });
+    queueUploads(job.slug, failed.map(function (item) { return item.file; }), 0, failed.map(function (item) { return item.position; }));
+  }
+
+  // Fiche de la galerie (re)dessinée : ses lignes d'envoi y reviennent.
+  function attachUploadRows(slug) {
+    var queue = document.getElementById("ad-upload-queue");
+    if (!queue || queue.getAttribute("data-slug") !== slug) return;
+    // Une ligne « terminé » encore affichée y reste (elle s'efface seule).
+    var shown = new Set(Array.prototype.slice.call(queue.children));
+    queue.textContent = "";
+    uploads.jobs.forEach(function (job) {
+      if (job.slug !== slug) return;
+      job.items.forEach(function (item) {
+        if (item.status !== "done" || shown.has(item.row)) queue.appendChild(item.row);
+      });
+      if (job.settled && job.items.some(function (item) { return item.status === "failed"; })) {
+        var failedCount = job.items.filter(function (item) { return item.status === "failed"; }).length;
         var retry = document.createElement("button");
         retry.type = "button";
         retry.className = "ad-btn ad-upload-retry";
-        retry.textContent = L("Réessayer les " + failedItems.length + " photo" + (failedItems.length > 1 ? "s" : "") + " en échec",
-          "Retry " + failedItems.length + " failed photo" + (failedItems.length > 1 ? "s" : ""));
-        retry.addEventListener("click", function () {
-          var again = failedItems.map(function (it) { it.row.remove(); return it; });
-          retry.remove();
-          queueUploads(slug, again.map(function (it) { return it.file; }), 0, again.map(function (it) { return it.position; }));
-        });
+        retry.textContent = L("Réessayer les " + failedCount + " photo" + (failedCount > 1 ? "s" : "") + " en échec",
+          "Retry " + failedCount + " failed photo" + (failedCount > 1 ? "s" : ""));
+        retry.addEventListener("click", function () { retryFailedUploads(job); });
         queue.appendChild(retry);
       }
-      if (failed === 0) toast(L(succeeded + " photo(s) envoyée(s).", succeeded + (succeeded === 1 ? " photo uploaded." : " photos uploaded.")));
-      else toast(L(succeeded + " envoyée(s), " + failed + " en échec — survolez la ligne pour le détail.", succeeded + " uploaded, " + failed + " failed — hover the row for details."), failed > 0);
-      var photos = document.querySelectorAll("#ad-photos .ad-photo").length;
-      var heading = document.getElementById("ad-photos-heading");
-      if (heading) heading.textContent = "Photos (" + photos + ")";
     });
   }
+
+  // Panneau en bas de l'écran : un envoi par galerie, sauf celle affichée
+  // (sa fiche montre déjà le détail).
+  var uploadPanelFrame = 0;
+  function renderUploadPanel() {
+    if (uploadPanelFrame) return;
+    uploadPanelFrame = requestAnimationFrame(function () {
+      uploadPanelFrame = 0;
+      drawUploadPanel();
+    });
+  }
+
+  function drawUploadPanel() {
+    var panel = document.getElementById("ad-uploads-panel");
+    if (!panel) {
+      panel = document.createElement("aside");
+      panel.id = "ad-uploads-panel";
+      panel.className = "ad-uploads-panel";
+      panel.setAttribute("aria-live", "polite");
+      document.body.appendChild(panel);
+      panel.addEventListener("click", function (event) {
+        var toggle = event.target.closest("[data-uploads-toggle]");
+        var retry = event.target.closest("[data-uploads-retry]");
+        if (toggle) {
+          uploads.collapsed = !uploads.collapsed;
+          drawUploadPanel();
+        } else if (retry) {
+          var job = uploads.jobs[Number(retry.getAttribute("data-uploads-retry"))];
+          if (job) retryFailedUploads(job);
+        }
+      });
+    }
+    var queue = document.getElementById("ad-upload-queue");
+    var shownSlug = queue ? queue.getAttribute("data-slug") : null;
+    var jobs = uploads.jobs.filter(function (job) { return job.slug !== shownSlug; });
+    if (!jobs.length) {
+      panel.hidden = true;
+      return;
+    }
+    var pending = 0;
+    var rows = jobs.map(function (job) {
+      var total = job.items.length;
+      var done = job.items.filter(function (item) { return item.status === "done"; }).length;
+      var failed = job.items.filter(function (item) { return item.status === "failed"; }).length;
+      var left = total - done - failed;
+      pending += left;
+      var status = left
+        ? done + " / " + total + L(" envoyée" + (total > 1 ? "s" : ""), " uploaded")
+        : failed ? L("terminé", "finished") : L("terminé ✓", "finished ✓");
+      return '<li class="ad-uploads-job' + (failed ? " ad-uploads-job-failed" : "") + (left ? "" : " ad-uploads-job-done") + '">' +
+        '<a href="#/g/' + encodeURIComponent(job.slug) + '" class="ad-uploads-title">' + esc(job.title) + "</a>" +
+        '<span class="ad-uploads-count">' + status + (failed ? " · " + failed + L(" en échec", " failed") : "") + "</span>" +
+        '<div class="ad-upload-bar"><div class="ad-upload-fill" style="width:' + Math.round(((done + failed) / total) * 100) + '%"></div></div>' +
+        (failed && !left ? '<button type="button" class="ad-link-btn" data-uploads-retry="' + uploads.jobs.indexOf(job) + '">' + L("Réessayer", "Retry") + "</button>" : "") +
+        "</li>";
+    }).join("");
+    panel.hidden = false;
+    panel.classList.toggle("ad-uploads-collapsed", uploads.collapsed);
+    panel.innerHTML =
+      '<button type="button" class="ad-uploads-head" data-uploads-toggle aria-expanded="' + !uploads.collapsed + '">' +
+      "<span>" + (pending
+        ? L("Envoi de " + pending + " photo" + (pending > 1 ? "s" : "") + " en cours", "Uploading " + pending + " photo" + (pending > 1 ? "s" : ""))
+        : L("Envois terminés", "Uploads finished")) + "</span>" +
+      '<span aria-hidden="true">' + (uploads.collapsed ? "▴" : "▾") + "</span></button>" +
+      (uploads.collapsed ? "" : '<ul class="ad-uploads-list">' + rows + "</ul>" +
+        (pending ? '<p class="ad-uploads-hint">' + L("Vous pouvez continuer à travailler : ne rechargez pas et ne fermez pas cette page.", "You can keep working: don't reload or close this page.") + "</p>" : ""));
+  }
+
+  // Fermer ou recharger la page couperait les envois : le navigateur demande.
+  window.addEventListener("beforeunload", function (event) {
+    var busy = uploads.jobs.some(function (job) { return job.items.some(uploadPending); });
+    if (!busy) return;
+    event.preventDefault();
+    event.returnValue = "";
+  });
+  window.addEventListener("popstate", renderUploadPanel);
+  // Changement d'écran (onglet, fiche) : le panneau montre ou cache la
+  // galerie qu'on quitte ou qu'on ouvre.
+  if (el.view && window.MutationObserver) new MutationObserver(renderUploadPanel).observe(el.view, { childList: true });
+
 
   document.getElementById("ad-check-photo").addEventListener("click", function () {
     renderDetect();

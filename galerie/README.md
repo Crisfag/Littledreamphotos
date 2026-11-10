@@ -446,6 +446,15 @@ Le tableau de bord s'organise en trois onglets, chacun avec son propre lien
   propres à un fichier (ou au ZIP) et signés avec une clé distincte des
   sessions ; fermer la livraison les coupe aussitôt. Chaque téléchargement
   est inscrit au journal d'accès. Les fichiers sont effacés avec la galerie.
+- **Envois de photos en arrière-plan** : l'envoi lancé dans une galerie
+  continue pendant qu'on travaille ailleurs dans l'espace photographe (autre
+  galerie, réservations…). Une seule file pour tout l'espace, deux photos à
+  la fois, partagée équitablement entre galeries (un petit envoi n'attend
+  pas la fin d'une grosse séance) ; un panneau en bas de l'écran suit chaque
+  galerie (progression, échecs, « Réessayer », lien vers la fiche), la
+  fiche retrouve ses lignes en cours quand on y revient, et le navigateur
+  demande confirmation avant de fermer ou recharger la page tant qu'un
+  envoi est en cours.
 - **HD livrées reliées à leur épreuve (galerie et boutique de tirages)** :
   chaque HD déposée est rattachée à la photo de la galerie qu'elle
   remplace — d'après le nom du fichier (« DSC_3662.jpg » ↔
@@ -2154,6 +2163,7 @@ node tests/schoolreminders.test.mjs   # rappels de commande aux familles, autono
 node tests/schoollab.test.mjs         # lots, planches et envoi à un faux BePhoto, autonome (BEPHOTO_API_BASE et BEPHOTO_PREVIEW_BASE=http://127.0.0.1:8791 dans worker/.dev.vars)
 node tests/music.test.mjs             # musique côté client (bibliothèque, lien Spotify), autonome
 node tests/delivery.test.mjs          # livraison des photos définitives côté client, autonome
+node tests/backgroundupload.test.mjs  # envois de photos en arrière-plan : changer de galerie pendant un envoi, panneau de suivi, file partagée entre galeries, autonome (admin-server.mjs lancé)
 node tests/hdmatch.test.mjs           # HD livrée ↔ épreuve : nom de fichier, heure de prise de vue
 node tests/hddelivery.test.mjs        # HD livrées reliées à leur épreuve : dépôt, menu, boutique sur les retouches, autonome (admin-server.mjs lancé)
 node tests/sales.test.mjs             # onglet Ventes, autonome (admin-server.mjs lancé)
