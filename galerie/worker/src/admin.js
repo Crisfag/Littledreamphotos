@@ -26,7 +26,7 @@ import { handleClientsAdmin } from "./clients.js";
 import { handlePlanningAdmin } from "./planning.js";
 import { setPromo, sendPromoToClient, promoForAdmin } from "./campaigns.js";
 import { galleryUrlFor } from "./reminders.js";
-import { updateOfflineSettings, confirmOfflinePayment, cancelOfflinePayment } from "./offlinepay.js";
+import { updateOfflineSettings, confirmOfflinePayment, cancelOfflinePayment, listDueSupplements, settleSupplement } from "./offlinepay.js";
 import { salesForAdmin } from "./sales.js";
 import { insightsForAdmin, setSessionType, cleanSessionType, guessSessionType } from "./insights.js";
 import { handlePortfolioAdmin, deletePortfolioFiles } from "./portfolio.js";
@@ -900,6 +900,13 @@ export async function handleAdmin(request, env, ctx, path) {
       if (!gallery) return fail(404, "Galerie introuvable");
       return parts[6] === "received" ? confirmOfflinePayment(env, gallery, parts[5]) : cancelOfflinePayment(env, gallery, parts[5]);
     }
+    // Supplément réglé hors galerie (virement sur le compte, espèces) : coché
+    // depuis le tableau des suppléments dus ou la fiche de la galerie.
+    if (parts.length === 6 && parts[4] === "supplement" && parts[5] === "settle" && request.method === "POST") {
+      const gallery = await ownedGallery(env, photographerId, slug);
+      if (!gallery) return fail(404, "Galerie introuvable");
+      return settleSupplement(request, env, gallery);
+    }
   }
 
   // Table des empreintes : c'est la liste des candidats que l'outil de
@@ -950,6 +957,9 @@ export async function handleAdmin(request, env, ctx, path) {
     return getInvoice(env, photographerId, parts[3]);
   }
 
+  if (section === "supplements" && parts.length === 3 && request.method === "GET") {
+    return listDueSupplements(env, photographerId);
+  }
   if (section === "stats" && parts.length === 3 && request.method === "GET") {
     return getStats(env, photographerId);
   }

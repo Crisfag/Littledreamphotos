@@ -148,6 +148,12 @@ export function createCheckoutSession(env, connectedAccountId, { label, unitAmou
   });
 }
 
+// Ferme une page de paiement encore ouverte : elle ne peut plus être
+// payée. Stripe refuse si elle vient d'être payée (ou a déjà expiré).
+export function expireCheckoutSession(env, sessionId) {
+  return stripeRequest(env, "POST", `/checkout/sessions/${encodeURIComponent(sessionId)}/expire`);
+}
+
 // Commande d'une famille (module scolaire) : plusieurs articles, charge de
 // destination vers le photographe comme pour les tirages, adresse de
 // livraison demandée par Stripe seulement pour un envoi à domicile.

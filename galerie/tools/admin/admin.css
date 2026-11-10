@@ -2032,6 +2032,21 @@ main section.ad-demo {
 .ad-offline-address { margin: .2rem 0 .8rem 1.7rem; }
 #ad-offline-form .ad-toggle { display: flex; margin-bottom: .5rem; }
 
+/* Suppléments réglés hors galerie : tableau de la Facturation, fiche galerie. */
+.ad-settle { display: flex; flex-wrap: wrap; gap: .4rem; }
+.ad-settle-btn { display: inline-flex; align-items: center; gap: .35rem; white-space: nowrap; }
+.ad-settle-btn svg { color: var(--accent-deep); flex: none; }
+.ad-settle-hint { margin: .7rem 0 .4rem; }
+.ad-due-client, .ad-due-detail, .ad-due-when { display: block; font-size: .8rem; color: var(--muted); margin-top: .15rem; }
+.ad-due-status .ad-badge { white-space: normal; }
+.ad-due-amount { white-space: nowrap; }
+@media (max-width: 720px) {
+  .ad-due-table thead { display: none; }
+  .ad-due-table, .ad-due-table tbody, .ad-due-table tr, .ad-due-table td { display: block; width: 100%; }
+  .ad-due-table tr { padding: .8rem 0; border-bottom: 1px solid var(--line); }
+  .ad-due-table td { border: 0; padding: .2rem 0; }
+}
+
 /* ---------- HD livrées reliées à leur épreuve (galerie et boutique) ---------- */
 
 .ad-delivery-links { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1rem; margin: 0 0 .7rem; }
