@@ -814,6 +814,30 @@ h1 { font-family: var(--title, var(--serif)); font-weight: 500; font-size: clamp
 }
 .gp-veil span { color: var(--muted); font-size: .92rem; }
 
+/* Capture détectée : le client est prévenu qu'un signalement est parti. */
+.gp-capture {
+  position: fixed; inset: 0; z-index: 95;
+  display: grid; place-items: center; padding: 1rem;
+  background: rgba(43, 37, 33, .6); backdrop-filter: blur(6px);
+}
+.gp-capture-card {
+  width: min(440px, 100%);
+  background: var(--ivory); border-radius: 16px; padding: 1.7rem 1.5rem 1.4rem;
+  text-align: center; box-shadow: 0 30px 80px -30px rgba(0, 0, 0, .6);
+}
+.gp-capture-eyebrow {
+  font-size: .72rem; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--rose-deep);
+}
+.gp-capture-card h2 {
+  margin: .5rem 0 .8rem; font-family: var(--serif); font-weight: 400; font-size: clamp(1.4rem, 4.5vw, 1.75rem); line-height: 1.2; color: var(--ink);
+}
+.gp-capture-card p:not(.gp-capture-eyebrow) { font-size: .92rem; line-height: 1.6; color: var(--ink); }
+.gp-capture-ok {
+  margin-top: 1.2rem; font-family: var(--sans); font-size: .82rem; font-weight: 500; letter-spacing: .07em;
+  color: #fff; background: var(--rose); border: 0; border-radius: 999px; padding: .65rem 1.4rem; cursor: pointer;
+}
+.gp-capture-ok:hover { background: var(--rose-deep); }
+
 /* Ceinture et bretelles : même si le voile tardait, les photos sont floutées. */
 body.gp-veiled .gp-canvas,
 body.gp-veiled #gp-viewer-canvas {
