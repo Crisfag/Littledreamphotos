@@ -25,11 +25,10 @@ const MAX_COMMENT_LENGTH = 500;
 const EVENTS_ALLOWED = new Set(["view", "capture_suspected", "blur", "print", "devtools"]);
 
 // "impr-ecran" et "capture-macos" sont des raccourcis de capture sans
-// ambiguïté. "absence-breve" est un signal plus indirect mais nécessaire
-// sur macOS, où le système intercepte Cmd+Maj+3/4/5 avant que le navigateur
-// ne puisse voir passer le raccourci lui-même : le client n'a alors journalisé
-// qu'un changement de fenêtre ou d'onglet très bref (voir gallery.js), plus
-// probablement l'éclair d'une capture qu'un vrai changement d'application.
+// ambiguïté. "absence-breve" : le système (Windows, macOS) intercepte
+// Win+Maj+S ou Cmd+Maj+3/4/5 avant le navigateur, mais la page a vu les
+// touches Win/Cmd et Maj enfoncées juste avant de perdre le focus (voir
+// gallery.js) — une absence sans ces touches n'est jamais signalée.
 const EMAIL_ALERT_REASONS = new Set(["impr-ecran", "capture-macos", "absence-breve"]);
 const ALERT_COOLDOWN_SECONDS = 120;
 

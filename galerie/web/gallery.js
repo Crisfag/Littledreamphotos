@@ -2335,16 +2335,29 @@
   var veilTimer = null;
   var blurStartedAt = 0;
   var blurReason = "";
-  // Sur macOS, le raccourci de capture (Cmd+Maj+3/4/5) est intercepté par le
-  // système avant même d'atteindre le navigateur — impossible à voir passer
-  // comme un raccourci clavier. Ce qu'on voit, en revanche : l'éclair très
-  // bref d'un changement de fenêtre ou d'onglet au moment de la capture,
-  // bien plus court qu'un vrai passage à une autre application. Compte le
-  // temps de sélectionner une zone (Cmd+Maj+4) et de voir la miniature de
-  // confirmation s'afficher : mesuré en usage réel autour de 2-3 s, donc une
-  // marge confortable pour ne pas rater le signal tout en excluant un vrai
-  // départ vers une autre application (souvent bien plus long).
-  var BRIEF_ABSENCE_MS = 4000;
+  var blurAfterShortcut = false;
+  // Une courte absence de la page ne suffit pas à conclure à une capture :
+  // une notification, un clic dans la barre d'adresse, un coup d'œil sur un
+  // autre onglet ou une bannière de téléphone font exactement la même chose
+  // (et c'est ce qui prévenait le photographe à tort). Ce qui distingue une
+  // vraie capture sur ordinateur : son raccourci. Windows (Win + Maj + S) et
+  // macOS (Cmd + Maj + 3/4/5) l'interceptent avant le navigateur, mais la
+  // page voit d'abord passer les touches Win/Cmd et Maj enfoncées ensemble.
+  // On ne signale donc une absence que si elle suit ces deux touches de
+  // près. Une capture faite autrement (outil lancé à la souris, téléphone)
+  // n'est pas signalée : on préfère la rater qu'accuser un client à tort.
+  var lastCaptureShortcutAt = 0;
+  var SHORTCUT_BEFORE_BLUR_MS = 3000;
+  // Le temps de choisir une zone (Cmd + Maj + 4, Win + Maj + S) ou d'utiliser
+  // la barre de capture (Cmd + Maj + 5) avant de revenir à la page.
+  var CAPTURE_ABSENCE_MAX_MS = 15000;
+
+  function noteShortcutKeys(event) {
+    if (event.type !== "keydown" || !event.shiftKey) return;
+    var winOrCmd = event.metaKey || event.key === "Meta" || event.key === "OS" ||
+      (event.getModifierState && event.getModifierState("OS"));
+    if (winOrCmd) lastCaptureShortcutAt = Date.now();
+  }
 
   // Masquer les photos dès que l'attention quitte la page : la plupart des
   // outils de capture prennent le focus, et un raccourci de capture se voit.
@@ -2354,10 +2367,12 @@
     document.body.classList.add("gp-veiled");
     clearTimeout(veilTimer);
     if (reason === "perte-focus" || reason === "onglet-masque") {
-      // On ne sait pas encore si c'est un vrai changement d'application ou
-      // l'éclair d'une capture : on tranche au retour du focus, selon la
-      // durée de l'absence (voir unveil ci-dessous).
-      blurStartedAt = Date.now();
+      // On ne sait pas encore si c'est une capture : on tranche au retour,
+      // selon le raccourci qui a précédé et la durée de l'absence.
+      if (!blurReason) {
+        blurStartedAt = Date.now();
+        blurAfterShortcut = blurStartedAt - lastCaptureShortcutAt < SHORTCUT_BEFORE_BLUR_MS;
+      }
       blurReason = reason;
       return;
     }
@@ -2370,19 +2385,33 @@
     }
   }
 
+  function hideVeil(delay) {
+    clearTimeout(veilTimer);
+    veilTimer = setTimeout(function () {
+      el.veil.hidden = true;
+      document.body.classList.remove("gp-veiled");
+    }, delay);
+  }
+
   function unveil() {
     clearTimeout(veilTimer);
     if (blurReason) {
       var elapsed = Date.now() - blurStartedAt;
-      var finalReason = elapsed < BRIEF_ABSENCE_MS ? "absence-breve" : blurReason;
+      var likelyCapture = blurAfterShortcut && elapsed < CAPTURE_ABSENCE_MAX_MS;
       var photo = currentViewerPhoto();
-      logEvent("capture_suspected", finalReason, photo ? photo.id : "");
+      logEvent("capture_suspected", likelyCapture ? "absence-breve" : blurReason, photo ? photo.id : "");
       blurReason = "";
+      blurAfterShortcut = false;
+      lastCaptureShortcutAt = 0;
     }
-    veilTimer = setTimeout(function () {
-      el.veil.hidden = true;
-      document.body.classList.remove("gp-veiled");
-    }, 220);
+    hideVeil(220);
+  }
+
+  // Un clic dans le film d'en-tête ou un lecteur intégré (iframe) retire le
+  // focus à la page sans que le client l'ait quittée : ni voile, ni trace.
+  function focusMovedIntoFrame() {
+    var active = document.activeElement;
+    return Boolean(active && active.tagName === "IFRAME" && document.hasFocus() && !document.hidden);
   }
 
   // Meilleur effort : remplacer le presse-papiers juste après une capture.
@@ -2428,6 +2457,7 @@
     // Sur Windows, « Impr. écran » ne déclenche souvent que keyup : on écoute
     // les deux. Sur macOS, la capture passe par Cmd + Maj + 3/4/5.
     function onKey(event) {
+      noteShortcutKeys(event);
       var key = event.key;
       var meta = event.metaKey || event.ctrlKey;
 
@@ -2459,6 +2489,15 @@
 
     window.addEventListener("blur", function () {
       veil("perte-focus");
+      // Le focus n'arrive dans l'iframe qu'après l'évènement : on vérifie
+      // juste après, et on retire le voile si le client est resté sur la page.
+      setTimeout(function () {
+        if (blurReason === "perte-focus" && focusMovedIntoFrame()) {
+          blurReason = "";
+          blurAfterShortcut = false;
+          hideVeil(0);
+        }
+      }, 0);
     });
     window.addEventListener("focus", unveil);
     document.addEventListener("visibilitychange", function () {

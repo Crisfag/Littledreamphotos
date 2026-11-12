@@ -42,8 +42,8 @@ const macos = buildCaptureAlertEmail({ ...base, reason: "capture-macos" });
 check("la raison macOS est traduite en texte lisible", macos.html.includes("macOS"));
 
 const briefAbsence = buildCaptureAlertEmail({ ...base, reason: "absence-breve" });
-check("l'absence brève (macOS, raccourci non détectable) est traduite en texte lisible",
-      briefAbsence.html.includes("changement de fenêtre"));
+check("l'absence brève après Cmd/Win + Maj est traduite en texte lisible",
+      briefAbsence.html.includes("raccourci de capture") && briefAbsence.html.includes("changement de fenêtre"));
 
 const unknownReason = buildCaptureAlertEmail({ ...base, reason: "quelque-chose-d-inconnu" });
 check("une raison inconnue retombe sur un texte générique plutôt que de planter",

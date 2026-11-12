@@ -4939,14 +4939,14 @@
     "enregistrer": "Tentative d'enregistrement",
     "perte-focus": "Changement de fenêtre",
     "onglet-masque": "Onglet mis en arrière-plan",
-    "absence-breve": "Absence très brève (capture probable)",
+    "absence-breve": "Raccourci de capture (Cmd/Win + Maj)",
   };
   // Ces raisons précises sont celles qui déclenchent une alerte par e-mail
   // au photographe (voir worker/src/viewer.js) : on le signale ici.
   var EMAIL_ALERT_REASONS = new Set(["impr-ecran", "capture-macos", "absence-breve"]);
   var CAPTURE_REASON_LABELS_EN = {
     "impr-ecran": "Print Screen key", "capture-macos": "Screenshot shortcut (macOS)", "enregistrer": "Save attempt",
-    "perte-focus": "Window switch", "onglet-masque": "Tab moved to the background", "absence-breve": "Very brief absence (likely screenshot)",
+    "perte-focus": "Window switch", "onglet-masque": "Tab moved to the background", "absence-breve": "Screenshot shortcut (Cmd/Win + Shift)",
   };
 
   function logRow(entry, photosById) {
