@@ -1324,6 +1324,20 @@ main section > p, .ad-share > p { max-width: 75ch; }
   transition: background-color .15s var(--ease), color .15s var(--ease);
 }
 .ad-bk-chip button:hover { background: var(--alert-bg); color: var(--alert-ink); }
+.ad-bk-chip button.ad-bk-chip-book svg { fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
+.ad-bk-chip button.ad-bk-chip-book:hover { background: var(--accent-soft); color: var(--accent-deep); }
+.ad-bk-chip-active { border-color: var(--accent); box-shadow: var(--ring); }
+.ad-bk-book-hint { margin: .9rem 0 .2rem; }
+.ad-bk-book {
+  margin: 1rem 0; padding: 1rem 1.1rem 1.1rem;
+  border: 1px solid rgba(59, 59, 246, .25); border-radius: var(--radius); background: var(--paper);
+  box-shadow: 0 0 0 4px var(--accent-soft);
+}
+.ad-bk-book-head { margin-bottom: .7rem; }
+.ad-bk-book-head h4 { font-size: .95rem; font-weight: 600; }
+.ad-bk-book-head .ad-hint { margin-top: .15rem; }
+.ad-bk-book-head .ad-hint::first-letter { text-transform: uppercase; }
+.ad-bk-book-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
 .ad-bk-chip-booked { padding-right: .75rem; background: var(--accent-soft); border-color: rgba(59, 59, 246, .25); color: var(--accent-deep); }
 .ad-bk-table td { vertical-align: top; }
 .ad-bk-table a.ad-acc-sub { color: var(--muted); text-decoration: none; }
@@ -2126,3 +2140,37 @@ main section.ad-demo {
 .ad-intro-keep { margin: -.3rem 0 1rem; }
 .ad-intro-keep .ad-toggle { display: flex; font-size: .88rem; }
 .ad-intro-keep-name { margin: .6rem 0 0 1.7rem; max-width: 22rem; }
+
+/* ---------- Sélecteur de fiche client ---------- */
+.ad-cpick { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: .3rem .6rem; margin: 0 0 .75rem; }
+.ad-cpick-btn { display: inline-flex; align-items: center; gap: .4rem; min-height: 34px; }
+.ad-cpick-btn svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.ad-cpick-caret { transition: transform .2s var(--ease); }
+.ad-cpick-btn[aria-expanded="true"] .ad-cpick-caret { transform: rotate(180deg); }
+.ad-cpick-picked { font-size: .82rem; color: var(--ok-ink); }
+.ad-cpick-picked:empty { display: none; }
+.ad-cpick-panel {
+  position: absolute; z-index: 40; top: calc(100% + 6px); left: 0;
+  width: min(420px, 100%); padding: .5rem;
+  background: var(--paper); border-radius: var(--radius); box-shadow: var(--shadow-float);
+}
+.ad-cpick-search {
+  width: 100%; min-height: 40px; padding: 0 .75rem;
+  font: inherit; font-size: .9rem; color: var(--ink);
+  background: var(--mist); border: 1px solid var(--line-2); border-radius: 9px;
+}
+.ad-cpick-search:focus { outline: none; border-color: var(--accent); box-shadow: var(--ring); background: var(--paper); }
+.ad-cpick-list { list-style: none; margin: .4rem 0 0; padding: 0; max-height: 300px; overflow-y: auto; overscroll-behavior: contain; }
+.ad-cpick-list [role=option] {
+  display: flex; flex-direction: column; gap: .1rem; padding: .5rem .6rem; border-radius: 8px; cursor: pointer;
+  min-height: 44px; justify-content: center;
+}
+.ad-cpick-list [role=option]:hover, .ad-cpick-list [aria-selected="true"] { background: var(--accent-soft); }
+.ad-cpick-name { font-size: .9rem; font-weight: 600; color: var(--ink); overflow-wrap: anywhere; }
+.ad-cpick-meta { font-size: .8rem; color: var(--muted); overflow-wrap: anywhere; }
+.ad-cpick-tag {
+  display: inline-block; margin-left: .3rem; padding: 0 .4rem; border-radius: 999px;
+  font-size: .7rem; font-weight: 500; color: var(--warn-ink); background: var(--warn-bg); vertical-align: 1px;
+}
+.ad-cpick-head { padding: .35rem .6rem .2rem; font-size: .72rem; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-soft); }
+.ad-cpick-empty { padding: .7rem .6rem; font-size: .85rem; color: var(--muted); }

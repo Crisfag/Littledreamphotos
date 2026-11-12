@@ -723,6 +723,7 @@
     }).join("");
     // Langue du client : celle de l'espace photographe, au départ.
     form.language.value = LANG;
+    mountClientPicker(document.getElementById("ad-create-cpick"), { form: form, fields: { name: "clientName", email: "clientEmail" } });
     document.getElementById("ad-create-error").hidden = true;
     openModal("ad-create-modal");
   }
@@ -1135,6 +1136,7 @@
     var single = f.schedule && f.schedule.length === 1 ? f.schedule[0] : null;
     return '<section id="ad-ci-editor" class="ad-ci-editor"><div class="ad-section-header"><h3>' + (f.id ? "Modifier le brouillon" : "Nouvelle facture") + "</h3></div>" +
       '<form id="ad-ci-form" novalidate>' +
+      '<div data-cpick="ci"></div>' +
       '<div class="ad-field-row">' +
       '<label class="ad-field"><span>Client</span><input name="clientName" maxlength="160" placeholder="ex. Camille Dubois" value="' + esc(f.clientName || (f.client && f.client.name) || "") + '" /></label>' +
       '<label class="ad-field"><span>E-mail <em>(pour l\'envoyer et relancer)</em></span><input type="email" name="clientEmail" maxlength="200" value="' + esc(f.clientEmail || (f.client && f.client.email) || "") + '" /></label>' +
@@ -1326,6 +1328,18 @@
 
     var form = document.getElementById("ad-ci-form");
     if (!form) return;
+    // Client habitué : nom et e-mail depuis sa fiche, adresse et TVA depuis
+    // sa dernière facture (s'il en a déjà reçu une).
+    mountClientPicker(form.querySelector("[data-cpick]"), {
+      form: form,
+      fields: { name: "clientName", email: "clientEmail" },
+      onPick: function (c, put) {
+        var last = (data.invoices || []).filter(function (f) { return f.client && f.client.email === c.email; })
+          .sort(function (a, b) { return (b.issuedAt || b.createdAt || 0) - (a.issuedAt || a.createdAt || 0); })[0];
+        put("clientAddress", last ? last.client.address : "");
+        put("clientVat", last ? last.client.vat : "");
+      },
+    });
     var lines = document.getElementById("ad-ci-lines");
     var steps = document.getElementById("ad-ci-steps");
     var refresh = function () { ciRefreshTotals(form); };
@@ -7936,8 +7950,10 @@
         : '<label class="ad-field ad-bk-times"><span>Heure(s) <em>(séparées par des virgules)</em></span><input name="times" placeholder="ex. 10:00, 14:30" required /></label>') +
       '<button type="submit" class="ad-btn ad-btn-primary">Ouvrir ' + (series ? "la série" : "les créneaux") + "</button>" +
       "</div></form>" +
+      bookForClientHtml(data) +
       (days.length
-        ? '<div class="ad-bk-days">' + days.map(function (day) {
+        ? '<p class="ad-hint ad-bk-book-hint">Un client habitué vous a appelé ? Cliquez sur <strong>+</strong> à côté d\'un horaire libre pour le réserver à son nom.</p>' +
+          '<div class="ad-bk-days">' + days.map(function (day) {
             // Le nom de la formule n'est utile que si plusieurs se partagent la journée.
             var mixed = byDay[day].some(function (s) { return s.offerId !== byDay[day][0].offerId; });
             var single = !mixed && offersById[byDay[day][0].offerId];
@@ -7948,12 +7964,41 @@
               var label = bookingTime(s.startsAt) + (mixed && o ? " · " + o.title : "");
               return b
                 ? '<li class="ad-bk-chip ad-bk-chip-booked" title="' + esc(o ? o.title : "") + '">' + esc(label) + " · " + esc(b.clientName) + "</li>"
-                : '<li class="ad-bk-chip" title="' + esc(o ? o.title : "") + '">' + esc(label) +
+                : '<li class="ad-bk-chip' + (bookingState.bookFor === s.id ? " ad-bk-chip-active" : "") + '" title="' + esc(o ? o.title : "") + '">' + esc(label) +
+                  '<button type="button" class="ad-bk-chip-book" data-bk-slot-book="' + esc(s.id) + '" aria-label="Réserver le créneau de ' + esc(label) + ' pour un client" title="Réserver pour un client">' +
+                  '<svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>' +
                   '<button type="button" data-bk-slot-delete="' + esc(s.id) + '" aria-label="Supprimer le créneau de ' + esc(label) + '">×</button></li>';
             }).join("") + "</ul></div>";
           }).join("") + "</div>"
         : '<p class="ad-hint">Aucun créneau ouvert pour l\'instant.</p>') +
       "</section>";
+  }
+
+  // Réserver un créneau libre au nom d'un client (fiches clients ou saisie).
+  function bookForClientHtml(data) {
+    var slot = bookingState.bookFor && data.slots.filter(function (s) { return s.id === bookingState.bookFor && !s.bookingId; })[0];
+    if (!slot) return "";
+    var offer = data.offers.filter(function (o) { return o.id === slot.offerId; })[0] || { title: "", tiers: [], durationMin: 0 };
+    var tiers = offer.tiers || [];
+    return '<form id="ad-bk-book" class="ad-bk-book" novalidate>' +
+      '<div class="ad-bk-book-head"><h4>Réserver pour un client</h4>' +
+      '<p class="ad-hint">' + esc(bookingDay(slot.startsAt)) + " à " + esc(bookingTime(slot.startsAt)) + " · " + esc(offer.title) +
+      (offer.durationMin ? " (" + esc(durationText(offer.durationMin)) + ")" : "") + "</p></div>" +
+      '<div data-cpick="bk"></div>' +
+      '<div class="ad-field-row">' +
+      '<label class="ad-field"><span>Client</span><input name="name" maxlength="100" required placeholder="ex. Camille Dubois" autocomplete="off" /></label>' +
+      '<label class="ad-field"><span>E-mail</span><input type="email" name="email" maxlength="200" required placeholder="camille@exemple.be" autocomplete="off" /></label>' +
+      '<label class="ad-field"><span>Téléphone <em>(facultatif)</em></span><input type="tel" name="phone" maxlength="30" autocomplete="off" /></label>' +
+      "</div>" +
+      (tiers.length
+        ? '<label class="ad-field"><span>Tarif</span><select name="tier">' + tiers.map(function (t, i) {
+            return '<option value="' + i + '">' + esc(t.photos + " photo" + (t.photos > 1 ? "s" : "") + (t.label ? " — " + t.label : "") + " · " + formatEuros(t.priceCents)) + "</option>";
+          }).join("") + "</select></label>"
+        : "") +
+      '<label class="ad-check"><input type="checkbox" name="notify" checked /> <span>Envoyer la confirmation au client <em>(e-mail avec l\'invitation pour son agenda, et un rappel la veille)</em></span></label>' +
+      '<p class="ad-hint">Pas d\'acompte en ligne : à régler avec vous, ou par une facture (onglet Facturation).</p>' +
+      '<div class="ad-bk-book-actions"><button type="submit" class="ad-btn ad-btn-primary">Réserver ce créneau</button>' +
+      '<button type="button" class="ad-btn" id="ad-bk-book-cancel">Annuler</button></div></form>';
   }
 
   function bookingRowHtml(b, actionable) {
@@ -8265,6 +8310,40 @@
         });
       });
     }
+    el.view.querySelectorAll("[data-bk-slot-book]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        bookingState.bookFor = btn.getAttribute("data-bk-slot-book");
+        paintBooking(data);
+        var panel = document.getElementById("ad-bk-book");
+        if (panel) {
+          panel.scrollIntoView({ block: "center", behavior: "smooth" });
+          panel.querySelector(".ad-cpick-btn").focus({ preventScroll: true });
+        }
+      });
+    });
+    var bookForm = document.getElementById("ad-bk-book");
+    if (bookForm) {
+      mountClientPicker(bookForm.querySelector("[data-cpick]"), { form: bookForm, fields: { name: "name", email: "email", phone: "phone" } });
+      document.getElementById("ad-bk-book-cancel").addEventListener("click", function () {
+        bookingState.bookFor = "";
+        paintBooking(data);
+      });
+      bookForm.addEventListener("submit", async function (e) {
+        e.preventDefault();
+        var f = bookForm.elements;
+        var body = { name: f.name.value.trim(), email: f.email.value.trim(), phone: f.phone.value.trim(), notify: f.notify.checked };
+        if (f.tier) body.tier = Number(f.tier.value);
+        if (!body.name) { toast("Indiquez le nom du client.", true); f.name.focus(); return; }
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email)) { toast("Indiquez l'e-mail du client.", true); f.email.focus(); return; }
+        var submit = bookForm.querySelector("[type=submit]");
+        submit.disabled = true;
+        var slotId = bookingState.bookFor;
+        bookingState.bookFor = "";
+        var ok = await bookingCall("POST", "/slots/" + encodeURIComponent(slotId) + "/book", body,
+          "Séance réservée pour " + body.name + (body.notify ? " : la confirmation lui est envoyée." : "."));
+        if (!ok) { bookingState.bookFor = slotId; submit.disabled = false; }
+      });
+    }
     el.view.querySelectorAll("[data-bk-slot-delete]").forEach(function (btn) {
       btn.addEventListener("click", function () {
         bookingCall("DELETE", "/slots/" + encodeURIComponent(btn.getAttribute("data-bk-slot-delete")), null, "Créneau supprimé.");
@@ -8279,6 +8358,155 @@
           bookingCall("POST", "/bookings/" + encodeURIComponent(id) + "/cancel", {}, "Séance annulée, le client est prévenu.");
         });
       });
+    });
+  }
+
+  /* ---------- Sélecteur de fiche client (factures, devis, galeries, séances) ---------- */
+
+  // Un bouton « Choisir dans mes fiches clients » qui déroule une recherche
+  // parmi les clients déjà connus (fiches clients : galeries, réservations,
+  // devis, factures, demandes) et remplit le formulaire d'un clic — utile
+  // pour un client habitué. La liste est gardée une minute en mémoire.
+  var clientDirectory = { at: 0, list: null, pending: null };
+  var cpickSeq = 0;
+
+  function loadClientDirectory() {
+    if (clientDirectory.list && Date.now() - clientDirectory.at < 60000) return Promise.resolve(clientDirectory.list);
+    if (clientDirectory.pending) return clientDirectory.pending;
+    clientDirectory.pending = api("GET", "/clients").then(function (data) {
+      clientDirectory.list = (data && data.clients) || [];
+      clientDirectory.at = Date.now();
+      return clientDirectory.list;
+    }).finally(function () { clientDirectory.pending = null; });
+    return clientDirectory.pending;
+  }
+
+  function cpickFold(value) {
+    return String(value || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  }
+
+  function cpickMatches(c, query) {
+    if (!query) return true;
+    var q = cpickFold(query).trim();
+    if (!q) return true;
+    var words = q.split(/\s+/);
+    var hay = cpickFold(c.name) + " " + c.email;
+    if (words.every(function (w) { return hay.indexOf(w) !== -1; })) return true;
+    var digits = q.replace(/\D/g, "").replace(/^0+/, "");
+    var phone = (c.phone || "").replace(/\D/g, "");
+    return digits.length >= 3 && /^[\d\s+().\/-]+$/.test(q) && phone.indexOf(digits) !== -1;
+  }
+
+  // options : { fields: { name, email, phone } (noms des champs du
+  // formulaire), form, onPick(client) }
+  function mountClientPicker(root, options) {
+    if (!root) return;
+    var id = "ad-cpick-" + (++cpickSeq);
+    root.classList.add("ad-cpick");
+    root.innerHTML =
+      '<button type="button" class="ad-btn ad-btn-small ad-cpick-btn" aria-haspopup="listbox" aria-expanded="false" aria-controls="' + id + '-panel">' +
+      '<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.6 3.3-5.5 6.5-5.5s5.9 1.9 6.5 5.5"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18.5 14.8c1.7.8 2.8 2.5 3 5.2"/></svg>' +
+      "<span>" + L("Choisir dans mes fiches clients", "Pick from my client records") + '</span><svg class="ad-cpick-caret" viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>' +
+      '<span class="ad-cpick-picked" aria-live="polite"></span>' +
+      '<div class="ad-cpick-panel" id="' + id + '-panel" hidden>' +
+      '<input type="search" class="ad-cpick-search" role="combobox" aria-autocomplete="list" aria-expanded="true" aria-controls="' + id + '-list" autocomplete="off" placeholder="' +
+      L("Nom, e-mail ou téléphone", "Name, email or phone") + '" aria-label="' + L("Rechercher un client", "Search a client") + '" />' +
+      '<ul class="ad-cpick-list" id="' + id + '-list" role="listbox" aria-label="' + L("Clients", "Clients") + '"></ul></div>';
+    var btn = root.querySelector(".ad-cpick-btn");
+    var panel = root.querySelector(".ad-cpick-panel");
+    var search = root.querySelector(".ad-cpick-search");
+    var list = root.querySelector(".ad-cpick-list");
+    var picked = root.querySelector(".ad-cpick-picked");
+    var shown = [];
+    var active = -1;
+
+    function setActive(i) {
+      var items = list.querySelectorAll("[role=option]");
+      if (!items.length) { active = -1; search.removeAttribute("aria-activedescendant"); return; }
+      active = (i + items.length) % items.length;
+      items.forEach(function (li, n) { li.setAttribute("aria-selected", n === active ? "true" : "false"); });
+      search.setAttribute("aria-activedescendant", items[active].id);
+      items[active].scrollIntoView({ block: "nearest" });
+    }
+
+    function paint() {
+      var all = clientDirectory.list || [];
+      var q = search.value;
+      shown = all.filter(function (c) { return cpickMatches(c, q); }).slice(0, q ? 30 : 8);
+      if (!all.length) {
+        list.innerHTML = '<li class="ad-cpick-empty">' + L("Pas encore de fiche client : elles se remplissent avec vos galeries, réservations, devis et factures.",
+          "No client records yet: they fill up with your galleries, bookings, quotes and invoices.") + "</li>";
+      } else if (!shown.length) {
+        list.innerHTML = '<li class="ad-cpick-empty">' + L("Aucun client ne correspond.", "No matching client.") + "</li>";
+      } else {
+        list.innerHTML = (q ? "" : '<li class="ad-cpick-head" aria-hidden="true">' + L("Derniers clients", "Recent clients") + "</li>") +
+          shown.map(function (c, n) {
+            return '<li role="option" id="' + id + "-o" + n + '" data-n="' + n + '" aria-selected="false">' +
+              '<span class="ad-cpick-name">' + esc(c.name || c.email) + (c.prospect ? ' <span class="ad-cpick-tag">' + L("prospect", "prospect") + "</span>" : "") + "</span>" +
+              '<span class="ad-cpick-meta">' + esc(c.email) + (c.phone ? " · " + esc(c.phone) : "") + "</span></li>";
+          }).join("");
+      }
+      setActive(shown.length && q ? 0 : -1);
+    }
+
+    function onOutside(event) {
+      if (!root.contains(event.target)) close(false);
+    }
+
+    function open() {
+      panel.hidden = false;
+      btn.setAttribute("aria-expanded", "true");
+      search.value = "";
+      list.innerHTML = '<li class="ad-cpick-empty">' + L("Chargement…", "Loading…") + "</li>";
+      search.focus();
+      document.addEventListener("mousedown", onOutside);
+      loadClientDirectory().then(function () { if (!panel.hidden) paint(); }).catch(function (err) {
+        list.innerHTML = '<li class="ad-cpick-empty">' + esc(err.message) + "</li>";
+      });
+    }
+
+    function close(refocus) {
+      panel.hidden = true;
+      btn.setAttribute("aria-expanded", "false");
+      document.removeEventListener("mousedown", onOutside);
+      if (refocus) btn.focus();
+    }
+
+    function choose(c) {
+      var form = options.form;
+      var f = options.fields || {};
+      function put(name, value) {
+        var input = name && form && form.elements[name];
+        if (!input) return;
+        input.value = value || "";
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+      put(f.name, c.name && c.name !== c.email ? c.name : "");
+      put(f.email, c.email);
+      put(f.phone, c.phone || "");
+      if (options.onPick) options.onPick(c, put);
+      picked.textContent = "✓ " + (c.name || c.email);
+      close(true);
+    }
+
+    btn.addEventListener("click", function () {
+      if (panel.hidden) open(); else close(true);
+    });
+    search.addEventListener("input", paint);
+    search.addEventListener("keydown", function (event) {
+      if (event.key === "ArrowDown") { event.preventDefault(); setActive(active + 1); }
+      else if (event.key === "ArrowUp") { event.preventDefault(); setActive(active - 1); }
+      else if (event.key === "Enter") {
+        // Ne jamais soumettre le formulaire qui entoure le sélecteur.
+        event.preventDefault();
+        if (active >= 0 && shown[active]) choose(shown[active]);
+      } else if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); close(true); }
+    });
+    list.addEventListener("mousedown", function (event) { event.preventDefault(); });
+    list.addEventListener("click", function (event) {
+      var li = event.target.closest("[role=option]");
+      if (li) choose(shown[Number(li.getAttribute("data-n"))]);
     });
   }
 
@@ -8324,6 +8552,7 @@
     return '<section id="ad-ct-editor"><div class="ad-section-header"><h3>' + (editing ? "Modifier le devis n° " + esc(c.number) : "Nouveau devis") + "</h3></div>" +
       (editing && c.status !== "draft" ? '<p class="ad-banner ad-banner-muted">Ce devis a déjà été envoyé : après modification, renvoyez-le pour que votre client signe la nouvelle version.</p>' : "") +
       '<form id="ad-ct-form" novalidate>' +
+      '<div data-cpick="ct"></div>' +
       '<div class="ad-field-row">' +
       '<label class="ad-field"><span>Client</span><input name="clientName" maxlength="120" required placeholder="ex. Camille Dubois" value="' + esc(c.clientName) + '" /></label>' +
       '<label class="ad-field"><span>E-mail du client</span><input type="email" name="clientEmail" maxlength="200" required placeholder="camille@exemple.be" value="' + esc(c.clientEmail) + '" /></label>' +
@@ -8485,6 +8714,7 @@
     });
 
     var form = document.getElementById("ad-ct-form");
+    if (form) mountClientPicker(form.querySelector("[data-cpick]"), { form: form, fields: { name: "clientName", email: "clientEmail" } });
     if (form && form.elements.sessionDay) {
       // L'heure n'a de sens qu'avec une date.
       form.elements.sessionDay.addEventListener("input", function () {
@@ -9519,6 +9749,7 @@
       '<label class="ad-field"><span>' + L("Date", "Date") + " <em>" + L("(facultatif)", "(optional)") + '</em></span><input type="date" name="date" /></label>' +
       '<label class="ad-field"><span>' + L("Heure", "Time") + " <em>" + L("(facultatif)", "(optional)") + '</em></span><input type="time" name="time" /></label>' +
       "</div>" +
+      '<div data-cpick="pl"></div>' +
       '<label class="ad-field"><span>' + L("Client", "Client") + " <em>" + L("(facultatif)", "(optional)") + '</em></span><input name="clientEmail" type="email" list="ad-pl-clients" placeholder="' +
       L("adresse e-mail du client", "client's email address") + '" /></label>' +
       '<datalist id="ad-pl-clients">' + (data.clients || []).map(function (c) {
@@ -9586,6 +9817,7 @@
   function wirePlanning() {
     var data = planningState.data;
     var form = document.getElementById("ad-pl-form");
+    mountClientPicker(form.querySelector("[data-cpick]"), { form: form, fields: { email: "clientEmail" } });
     document.getElementById("ad-pl-add").addEventListener("click", function () {
       planningState.adding = true;
       form.hidden = false;
