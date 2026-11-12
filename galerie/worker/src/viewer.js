@@ -8,6 +8,7 @@ import { sendCaptureAlert, sendSelectionValidated } from "./notify.js";
 import { supplementFor } from "./admin.js";
 import { shopForClient, handlePrintOrder, isPrintable } from "./shop.js";
 import { createCheckoutSession } from "./stripe.js";
+import { amountDueFor, optionsSnapshot, optionsForClient, handleOptionChoice } from "./options.js";
 import { paymentFeeCents } from "./fees.js";
 import { musicForClient, audioKeyFor, serveAudio, getTrack } from "./music.js";
 import { deliveryForClient, createDownloadLink, downloadFile, downloadZip } from "./delivery.js";
@@ -199,6 +200,8 @@ async function openSession(env, gallery, token, expiresIn, preview) {
       canPayOnline: Boolean(photographer?.stripe_account_id) && Boolean(photographer?.stripe_charges_enabled) && hasFeature(env, photographer, "extras"),
       // Espèces / virement, si le photographe les propose (offlinepay.js).
       offline: await offlineForClient(env, gallery, photographer),
+      // Options payantes à cocher (options.js), null si le studio n'en propose pas.
+      options: await optionsForClient(env, gallery),
       invoices: invoices.map((i) => ({
         id: i.id,
         number: i.number,
@@ -238,7 +241,7 @@ async function authorize(request, env, slug) {
 // Actions qui écrivent (sélection, couleurs, commentaires, validation,
 // panier, paiements, journal, liens de téléchargement) : refusées à une
 // session d'aperçu, quoi que fasse la page.
-const WRITE_ACTIONS = new Set(["select", "comment", "tag", "marks", "validate", "cart", "print-order", "event", "checkout", "offline-payment", "delivery"]);
+const WRITE_ACTIONS = new Set(["select", "comment", "tag", "marks", "validate", "cart", "print-order", "event", "checkout", "offline-payment", "options", "delivery"]);
 async function isPreviewSession(request, env) {
   const header = request.headers.get("Authorization") || "";
   const payload = header.startsWith("Bearer ") ? await verifyToken(env.TOKEN_SECRET, header.slice(7)) : null;
@@ -502,7 +505,10 @@ async function handleCheckout(request, env, slug) {
   if (auth.error) return auth.error;
   const gallery = auth.gallery;
 
-  if (gallery.included_photos === null || gallery.included_photos === undefined) {
+  // Suppléments ET options cochées (options.js), recalculés ici.
+  const due = await amountDueFor(env, gallery);
+  const outstanding = due.dueExtraCount;
+  if ((gallery.included_photos === null || gallery.included_photos === undefined) && due.totalCents <= 0) {
     return fail(400, "Aucun forfait n'est défini pour cette galerie");
   }
 
@@ -514,16 +520,7 @@ async function handleCheckout(request, env, slug) {
   if (!photographer?.stripe_account_id || !photographer.stripe_charges_enabled || !hasFeature(env, photographer, "extras")) {
     return fail(503, "Le paiement en ligne n'est pas encore activé pour cette galerie");
   }
-
-  const selectedRow = await env.DB.prepare(
-    "SELECT COUNT(*) AS n FROM photos WHERE gallery_id = ? AND selected = 1"
-  )
-    .bind(gallery.id)
-    .first();
-  const grossExtraCount = Math.max(0, (selectedRow?.n || 0) - gallery.included_photos);
-  const alreadyPaid = await paidExtraCount(env, gallery.id);
-  const outstanding = Math.max(0, grossExtraCount - alreadyPaid);
-  if (outstanding <= 0) return fail(400, "Rien à régler pour le moment");
+  if (due.totalCents <= 0) return fail(400, "Rien à régler pour le moment");
 
   let body;
   try {
@@ -536,17 +533,26 @@ async function handleCheckout(request, env, slug) {
   if (!successUrl || !cancelUrl) return fail(400, "URL de retour manquante");
 
   const paymentId = newPaymentId();
-  const amountCents = outstanding * (gallery.extra_photo_price_cents || 0);
+  const amountCents = due.totalCents;
   const feeCents = paymentFeeCents(env, photographer, amountCents);
-
-  let session;
-  try {
-    session = await createCheckoutSession(env, photographer.stripe_account_id, {
-      label: gallery.language === "en"
+  const lineItems = [];
+  if (outstanding > 0) {
+    lineItems.push({
+      name: gallery.language === "en"
         ? `${outstanding} additional photo${outstanding > 1 ? "s" : ""} — ${gallery.title}`
         : `${outstanding} photo${outstanding > 1 ? "s" : ""} supplémentaire${outstanding > 1 ? "s" : ""} — ${gallery.title}`,
       unitAmountCents: gallery.extra_photo_price_cents || 0,
       quantity: outstanding,
+    });
+  }
+  for (const option of due.options) {
+    lineItems.push({ name: `${option.label} — ${gallery.title}`, unitAmountCents: option.unitCents, quantity: option.quantity });
+  }
+
+  let session;
+  try {
+    session = await createCheckoutSession(env, photographer.stripe_account_id, {
+      lineItems,
       successUrl,
       cancelUrl,
       metadata: { gallery_id: gallery.id, gallery_slug: slug, payment_id: paymentId },
@@ -559,10 +565,10 @@ async function handleCheckout(request, env, slug) {
   }
 
   await env.DB.prepare(
-    `INSERT INTO payments (id, gallery_id, stripe_checkout_session_id, extra_count, amount_cents, fee_cents, status, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)`
+    `INSERT INTO payments (id, gallery_id, stripe_checkout_session_id, extra_count, amount_cents, fee_cents, status, options_json, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)`
   )
-    .bind(paymentId, gallery.id, session.id, outstanding, amountCents, feeCents, now())
+    .bind(paymentId, gallery.id, session.id, outstanding, amountCents, feeCents, optionsSnapshot(due.options), now())
     .run();
 
   return json({ url: session.url });
@@ -790,6 +796,12 @@ export async function handleViewer(request, env, ctx, path) {
   }
   if (action === "checkout" && request.method === "POST") {
     return handleCheckout(request, env, slug);
+  }
+  // Options payantes : cocher, changer la quantité, décocher.
+  if (action === "options" && request.method === "POST" && parts.length === 4) {
+    const auth = await authorize(request, env, slug);
+    if (auth.error) return auth.error;
+    return handleOptionChoice(request, env, auth.gallery);
   }
   // Supplément réglé en espèces ou par virement : demande au photographe.
   if (action === "offline-payment" && request.method === "POST") {

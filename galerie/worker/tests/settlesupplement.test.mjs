@@ -159,7 +159,7 @@ check("tout est réglé : le tableau est vide", list.supplements.length === 0 &&
 const noQuota = db.prepare("SELECT * FROM galleries WHERE id = 'ailleurs'").get();
 run("UPDATE galleries SET included_photos = NULL WHERE id = 'ailleurs'");
 res = await settleSupplement(post({ method: "cash" }), env, { ...noQuota, included_photos: null });
-check("galerie sans forfait : refusé", res.status === 400);
+check("galerie sans forfait ni option : rien à régler, refusé", res.status === 409);
 
 const failed = checks.filter((c) => !c.ok);
 console.log(`\n${checks.length} vérifications, ${failed.length ? failed.length + " en échec" : "toutes passent"}.`);

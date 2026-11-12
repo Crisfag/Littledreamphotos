@@ -19,6 +19,7 @@ import { handleOwner } from "./owner.js";
 import { handleLibraryAudio } from "./music.js";
 import { handleStripeWebhook } from "./billing.js";
 import { runReminders } from "./reminders.js";
+import { runUnpaidReminders } from "./unpaidreminders.js";
 import { purgeOldAccessLogs } from "./privacy.js";
 import { runSalesReminders } from "./campaigns.js";
 import { handlePortfolioPublic, purgeOldPortfolioMessages } from "./portfolio.js";
@@ -184,6 +185,13 @@ export default {
     ctx.waitUntil(
       runReminders(env).catch((err) => {
         console.error("Relances : échec de la passe planifiée :", err && err.stack ? err.stack : err);
+      })
+    );
+    // Suppléments et options pas encore réglés, 3 et 7 jours après la
+    // validation de la sélection (unpaidreminders.js).
+    ctx.waitUntil(
+      runUnpaidReminders(env).catch((err) => {
+        console.error("Relances des suppléments : échec de la passe planifiée :", err && err.stack ? err.stack : err);
       })
     );
     // Campagnes de vente : paniers oubliés, coups de cœur à imprimer.

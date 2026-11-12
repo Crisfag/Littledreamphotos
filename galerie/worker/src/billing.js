@@ -15,6 +15,7 @@ import { markGiftCardPaid } from "./giftcards.js";
 import { markInvoicePaid } from "./clientinvoices.js";
 import { sendInvoiceEmail } from "./notify.js";
 import { languageOf } from "./i18n.js";
+import { markOptionsPaid, paymentInvoiceText } from "./options.js";
 
 // Message montré au photographe : la raison donnée par Stripe (jamais une
 // clé, Stripe n'en renvoie pas), avec la marche à suivre pour les refus
@@ -216,6 +217,7 @@ export async function handleStripeWebhook(request, env) {
           // espèces ou par virement encore en attente n'a plus lieu d'être.
           await env.DB.prepare("DELETE FROM payments WHERE gallery_id = ? AND status = 'awaiting' AND kind = 'supplement'")
             .bind(payment.gallery_id).run();
+          await markOptionsPaid(env, payment);
           await issueInvoice(env, session.id);
         }
       }
@@ -243,7 +245,10 @@ export async function issueInvoice(env, stripeCheckoutSessionId) {
       .first();
     if (!photographer) return;
 
-    const invoice = await createInvoiceForPayment(env, { payment, gallery, photographer });
+    const invoice = await createInvoiceForPayment(env, {
+      payment, gallery, photographer,
+      ...paymentInvoiceText(payment, gallery, gallery.language === "en" ? "en" : "fr"),
+    });
 
     // "emailed_to" atteste qu'un envoi a été tenté vers cette adresse, pas
     // qu'il a été livré avec certitude — l'envoi d'e-mail est toujours au

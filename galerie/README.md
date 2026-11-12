@@ -1255,6 +1255,73 @@ npx wrangler d1 execute galerie-protegee --remote --file=migrations/2026-11-paie
 npm run deploy
 ```
 
+### Suppléments réglés hors galerie (onglet Facturation)
+
+**Facturation → Suppléments en attente de règlement** liste toutes les
+galeries où le client doit encore quelque chose (suppléments et options
+cochées) : montant, où en est le client (demande de virement ou
+d'espèces, carte commencée, sélection validée), date de la dernière
+relance. Pour les clients qui paient directement sur le compte du studio,
+**Réglé par virement** / **Réglé en espèces** passe tout en réglé et envoie
+la facture (`POST /api/admin/galleries/:slug/supplement/settle`, aussi
+dans la fiche de la galerie). Un montant qui a changé depuis l'affichage
+est refusé (409) ; une page de paiement Stripe encore ouverte est fermée.
+**Relancer maintenant** envoie le rappel décrit plus bas.
+
+### Options payantes à cocher
+
+Le studio définit ses options (**Paramètres → Options payantes à
+cocher** : nom, description, prix, « à l'unité » si le client choisit une
+quantité — idées prêtes : retouche avancée, livraison express, clé USB,
+coffret de tirages, diaporama). Dans sa galerie, le client ouvre **Ajouter
+des options**, coche, règle la quantité ; c'est ajouté au montant à
+régler, avec les suppléments, par le même chemin (carte, espèces,
+virement, ou « Réglé par… » côté photographe). Fonctionne aussi sur une
+galerie sans forfait.
+
+- Tant qu'une option n'est pas réglée, elle compte au prix actuel du
+  catalogue (désactivée ou supprimée : plus due). Au paiement, ce qui est
+  payé est figé (`payments.options_json`), puis recopié sur chaque choix
+  (`gallery_option_choices`) une fois le paiement confirmé — facture
+  détaillée ligne par ligne, page Stripe à plusieurs lignes.
+- Fiche de la galerie : options cochées (« À régler » / « Réglée ») et
+  case **Proposer vos options payantes dans cette galerie**.
+
+### Relance des suppléments non réglés
+
+Chaque matin (déclencheur planifié), un client qui a validé sa sélection
+depuis 3 jours, puis 7 jours, et doit encore des suppléments ou des
+options reçoit un rappel aimable : montant, détail, et toutes les façons
+de régler proposées par le studio — carte, virement **avec l'IBAN** des
+coordonnées fiscales (si le virement est proposé), espèces avec l'adresse.
+Une seule fois par étape et par validation (`reminders_sent`, clés
+`unpaid_d3_<validation>` / `unpaid_d7_<validation>`), rien au-delà de
+14 jours ni si une relance manuelle est partie dans les 2 derniers jours.
+Désactivable dans **Paramètres → Relances automatiques**.
+
+**Mise en service sur une base existante** :
+
+```bash
+cd worker
+npx wrangler d1 execute galerie-protegee --remote --file=migrations/2026-11-options-relances.sql
+npm run deploy
+```
+
+### Textes d'accompagnement enregistrés
+
+Dans **Style de la galerie**, sous le titre : la case **Enregistrer ce texte
+pour mes prochaines galeries** (avec un nom facultatif, « Noël 2026 »)
+garde le texte en cours au moment d'enregistrer. Le menu **Mes textes
+enregistrés** apparaît alors dans toutes les galeries : choisir un texte
+l'affiche et l'applique aussitôt à la galerie. Le dernier utilisé vient en
+premier ; **Retirer du menu** ne touche pas aux galeries qui l'utilisent.
+50 textes au maximum par photographe (`intro_texts`, `introtexts.js`).
+
+```bash
+cd worker
+npx wrangler d1 execute galerie-protegee --remote --file=migrations/2026-11-textes-accompagnement.sql
+```
+
 ### Devis et contrats signés en ligne
 
 Onglet **Devis & contrats** (formules Pro et Studio) :
@@ -2158,6 +2225,8 @@ node tests/schoolshop.test.mjs        # commande des photos scolaires (gamme, pa
 node tests/invoicing.test.mjs         # factures libres (TVA par ligne, échéancier, note de crédit, depuis un contrat), prospects et tags, ventes, autonome (admin-server.mjs lancé)
 node tests/offlinepay.test.mjs        # suppléments réglés en espèces ou par virement : réglages, demande du client, « Marquer comme reçu », autonome (admin-server.mjs lancé)
 node tests/settlesupplement.test.mjs  # Facturation : suppléments en attente de règlement, « Réglé par virement » / « Réglé en espèces » hors galerie, autonome (admin-server.mjs lancé)
+node tests/introtexts.test.mjs        # textes d'accompagnement enregistrés : case, menu déroulant, retrait, autonome (admin-server.mjs lancé)
+node tests/options.test.mjs           # options payantes : catalogue, cases à cocher dans la galerie, virement, relance, « Marquer comme reçu », autonome (admin-server.mjs lancé)
 node tests/giftcards.test.mjs         # bons cadeaux : vente sur le mini-site, page du bon, suivi et bon à la main, autonome (admin-server.mjs lancé)
 node tests/schoolpack.test.mjs        # pack « toutes les photos », ordre de la gamme, liste de prénoms collée, autonome
 node tests/schoolreminders.test.mjs   # rappels de commande aux familles, autonome (npm run dev:local -- --test-scheduled)

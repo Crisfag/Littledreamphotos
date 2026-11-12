@@ -118,17 +118,22 @@ export function retrieveAccount(env, accountId) {
 // `expiresAt` (facultatif, epoch secondes, 30 min à 24 h) : la session ne
 // peut plus être payée après — sert aux réservations, dont le créneau
 // n'est bloqué qu'un temps. `customerEmail` pré-remplit l'e-mail du payeur.
-export function createCheckoutSession(env, connectedAccountId, { label, unitAmountCents, quantity, successUrl, cancelUrl, metadata, applicationFeeCents = 0, expiresAt, customerEmail, locale }) {
+//
+// `lineItems` (facultatif) : plusieurs lignes [{ name, unitAmountCents,
+// quantity }] au lieu de label/unitAmountCents/quantity (suppléments et
+// options payantes sur une même page de paiement).
+export function createCheckoutSession(env, connectedAccountId, { label, unitAmountCents, quantity, lineItems, successUrl, cancelUrl, metadata, applicationFeeCents = 0, expiresAt, customerEmail, locale }) {
+  const items = lineItems && lineItems.length ? lineItems : [{ name: label, unitAmountCents, quantity }];
   return stripeRequest(env, "POST", "/checkout/sessions", {
     mode: "payment",
-    line_items: [{
+    line_items: items.map((item) => ({
       price_data: {
         currency: "eur",
-        unit_amount: unitAmountCents,
-        product_data: { name: label },
+        unit_amount: item.unitAmountCents,
+        product_data: { name: item.name },
       },
-      quantity,
-    }],
+      quantity: item.quantity,
+    })),
     payment_intent_data: {
       transfer_data: { destination: connectedAccountId },
       ...(applicationFeeCents > 0 ? { application_fee_amount: applicationFeeCents } : {}),

@@ -826,7 +826,7 @@
         (g.comment_count > 0
           ? '<span class="ad-badge ad-badge-comment">💬 ' + g.comment_count + "</span>"
           : "") +
-        (g.due_extra_count > 0
+        (g.due_total_cents > 0
           ? '<span class="ad-badge ad-badge-due">💶 ' + formatEuros(g.due_total_cents) + "</span>"
           : "") +
         (g.selection_done_at
@@ -930,8 +930,9 @@
   var SETTLE_ICON = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>';
 
   function settleButtonsHtml(s) {
+    var what = s.what !== undefined ? s.what : dueWhatText(s.dueExtraCount, s.optionsCount);
     var attrs = ' data-settle-slug="' + esc(s.slug) + '" data-settle-title="' + esc(s.title) + '" data-settle-amount="' + s.dueTotalCents +
-      '" data-settle-count="' + s.dueExtraCount + '" data-settle-email="' + esc(s.clientEmail || "") + '"';
+      '" data-settle-what="' + esc(what) + '" data-settle-email="' + esc(s.clientEmail || "") + '"';
     return '<div class="ad-settle">' +
       '<button type="button" class="ad-btn ad-btn-small ad-settle-btn" data-settle="transfer"' + attrs + ">" + SETTLE_ICON + L("Réglé par virement", "Paid by transfer") + "</button>" +
       '<button type="button" class="ad-btn ad-btn-small ad-settle-btn" data-settle="cash"' + attrs + ">" + SETTLE_ICON + L("Réglé en espèces", "Paid in cash") + "</button>" +
@@ -942,13 +943,12 @@
   async function settleSupplementFrom(btn, done) {
     var method = btn.getAttribute("data-settle");
     var title = btn.getAttribute("data-settle-title");
-    var count = Number(btn.getAttribute("data-settle-count"));
+    var what = btn.getAttribute("data-settle-what");
     var amount = Number(btn.getAttribute("data-settle-amount"));
     var email = btn.getAttribute("data-settle-email");
     var how = method === "cash" ? L("en espèces", "in cash") : L("par virement", "by bank transfer");
-    var photos = count + (count === 1 ? " photo" : " photos");
-    var question = L("« " + title + " » : " + photos + ", " + formatEuros(amount) + " réglé" + (count > 1 ? "s" : "") + " " + how + " ?",
-      "“" + title + "”: " + photos + ", " + formatEuros(amount) + " paid " + how + "?") + "\n\n" +
+    var question = L("« " + title + " » : " + what + ", " + formatEuros(amount) + " réglés " + how + " ?",
+      "“" + title + "”: " + what + ", " + formatEuros(amount) + " paid " + how + "?") + "\n\n" +
       (email ? L("La facture sera émise et envoyée à " + email + ".", "The invoice will be issued and sent to " + email + ".")
         : L("La facture sera émise (aucune adresse e-mail client sur cette galerie : vous la retrouverez dans l'historique des factures).",
           "The invoice will be issued (no client email on this gallery: you'll find it in the invoice history)."));
@@ -993,8 +993,12 @@
         '<td><a href="#/g/' + encodeURIComponent(s.slug) + '">' + esc(s.title) + "</a>" +
         (s.clientName ? '<span class="ad-due-client">' + esc(s.clientName) + "</span>" : "") + "</td>" +
         '<td class="ad-due-amount"><strong>' + formatEuros(s.dueTotalCents) + "</strong>" +
-        '<span class="ad-due-detail">' + s.dueExtraCount + (s.dueExtraCount === 1 ? " photo" : " photos") + " × " + formatEuros(s.unitPriceCents) + "</span></td>" +
-        '<td class="ad-due-status">' + status + "</td>" +
+        (s.dueExtraCount > 0 ? '<span class="ad-due-detail">' + s.dueExtraCount + (s.dueExtraCount === 1 ? " photo" : " photos") + " × " + formatEuros(s.unitPriceCents) + "</span>" : "") +
+        (s.optionsCount > 0 ? '<span class="ad-due-detail">' + L("+ " + s.optionsCount + " option" + (s.optionsCount > 1 ? "s" : ""), "+ " + s.optionsCount + " option" + (s.optionsCount > 1 ? "s" : "")) + " (" + formatEuros(s.optionsCents) + ")</span>" : "") + "</td>" +
+        '<td class="ad-due-status">' + status +
+        (s.remindedAt ? '<span class="ad-due-when">' + L("Relancé le ", "Reminded on ") + esc(formatDate(s.remindedAt)) + "</span>" : "") +
+        (s.clientEmail ? '<button type="button" class="ad-link-btn ad-due-remind" data-remind="' + esc(s.slug) + '" data-remind-email="' + esc(s.clientEmail) + '">' + L("Relancer maintenant", "Send a reminder now") + "</button>" : "") +
+        "</td>" +
         "<td>" + settleButtonsHtml(s) + "</td>" +
         "</tr>"
       );
@@ -1002,8 +1006,8 @@
     return (
       '<p class="ad-quota-due">' + formatEuros(data.totalCents) + L(" au total, sur " + due.length + " galerie" + (due.length > 1 ? "s" : ""),
         " in total, across " + due.length + " galler" + (due.length > 1 ? "ies" : "y")) + "</p>" +
-      '<p class="ad-hint">' + L("Un client vous a réglé par virement ou en espèces sans passer par sa galerie ? Notez-le ici : le supplément passe en réglé et sa facture lui est envoyée.",
-        "A client paid you by transfer or in cash without going through their gallery? Record it here: the extras are marked as paid and the invoice is sent to them.") + "</p>" +
+      '<p class="ad-hint">' + L("Suppléments et options cochées par vos clients. Un client vous a réglé par virement ou en espèces sans passer par sa galerie ? Notez-le ici : c'est marqué réglé et sa facture lui est envoyée. Sans règlement, il reçoit un rappel 3 puis 7 jours après avoir validé sa sélection (réglable dans Paramètres).",
+        "Extras and options ticked by your clients. A client paid you by transfer or in cash without going through their gallery? Record it here: it's marked as paid and the invoice is sent to them. Unpaid, they get a reminder 3 and then 7 days after confirming their selection (set in Settings).") + "</p>" +
       '<div class="ad-table-wrap"><table class="ad-table ad-due-table"><thead><tr><th>' + L("Galerie", "Gallery") + "</th><th>" + L("À régler", "Due") + "</th><th>" +
       L("Où en est le client", "Client status") + "</th><th>" + L("Réglé hors galerie", "Paid outside the gallery") + "</th></tr></thead><tbody>" +
       rows.join("") + "</tbody></table></div>"
@@ -1442,9 +1446,21 @@
     });
     loadClientInvoices();
     loadDueSupplements();
-    document.getElementById("ad-due").addEventListener("click", function (event) {
+    document.getElementById("ad-due").addEventListener("click", async function (event) {
       var btn = event.target.closest("[data-settle]");
-      if (btn) settleSupplementFrom(btn, function () { renderBilling(true); });
+      if (btn) return settleSupplementFrom(btn, function () { renderBilling(true); });
+      var remind = event.target.closest("[data-remind]");
+      if (!remind) return;
+      if (!confirm(L("Envoyer maintenant un rappel de paiement à " + remind.getAttribute("data-remind-email") + " ?", "Send a payment reminder to " + remind.getAttribute("data-remind-email") + " now?"))) return;
+      remind.disabled = true;
+      try {
+        var result = await api("POST", "/galleries/" + encodeURIComponent(remind.getAttribute("data-remind")) + "/supplement/remind");
+        toast(L("Rappel envoyé à " + result.to + ".", "Reminder sent to " + result.to + "."));
+        loadDueSupplements();
+      } catch (err) {
+        toast(err.message, true);
+        remind.disabled = false;
+      }
     });
 
     var connectBtn = document.getElementById("ad-stripe-connect");
@@ -1481,6 +1497,139 @@
   // Studio, présentation par défaut des futures galeries, coordonnées
   // fiscales, connexion (e-mail, mot de passe) — tout ce qui concerne le
   // compte lui-même plutôt qu'une galerie en particulier.
+
+  /* ---------- Options payantes (Paramètres) ---------- */
+
+  var OPTION_IDEAS = [
+    { fr: "Retouche avancée", en: "Advanced retouching", price: "15", perUnit: true,
+      dfr: "Peau, détails, objet gênant retiré", den: "Skin, details, distracting object removed" },
+    { fr: "Livraison express 48 h", en: "48-hour express delivery", price: "29", perUnit: false,
+      dfr: "Vos photos livrées en 48 h", den: "Your photos delivered within 48 hours" },
+    { fr: "Clé USB personnalisée", en: "Personalised USB key", price: "35", perUnit: false,
+      dfr: "Toutes vos photos sur une jolie clé gravée", den: "All your photos on a lovely engraved key" },
+    { fr: "Coffret de tirages", en: "Print box", price: "89", perUnit: false,
+      dfr: "Vos photos préférées tirées et présentées dans un coffret", den: "Your favourite photos printed in a gift box" },
+    { fr: "Diaporama vidéo en musique", en: "Video slideshow with music", price: "49", perUnit: false,
+      dfr: "Un petit film de votre séance à partager", den: "A short film of your session to share" },
+  ];
+  var optionsState = { list: [], editing: null };
+
+  function optionCatalogHtml() {
+    if (!optionsState.list.length) {
+      return '<p class="ad-hint ad-options-empty">' + L("Aucune option pour l'instant : partez d'une idée ci-dessous.", "No options yet: start from an idea below.") + "</p>";
+    }
+    return '<ul class="ad-options-catalog">' + optionsState.list.map(function (o) {
+      return '<li class="' + (o.active ? "" : "ad-option-off") + '">' +
+        '<div class="ad-option-text"><strong>' + esc(o.label) + "</strong>" + (o.description ? "<span>" + esc(o.description) + "</span>" : "") + "</div>" +
+        '<span class="ad-option-price">' + formatEuros(o.priceCents) + (o.perUnit ? L(" / unité", " each") : "") + "</span>" +
+        '<label class="ad-toggle"><input type="checkbox" data-option-active="' + esc(o.id) + '"' + (o.active ? " checked" : "") + " /><span>" + L("Proposée", "Offered") + "</span></label>" +
+        '<span class="ad-option-row-actions"><button type="button" class="ad-link-btn" data-option-edit="' + esc(o.id) + '">' + L("Modifier", "Edit") + "</button>" +
+        '<button type="button" class="ad-link-btn ad-link-danger" data-option-delete="' + esc(o.id) + '">' + L("Supprimer", "Delete") + "</button></span>" +
+        "</li>";
+    }).join("") + "</ul>";
+  }
+
+  async function bindOptionsCatalog() {
+    var box = document.getElementById("ad-options-catalog");
+    var form = document.getElementById("ad-option-form");
+    if (!box || !form) return;
+    var errorBox = document.getElementById("ad-option-error");
+    var saveBtn = document.getElementById("ad-option-save");
+    var cancelBtn = document.getElementById("ad-option-cancel");
+    var paint = function () { box.innerHTML = optionCatalogHtml(); };
+    var resetForm = function () {
+      optionsState.editing = null;
+      form.reset();
+      saveBtn.textContent = L("Ajouter l'option", "Add the option");
+      cancelBtn.hidden = true;
+      errorBox.hidden = true;
+    };
+    try {
+      optionsState.list = (await api("GET", "/options")).options;
+      paint();
+    } catch (err) {
+      box.innerHTML = '<p class="ad-hint">' + esc(err.message) + "</p>";
+    }
+
+    form.addEventListener("click", function (event) {
+      var idea = event.target.closest("[data-option-idea]");
+      if (!idea) return;
+      var i = OPTION_IDEAS[Number(idea.getAttribute("data-option-idea"))];
+      form.label.value = L(i.fr, i.en);
+      form.price.value = i.price;
+      form.description.value = L(i.dfr, i.den);
+      form.perUnit.checked = i.perUnit;
+      form.label.focus();
+    });
+    cancelBtn.addEventListener("click", resetForm);
+    form.addEventListener("submit", async function (event) {
+      event.preventDefault();
+      errorBox.hidden = true;
+      saveBtn.disabled = true;
+      var payload = { label: form.label.value.trim(), price: form.price.value.trim(), description: form.description.value.trim(), perUnit: form.perUnit.checked };
+      try {
+        if (optionsState.editing) {
+          var updated = (await api("POST", "/options/" + encodeURIComponent(optionsState.editing), payload)).option;
+          optionsState.list = optionsState.list.map(function (o) { return o.id === updated.id ? updated : o; });
+          toast(L("Option modifiée.", "Option updated."));
+        } else {
+          optionsState.list.push((await api("POST", "/options", payload)).option);
+          toast(L("Option ajoutée : vos clients la voient dans leur galerie.", "Option added: your clients see it in their gallery."));
+        }
+        paint();
+        resetForm();
+      } catch (err) {
+        errorBox.textContent = err.message;
+        errorBox.hidden = false;
+      } finally {
+        saveBtn.disabled = false;
+      }
+    });
+    box.addEventListener("change", async function (event) {
+      var toggle = event.target.closest("[data-option-active]");
+      if (!toggle) return;
+      var id = toggle.getAttribute("data-option-active");
+      try {
+        var updated = (await api("POST", "/options/" + encodeURIComponent(id), { active: toggle.checked })).option;
+        optionsState.list = optionsState.list.map(function (o) { return o.id === id ? updated : o; });
+        paint();
+      } catch (err) {
+        toggle.checked = !toggle.checked;
+        toast(err.message, true);
+      }
+    });
+    box.addEventListener("click", async function (event) {
+      var edit = event.target.closest("[data-option-edit]");
+      var del = event.target.closest("[data-option-delete]");
+      if (edit) {
+        var o = optionsState.list.filter(function (x) { return x.id === edit.getAttribute("data-option-edit"); })[0];
+        if (!o) return;
+        optionsState.editing = o.id;
+        form.label.value = o.label;
+        form.price.value = String(o.priceCents / 100).replace(".", ",");
+        form.description.value = o.description || "";
+        form.perUnit.checked = o.perUnit;
+        saveBtn.textContent = L("Enregistrer la modification", "Save changes");
+        cancelBtn.hidden = false;
+        form.label.focus();
+        return;
+      }
+      if (del) {
+        var id = del.getAttribute("data-option-delete");
+        if (!confirm(L("Supprimer cette option ? Ce que vos clients ont déjà réglé reste sur leurs factures ; si elle est cochée sans être réglée, elle n'est plus due.",
+          "Delete this option? What your clients already paid stays on their invoices; if it's ticked but unpaid, it's no longer due."))) return;
+        try {
+          await api("DELETE", "/options/" + encodeURIComponent(id));
+          optionsState.list = optionsState.list.filter(function (x) { return x.id !== id; });
+          if (optionsState.editing === id) resetForm();
+          paint();
+          toast(L("Option supprimée.", "Option deleted."));
+        } catch (err) {
+          toast(err.message, true);
+        }
+      }
+    });
+  }
 
   async function renderSettings(skipHash) {
     if (!skipHash && location.hash !== "#/parametres") history.pushState(null, "", "#/parametres");
@@ -1558,6 +1707,10 @@
         "Until a client clicks “Confirm my selection”, they get a reminder 7 days and then 2 days before their gallery expires (if their email is filled in), and you get one 2 days before. Nothing is sent for a gallery with no expiry date.") + "</p>" +
       '<label class="ad-toggle"><input type="checkbox" id="ad-reminders-toggle"' + (photographer.remindersEnabled ? " checked" : "") + " />" +
       "<span>" + L("Envoyer les relances automatiques", "Send automatic reminders") + "</span></label>" +
+      '<p class="ad-hint ad-unpaid-hint">' + L("Suppléments et options pas encore réglés : le client reçoit un rappel aimable 3 jours puis 7 jours après avoir validé sa sélection, avec vos moyens de paiement (et votre IBAN si vous proposez le virement). Rien ne part si tout est réglé.",
+        "Extras and options not paid yet: the client gets a friendly reminder 3 and then 7 days after confirming their selection, with your payment methods (and your IBAN if you offer bank transfer). Nothing is sent once everything is paid.") + "</p>" +
+      '<label class="ad-toggle"><input type="checkbox" id="ad-unpaid-reminders-toggle"' + (photographer.unpaidRemindersEnabled ? " checked" : "") + " />" +
+      "<span>" + L("Relancer les suppléments non réglés", "Remind clients about unpaid extras") + "</span></label>" +
       "</section>" +
 
       '<section id="ad-offline-section"><div class="ad-section-header"><h3>' + L("Suppléments : espèces et virement", "Extras: cash and bank transfer") + "</h3></div>" +
@@ -1572,6 +1725,25 @@
         "Transfer: the client lets you know from their gallery, and you send them your bank account number by simply replying to the email you get.") + "</p>" +
       '<p class="ad-error" id="ad-offline-error" hidden></p>' +
       '<button type="submit" class="ad-btn ad-btn-primary" id="ad-offline-save">' + L("Enregistrer", "Save") + "</button>" +
+      "</form></section>" +
+
+      '<section id="ad-options-section"><div class="ad-section-header"><h3>' + L("Options payantes à cocher", "Paid options to tick") + "</h3></div>" +
+      '<p class="ad-hint">' + L("Vos clients les cochent dans leur galerie et les règlent avec leurs suppléments : en ligne, en espèces ou par virement. Une option « à l'unité » laisse le client choisir une quantité (par exemple par photo). Vous pouvez les retirer galerie par galerie.",
+        "Your clients tick them in their gallery and pay for them with their extras: online, in cash or by bank transfer. A “per unit” option lets the client choose a quantity (for example per photo). You can turn them off gallery by gallery.") + "</p>" +
+      '<div id="ad-options-catalog"><p class="ad-loading">' + L("Chargement…", "Loading…") + "</p></div>" +
+      '<form id="ad-option-form" class="ad-option-form">' +
+      '<p class="ad-option-ideas"><span>' + L("Idées :", "Ideas:") + "</span>" + OPTION_IDEAS.map(function (idea, i) {
+        return '<button type="button" class="ad-chip" data-option-idea="' + i + '">' + esc(L(idea.fr, idea.en)) + "</button>";
+      }).join("") + "</p>" +
+      '<div class="ad-field-row">' +
+      '<label class="ad-field"><span>' + L("Nom de l'option", "Option name") + '</span><input type="text" name="label" maxlength="80" placeholder="' + L("Retouche avancée", "Advanced retouching") + '" /></label>' +
+      '<label class="ad-field ad-option-price-field"><span>' + L("Prix (€)", "Price (€)") + '</span><input type="text" name="price" inputmode="decimal" placeholder="15" /></label>' +
+      "</div>" +
+      '<label class="ad-field"><span>' + L("Description <em>(facultative, vue par le client)</em>", "Description <em>(optional, seen by the client)</em>") + '</span><input type="text" name="description" maxlength="300" placeholder="' + L("Peau, détails, objet gênant retiré", "Skin, details, distracting object removed") + '" /></label>' +
+      '<label class="ad-toggle"><input type="checkbox" name="perUnit" /><span>' + L("À l'unité : le client choisit une quantité", "Per unit: the client chooses a quantity") + "</span></label>" +
+      '<p class="ad-error" id="ad-option-error" hidden></p>' +
+      '<div class="ad-option-actions"><button type="submit" class="ad-btn ad-btn-primary" id="ad-option-save">' + L("Ajouter l'option", "Add the option") + "</button>" +
+      '<button type="button" class="ad-link-btn" id="ad-option-cancel" hidden>' + L("Annuler la modification", "Cancel editing") + "</button></div>" +
       "</form></section>" +
 
       '<section><div class="ad-section-header"><h3>' + L("Coordonnées fiscales", "Billing details") + "</h3></div>" +
@@ -1778,6 +1950,18 @@
         saveBtn.disabled = false;
       }
     });
+
+    document.getElementById("ad-unpaid-reminders-toggle").addEventListener("change", async function (event) {
+      var box = event.target;
+      try {
+        await api("POST", "/account/unpaid-reminders", { enabled: box.checked });
+        toast(box.checked ? L("Relance des suppléments non réglés activée.", "Unpaid extras reminders on.") : L("Relance des suppléments non réglés désactivée.", "Unpaid extras reminders off."));
+      } catch (err) {
+        box.checked = !box.checked;
+        toast(err.message, true);
+      }
+    });
+    bindOptionsCatalog();
 
     var offlineForm = document.getElementById("ad-offline-form");
     var syncOfflineAddress = function () {
@@ -4808,39 +4992,76 @@
     return LANG === "en" ? "€" + amount : amount + " €";
   }
 
-  function quotaSummaryHtml(gallery, payments) {
-    if (gallery.included_photos === null || gallery.included_photos === undefined) {
-      return '<p class="ad-hint">' + L("Aucun forfait défini pour l'instant — les coups de cœur du client ne déclenchent aucun supplément.", "No package set yet — the client's favourites don't trigger any extras.") + "</p>";
-    }
-    var selected = gallery.selected_count || 0;
-    var included = gallery.included_photos;
-    var extra = gallery.extra_count || 0;
-    var due = gallery.due_extra_count || 0;
-    var paid = gallery.paid_extra_count || 0;
-    var withinQuota = '<p class="ad-quota-count">' + selected + " / " + included + L(" photo" + (included > 1 ? "s" : "") + " incluse" + (included > 1 ? "s" : ""), (included === 1 ? " photo" : " photos") + " included") + "</p>";
-    if (extra <= 0) return withinQuota;
+  function dueWhatText(extraCount, optionsCount) {
+    var parts = [];
+    if (extraCount > 0) parts.push(extraCount + (extraCount === 1 ? " photo" : " photos"));
+    if (optionsCount > 0) parts.push(optionsCount + " option" + (optionsCount > 1 ? "s" : ""));
+    return parts.join(" + ");
+  }
 
-    var html = withinQuota;
-    if (due > 0) {
-      html +=
-        '<p class="ad-quota-due">' +
-        "+" + due + L(" supplément" + (due > 1 ? "s" : ""), due === 1 ? " extra" : " extras") + " × " + formatEuros(gallery.extra_photo_price_cents) +
-        " = <strong>" + formatEuros(gallery.due_total_cents) + L(" à régler", " due") + "</strong>" +
-        "</p>";
+  function quotaSummaryHtml(gallery, payments) {
+    var html = "";
+    var due = gallery.due_extra_count || 0;
+    if (gallery.included_photos === null || gallery.included_photos === undefined) {
+      html += '<p class="ad-hint">' + L("Aucun forfait défini pour l'instant — les coups de cœur du client ne déclenchent aucun supplément.", "No package set yet — the client's favourites don't trigger any extras.") + "</p>";
+    } else {
+      var selected = gallery.selected_count || 0;
+      var included = gallery.included_photos;
+      var paid = gallery.paid_extra_count || 0;
+      html += '<p class="ad-quota-count">' + selected + " / " + included + L(" photo" + (included > 1 ? "s" : "") + " incluse" + (included > 1 ? "s" : ""), (included === 1 ? " photo" : " photos") + " included") + "</p>";
+      if (due > 0) {
+        html +=
+          '<p class="ad-quota-due">' +
+          "+" + due + L(" supplément" + (due > 1 ? "s" : ""), due === 1 ? " extra" : " extras") + " × " + formatEuros(gallery.extra_photo_price_cents) +
+          " = <strong>" + formatEuros(gallery.due_extras_cents) + L(" à régler", " due") + "</strong>" +
+          "</p>";
+      }
+      if (paid > 0) {
+        html +=
+          '<p class="ad-quota-paid">✓ ' + paid + L(" supplément" + (paid > 1 ? "s" : "") + " déjà réglé" + (paid > 1 ? "s" : ""),
+            (paid === 1 ? " extra" : " extras") + " already paid") + "</p>";
+      }
+    }
+
+    // Options payantes cochées par le client (catalogue : Paramètres).
+    var options = gallery.options || { enabled: true, chosen: [] };
+    var unpaid = options.chosen.filter(function (c) { return !c.paid; });
+    if (options.chosen.length) {
+      html += '<ul class="ad-options-chosen">' + options.chosen.map(function (c) {
+        return "<li><span>" + esc(c.label) + (c.quantity > 1 ? " × " + c.quantity : "") + "</span>" +
+          "<span>" + formatEuros(c.unitCents * c.quantity) + "</span>" +
+          (c.paid ? '<span class="ad-badge ad-badge-selected">' + L("Réglée", "Paid") + "</span>"
+            : '<span class="ad-badge ad-badge-awaiting">' + L("À régler", "Due") + "</span>") + "</li>";
+      }).join("") + "</ul>";
+    }
+    html += '<label class="ad-toggle ad-options-toggle"><input type="checkbox" id="ad-gallery-options"' + (options.enabled ? " checked" : "") + " />" +
+      "<span>" + L("Proposer vos options payantes dans cette galerie", "Offer your paid options in this gallery") + "</span></label>";
+
+    if ((gallery.due_total_cents || 0) > 0) {
+      if (unpaid.length && due > 0) {
+        html += '<p class="ad-quota-due">' + L("Total à régler : ", "Total due: ") + "<strong>" + formatEuros(gallery.due_total_cents) + "</strong></p>";
+      } else if (unpaid.length) {
+        html += '<p class="ad-quota-due">' + L("Options à régler : ", "Options due: ") + "<strong>" + formatEuros(gallery.due_total_cents) + "</strong></p>";
+      }
       // Une demande en espèces ou par virement en cours a déjà son bouton
       // « Marquer comme reçu » dans l'historique, juste en dessous.
       var awaiting = (payments || []).some(function (p) { return p.status === "awaiting" && p.kind !== "print"; });
       if (!awaiting) {
         html += '<p class="ad-hint ad-settle-hint">' + L("Déjà réglé directement avec vous ?", "Already settled directly with you?") + "</p>" +
-          settleButtonsHtml({ slug: gallery.slug, title: gallery.title, dueTotalCents: gallery.due_total_cents, dueExtraCount: due, clientEmail: gallery.client_email });
+          settleButtonsHtml({ slug: gallery.slug, title: gallery.title, dueTotalCents: gallery.due_total_cents, what: dueWhatText(due, unpaid.length), clientEmail: gallery.client_email });
       }
     }
-    if (paid > 0) {
-      html +=
-        '<p class="ad-quota-paid">✓ ' + paid + L(" supplément" + (paid > 1 ? "s" : "") + " déjà réglé" + (paid > 1 ? "s" : ""),
-          (paid === 1 ? " extra" : " extras") + " already paid") + "</p>";
-    }
     return html;
+  }
+
+  // « 3 photos + Retouche avancée × 2 » : ce que couvre un paiement.
+  function paymentWhatHtml(p) {
+    var parts = [];
+    if (p.extra_count > 0) parts.push(p.extra_count + (p.extra_count === 1 ? " photo" : " photos"));
+    var options = [];
+    try { options = JSON.parse(p.options_json || "[]"); } catch (err) { options = []; }
+    options.forEach(function (o) { parts.push(o.label + (o.quantity > 1 ? " × " + o.quantity : "")); });
+    return esc(parts.join(" + ") || "—");
   }
 
   function paymentsHistoryHtml(payments) {
@@ -4865,7 +5086,7 @@
       return (
         "<tr>" +
         "<td>" + esc(formatDateTime(p.paid_at || p.created_at)) + "</td>" +
-        "<td>" + (p.kind === "print" ? L("Tirages", "Prints") : p.extra_count + (p.extra_count === 1 ? " photo" : " photos")) + "</td>" +
+        "<td>" + (p.kind === "print" ? L("Tirages", "Prints") : paymentWhatHtml(p)) + "</td>" +
         "<td>" + formatEuros(p.amount_cents) +
         (p.fee_cents ? '<br><span class="ad-hint">' + L("dont " + formatEuros(p.fee_cents) + " de frais de paiement", "incl. " + formatEuros(p.fee_cents) + " payment fees") + "</span>" : "") + "</td>" +
         "<td><span class=\"ad-badge " + statusCls + "\">" + statusLabel + "</span>" + actions + "</td>" +
@@ -5023,8 +5244,14 @@
       '<span class="ad-style-sample-body">' + esc(p.intro || L("Merci pour ces beaux moments partagés : voici vos photos.", "Thank you for these lovely moments together: here are your photos.")) + "</span></p>" +
       "</div>" +
       '<form id="ad-presentation-form" class="ad-presentation-form" novalidate>' +
+      '<div class="ad-intro-saved" id="ad-intro-saved-box">' + introSavedHtml(data.introTexts || []) + "</div>" +
       '<label class="ad-field"><span>' + L("Texte d'accompagnement <em>(facultatif, sous le titre)</em>", "Welcome text <em>(optional, under the title)</em>") + "</span>" +
       '<textarea name="intro" rows="3" maxlength="600" placeholder="' + L("Merci pour cette belle journée ! Voici vos photos : choisissez vos préférées en cliquant sur le cœur.", "Thank you for a wonderful day! Here are your photos: choose your favourites by clicking the heart.") + '">' + esc(p.intro) + "</textarea></label>" +
+      '<div class="ad-intro-keep">' +
+      '<label class="ad-toggle"><input type="checkbox" name="keepIntro" /><span>' + L("Enregistrer ce texte pour mes prochaines galeries", "Save this text for my next galleries") + "</span></label>" +
+      '<label class="ad-field ad-intro-keep-name" hidden><span>' + L("Nom dans le menu <em>(facultatif)</em>", "Name in the menu <em>(optional)</em>") + "</span>" +
+      '<input type="text" name="introLabel" maxlength="60" placeholder="' + L("Noël 2026", "Christmas 2026") + '" /></label>' +
+      "</div>" +
       '<div class="ad-style-header">' +
       '<span class="ad-style-header-title">' + L("En-tête de la galerie", "Gallery header") + "</span>" +
       '<div class="ad-seg" role="group" aria-label="' + L("En-tête de la galerie", "Gallery header") + '">' +
@@ -5053,6 +5280,18 @@
   }
 
   // Branche la section « Style de la galerie » d'une galerie ouverte.
+  // Menu des textes d'accompagnement enregistrés (vide : rien n'est montré,
+  // la case « Enregistrer ce texte » suffit à démarrer).
+  function introSavedHtml(texts) {
+    if (!texts.length) return "";
+    return '<label class="ad-field"><span>' + L("Mes textes enregistrés", "My saved texts") + "</span>" +
+      '<span class="ad-intro-saved-row"><select id="ad-intro-saved">' +
+      '<option value="">' + L("Choisir un texte déjà écrit…", "Pick a text you already wrote…") + "</option>" +
+      texts.map(function (t) { return '<option value="' + esc(t.id) + '">' + esc(t.label) + "</option>"; }).join("") +
+      "</select>" +
+      '<button type="button" class="ad-link-btn ad-link-danger" id="ad-intro-delete" hidden>' + L("Retirer du menu", "Remove from the menu") + "</button></span></label>";
+  }
+
   function bindPresentation(slug, data) {
     var p = data.gallery.presentation || {};
     var path = "/galleries/" + encodeURIComponent(slug) + "/presentation";
@@ -5093,8 +5332,46 @@
     };
     titleSelect.addEventListener("change", function () { syncSample(); save({ titleFont: titleSelect.value }, L("Police des titres enregistrée.", "Heading font saved.")); });
     bodySelect.addEventListener("change", function () { syncSample(); save({ bodyFont: bodySelect.value }, L("Police du texte enregistrée.", "Text font saved.")); });
-    form.elements.intro.addEventListener("input", function () {
+    var syncIntroSample = function () {
       document.querySelector("#ad-style-sample .ad-style-sample-body").textContent = form.elements.intro.value.trim() || L("Merci pour ces beaux moments partagés : voici vos photos.", "Thank you for these lovely moments together: here are your photos.");
+    };
+    form.elements.intro.addEventListener("input", syncIntroSample);
+
+    // Textes enregistrés : choisir = le texte s'affiche et s'applique
+    // aussitôt à la galerie ; « Retirer du menu » ; case pour garder le
+    // texte en cours au moment d'enregistrer.
+    var introTexts = data.introTexts || [];
+    var savedBox = document.getElementById("ad-intro-saved-box");
+    var keepName = form.querySelector(".ad-intro-keep-name");
+    form.elements.keepIntro.addEventListener("change", function () {
+      keepName.hidden = !form.elements.keepIntro.checked;
+      if (!keepName.hidden) form.elements.introLabel.focus();
+    });
+    var repaintSaved = function () { savedBox.innerHTML = introSavedHtml(introTexts); };
+    savedBox.addEventListener("change", async function (e) {
+      if (e.target.id !== "ad-intro-saved") return;
+      var chosen = introTexts.filter(function (t) { return t.id === e.target.value; })[0];
+      document.getElementById("ad-intro-delete").hidden = !chosen;
+      if (!chosen) return;
+      form.elements.intro.value = chosen.body;
+      syncIntroSample();
+      if (await save({ intro: chosen.body }, L("Texte « " + chosen.label + " » appliqué à la galerie.", "Text “" + chosen.label + "” applied to the gallery."))) {
+        p.intro = chosen.body;
+        api("POST", "/intro-texts/" + encodeURIComponent(chosen.id) + "/used").catch(function () {});
+      }
+    });
+    savedBox.addEventListener("click", async function (e) {
+      if (e.target.id !== "ad-intro-delete") return;
+      var select = document.getElementById("ad-intro-saved");
+      var chosen = introTexts.filter(function (t) { return t.id === select.value; })[0];
+      if (!chosen || !confirm(L("Retirer « " + chosen.label + " » de vos textes enregistrés ? Les galeries qui l'utilisent le gardent.", "Remove “" + chosen.label + "” from your saved texts? Galleries using it keep it."))) return;
+      try {
+        introTexts = (await api("DELETE", "/intro-texts/" + encodeURIComponent(chosen.id))).texts;
+        repaintSaved();
+        toast(L("Texte retiré du menu.", "Text removed from the menu."));
+      } catch (err) {
+        toast(err.message, true);
+      }
     });
     var mode = form.querySelector('[data-header-mode][aria-pressed="true"]').getAttribute("data-header-mode");
     form.querySelectorAll("[data-header-mode]").forEach(function (btn) {
@@ -5127,7 +5404,18 @@
         if (!form.elements.headerVideo.value.trim()) { toast(L("Collez le lien de la vidéo (YouTube ou Vimeo).", "Paste the video link (YouTube or Vimeo)."), true); return; }
         fields.headerVideo = form.elements.headerVideo.value;
       }
-      if (await save(fields, L("Texte et en-tête enregistrés.", "Text and header saved."))) renderDetail(slug, true);
+      if (form.elements.keepIntro.checked) {
+        if (!form.elements.intro.value.trim()) { toast(L("Écrivez d'abord le texte à garder pour vos prochaines galeries.", "Write the text to keep for your next galleries first."), true); return; }
+        try {
+          await api("POST", "/intro-texts", { body: form.elements.intro.value, label: form.elements.introLabel.value });
+        } catch (err) {
+          toast(err.message, true);
+          return;
+        }
+      }
+      var kept = form.elements.keepIntro.checked;
+      if (await save(fields, kept ? L("Texte et en-tête enregistrés. Le texte est aussi dans votre menu « Mes textes enregistrés ».", "Text and header saved. The text is also in your “My saved texts” menu.")
+        : L("Texte et en-tête enregistrés.", "Text and header saved."))) renderDetail(slug, true);
     });
   }
 
@@ -5514,6 +5802,17 @@
       }
     });
     // Supplément réglé en espèces ou par virement : reçu, ou demande annulée.
+    document.getElementById("ad-gallery-options").addEventListener("change", async function (event) {
+      var box = event.target;
+      try {
+        await api("POST", "/galleries/" + encodeURIComponent(slug) + "/options", { enabled: box.checked });
+        toast(box.checked ? L("Options proposées dans cette galerie.", "Options offered in this gallery.") : L("Options retirées de cette galerie.", "Options removed from this gallery."));
+        renderDetail(slug, true);
+      } catch (err) {
+        box.checked = !box.checked;
+        toast(err.message, true);
+      }
+    });
     el.view.querySelector(".ad-quota").addEventListener("click", async function (event) {
       var settle = event.target.closest("[data-settle]");
       if (settle) return settleSupplementFrom(settle, function () { renderDetail(slug, true); });

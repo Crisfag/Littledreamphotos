@@ -87,6 +87,17 @@
     "/event": function (body) {
       return { ok: true, reported: body.event === "capture_suspected" && ["impr-ecran", "capture-macos", "absence-breve"].indexOf(body.detail) !== -1 };
     },
+    // Options payantes : cochées dans la page, rien n'est enregistré.
+    "/options": function (body) {
+      var current = (state.gallery && state.gallery.options) || { available: [], chosen: [] };
+      var option = current.available.filter(function (o) { return o.id === body.optionId; })[0];
+      var chosen = current.chosen.filter(function (c) { return c.paid || c.optionId !== body.optionId; });
+      var quantity = Math.max(0, Math.floor(Number(body.quantity) || 0));
+      if (option && quantity > 0) {
+        chosen.push({ choiceId: "apercu-" + option.id, optionId: option.id, label: option.label, unitCents: option.priceCents, quantity: option.perUnit ? Math.min(99, quantity) : 1, paid: false });
+      }
+      return { options: { available: current.available, chosen: chosen } };
+    },
   };
   var PREVIEW_BLOCKED = ["/checkout", "/offline-payment", "/print-order", "/delivery/link"];
   function fetch(url, options) {
@@ -292,37 +303,195 @@
   function updateQuotaUI(count) {
     if (!el.toolbarQuota) return;
     var included = state.gallery && state.gallery.includedPhotos;
+    var extrasDueCents = 0;
     if (included === null || included === undefined) {
       el.toolbarQuota.hidden = true;
-      if (el.payButton) el.payButton.hidden = true;
-      return;
+    } else {
+      var extra = Math.max(0, count - included);
+      var paid = (state.gallery && state.gallery.paidExtraCount) || 0;
+      var due = Math.max(0, extra - paid);
+      extrasDueCents = due * (state.gallery.extraPhotoPriceCents || 0);
+      var text = count + " / " + included + " " + L(
+        "photo" + (included > 1 ? "s" : "") + " incluse" + (included > 1 ? "s" : ""),
+        plural(included, "photo", "photos") + " included"
+      );
+      if (due > 0) {
+        text +=
+          " — +" + due + " " + L("supplément" + (due > 1 ? "s" : ""), plural(due, "extra", "extras")) +
+          " (" + formatEuros(extrasDueCents) + ")";
+      } else if (extra > 0) {
+        text += L(" — supplément réglé ✓", " — extras paid ✓");
+      }
+      el.toolbarQuota.textContent = text;
+      el.toolbarQuota.classList.toggle("gp-toolbar-quota-due", due > 0);
+      el.toolbarQuota.hidden = false;
     }
-    var extra = Math.max(0, count - included);
-    var paid = (state.gallery && state.gallery.paidExtraCount) || 0;
-    var due = Math.max(0, extra - paid);
-    var text = count + " / " + included + " " + L(
-      "photo" + (included > 1 ? "s" : "") + " incluse" + (included > 1 ? "s" : ""),
-      plural(included, "photo", "photos") + " included"
-    );
-    if (due > 0) {
-      text +=
-        " — +" + due + " " + L("supplément" + (due > 1 ? "s" : ""), plural(due, "extra", "extras")) +
-        " (" + formatEuros(due * (state.gallery.extraPhotoPriceCents || 0)) + ")";
-    } else if (extra > 0) {
-      text += L(" — supplément réglé ✓", " — extras paid ✓");
-    }
-    el.toolbarQuota.textContent = text;
-    el.toolbarQuota.classList.toggle("gp-toolbar-quota-due", due > 0);
-    el.toolbarQuota.hidden = false;
 
+    // Tout ce qui est dû : suppléments + options cochées pas encore réglées.
+    var totalCents = extrasDueCents + optionsDueCents();
     if (el.payButton) {
-      el.payButton.hidden = !(due > 0 && state.gallery.canPayOnline);
+      el.payButton.hidden = !(totalCents > 0 && state.gallery.canPayOnline);
+      if (!el.payButton.disabled) el.payButton.textContent = payLabel(totalCents);
     }
-    updateOfflineUI(due);
+    updateOfflineUI(totalCents);
+    updateOptionsBar();
     if (el.invoiceButton) {
       var invoices = state.gallery.invoices || [];
       el.invoiceButton.hidden = invoices.length === 0;
     }
+  }
+
+  function payLabel(cents) {
+    return L("Régler " + formatEuros(cents), "Pay " + formatEuros(cents));
+  }
+
+  /* ---------- Options payantes à cocher ---------- */
+
+  function unpaidOptions() {
+    var options = state.gallery && state.gallery.options;
+    return options ? options.chosen.filter(function (c) { return !c.paid; }) : [];
+  }
+
+  function optionsDueCents() {
+    return unpaidOptions().reduce(function (sum, c) { return sum + c.unitCents * c.quantity; }, 0);
+  }
+
+  function optionPriceText(option) {
+    return "+" + formatEuros(option.priceCents) + (option.perUnit ? L(" / unité", " each") : "");
+  }
+
+  function updateOptionsBar() {
+    if (!el.optionsBar) return;
+    var options = state.gallery && state.gallery.options;
+    el.optionsBar.hidden = !options || (!options.available.length && !options.chosen.length);
+    if (el.optionsBar.hidden) return;
+    var chosen = unpaidOptions();
+    var cents = optionsDueCents();
+    el.optionsOpen.textContent = chosen.length
+      ? L("Options : " + chosen.length + " choisie" + (chosen.length > 1 ? "s" : "") + " · " + formatEuros(cents),
+          "Options: " + chosen.length + " chosen · " + formatEuros(cents))
+      : options.available.length ? L("Ajouter des options", "Add options") : L("Mes options", "My options");
+    el.optionsOpen.classList.toggle("gp-options-btn-on", chosen.length > 0);
+    if (!el.optionsDialog.hidden) renderOptionsDialog();
+  }
+
+  function renderOptionsDialog() {
+    var options = state.gallery.options || { available: [], chosen: [] };
+    var list = el.optionsList;
+    list.textContent = "";
+    options.available.forEach(function (option) {
+      var mine = options.chosen.filter(function (c) { return !c.paid && c.optionId === option.id; })[0];
+      var item = document.createElement("li");
+      item.className = "gp-option" + (mine ? " gp-option-on" : "");
+      var label = document.createElement("label");
+      label.className = "gp-option-label";
+      var box = document.createElement("input");
+      box.type = "checkbox";
+      box.checked = Boolean(mine);
+      box.setAttribute("data-option", option.id);
+      var main = document.createElement("span");
+      main.className = "gp-option-main";
+      var name = document.createElement("span");
+      name.className = "gp-option-name";
+      name.textContent = option.label;
+      main.appendChild(name);
+      if (option.description) {
+        var desc = document.createElement("span");
+        desc.className = "gp-option-desc";
+        desc.textContent = option.description;
+        main.appendChild(desc);
+      }
+      var price = document.createElement("span");
+      price.className = "gp-option-price";
+      price.textContent = optionPriceText(option);
+      label.appendChild(box);
+      label.appendChild(main);
+      label.appendChild(price);
+      item.appendChild(label);
+      if (mine && option.perUnit) {
+        var qty = document.createElement("div");
+        qty.className = "gp-option-qty";
+        var minus = document.createElement("button");
+        minus.type = "button";
+        minus.textContent = "−";
+        minus.setAttribute("aria-label", L("Une de moins", "One less"));
+        minus.setAttribute("data-option-qty", option.id);
+        minus.setAttribute("data-qty", String(mine.quantity - 1));
+        var value = document.createElement("output");
+        value.textContent = String(mine.quantity);
+        var plus = document.createElement("button");
+        plus.type = "button";
+        plus.textContent = "+";
+        plus.setAttribute("aria-label", L("Une de plus", "One more"));
+        plus.setAttribute("data-option-qty", option.id);
+        plus.setAttribute("data-qty", String(mine.quantity + 1));
+        plus.disabled = mine.quantity >= 99;
+        var total = document.createElement("span");
+        total.className = "gp-option-line";
+        total.textContent = "= " + formatEuros(option.priceCents * mine.quantity);
+        qty.appendChild(minus);
+        qty.appendChild(value);
+        qty.appendChild(plus);
+        qty.appendChild(total);
+        item.appendChild(qty);
+      }
+      list.appendChild(item);
+    });
+    var paid = options.chosen.filter(function (c) { return c.paid; });
+    el.optionsPaid.hidden = paid.length === 0;
+    el.optionsPaid.textContent = paid.length
+      ? L("Déjà réglé : ", "Already paid: ") + paid.map(function (c) { return c.label + (c.quantity > 1 ? " × " + c.quantity : ""); }).join(", ") + " ✓"
+      : "";
+    var cents = optionsDueCents();
+    el.optionsTotal.textContent = cents > 0
+      ? L("Options choisies : ", "Options chosen: ") + formatEuros(cents)
+      : options.available.length ? L("Rien de coché pour l'instant.", "Nothing ticked yet.") : "";
+  }
+
+  function openOptions() {
+    el.optionsError.hidden = true;
+    renderOptionsDialog();
+    el.optionsDialog.hidden = false;
+    var first = el.optionsList.querySelector("input");
+    (first || el.optionsDone).focus();
+  }
+
+  function closeOptions() {
+    el.optionsDialog.hidden = true;
+    if (el.optionsOpen) el.optionsOpen.focus();
+  }
+
+  function chooseOption(optionId, quantity) {
+    el.optionsError.hidden = true;
+    el.optionsList.querySelectorAll("input, button").forEach(function (b) { b.disabled = true; });
+    fetch(apiUrl("/options"), {
+      method: "POST",
+      headers: Object.assign({ "content-type": "application/json" }, authHeaders()),
+      body: JSON.stringify({ optionId: optionId, quantity: quantity }),
+    })
+      .then(function (response) {
+        if (response.status === 401) throw new Error("session");
+        return response.json().then(function (data) {
+          if (!response.ok) throw new Error(serverText(data.error || "", "Your choice couldn't be saved.") || L("Votre choix n'a pas pu être enregistré.", "Your choice couldn't be saved."));
+          return data;
+        });
+      })
+      .then(function (data) {
+        state.gallery.options = data.options;
+        updateSelectionUI();
+        renderOptionsDialog();
+        var again = el.optionsList.querySelector('[data-option="' + optionId + '"]');
+        if (again) again.focus();
+      })
+      .catch(function (err) {
+        if (err.message === "session") {
+          sessionLost(SESSION_EXPIRED());
+          return;
+        }
+        renderOptionsDialog();
+        el.optionsError.textContent = err.message;
+        el.optionsError.hidden = false;
+      });
   }
 
   // Facture la plus récente : suffisant tant qu'un seul supplément est réglé
@@ -401,7 +570,7 @@
           return;
         }
         el.payButton.disabled = false;
-        el.payButton.textContent = L("Régler le supplément", "Pay the extra");
+        updateSelectionUI();
         if (el.payError) {
           el.payError.textContent = err.message || L("Le paiement n'a pas pu démarrer. Réessayez dans un instant.", "The payment couldn't start. Please try again in a moment.");
           el.payError.hidden = false;
@@ -413,6 +582,7 @@
   // demande faite, ce qu'il reste à faire (adresse, numéro de compte à
   // venir). Une demande faite pour un autre montant (sélection changée
   // depuis) n'est plus montrée : le client choisit à nouveau.
+  // `due` : montant total dû (suppléments + options), en centimes.
   function updateOfflineUI(due) {
     if (!el.offline) return;
     var off = state.gallery && state.gallery.offline;
@@ -420,12 +590,12 @@
       el.offline.hidden = true;
       return;
     }
-    var pending = off.pending && off.pending.extraCount === due ? off.pending : null;
+    var pending = off.pending && off.pending.amountCents === due ? off.pending : null;
     var stale = off.pending && !pending;
     var choosing = !pending || state.offlineChoosing;
     el.offline.hidden = !(off.cash || off.transfer || pending);
     el.offlineLead.textContent = stale
-      ? L("Votre sélection a changé : choisissez à nouveau comment régler le supplément.", "Your selection has changed: choose again how to pay the extra.")
+      ? L("Votre sélection ou vos options ont changé : choisissez à nouveau comment régler.", "Your selection or options have changed: choose again how to pay.")
       : state.gallery.canPayOnline ? L("Ou réglez directement le studio :", "Or pay the studio directly:") : L("Régler le supplément :", "Pay the extra:");
     el.offlineLead.hidden = !choosing;
     el.payCash.hidden = !(choosing && off.cash);
@@ -2480,6 +2650,14 @@
       payTransfer: $("gp-pay-transfer"),
       offlinePending: $("gp-offline-pending"),
       offlineError: $("gp-offline-error"),
+      optionsBar: $("gp-options-bar"),
+      optionsOpen: $("gp-options-open"),
+      optionsDialog: $("gp-options"),
+      optionsList: $("gp-options-list"),
+      optionsPaid: $("gp-options-paid"),
+      optionsTotal: $("gp-options-total"),
+      optionsError: $("gp-options-error"),
+      optionsDone: $("gp-options-done"),
       invoiceButton: $("gp-download-invoice"),
       filters: Array.prototype.slice.call(document.querySelectorAll("#gp-filters [data-filter]")),
       validateBlock: $("gp-validate-block"),
@@ -2585,6 +2763,22 @@
         updateFilterUI();
       });
     });
+    if (el.optionsOpen) {
+      el.optionsOpen.addEventListener("click", openOptions);
+      el.optionsDone.addEventListener("click", closeOptions);
+      el.optionsDialog.addEventListener("click", function (event) {
+        if (event.target === el.optionsDialog) { closeOptions(); return; }
+        var qty = event.target.closest("[data-option-qty]");
+        if (qty) chooseOption(qty.getAttribute("data-option-qty"), Number(qty.getAttribute("data-qty")));
+      });
+      el.optionsList.addEventListener("change", function (event) {
+        var box = event.target.closest("[data-option]");
+        if (box) chooseOption(box.getAttribute("data-option"), box.checked ? 1 : 0);
+      });
+      el.optionsDialog.addEventListener("keydown", function (event) {
+        if (event.key === "Escape") closeOptions();
+      });
+    }
     if (el.captureOk) {
       el.captureOk.addEventListener("click", function () { el.capture.hidden = true; });
       el.capture.addEventListener("keydown", function (event) {

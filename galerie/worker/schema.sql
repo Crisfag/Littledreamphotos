@@ -54,6 +54,9 @@ CREATE TABLE IF NOT EXISTS photographers (
   offline_cash            INTEGER NOT NULL DEFAULT 0,
   offline_cash_address    TEXT NOT NULL DEFAULT '',
   offline_transfer        INTEGER NOT NULL DEFAULT 0,
+  -- Relance du client quand un supplément (ou une option) reste à régler,
+  -- 3 puis 7 jours après la validation de sa sélection (unpaidreminders.js).
+  unpaid_reminders_enabled INTEGER NOT NULL DEFAULT 1,
   -- Numérotation des factures : continue et sans trou par photographe, en
   -- séries annuelles (ex. 2026-0001) — remise à zéro dès le premier
   -- règlement d'une nouvelle année civile, jamais en cours d'année.
@@ -151,6 +154,8 @@ CREATE TABLE IF NOT EXISTS galleries (
   -- l'espace photographe l'affiche (rien de personnel dedans) ; effacé dès
   -- que le photographe en génère un nouveau.
   demo                   INTEGER NOT NULL DEFAULT 0,
+  -- Options payantes du studio proposées dans cette galerie (options.js).
+  options_enabled        INTEGER NOT NULL DEFAULT 1,
   demo_password          TEXT,
   -- Forfait : nombre de photos incluses dans ce que le client a déjà payé.
   -- NULL = pas de forfait défini (comportement d'avant cette fonctionnalité :
@@ -384,6 +389,10 @@ CREATE TABLE IF NOT EXISTS payments (
   -- pour couvrir les frais Stripe payés par la plateforme (voir fees.js).
   -- Le photographe reçoit amount_cents - fee_cents.
   fee_cents                   INTEGER NOT NULL DEFAULT 0,
+  -- Options payantes réglées avec ce paiement (JSON, instantané au moment
+  -- du paiement : [{choiceId, optionId, label, unitCents, quantity}]).
+  -- '' : aucune (voir options.js).
+  options_json                TEXT NOT NULL DEFAULT '',
   created_at                  INTEGER NOT NULL,
   paid_at                     INTEGER
 );
@@ -1283,3 +1292,50 @@ CREATE TABLE IF NOT EXISTS client_invoices (
 );
 CREATE INDEX IF NOT EXISTS idx_client_invoices_photographer ON client_invoices(photographer_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_client_invoices_session ON client_invoices(stripe_session_id);
+
+-- Options payantes que le studio propose dans ses galeries : le client les
+-- coche (retouche avancée, livraison express, clé USB…) et les règle avec
+-- ses suppléments — en ligne, en espèces ou par virement (options.js).
+-- per_unit = 1 : le client choisit une quantité (ex. « par photo »).
+CREATE TABLE IF NOT EXISTS gallery_options (
+  id              TEXT PRIMARY KEY,
+  photographer_id TEXT NOT NULL REFERENCES photographers(id) ON DELETE CASCADE,
+  label           TEXT NOT NULL,
+  description     TEXT NOT NULL DEFAULT '',
+  price_cents     INTEGER NOT NULL,
+  per_unit        INTEGER NOT NULL DEFAULT 0,
+  active          INTEGER NOT NULL DEFAULT 1,
+  position        INTEGER NOT NULL DEFAULT 0,
+  created_at      INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_gallery_options_photographer ON gallery_options(photographer_id, position);
+
+-- Ce que le client a coché. Tant que payment_id est vide, le prix est celui
+-- de l'option (catalogue) ; une fois réglée, label, prix et quantité sont
+-- figés tels que payés. Pas de clé étrangère vers gallery_options : une
+-- option retirée du catalogue reste lisible sur ce qui a été payé.
+CREATE TABLE IF NOT EXISTS gallery_option_choices (
+  id               TEXT PRIMARY KEY,
+  gallery_id       TEXT NOT NULL REFERENCES galleries(id) ON DELETE CASCADE,
+  option_id        TEXT NOT NULL,
+  quantity         INTEGER NOT NULL DEFAULT 1,
+  label            TEXT NOT NULL DEFAULT '',
+  unit_price_cents INTEGER NOT NULL DEFAULT 0,
+  payment_id       TEXT NOT NULL DEFAULT '',
+  created_at       INTEGER NOT NULL,
+  paid_at          INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_option_choices_gallery ON gallery_option_choices(gallery_id, payment_id);
+
+-- Textes d'accompagnement enregistrés par le photographe, à réutiliser
+-- d'une galerie à l'autre depuis un menu déroulant (introtexts.js). Retirer
+-- un texte du menu ne touche pas aux galeries qui l'utilisent déjà.
+CREATE TABLE IF NOT EXISTS intro_texts (
+  id              TEXT PRIMARY KEY,
+  photographer_id TEXT NOT NULL REFERENCES photographers(id) ON DELETE CASCADE,
+  label           TEXT NOT NULL,
+  body            TEXT NOT NULL,
+  created_at      INTEGER NOT NULL,
+  used_at         INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_intro_texts_photographer ON intro_texts(photographer_id, used_at);

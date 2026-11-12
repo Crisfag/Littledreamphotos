@@ -838,6 +838,51 @@ h1 { font-family: var(--title, var(--serif)); font-weight: 500; font-size: clamp
 }
 .gp-capture-ok:hover { background: var(--rose-deep); }
 
+/* Options payantes : bouton dans la barre, fenêtre à cases à cocher. */
+.gp-options-bar { margin-top: .45rem; }
+.gp-options-bar .gp-options-btn { margin: 0; }
+.gp-options-btn::before { content: "+"; display: inline-block; margin-right: .45rem; font-weight: 500; color: var(--rose-deep); }
+.gp-options-btn-on { border-color: var(--rose); color: var(--rose-deep); }
+.gp-options-btn-on::before { content: "✓"; }
+.gp-options {
+  position: fixed; inset: 0; z-index: 90;
+  display: grid; place-items: center; padding: 1rem;
+  background: rgba(43, 37, 33, .55); backdrop-filter: blur(6px);
+}
+.gp-options-card {
+  width: min(520px, 100%); max-height: calc(100vh - 2rem); overflow-y: auto;
+  background: var(--ivory); border-radius: 16px; padding: 1.6rem 1.4rem 1.3rem;
+  box-shadow: 0 30px 80px -30px rgba(0, 0, 0, .6); text-align: center;
+}
+.gp-options-card h2 {
+  margin: .4rem 0 .5rem; font-family: var(--serif); font-weight: 400; font-size: clamp(1.4rem, 4.5vw, 1.75rem); color: var(--ink);
+}
+.gp-options-lead { font-size: .88rem; line-height: 1.55; color: var(--muted); margin-bottom: 1rem; }
+.gp-options-list { list-style: none; margin: 0; padding: 0; display: grid; gap: .55rem; text-align: left; }
+.gp-option {
+  border: 1px solid var(--line); border-radius: 12px; background: #fff;
+  transition: border-color .2s var(--ease), background-color .2s var(--ease);
+}
+.gp-option-on { border-color: var(--rose); background: color-mix(in srgb, var(--rose) 7%, #fff); }
+.gp-option-label { display: flex; align-items: flex-start; gap: .75rem; padding: .85rem .9rem; cursor: pointer; }
+.gp-option-label input { flex: none; width: 1.15rem; height: 1.15rem; margin-top: .12rem; accent-color: var(--rose-deep); cursor: pointer; }
+.gp-option-main { flex: 1; min-width: 0; display: grid; gap: .15rem; }
+.gp-option-name { font-size: .95rem; font-weight: 500; color: var(--ink); }
+.gp-option-desc { font-size: .8rem; line-height: 1.45; color: var(--muted); }
+.gp-option-price { flex: none; font-size: .88rem; font-weight: 500; color: var(--rose-deep); white-space: nowrap; }
+.gp-option-qty { display: flex; align-items: center; gap: .5rem; padding: 0 .9rem .8rem 2.8rem; }
+.gp-option-qty button {
+  width: 2.25rem; height: 2.25rem; border-radius: 50%; border: 1px solid var(--line); background: var(--ivory);
+  font-size: 1.05rem; line-height: 1; color: var(--ink); cursor: pointer;
+}
+.gp-option-qty button:hover:not(:disabled) { border-color: var(--rose); }
+.gp-option-qty button:disabled { opacity: .45; cursor: default; }
+.gp-option-qty output { min-width: 1.6rem; text-align: center; font-weight: 500; font-variant-numeric: tabular-nums; }
+.gp-option-line { margin-left: auto; font-size: .85rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.gp-options-paid { margin-top: .9rem; font-size: .82rem; color: var(--muted); }
+.gp-options-total { margin-top: .9rem; font-size: .9rem; color: var(--ink); font-weight: 500; }
+.gp-options-total:empty { display: none; }
+
 /* Ceinture et bretelles : même si le voile tardait, les photos sont floutées. */
 body.gp-veiled .gp-canvas,
 body.gp-veiled #gp-viewer-canvas {
