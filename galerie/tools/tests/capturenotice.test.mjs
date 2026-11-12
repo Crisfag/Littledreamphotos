@@ -90,6 +90,56 @@ try {
   if (SHOTS) await page.screenshot({ path: join(SHOTS, "capture-fenetre-mobile.png") });
   await page.keyboard.press("Escape");
   check("Échap ferme aussi la fenêtre", await page.isHidden("#gp-capture"));
+
+  // Sensibilité : une absence brève sans raccourci (notification, barre
+  // d'adresse, autre onglet) n'est plus prise pour une capture.
+  await page.setViewportSize({ width: 1200, height: 900 });
+  const blurFor = async (ms) => {
+    await page.evaluate(() => window.dispatchEvent(new Event("blur")));
+    await page.waitForTimeout(ms);
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await page.waitForTimeout(1200);
+  };
+  await blurFor(400);
+  check("absence brève sans raccourci : pas de fenêtre", await page.isHidden("#gp-capture"));
+
+  // Win/Cmd + Maj enfoncées juste avant (le système garde la 3e touche).
+  await page.keyboard.down("Shift");
+  await page.keyboard.down("Meta");
+  await page.keyboard.up("Meta");
+  await page.keyboard.up("Shift");
+  await blurFor(1500);
+  check("Win/Cmd + Maj puis absence brève : fenêtre de capture", await page.isVisible("#gp-capture"));
+  await page.click("#gp-capture-ok");
+
+  // Raccourci trop ancien : l'absence qui suit n'est pas une capture.
+  await page.keyboard.down("Shift");
+  await page.keyboard.down("Meta");
+  await page.keyboard.up("Meta");
+  await page.keyboard.up("Shift");
+  await page.waitForTimeout(3300);
+  await blurFor(300);
+  check("raccourci vieux de plus de 3 s : pas de fenêtre", await page.isHidden("#gp-capture"));
+
+  // Clic dans un lecteur intégré (iframe) : le client reste sur la page.
+  await page.evaluate(() => {
+    const frame = document.createElement("iframe");
+    frame.id = "test-frame";
+    frame.srcdoc = "<button id=b>lecture</button>";
+    frame.style.cssText = "position:fixed;top:10px;left:10px;width:200px;height:80px;z-index:99999";
+    document.body.appendChild(frame);
+  });
+  await page.waitForTimeout(300);
+  await page.frameLocator("#test-frame").locator("#b").click();
+  await page.waitForTimeout(400);
+  check("clic dans un lecteur intégré : photos pas masquées", await page.isHidden("#gp-veil"));
+  await page.click("h1, #gp-gallery", { position: { x: 600, y: 400 } }).catch(() => {});
+  await page.waitForTimeout(1200);
+  check("retour du lecteur intégré : pas de fenêtre", await page.isHidden("#gp-capture"));
+  const log2 = await client.request("GET", `/api/admin/galleries/${slug}/log`);
+  const details = ((log2.events || log2.log || log2.entries || log2).filter?.((e) => e.event === "capture_suspected") || []).map((e) => e.detail);
+  check("au journal : une seule capture par raccourci, les autres absences restent de simples changements de fenêtre",
+        details.filter((d) => d === "absence-breve").length === 1 && details.filter((d) => d === "perte-focus").length === 2, JSON.stringify(details));
   check("aucune erreur JavaScript", exceptions.length === 0, exceptions.join(" | "));
 } finally {
   await browser.close();

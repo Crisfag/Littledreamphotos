@@ -8,7 +8,7 @@
 const REASON_LABELS = {
   "impr-ecran": "la touche Impr. écran",
   "capture-macos": "un raccourci de capture macOS",
-  "absence-breve": "un signal fort de capture d'écran (changement de fenêtre très bref)",
+  "absence-breve": "un raccourci de capture (Cmd ou Windows + Maj), suivi d'un bref changement de fenêtre",
 };
 
 const SANS = "-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif";
@@ -440,7 +440,7 @@ function printOrderShippedEn({ studioName, galleryTitle, recipientName, tracking
 const REASON_LABELS_EN = {
   "impr-ecran": "the Print Screen key",
   "capture-macos": "a macOS screenshot shortcut",
-  "absence-breve": "a strong screenshot signal (a very brief window switch)",
+  "absence-breve": "a screenshot shortcut (Cmd or Windows + Shift), followed by a brief window switch",
 };
 
 function formatWhenEn(ts) {

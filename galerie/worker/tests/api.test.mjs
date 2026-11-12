@@ -652,10 +652,10 @@ await fetch(`${BASE}/api/gallery/${SLUG}/event`, {
   headers: { ...bearer, "content-type": "application/json" },
   body: JSON.stringify({ event: "capture_suspected", detail: "perte-focus", photoId: "pho_NExistePas000" }),
 });
-// Sur macOS, le raccourci de capture est intercepté par le système avant
-// d'atteindre le navigateur : "absence-breve" (changement de fenêtre très
-// bref, mesuré côté client) est le signal de repli qui déclenche quand même
-// une alerte — voir gallery.js et viewer.js pour le détail.
+// Win+Maj+S et Cmd+Maj+3/4/5 sont interceptés par le système avant
+// d'atteindre le navigateur : "absence-breve" (Win/Cmd + Maj vus juste avant
+// une perte de focus, côté client) déclenche quand même une alerte — voir
+// gallery.js et viewer.js pour le détail.
 await fetch(`${BASE}/api/gallery/${SLUG}/event`, {
   method: "POST",
   headers: { ...bearer, "content-type": "application/json" },
