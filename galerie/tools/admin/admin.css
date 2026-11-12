@@ -2119,3 +2119,10 @@ main section.ad-demo {
 @media (max-width: 560px) {
   .ad-uploads-panel { right: 8px; bottom: 8px; width: calc(100vw - 16px); }
 }
+
+/* Textes d'accompagnement enregistrés (style de la galerie). */
+.ad-intro-saved-row { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem 1rem; }
+.ad-intro-saved-row select { flex: 1 1 16rem; min-width: 0; }
+.ad-intro-keep { margin: -.3rem 0 1rem; }
+.ad-intro-keep .ad-toggle { display: flex; font-size: .88rem; }
+.ad-intro-keep-name { margin: .6rem 0 0 1.7rem; max-width: 22rem; }

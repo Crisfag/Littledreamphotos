@@ -5244,8 +5244,14 @@
       '<span class="ad-style-sample-body">' + esc(p.intro || L("Merci pour ces beaux moments partagés : voici vos photos.", "Thank you for these lovely moments together: here are your photos.")) + "</span></p>" +
       "</div>" +
       '<form id="ad-presentation-form" class="ad-presentation-form" novalidate>' +
+      '<div class="ad-intro-saved" id="ad-intro-saved-box">' + introSavedHtml(data.introTexts || []) + "</div>" +
       '<label class="ad-field"><span>' + L("Texte d'accompagnement <em>(facultatif, sous le titre)</em>", "Welcome text <em>(optional, under the title)</em>") + "</span>" +
       '<textarea name="intro" rows="3" maxlength="600" placeholder="' + L("Merci pour cette belle journée ! Voici vos photos : choisissez vos préférées en cliquant sur le cœur.", "Thank you for a wonderful day! Here are your photos: choose your favourites by clicking the heart.") + '">' + esc(p.intro) + "</textarea></label>" +
+      '<div class="ad-intro-keep">' +
+      '<label class="ad-toggle"><input type="checkbox" name="keepIntro" /><span>' + L("Enregistrer ce texte pour mes prochaines galeries", "Save this text for my next galleries") + "</span></label>" +
+      '<label class="ad-field ad-intro-keep-name" hidden><span>' + L("Nom dans le menu <em>(facultatif)</em>", "Name in the menu <em>(optional)</em>") + "</span>" +
+      '<input type="text" name="introLabel" maxlength="60" placeholder="' + L("Noël 2026", "Christmas 2026") + '" /></label>' +
+      "</div>" +
       '<div class="ad-style-header">' +
       '<span class="ad-style-header-title">' + L("En-tête de la galerie", "Gallery header") + "</span>" +
       '<div class="ad-seg" role="group" aria-label="' + L("En-tête de la galerie", "Gallery header") + '">' +
@@ -5274,6 +5280,18 @@
   }
 
   // Branche la section « Style de la galerie » d'une galerie ouverte.
+  // Menu des textes d'accompagnement enregistrés (vide : rien n'est montré,
+  // la case « Enregistrer ce texte » suffit à démarrer).
+  function introSavedHtml(texts) {
+    if (!texts.length) return "";
+    return '<label class="ad-field"><span>' + L("Mes textes enregistrés", "My saved texts") + "</span>" +
+      '<span class="ad-intro-saved-row"><select id="ad-intro-saved">' +
+      '<option value="">' + L("Choisir un texte déjà écrit…", "Pick a text you already wrote…") + "</option>" +
+      texts.map(function (t) { return '<option value="' + esc(t.id) + '">' + esc(t.label) + "</option>"; }).join("") +
+      "</select>" +
+      '<button type="button" class="ad-link-btn ad-link-danger" id="ad-intro-delete" hidden>' + L("Retirer du menu", "Remove from the menu") + "</button></span></label>";
+  }
+
   function bindPresentation(slug, data) {
     var p = data.gallery.presentation || {};
     var path = "/galleries/" + encodeURIComponent(slug) + "/presentation";
@@ -5314,8 +5332,46 @@
     };
     titleSelect.addEventListener("change", function () { syncSample(); save({ titleFont: titleSelect.value }, L("Police des titres enregistrée.", "Heading font saved.")); });
     bodySelect.addEventListener("change", function () { syncSample(); save({ bodyFont: bodySelect.value }, L("Police du texte enregistrée.", "Text font saved.")); });
-    form.elements.intro.addEventListener("input", function () {
+    var syncIntroSample = function () {
       document.querySelector("#ad-style-sample .ad-style-sample-body").textContent = form.elements.intro.value.trim() || L("Merci pour ces beaux moments partagés : voici vos photos.", "Thank you for these lovely moments together: here are your photos.");
+    };
+    form.elements.intro.addEventListener("input", syncIntroSample);
+
+    // Textes enregistrés : choisir = le texte s'affiche et s'applique
+    // aussitôt à la galerie ; « Retirer du menu » ; case pour garder le
+    // texte en cours au moment d'enregistrer.
+    var introTexts = data.introTexts || [];
+    var savedBox = document.getElementById("ad-intro-saved-box");
+    var keepName = form.querySelector(".ad-intro-keep-name");
+    form.elements.keepIntro.addEventListener("change", function () {
+      keepName.hidden = !form.elements.keepIntro.checked;
+      if (!keepName.hidden) form.elements.introLabel.focus();
+    });
+    var repaintSaved = function () { savedBox.innerHTML = introSavedHtml(introTexts); };
+    savedBox.addEventListener("change", async function (e) {
+      if (e.target.id !== "ad-intro-saved") return;
+      var chosen = introTexts.filter(function (t) { return t.id === e.target.value; })[0];
+      document.getElementById("ad-intro-delete").hidden = !chosen;
+      if (!chosen) return;
+      form.elements.intro.value = chosen.body;
+      syncIntroSample();
+      if (await save({ intro: chosen.body }, L("Texte « " + chosen.label + " » appliqué à la galerie.", "Text “" + chosen.label + "” applied to the gallery."))) {
+        p.intro = chosen.body;
+        api("POST", "/intro-texts/" + encodeURIComponent(chosen.id) + "/used").catch(function () {});
+      }
+    });
+    savedBox.addEventListener("click", async function (e) {
+      if (e.target.id !== "ad-intro-delete") return;
+      var select = document.getElementById("ad-intro-saved");
+      var chosen = introTexts.filter(function (t) { return t.id === select.value; })[0];
+      if (!chosen || !confirm(L("Retirer « " + chosen.label + " » de vos textes enregistrés ? Les galeries qui l'utilisent le gardent.", "Remove “" + chosen.label + "” from your saved texts? Galleries using it keep it."))) return;
+      try {
+        introTexts = (await api("DELETE", "/intro-texts/" + encodeURIComponent(chosen.id))).texts;
+        repaintSaved();
+        toast(L("Texte retiré du menu.", "Text removed from the menu."));
+      } catch (err) {
+        toast(err.message, true);
+      }
     });
     var mode = form.querySelector('[data-header-mode][aria-pressed="true"]').getAttribute("data-header-mode");
     form.querySelectorAll("[data-header-mode]").forEach(function (btn) {
@@ -5348,7 +5404,18 @@
         if (!form.elements.headerVideo.value.trim()) { toast(L("Collez le lien de la vidéo (YouTube ou Vimeo).", "Paste the video link (YouTube or Vimeo)."), true); return; }
         fields.headerVideo = form.elements.headerVideo.value;
       }
-      if (await save(fields, L("Texte et en-tête enregistrés.", "Text and header saved."))) renderDetail(slug, true);
+      if (form.elements.keepIntro.checked) {
+        if (!form.elements.intro.value.trim()) { toast(L("Écrivez d'abord le texte à garder pour vos prochaines galeries.", "Write the text to keep for your next galleries first."), true); return; }
+        try {
+          await api("POST", "/intro-texts", { body: form.elements.intro.value, label: form.elements.introLabel.value });
+        } catch (err) {
+          toast(err.message, true);
+          return;
+        }
+      }
+      var kept = form.elements.keepIntro.checked;
+      if (await save(fields, kept ? L("Texte et en-tête enregistrés. Le texte est aussi dans votre menu « Mes textes enregistrés ».", "Text and header saved. The text is also in your “My saved texts” menu.")
+        : L("Texte et en-tête enregistrés.", "Text and header saved."))) renderDetail(slug, true);
     });
   }
 

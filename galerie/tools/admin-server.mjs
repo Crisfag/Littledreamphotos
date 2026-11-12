@@ -1160,6 +1160,17 @@ async function handleApi(req, res, url) {
     }
   }
 
+  // /local/intro-texts[/:id[/used]] — textes d'accompagnement enregistrés.
+  if (parts[0] === "intro-texts" && parts.length >= 1 && parts.length <= 3 && ["GET", "POST", "DELETE"].includes(req.method)) {
+    const path = "/api/admin/" + parts.map(encodeURIComponent).join("/");
+    try {
+      const body = req.method === "POST" ? JSON.parse((await readBody(req)).toString("utf8") || "{}") : undefined;
+      return json(res, 200, await client.request(req.method, path, body));
+    } catch (err) {
+      return relayError(res, err, "Impossible d'enregistrer le texte");
+    }
+  }
+
   // /local/options[/:id] — catalogue des options payantes (Paramètres).
   if (parts[0] === "options" && (parts.length === 1 || parts.length === 2) && ["GET", "POST", "DELETE"].includes(req.method)) {
     const path = `/api/admin/options${parts[1] ? "/" + encodeURIComponent(parts[1]) : ""}`;

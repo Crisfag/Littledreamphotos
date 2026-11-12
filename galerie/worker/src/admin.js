@@ -32,6 +32,7 @@ import {
   unpaidOptionsByGallery, unpaidOptions, optionsForAdmin,
 } from "./options.js";
 import { remindUnpaidNow, updateUnpaidReminders } from "./unpaidreminders.js";
+import { listIntroTexts, getIntroTexts, saveIntroText, touchIntroText, deleteIntroText } from "./introtexts.js";
 import { salesForAdmin } from "./sales.js";
 import { insightsForAdmin, setSessionType, cleanSessionType, guessSessionType } from "./insights.js";
 import { handlePortfolioAdmin, deletePortfolioFiles } from "./portfolio.js";
@@ -325,6 +326,8 @@ async function getGallery(env, photographerId, slug) {
     photos,
     payments,
     printOrders: await listPrintOrders(env, { galleryId: gallery.id }),
+    // Textes d'accompagnement enregistrés : menu déroulant du style.
+    introTexts: await listIntroTexts(env, photographerId),
   });
 }
 
@@ -987,6 +990,19 @@ export async function handleAdmin(request, env, ctx, path) {
     return getInvoice(env, photographerId, parts[3]);
   }
 
+  // Textes d'accompagnement enregistrés (introtexts.js).
+  if (section === "intro-texts" && parts.length === 3 && request.method === "GET") {
+    return getIntroTexts(env, photographerId);
+  }
+  if (section === "intro-texts" && parts.length === 3 && request.method === "POST") {
+    return saveIntroText(request, env, photographerId);
+  }
+  if (section === "intro-texts" && parts.length === 5 && parts[4] === "used" && request.method === "POST") {
+    return touchIntroText(env, photographerId, parts[3]);
+  }
+  if (section === "intro-texts" && parts.length === 4 && request.method === "DELETE") {
+    return deleteIntroText(env, photographerId, parts[3]);
+  }
   // Catalogue des options payantes (options.js).
   if (section === "options" && parts.length === 3 && request.method === "GET") {
     return getOptionsCatalog(env, photographerId);

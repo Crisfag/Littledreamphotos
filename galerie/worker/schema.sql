@@ -1326,3 +1326,16 @@ CREATE TABLE IF NOT EXISTS gallery_option_choices (
   paid_at          INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_option_choices_gallery ON gallery_option_choices(gallery_id, payment_id);
+
+-- Textes d'accompagnement enregistrés par le photographe, à réutiliser
+-- d'une galerie à l'autre depuis un menu déroulant (introtexts.js). Retirer
+-- un texte du menu ne touche pas aux galeries qui l'utilisent déjà.
+CREATE TABLE IF NOT EXISTS intro_texts (
+  id              TEXT PRIMARY KEY,
+  photographer_id TEXT NOT NULL REFERENCES photographers(id) ON DELETE CASCADE,
+  label           TEXT NOT NULL,
+  body            TEXT NOT NULL,
+  created_at      INTEGER NOT NULL,
+  used_at         INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_intro_texts_photographer ON intro_texts(photographer_id, used_at);
