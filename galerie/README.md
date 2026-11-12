@@ -2226,6 +2226,7 @@ node tests/invoicing.test.mjs         # factures libres (TVA par ligne, échéan
 node tests/offlinepay.test.mjs        # suppléments réglés en espèces ou par virement : réglages, demande du client, « Marquer comme reçu », autonome (admin-server.mjs lancé)
 node tests/settlesupplement.test.mjs  # Facturation : suppléments en attente de règlement, « Réglé par virement » / « Réglé en espèces » hors galerie, autonome (admin-server.mjs lancé)
 node tests/introtexts.test.mjs        # textes d'accompagnement enregistrés : case, menu déroulant, retrait, autonome (admin-server.mjs lancé)
+node tests/clientpicker.test.mjs       # « Choisir dans mes fiches clients » (facture, devis, galerie, planning) et créneau réservé pour un client (admin-server.mjs lancé)
 node tests/options.test.mjs           # options payantes : catalogue, cases à cocher dans la galerie, virement, relance, « Marquer comme reçu », autonome (admin-server.mjs lancé)
 node tests/giftcards.test.mjs         # bons cadeaux : vente sur le mini-site, page du bon, suivi et bon à la main, autonome (admin-server.mjs lancé)
 node tests/schoolpack.test.mjs        # pack « toutes les photos », ordre de la gamme, liste de prénoms collée, autonome

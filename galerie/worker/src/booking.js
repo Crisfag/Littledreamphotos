@@ -659,6 +659,68 @@ export async function runBookingReminders(env) {
   return sent;
 }
 
+/* ---------- Photographe : réserver un créneau pour un client ---------- */
+
+async function bookForClient(env, photographer, slotId, body) {
+  if (!body || typeof body !== "object") return fail(400, "Requête invalide");
+  const name = cleanLine(body.name, 100);
+  const email = cleanLine(body.email, 200).toLowerCase();
+  const phone = normalizePhone(body.phone);
+  const message = cleanText(body.message, 2000);
+  if (!name) return fail(400, "Indiquez le nom du client");
+  if (!EMAIL_RE.test(email)) return fail(400, "Adresse e-mail du client invalide");
+  if (phone.error) return fail(400, phone.error);
+
+  const ts = now();
+  const slot = await env.DB.prepare(
+    `SELECT s.*, o.title, o.duration_min, o.price_cents, o.tiers, o.location, o.included, o.dress_code
+       FROM booking_slots s JOIN booking_offers o ON o.id = s.offer_id
+      WHERE s.id = ? AND s.photographer_id = ?`
+  ).bind(slotId, photographer.id).first();
+  if (!slot) return fail(404, "Créneau introuvable");
+  if (slot.starts_at <= ts) return fail(409, "Ce créneau est déjà passé");
+
+  const tiers = parseTiers(slot.tiers);
+  let priceCents = slot.price_cents;
+  let photos = null;
+  let tierLabel = "";
+  if (tiers.length) {
+    const index = body.tier === undefined || body.tier === null || body.tier === "" ? 0 : Number(body.tier);
+    const tier = Number.isInteger(index) ? tiers[index] : null;
+    if (!tier) return fail(400, "Choisissez le tarif");
+    priceCents = tier.priceCents;
+    photos = tier.photos;
+    tierLabel = tier.label || "";
+  }
+
+  await expireHolds(env, photographer.id);
+  const id = newId("bkg");
+  try {
+    await env.DB.prepare(
+      `INSERT INTO bookings (id, photographer_id, slot_id, offer_id, offer_title, location, starts_at, duration_min,
+         price_cents, deposit_cents, fee_cents, photos, tier_label, included, dress_code, client_name, client_email, client_phone, message, status,
+         created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?, ?, ?, ?, 'confirmed', ?)`
+    ).bind(
+      id, photographer.id, slot.id, slot.offer_id, slot.title, slot.location, slot.starts_at, slot.duration_min,
+      priceCents, photos, tierLabel, slot.included || "", slot.dress_code || "", name, email, phone.phone, message, ts
+    ).run();
+  } catch (err) {
+    if (/UNIQUE/i.test(String(err && err.message))) return fail(409, "Ce créneau vient d'être réservé. Choisissez-en un autre.");
+    throw err;
+  }
+
+  // Le client reçoit la même confirmation (avec l'invitation d'agenda) que
+  // s'il avait réservé lui-même ; le photographe, lui, sait déjà.
+  if (body.notify !== false) {
+    const booking = await env.DB.prepare("SELECT * FROM bookings WHERE id = ?").bind(id).first();
+    const portfolio = await env.DB.prepare("SELECT * FROM portfolios WHERE photographer_id = ?").bind(photographer.id).first();
+    const params = emailParams(env, portfolio, photographer, booking);
+    await sendBookingConfirmation(env, { ...params, to: email, replyTo: photographer.email, attachment: icsAttachment(booking, params.studioName) });
+  }
+  return json({ ...(await bookingForAdmin(env, photographer)), booked: id });
+}
+
 /* ---------- Photographe : /api/admin/booking[/…] ---------- */
 
 function readOffer(body) {
@@ -819,6 +881,12 @@ export async function handleBookingAdmin(request, env, photographer, parts) {
   }
 
   // Créneaux : une date et une ou plusieurs heures, ou une série.
+  // Réservation faite par le photographe pour un client (habitué, demande
+  // reçue par téléphone…) : le créneau est pris tout de suite, sans acompte
+  // en ligne (réglé à part, ou plus tard par facture).
+  if (parts[0] === "slots" && parts[1] && parts[2] === "book" && parts.length === 3 && method === "POST") {
+    return bookForClient(env, photographer, decodeURIComponent(parts[1]), body);
+  }
   if (parts[0] === "slots" && parts.length === 1 && method === "POST") {
     const offer = await env.DB.prepare("SELECT * FROM booking_offers WHERE id = ? AND photographer_id = ?")
       .bind(String(body.offerId || ""), photographer.id)
