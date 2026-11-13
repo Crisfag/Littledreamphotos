@@ -37,7 +37,11 @@ import {
   sendBookingReminder,
   sendBookingConflict,
   sendPrivateSlotInvite,
+  sendBookingPrep,
+  prepItems,
 } from "./notify.js";
+import { ensureClientRecord } from "./clients.js";
+import { createContractForBooking, remindContract, CONTRACT_REMIND_EVERY } from "./contracts.js";
 
 export const BOOKING_TIME_ZONE = "Europe/Brussels";
 // Le paiement de l'acompte dispose de 30 minutes (minimum imposé par Stripe
@@ -54,6 +58,8 @@ const MAX_SLOTS_PER_REQUEST = 400;
 // Période ouverte d'un coup (« tous les samedis de décembre ») : trois mois au plus.
 export const MAX_RANGE_DAYS = 92;
 const BOOKINGS_PER_VISITOR_PER_HOUR = 6;
+// Séances passées gardées dans l'onglet (suivi jusqu'à la galerie).
+const FOLLOW_UP_DAYS = 180;
 export const MAX_OFFER_IMAGE_BYTES = 1536 * 1024;
 const MAX_OFFER_IMAGES = 60;
 const MAX_TEMPLATES = 40;
@@ -236,6 +242,7 @@ function offerOut(o) {
     location: o.location,
     included: o.included || "",
     dressCode: o.dress_code || "",
+    prep: o.prep || "",
     imageId: o.image_id || "",
     active: Boolean(o.active),
   };
@@ -337,7 +344,7 @@ export async function deleteBookingFiles(env, photographerId) {
 
 /* ---------- Prestations enregistrées ---------- */
 
-const TEMPLATE_FIELDS = ["title", "description", "included", "dressCode", "durationMin", "priceCents", "depositCents", "tiers", "location"];
+const TEMPLATE_FIELDS = ["title", "description", "included", "dressCode", "prep", "durationMin", "priceCents", "depositCents", "tiers", "location"];
 
 function templateOut(t) {
   let data = {};
@@ -357,6 +364,7 @@ async function saveTemplate(env, photographerId, offer) {
     description: offer.description,
     included: offer.included,
     dressCode: offer.dressCode,
+    prep: offer.prep,
     durationMin: offer.durationMin,
     priceCents: offer.priceCents,
     depositCents: offer.depositCents,
@@ -741,6 +749,7 @@ function icsAttachment(booking, studioName, cancelled = false) {
 }
 
 async function notifyConfirmed(env, portfolio, photographer, booking) {
+  await ensureClientRecord(env, booking.photographer_id, { email: booking.client_email, name: booking.client_name, phone: booking.client_phone });
   const params = emailParams(env, portfolio, photographer, booking);
   await sendBookingConfirmation(env, { ...params, to: booking.client_email, replyTo: photographer?.email, attachment: icsAttachment(booking, params.studioName) });
   await sendBookingPhotographerNotice(env, { ...params, to: photographer?.email, replyTo: booking.client_email, attachment: icsAttachment(booking, booking.client_name) });
@@ -970,6 +979,7 @@ async function bookForClient(env, photographer, slotId, body) {
     throw err;
   }
 
+  await ensureClientRecord(env, photographer.id, { email, name, phone: phone.phone });
   // Le client reçoit la même confirmation (avec l'invitation d'agenda) que
   // s'il avait réservé lui-même ; le photographe, lui, sait déjà.
   if (body.notify !== false) {
@@ -1008,6 +1018,7 @@ function readOffer(body) {
       description: cleanText(body.description, 1000),
       included: cleanText(body.included, 1000),
       dressCode: cleanText(body.dressCode, 1000),
+      prep: cleanText(body.prep, 3000),
       imageId,
       durationMin,
       priceCents,
@@ -1019,9 +1030,47 @@ function readOffer(body) {
   };
 }
 
-function bookingAdminOut(b) {
+// Liste récapitulative proposée pour une séance : celle de la formule, à
+// défaut le conseil vestimentaire copié à la réservation.
+export function defaultPrep(offerPrep, dressCode) {
+  const prep = String(offerPrep || "").trim();
+  if (prep) return prep;
+  return String(dressCode || "").trim();
+}
+
+// Suivi d'une séance, de la réservation à la livraison : contrat, liste
+// récapitulative, galerie (associée, envoyée, livraison ouverte).
+function followUpOut(b, { contract, gallery, choices, offer }) {
+  const remindAt = contract && ["sent", "viewed"].includes(contract.status)
+    ? Math.max(b.contract_reminded_at || 0, contract.sent_at || 0) + CONTRACT_REMIND_EVERY
+    : null;
+  return {
+    contract: contract
+      ? {
+          id: contract.id, number: contract.number, status: contract.status, totalCents: contract.total_cents, depositCents: contract.deposit_cents,
+          sentAt: contract.sent_at, viewedAt: contract.viewed_at, signedAt: contract.signed_at, paidAt: contract.paid_at,
+        }
+      : null,
+    contractRemindedAt: b.contract_reminded_at || null,
+    contractRemindAt: remindAt,
+    prep: defaultPrep(offer?.prep, b.dress_code),
+    offerPrep: Boolean(offer && String(offer.prep || "").trim()),
+    prepSentAt: b.prep_sent_at || null,
+    gallery: gallery
+      ? {
+          slug: gallery.slug, title: gallery.title, photoCount: gallery.photo_count || 0, createdAt: gallery.created_at,
+          inviteSentAt: gallery.invite_sent_at || null, deliveryOpen: Boolean(gallery.delivery_open), deliveryOpenedAt: gallery.delivery_opened_at || null,
+        }
+      : null,
+    // Galeries du même client, à associer d'un clic (la plus récente d'abord).
+    galleryChoices: gallery ? [] : choices.map((g) => ({ slug: g.slug, title: g.title, createdAt: g.created_at })),
+  };
+}
+
+function bookingAdminOut(b, extra) {
   return {
     ...reservationOut(b),
+    ...(extra && b.status === "confirmed" ? { followUp: followUpOut(b, extra) } : {}),
     slotId: b.slot_id,
     offerId: b.offer_id,
     feeCents: b.fee_cents,
@@ -1038,7 +1087,7 @@ function bookingAdminOut(b) {
 async function bookingForAdmin(env, photographer) {
   await expireHolds(env, photographer.id);
   const ts = now();
-  const [{ results: offers }, { results: slots }, { results: bookings }, portfolio, { results: templates }] = await Promise.all([
+  const [{ results: offers }, { results: slots }, { results: bookings }, portfolio, { results: templates }, { results: contractRows }, { results: galleryRows }] = await Promise.all([
     env.DB.prepare("SELECT * FROM booking_offers WHERE photographer_id = ? ORDER BY position ASC, created_at ASC").bind(photographer.id).all(),
     env.DB.prepare(
       `SELECT s.id, s.offer_id, s.starts_at, s.private_token, s.private_name, s.private_email,
@@ -1047,13 +1096,42 @@ async function bookingForAdmin(env, photographer) {
          FROM booking_slots s JOIN booking_offers o ON o.id = s.offer_id
         WHERE s.photographer_id = ? AND s.starts_at > ? ORDER BY s.starts_at ASC LIMIT 2000`
     ).bind(photographer.id, ts - 86400).all(),
+    // Six mois en arrière : une séance passée reste à suivre jusqu'à la
+    // livraison des photos. Les plus récentes d'abord, remises dans l'ordre.
     env.DB.prepare(
       `SELECT * FROM bookings WHERE photographer_id = ? AND status IN ('pending', 'confirmed', 'cancelled', 'conflict') AND starts_at > ?
-        ORDER BY starts_at ASC LIMIT 300`
-    ).bind(photographer.id, ts - 60 * 86400).all(),
+        ORDER BY starts_at DESC LIMIT 400`
+    ).bind(photographer.id, ts - FOLLOW_UP_DAYS * 86400).all(),
     env.DB.prepare("SELECT * FROM portfolios WHERE photographer_id = ?").bind(photographer.id).first(),
     env.DB.prepare("SELECT * FROM booking_templates WHERE photographer_id = ? ORDER BY lower(title) ASC").bind(photographer.id).all(),
+    env.DB.prepare(
+      `SELECT c.id, c.number, c.status, c.total_cents, c.deposit_cents, c.sent_at, c.viewed_at, c.signed_at, c.paid_at
+         FROM contracts c WHERE c.photographer_id = ?
+          AND c.id IN (SELECT contract_id FROM bookings WHERE photographer_id = ? AND contract_id != '' AND starts_at > ?)`
+    ).bind(photographer.id, photographer.id, ts - FOLLOW_UP_DAYS * 86400).all(),
+    env.DB.prepare(
+      `SELECT g.id, g.slug, g.title, lower(g.client_email) AS email, g.created_at, g.invite_sent_at, g.delivery_open, g.delivery_opened_at,
+              (SELECT COUNT(*) FROM photos p WHERE p.gallery_id = g.id) AS photo_count
+         FROM galleries g
+        WHERE g.photographer_id = ? AND g.kind != 'school'
+          AND (g.id IN (SELECT gallery_id FROM bookings WHERE photographer_id = ? AND gallery_id != '' AND starts_at > ?)
+               OR (g.client_email != '' AND lower(g.client_email) IN (SELECT lower(client_email) FROM bookings WHERE photographer_id = ? AND status = 'confirmed' AND starts_at > ?)))
+        ORDER BY g.created_at DESC LIMIT 600`
+    ).bind(photographer.id, photographer.id, ts - FOLLOW_UP_DAYS * 86400, photographer.id, ts - FOLLOW_UP_DAYS * 86400).all(),
   ]);
+  const contractsById = new Map((contractRows || []).map((c) => [c.id, c]));
+  const galleriesById = new Map((galleryRows || []).map((g) => [g.id, g]));
+  const offersById = new Map((offers || []).map((o) => [o.id, o]));
+  const followUpOf = (b) => {
+    const gallery = b.gallery_id ? galleriesById.get(b.gallery_id) || null : null;
+    const email = String(b.client_email || "").toLowerCase();
+    return {
+      contract: b.contract_id ? contractsById.get(b.contract_id) || null : null,
+      gallery,
+      choices: gallery ? [] : (galleryRows || []).filter((g) => g.email === email).slice(0, 8),
+      offer: offersById.get(b.offer_id) || null,
+    };
+  };
   return {
     enabled: hasFeature(env, photographer, "booking"),
     stripeReady: stripeReady(photographer),
@@ -1075,7 +1153,8 @@ async function bookingForAdmin(env, photographer) {
       privateEmail: s.private_email || "",
       privateUrl: s.private_token ? privateSlotUrl(env, photographer, portfolio, s.private_token) : "",
     })),
-    bookings: (bookings || []).map(bookingAdminOut),
+    bookings: (bookings || []).reverse().map((b) => bookingAdminOut(b, followUpOf(b))),
+    contractsEnabled: hasFeature(env, photographer, "contracts"),
   };
 }
 
@@ -1112,10 +1191,10 @@ export async function handleBookingAdmin(request, env, photographer, parts) {
     if ((count?.n || 0) >= 30) return fail(409, "30 formules au maximum");
     const id = newId("bko");
     await env.DB.prepare(
-      `INSERT INTO booking_offers (id, photographer_id, title, description, duration_min, price_cents, deposit_cents, tiers, location, included, dress_code, image_id, active, position, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO booking_offers (id, photographer_id, title, description, duration_min, price_cents, deposit_cents, tiers, location, included, dress_code, prep, image_id, active, position, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).bind(id, photographer.id, offer.title, offer.description, offer.durationMin, offer.priceCents, offer.depositCents, offer.tiers, offer.location,
-      offer.included, offer.dressCode, offer.imageId, offer.active, count?.n || 0, ts).run();
+      offer.included, offer.dressCode, offer.prep, offer.imageId, offer.active, count?.n || 0, ts).run();
     const templateError = body.saveTemplate ? await saveTemplate(env, photographer.id, offer) : null;
     return json({ ...(await bookingForAdmin(env, photographer)), createdOfferId: id, templateError }, { status: 201 });
   }
@@ -1131,10 +1210,10 @@ export async function handleBookingAdmin(request, env, photographer, parts) {
       }
       await env.DB.prepare(
         `UPDATE booking_offers SET title = ?, description = ?, duration_min = ?, price_cents = ?, deposit_cents = ?, tiers = ?, location = ?,
-            included = ?, dress_code = ?, image_id = ?, active = ?
+            included = ?, dress_code = ?, prep = ?, image_id = ?, active = ?
           WHERE id = ?`
       ).bind(offer.title, offer.description, offer.durationMin, offer.priceCents, offer.depositCents, offer.tiers, offer.location,
-        offer.included, offer.dressCode, offer.imageId, offer.active, id).run();
+        offer.included, offer.dressCode, offer.prep, offer.imageId, offer.active, id).run();
       const templateError = body.saveTemplate ? await saveTemplate(env, photographer.id, offer) : null;
       if (existing.image_id !== offer.imageId) await releaseImage(env, photographer.id, existing.image_id);
       return json({ ...(await bookingForAdmin(env, photographer)), templateError });
@@ -1252,6 +1331,54 @@ export async function handleBookingAdmin(request, env, photographer, parts) {
     const result = await env.DB.prepare("DELETE FROM booking_slots WHERE id = ? AND photographer_id = ?").bind(id, photographer.id).run();
     if (!result.meta?.changes) return fail(404, "Créneau introuvable");
     return json(await bookingForAdmin(env, photographer));
+  }
+
+  // Suivi de la séance : contrat, relance, liste récapitulative, galerie.
+  if (parts[0] === "bookings" && parts[1] && parts.length >= 3 && ["contract", "prep", "gallery"].includes(parts[2]) && method === "POST") {
+    const id = decodeURIComponent(parts[1]);
+    const booking = await env.DB.prepare("SELECT * FROM bookings WHERE id = ? AND photographer_id = ?").bind(id, photographer.id).first();
+    if (!booking) return fail(404, "Réservation introuvable");
+    if (booking.status !== "confirmed") return fail(409, "Cette réservation n'est plus active");
+
+    if (parts[2] === "contract" && parts.length === 3) {
+      const created = await createContractForBooking(env, photographer, booking.id, body);
+      if (created instanceof Response) return created;
+      return json({ ...(await bookingForAdmin(env, photographer)), contractId: created.id, contractSent: created.sent });
+    }
+    if (parts[2] === "contract" && parts[3] === "remind" && parts.length === 4) {
+      if (!booking.contract_id) return fail(409, "Aucun contrat envoyé pour cette séance");
+      const reminded = await remindContract(env, photographer, booking.contract_id, booking.contract_reminded_at);
+      if (reminded.error) return reminded.error;
+      await env.DB.prepare("UPDATE bookings SET contract_reminded_at = ? WHERE id = ?").bind(ts, booking.id).run();
+      return json(await bookingForAdmin(env, photographer));
+    }
+    if (parts[2] === "prep" && parts.length === 3) {
+      const prep = cleanText(body.prep, 3000);
+      const note = cleanText(body.note, 2000);
+      if (!prepItems(prep).length) return fail(400, "La liste est vide : ajoutez au moins un point (une ligne par point)");
+      const portfolio = await env.DB.prepare("SELECT * FROM portfolios WHERE photographer_id = ?").bind(photographer.id).first();
+      await sendBookingPrep(env, {
+        ...emailParams(env, portfolio, photographer, booking),
+        prep, note, to: booking.client_email, replyTo: photographer.email,
+      });
+      await env.DB.prepare("UPDATE bookings SET prep_sent_at = ? WHERE id = ?").bind(ts, booking.id).run();
+      // « Garder cette liste pour la formule » : les prochaines séances la reprennent.
+      if (body.saveToOffer === true) {
+        await env.DB.prepare("UPDATE booking_offers SET prep = ? WHERE id = ? AND photographer_id = ?").bind(prep, booking.offer_id, photographer.id).run();
+      }
+      return json(await bookingForAdmin(env, photographer));
+    }
+    if (parts[2] === "gallery" && parts.length === 3) {
+      const slug = String(body.slug || "");
+      let galleryId = "";
+      if (slug) {
+        const gallery = await env.DB.prepare("SELECT id FROM galleries WHERE slug = ? AND photographer_id = ? AND kind != 'school'").bind(slug, photographer.id).first();
+        if (!gallery) return fail(404, "Galerie introuvable");
+        galleryId = gallery.id;
+      }
+      await env.DB.prepare("UPDATE bookings SET gallery_id = ? WHERE id = ?").bind(galleryId, booking.id).run();
+      return json(await bookingForAdmin(env, photographer));
+    }
   }
 
   // Annulation par le photographe : le créneau redevient libre, le client

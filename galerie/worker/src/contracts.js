@@ -644,22 +644,15 @@ export async function handleContractsAdmin(request, env, photographer, parts) {
     return json(await listForAdmin(env, photographer));
   }
 
-  // Nouveau devis (brouillon, ou envoyé tout de suite).
+  // Nouveau devis (brouillon, ou envoyé tout de suite). Ouvert depuis une
+  // réservation (« Vérifier avant d'envoyer ») : il lui reste attaché.
   if (!parts.length && method === "POST") {
     const { draft, error } = readDraft(body, { terms: await termsOf(env, photographer.id) });
     if (error) return fail(400, error);
-    const id = newId("ctr");
-    const studio = displayName(photographer);
-    await env.DB.prepare(
-      `INSERT INTO contracts (id, photographer_id, token, number, status, studio_name, studio_email, seller_name, seller_address, seller_vat,
-         client_name, client_email, title, session_date, session_day, session_time, lines, total_cents, deposit_cents, terms, valid_until, created_at, updated_at)
-       VALUES (?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).bind(
-      id, photographer.id, newToken(), await nextNumber(env, photographer.id), studio, photographer.email,
-      photographer.billing_company_name || "", photographer.billing_address || "", photographer.billing_vat_number || "",
-      draft.clientName, draft.clientEmail, draft.title, draft.sessionDate, draft.sessionDay, draft.sessionTime, JSON.stringify(draft.lines), draft.totalCents,
-      draft.depositCents, draft.terms, draft.validUntil, ts, ts
-    ).run();
+    const booking = body.bookingId ? await linkableBooking(env, photographer, String(body.bookingId)) : null;
+    if (booking && booking.error) return fail(409, booking.error);
+    const id = await insertContract(env, photographer, draft);
+    if (booking) await env.DB.prepare("UPDATE bookings SET contract_id = ? WHERE id = ?").bind(id, booking.id).run();
     if (body.send) return sendContract(env, photographer, id);
     return json({ ...(await listForAdmin(env, photographer)), createdId: id }, { status: 201 });
   }
@@ -697,6 +690,96 @@ export async function handleContractsAdmin(request, env, photographer, parts) {
     return json(await listForAdmin(env, photographer));
   }
   return fail(404, "Route inconnue");
+}
+
+async function insertContract(env, photographer, draft) {
+  const ts = now();
+  const id = newId("ctr");
+  await env.DB.prepare(
+    `INSERT INTO contracts (id, photographer_id, token, number, status, studio_name, studio_email, seller_name, seller_address, seller_vat,
+       client_name, client_email, title, session_date, session_day, session_time, lines, total_cents, deposit_cents, terms, valid_until, created_at, updated_at)
+     VALUES (?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(
+    id, photographer.id, newToken(), await nextNumber(env, photographer.id), displayName(photographer), photographer.email,
+    photographer.billing_company_name || "", photographer.billing_address || "", photographer.billing_vat_number || "",
+    draft.clientName, draft.clientEmail, draft.title, draft.sessionDate, draft.sessionDay, draft.sessionTime, JSON.stringify(draft.lines), draft.totalCents,
+    draft.depositCents, draft.terms, draft.validUntil, ts, ts
+  ).run();
+  return id;
+}
+
+/* ---------- Contrat d'une réservation (booking.js, suivi de la séance) ---------- */
+
+// Contrats encore « vivants » : une réservation n'en porte qu'un à la fois.
+const LIVE_CONTRACT = ["draft", "sent", "viewed", "signed", "paid"];
+
+async function linkableBooking(env, photographer, bookingId) {
+  const booking = await env.DB.prepare("SELECT * FROM bookings WHERE id = ? AND photographer_id = ?").bind(bookingId, photographer.id).first();
+  if (!booking) return { error: "Réservation introuvable" };
+  if (booking.status !== "confirmed") return { error: "Cette réservation n'est plus active" };
+  if (booking.contract_id) {
+    const current = await env.DB.prepare("SELECT status FROM contracts WHERE id = ? AND photographer_id = ?").bind(booking.contract_id, photographer.id).first();
+    if (current && LIVE_CONTRACT.includes(current.status)) return { error: "Cette séance a déjà son contrat" };
+  }
+  return booking;
+}
+
+// Jour et heure de Bruxelles d'un instant : « 2026-11-28 » et « 10:30 ».
+function brusselsDayTime(ts) {
+  const date = new Date(ts * 1000);
+  const day = date.toLocaleDateString("en-CA", { timeZone: "Europe/Brussels" });
+  const time = date.toLocaleTimeString("en-GB", { timeZone: "Europe/Brussels", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+  return { day, time };
+}
+
+// Le contrat proposé pour une réservation : la formule, le tarif choisi,
+// la date et l'heure, les conditions du studio. Un acompte déjà réglé en
+// ligne à la réservation est rappelé dans le libellé, pas redemandé.
+export function bookingContractDraft(booking, { priceCents, depositCents, terms }) {
+  const { day, time } = brusselsDayTime(booking.starts_at);
+  const tier = booking.photos ? `${booking.photos} photo${booking.photos > 1 ? "s" : ""}${booking.tier_label ? ` (${booking.tier_label})` : ""}` : booking.tier_label || "";
+  const paidDeposit = booking.paid_at && booking.deposit_cents ? booking.deposit_cents : 0;
+  const label = [booking.offer_title, tier].filter(Boolean).join(" — ") +
+    (paidDeposit ? ` (acompte de ${formatEurosPdf(paidDeposit).replace(/,00 EUR$/, " €").replace(/ EUR$/, " €")} déjà réglé à la réservation)` : "");
+  return {
+    clientName: booking.client_name,
+    clientEmail: booking.client_email,
+    title: booking.offer_title,
+    sessionDay: day,
+    sessionTime: time,
+    lines: [{ label: label.slice(0, 160), amountCents: priceCents === undefined ? booking.price_cents : priceCents }],
+    depositCents: depositCents === undefined ? 0 : depositCents,
+    terms,
+  };
+}
+
+export async function createContractForBooking(env, photographer, bookingId, body) {
+  if (!hasFeature(env, photographer, "contracts")) return featureRefusal("contracts");
+  const booking = await linkableBooking(env, photographer, bookingId);
+  if (booking.error) return fail(booking.error === "Réservation introuvable" ? 404 : 409, booking.error);
+  const priceCents = body.priceCents === undefined || body.priceCents === null || body.priceCents === "" ? undefined : Math.round(Number(body.priceCents));
+  const depositCents = Math.round(Number(body.depositCents) || 0);
+  if (priceCents !== undefined && !(priceCents >= 0)) return fail(400, "Montant invalide");
+  const { draft, error } = readDraft(bookingContractDraft(booking, { priceCents, depositCents, terms: await termsOf(env, photographer.id) }));
+  if (error) return fail(400, error);
+  const id = await insertContract(env, photographer, draft);
+  await env.DB.prepare("UPDATE bookings SET contract_id = ? WHERE id = ?").bind(id, booking.id).run();
+  if (body.send === false) return { id, sent: false };
+  await sendContract(env, photographer, id);
+  return { id, sent: true };
+}
+
+// Relance d'un contrat envoyé mais pas encore signé : le même lien, avec un
+// e-mail de rappel. Une relance par jour au plus.
+export const CONTRACT_REMIND_EVERY = 20 * 3600;
+export async function remindContract(env, photographer, contractId, lastRemindedAt) {
+  const contract = await env.DB.prepare("SELECT * FROM contracts WHERE id = ? AND photographer_id = ?").bind(contractId, photographer.id).first();
+  if (!contract) return { error: fail(404, "Contrat introuvable") };
+  if (!["sent", "viewed"].includes(contract.status)) return { error: fail(409, "Ce contrat n'attend plus de signature") };
+  const last = Math.max(lastRemindedAt || 0, contract.sent_at || 0);
+  if (last && now() - last < CONTRACT_REMIND_EVERY) return { error: fail(429, "Le client a reçu le contrat il y a moins d'un jour : laissez-lui un peu de temps.") };
+  await sendContractToClient(env, { ...mailParams(env, contract), reminder: true, to: contract.client_email, replyTo: photographer.email });
+  return { ok: true };
 }
 
 async function sendContract(env, photographer, id) {

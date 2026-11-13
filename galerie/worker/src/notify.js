@@ -769,6 +769,39 @@ export function buildPrintOrderPhotographerEmail({ galleryTitle, recipientName, 
 }
 
 // Au client : ses tirages sont expédiés.
+// Galerie en ligne : le lien et le mot de passe, envoyés par le photographe
+// depuis Holypixx (admin.js, sendGalleryInvite) plutôt que recopiés à la main.
+export function buildGalleryInviteEmail({ studioName, galleryTitle, clientName, galleryUrl, password, note, expiresAt, lang }) {
+  const en = lang === "en";
+  const first = String(clientName || "").trim().split(/\s+/)[0] || "";
+  const subject = en ? `Your gallery “${galleryTitle}” is online` : `Votre galerie « ${galleryTitle} » est en ligne`;
+  const until = expiresAt
+    ? new Date(expiresAt * 1000).toLocaleDateString(en ? "en-GB" : "fr-FR", { day: "numeric", month: "long", year: "numeric", timeZone: "Europe/Brussels" })
+    : "";
+  const passwordBox = `<div style="margin:0 0 14px;padding:14px 16px;background:${CREAM};border-radius:10px;font-family:${SANS};font-size:15px;line-height:1.6;color:${CHARCOAL};">` +
+    `<span style="display:block;font-size:13px;opacity:.75;">${en ? "Your password" : "Votre mot de passe"}</span>` +
+    `<strong style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:18px;letter-spacing:.04em;">${escapeHtml(password)}</strong></div>`;
+  const bodyHtml =
+    eyebrow(studioName || (en ? "Your photographer" : "Votre photographe")) +
+    heading(en ? (first ? `${escapeHtml(first)}, your photos are online` : "Your photos are online") : (first ? `${escapeHtml(first)}, vos photos sont en ligne` : "Vos photos sont en ligne")) +
+    (note ? `<div style="margin:0 0 14px;font-family:${SANS};font-size:15px;line-height:1.6;color:${CHARCOAL};white-space:pre-wrap;">${escapeHtml(note)}</div>` : "") +
+    paragraph(en
+      ? `Your private gallery “<strong>${escapeHtml(galleryTitle)}</strong>” is ready. Open it with the button below and this password:`
+      : `Votre galerie privée « <strong>${escapeHtml(galleryTitle)}</strong> » est prête. Ouvrez-la avec le bouton ci-dessous et ce mot de passe :`) +
+    passwordBox +
+    emailButton(galleryUrl, en ? "Open my gallery" : "Ouvrir ma galerie") +
+    (until ? paragraph(en ? `The gallery is open until ${escapeHtml(until)}.` : `La galerie est ouverte jusqu'au ${escapeHtml(until)}.`, { small: true }) : "") +
+    paragraph(en ? "Keep this password to yourself: it is asked at each visit. A question? Just reply to this email." : "Gardez ce mot de passe pour vous : il vous sera demandé à chaque visite. Une question ? Répondez simplement à cet e-mail.", { small: true });
+  const text = [
+    en ? `Your private gallery “${galleryTitle}” is ready.` : `Votre galerie privée « ${galleryTitle} » est prête.`,
+    note ? `\n${note}\n` : "",
+    `${en ? "Link: " : "Lien : "}${galleryUrl}`,
+    `${en ? "Password: " : "Mot de passe : "}${password}`,
+    until ? (en ? `\nOpen until ${until}.` : `\nOuverte jusqu'au ${until}.`) : "",
+  ].join("\n");
+  return { subject, html: emailShell({ preheader: subject, bodyHtml, lang: en ? "en" : undefined }), text };
+}
+
 export function buildDeliveryReadyEmail({ studioName, galleryTitle, clientName, count, galleryUrl, lang }) {
   if (lang === "en") return deliveryReadyEn({ studioName, galleryTitle, clientName, count, galleryUrl });
   const subject = `Vos photos « ${galleryTitle} » sont prêtes`;
@@ -1175,6 +1208,43 @@ export function buildPrivateSlotInviteEmail(params) {
   return { subject, html: emailShell({ preheader: subject, bodyHtml }), text };
 }
 
+// Liste récapitulative envoyée avant la séance (booking.js, sendPrep) : ce
+// qu'il faut prévoir — tenues, ambiance, accessoires —, une ligne par point,
+// reprise de la formule et ajustable par le photographe avant l'envoi.
+export function prepItems(prep) {
+  return String(prep || "")
+    .split(/\r?\n/)
+    .map((line) => line.replace(/^\s*(?:[-–—•*·]|\d+[.)])\s*/, "").trim())
+    .filter(Boolean)
+    .slice(0, 40);
+}
+
+export function buildBookingPrepEmail(params) {
+  const { studioName, clientName, offerTitle, when, prep, note } = params;
+  const first = String(clientName || "").trim().split(/\s+/)[0] || "";
+  const items = prepItems(prep);
+  const subject = `Préparer votre séance « ${offerTitle} » (${when})`;
+  const listHtml = items.length
+    ? `<ul style="margin:0 0 14px;padding:14px 16px 14px 34px;background:${CREAM};border-radius:10px;font-family:${SANS};font-size:15px;line-height:1.7;color:${CHARCOAL};">` +
+      items.map((item) => `<li style="margin:0 0 4px;">${escapeHtml(item)}</li>`).join("") + "</ul>"
+    : "";
+  const bodyHtml =
+    eyebrow(studioName || "Votre photographe") +
+    heading(first ? `${escapeHtml(first)}, tout pour préparer votre séance` : "Tout pour préparer votre séance") +
+    (note ? `<div style="margin:0 0 14px;font-family:${SANS};font-size:15px;line-height:1.6;color:${CHARCOAL};white-space:pre-wrap;">${escapeHtml(note)}</div>` : "") +
+    paragraph(bookingDetailsHtml({ ...params, depositCents: 0, priceCents: 0, photos: null, tierLabel: "" })) +
+    (items.length ? paragraph("<strong>À prévoir</strong>") + listHtml : "") +
+    (studioContactLine(params) ? paragraph(studioContactLine(params), { small: true }) : "");
+  const text = [
+    first ? `Bonjour ${first},` : "Bonjour,",
+    note ? `\n${note}` : "",
+    "",
+    bookingDetailsText({ ...params, depositCents: 0, priceCents: 0, photos: null, tierLabel: "" }),
+    items.length ? "\nÀ prévoir :\n" + items.map((item) => `- ${item}`).join("\n") : "",
+  ].join("\n");
+  return { subject, html: emailShell({ preheader: subject, bodyHtml }), text };
+}
+
 export function buildBookingCancelledEmail(params) {
   const { studioName, offerTitle, when, depositCents, note } = params;
   const subject = `Séance annulée : ${offerTitle}, ${when}`;
@@ -1218,12 +1288,14 @@ function contractSummaryHtml({ title, sessionDate, totalCents, depositCents }) {
 }
 
 export function buildContractToClientEmail(params) {
-  const { studioName, clientName, number, title, url, validUntil, depositCents } = params;
-  const subject = `${studioName} : votre devis « ${title} »`;
+  const { studioName, clientName, number, title, url, validUntil, depositCents, reminder } = params;
+  const subject = reminder ? `Rappel : votre contrat « ${title} » attend votre signature` : `${studioName} : votre devis « ${title} »`;
   const bodyHtml =
     eyebrow(studioName || "Votre photographe") +
     heading(`Bonjour ${escapeHtml(clientName)},`) +
-    paragraph(`Voici votre devis n° ${escapeHtml(number)}. Vous pouvez le lire, puis le signer en ligne${depositCents ? " et régler l'acompte" : ""} : tout se fait depuis le lien ci-dessous, sans compte à créer.`) +
+    paragraph(reminder
+      ? `Petit rappel : votre contrat n° ${escapeHtml(number)} n'est pas encore signé. Il suffit d'une minute pour le lire et le signer en ligne${depositCents ? ", puis régler l'acompte" : ""}, depuis le lien ci-dessous.`
+      : `Voici votre devis n° ${escapeHtml(number)}. Vous pouvez le lire, puis le signer en ligne${depositCents ? " et régler l'acompte" : ""} : tout se fait depuis le lien ci-dessous, sans compte à créer.`) +
     paragraph(contractSummaryHtml(params)) +
     emailButton(url, "Consulter et signer") +
     (validUntil ? paragraph(`Ce devis est valable jusqu'au ${escapeHtml(formatDay(validUntil))}.`, { small: true }) : "") +
@@ -1231,7 +1303,7 @@ export function buildContractToClientEmail(params) {
   const text = [
     `Bonjour ${clientName},`,
     "",
-    `Voici votre devis n° ${number} : ${title}.`,
+    reminder ? `Petit rappel : votre contrat n° ${number} (${title}) n'est pas encore signé.` : `Voici votre devis n° ${number} : ${title}.`,
     `Consulter et signer : ${url}`,
     validUntil ? `Valable jusqu'au ${formatDay(validUntil)}.` : "",
   ].join("\n");
@@ -1733,6 +1805,14 @@ export async function sendPrivateSlotInvite(env, params) {
 
 export async function sendBookingReminder(env, params) {
   await sendEmail(env, { to: params.to, replyTo: params.replyTo, ...buildBookingReminderEmail(params) });
+}
+
+export async function sendBookingPrep(env, params) {
+  await sendEmail(env, { to: params.to, replyTo: params.replyTo, ...buildBookingPrepEmail(params) });
+}
+
+export async function sendGalleryInvite(env, params) {
+  await sendEmail(env, { to: params.to, replyTo: params.replyTo, ...buildGalleryInviteEmail(params) });
 }
 
 export async function sendBookingCancelled(env, params) {

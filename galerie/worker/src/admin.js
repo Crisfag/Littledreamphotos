@@ -8,10 +8,11 @@
 import { json, fail } from "./http.js";
 import { parseMarks } from "./marks.js";
 import { handleShopAdmin, listPrintOrders } from "./shop.js";
-import { hashPassword, randomBytes, b64url, signToken } from "./auth.js";
+import { hashPassword, verifyPassword, randomBytes, b64url, signToken } from "./auth.js";
 import { listLibrary, setMusicChoice, musicForAdmin } from "./music.js";
 import { handleDeliveryAdmin, deliveryForAdmin } from "./delivery.js";
-import { sendDeliveryReady } from "./notify.js";
+import { sendDeliveryReady, sendGalleryInvite } from "./notify.js";
+import { studioLinkFor } from "./studio.js";
 import { exportAccount, deleteAccount } from "./privacy.js";
 import { galleryQuotaRefusal, subscriptionForAdmin, startSubscriptionCheckout, openBillingPortal, syncSubscription, setScolairePlan, hasFeature, featureRefusal } from "./subscription.js";
 import { handleSchoolAdmin } from "./school.js";
@@ -284,6 +285,7 @@ async function getGallery(env, photographerId, slug) {
       watermark_text: gallery.watermark_text,
       expires_at: gallery.expires_at,
       created_at: gallery.created_at,
+      invite_sent_at: gallery.invite_sent_at || null,
       // Type de séance (statistiques) : choisi, sinon deviné d'après le titre.
       session_type: cleanSessionType(gallery.session_type),
       session_type_guess: guessSessionType(gallery.title),
@@ -372,6 +374,55 @@ async function regeneratePassword(request, env, photographerId, slug) {
     .run();
 
   return json({ ok: true });
+}
+
+// Envoie au client le lien de sa galerie et son mot de passe, par e-mail.
+// Le mot de passe n'est connu qu'en empreinte : le photographe le redonne
+// (vérifié ici, pour ne jamais envoyer un mot de passe faux), ou l'outil
+// d'administration en crée un nouveau juste avant (voir admin-server.mjs).
+const INVITE_EVERY_SECONDS = 60;
+async function sendGalleryToClient(request, env, photographerId, slug) {
+  const gallery = await ownedGallery(env, photographerId, slug);
+  if (!gallery) return fail(404, "Galerie introuvable");
+  const body = await request.json().catch(() => ({}));
+  // Nouveau mot de passe (créé par l'outil d'administration) : enregistré
+  // seulement une fois tout vérifié, juste avant l'envoi.
+  const fresh = typeof body.newPassword === "string" ? body.newPassword : "";
+  if (fresh && fresh.length < 8) return fail(400, "Mot de passe trop court (8 caractères minimum)");
+  const password = fresh || String(body.password || "");
+  const email = String(body.email || gallery.client_email || "").trim().toLowerCase().slice(0, 200);
+  if (!EMAIL_RE.test(email)) return fail(400, "Indiquez l'e-mail du client");
+  const photos = await env.DB.prepare("SELECT COUNT(*) AS n FROM photos WHERE gallery_id = ?").bind(gallery.id).first();
+  if (!photos?.n) return fail(409, "La galerie est encore vide : ajoutez les photos avant de l'envoyer.");
+  if (!fresh && (!password || !(await verifyPassword(password, gallery.password_hash, gallery.password_salt)))) {
+    return fail(400, "Ce mot de passe ne correspond pas à la galerie : vérifiez-le, ou créez-en un nouveau.");
+  }
+  const ts = now();
+  if (gallery.invite_sent_at && ts - gallery.invite_sent_at < INVITE_EVERY_SECONDS) return fail(429, "La galerie vient d'être envoyée.");
+  const photographer = await env.DB.prepare("SELECT * FROM photographers WHERE id = ?").bind(photographerId).first();
+  const galleryUrl = studioLinkFor(env, photographer, gallery.slug) || galleryUrlFor(env, gallery.slug);
+  if (!galleryUrl) return fail(503, "L'adresse publique des galeries n'est pas configurée");
+  if (fresh) {
+    const { hash, salt } = await hashPassword(fresh);
+    await env.DB.prepare("UPDATE galleries SET password_hash = ?, password_salt = ?, demo_password = NULL WHERE id = ?").bind(hash, salt, gallery.id).run();
+  }
+  await sendGalleryInvite(env, {
+    to: email,
+    replyTo: photographer?.email,
+    studioName: photographer?.studio_name || "",
+    galleryTitle: gallery.title,
+    clientName: gallery.client_name,
+    galleryUrl,
+    password,
+    note: String(body.note || "").trim().slice(0, 2000),
+    expiresAt: gallery.expires_at,
+    lang: languageOf(gallery.language),
+  });
+  // L'e-mail du client est gardé sur la galerie s'il n'y était pas encore.
+  await env.DB.prepare("UPDATE galleries SET invite_sent_at = ?, client_email = CASE WHEN client_email = '' THEN ? ELSE client_email END WHERE id = ?")
+    .bind(ts, email, gallery.id)
+    .run();
+  return json({ ok: true, sentAt: ts, to: email });
 }
 
 const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
@@ -849,6 +900,9 @@ export async function handleAdmin(request, env, ctx, path) {
     }
     if (parts.length === 5 && parts[4] === "password" && request.method === "POST") {
       return regeneratePassword(request, env, photographerId, slug);
+    }
+    if (parts.length === 5 && parts[4] === "send" && request.method === "POST") {
+      return sendGalleryToClient(request, env, photographerId, slug);
     }
     if (parts.length === 5 && parts[4] === "preview" && request.method === "POST") {
       return previewKey(env, photographerId, slug);

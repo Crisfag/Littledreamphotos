@@ -355,6 +355,43 @@
     </div>
   </div>
 
+  <!-- ============ Modale : envoyer la galerie au client (lien et mot de passe) ============ -->
+  <div class="ad-modal-backdrop" id="ad-send-gallery-modal" hidden>
+    <div class="ad-modal" role="dialog" aria-modal="true" aria-labelledby="ad-send-gallery-title">
+      <h2 id="ad-send-gallery-title" data-en="Send the gallery">Envoyer la galerie</h2>
+      <p class="ad-lede"><span data-en="Your client receives an email with the link to">Votre client reçoit un e-mail avec le lien de</span>
+        « <strong id="ad-send-gallery-name"></strong> » <span data-en="and its password, ready to open.">et son mot de passe, prêt à ouvrir.</span></p>
+      <p class="ad-hint" id="ad-send-gallery-sent" hidden></p>
+      <form id="ad-send-gallery-form" novalidate>
+        <label class="ad-field">
+          <span data-en="Client's email">E-mail du client</span>
+          <input type="email" name="email" required maxlength="200" placeholder="camille@exemple.be" autocomplete="off" />
+        </label>
+        <fieldset class="ad-send-mode">
+          <legend data-en="Password">Mot de passe</legend>
+          <label class="ad-check"><input type="radio" name="mode" value="new" checked />
+            <span><strong data-en="Create a new password">Créer un nouveau mot de passe</strong>
+              <em data-en="The simplest: it goes in the email. Any previous one stops working.">Le plus simple : il part dans l'e-mail. L'ancien, s'il y en avait un, ne fonctionnera plus.</em></span></label>
+          <label class="ad-check"><input type="radio" name="mode" value="current" />
+            <span><strong data-en="Keep the current password">Garder le mot de passe actuel</strong>
+              <em data-en="If your client already has it: it is checked before sending.">Si votre client l'a déjà : il est vérifié avant l'envoi.</em></span></label>
+          <div id="ad-send-gallery-current" class="ad-field ad-send-current" hidden>
+            <input type="text" name="password" maxlength="200" autocomplete="off" spellcheck="false" aria-label="Mot de passe actuel" placeholder="Mot de passe actuel" />
+          </div>
+        </fieldset>
+        <label class="ad-field">
+          <span data-en="A short note (optional)">Petit mot (facultatif)</span>
+          <textarea name="note" rows="3" maxlength="2000" placeholder="Voici vos photos, j'ai adoré cette séance !"></textarea>
+        </label>
+        <p class="ad-error" id="ad-send-gallery-error" role="alert" hidden></p>
+        <div class="ad-modal-actions">
+          <button type="button" class="ad-btn" data-close-modal data-en="Cancel">Annuler</button>
+          <button type="submit" class="ad-btn ad-btn-primary" id="ad-send-gallery-submit" data-en="Send the gallery">Envoyer la galerie</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- ============ Confirmation générique ============ -->
   <!-- Photo en grand, avec les repères annotés du client -->
   <div class="ad-modal-backdrop" id="ad-photo-modal" hidden>

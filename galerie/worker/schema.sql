@@ -183,6 +183,8 @@ CREATE TABLE IF NOT EXISTS galleries (
   delivery_open          INTEGER NOT NULL DEFAULT 0,
   delivery_opened_at     INTEGER,
   delivery_notified_at   INTEGER,
+  -- Lien et mot de passe envoyés au client par e-mail depuis Holypixx.
+  invite_sent_at         INTEGER,
   -- Promotion sur les tirages : remise en % (0 = aucune), date de fin, et
   -- quand elle a été annoncée au client par e-mail (voir campaigns.js).
   promo_percent          INTEGER NOT NULL DEFAULT 0,
@@ -950,6 +952,7 @@ CREATE TABLE IF NOT EXISTS booking_offers (
   location        TEXT NOT NULL DEFAULT '',
   included        TEXT NOT NULL DEFAULT '',   -- « compris dans votre forfait », une ligne par élément
   dress_code      TEXT NOT NULL DEFAULT '',   -- conseil vestimentaire
+  prep            TEXT NOT NULL DEFAULT '',   -- liste récapitulative envoyée avant la séance (tenues, ambiance…), une ligne par point
   image_id        TEXT NOT NULL DEFAULT '',   -- image d'illustration (R2 booking/{photographer}/{image}.webp)
   active          INTEGER NOT NULL DEFAULT 1,
   position        INTEGER NOT NULL DEFAULT 0,
@@ -1071,6 +1074,12 @@ CREATE TABLE IF NOT EXISTS bookings (
   cancelled_at      INTEGER,
   reminded_at       INTEGER,
   ip_hash           TEXT NOT NULL DEFAULT '',
+  -- Suivi de la séance : contrat envoyé depuis la réservation (et dernière
+  -- relance), liste récapitulative envoyée, galerie associée.
+  contract_id       TEXT NOT NULL DEFAULT '',
+  contract_reminded_at INTEGER,
+  prep_sent_at      INTEGER,
+  gallery_id        TEXT NOT NULL DEFAULT '',
   created_at        INTEGER NOT NULL
 );
 -- Un créneau ne peut porter qu'une réservation en cours ou confirmée : deux
