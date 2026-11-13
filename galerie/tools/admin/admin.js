@@ -430,6 +430,7 @@
       else if (tab === "subscription") renderSubscription();
       else if (tab === "settings") renderSettings();
       else if (tab === "owner") renderOwner();
+      else if (tab === "feedback") renderFeedback();
       else if (tab === "school") renderSchool();
     });
   }
@@ -3957,17 +3958,200 @@
     );
   }
 
+  /* ---------- Suggestions : idées et demandes des photographes ---------- */
+
+  var FEEDBACK_KINDS = [
+    ["idea", "Nouvelle fonction", "New feature"],
+    ["improvement", "Amélioration", "Improvement"],
+    ["problem", "Un souci", "A problem"],
+    ["other", "Autre", "Other"],
+  ];
+  var FEEDBACK_STATUS = {
+    new: ["Reçue", "Received", ""],
+    considering: ["À l'étude", "Under review", "ad-badge-selected"],
+    planned: ["Prévue", "Planned", "ad-badge-soon"],
+    done: ["Faite", "Done", "ad-badge-validated"],
+    declined: ["Pas pour l'instant", "Not for now", "ad-badge-expired"],
+  };
+  function feedbackKindLabel(kind) {
+    var k = FEEDBACK_KINDS.filter(function (x) { return x[0] === kind; })[0] || FEEDBACK_KINDS[0];
+    return L(k[1], k[2]);
+  }
+  function feedbackStatusHtml(status) {
+    var st = FEEDBACK_STATUS[status] || FEEDBACK_STATUS.new;
+    return '<span class="ad-badge ' + st[2] + '">' + esc(L(st[0], st[1])) + "</span>";
+  }
+  function shortDate(ts) {
+    return new Date(ts * 1000).toLocaleDateString(LANG === "en" ? "en-GB" : "fr-BE", { day: "numeric", month: "short", year: "numeric" });
+  }
+
+  function setTabCount(tabId, count, label) {
+    var tab = document.getElementById(tabId);
+    if (!tab) return;
+    var badge = tab.querySelector(".ad-tab-count");
+    if (!count) { if (badge) badge.remove(); return; }
+    if (!badge) {
+      badge = document.createElement("span");
+      badge.className = "ad-tab-count";
+      tab.appendChild(badge);
+    }
+    badge.textContent = String(count);
+    badge.setAttribute("aria-label", label);
+  }
+  function updateFeedbackBadge(data) {
+    var n = (data && data.unread) || 0;
+    setTabCount("ad-tab-feedback", n, L(n + " réponse" + (n > 1 ? "s" : "") + " à lire", n + " repl" + (n > 1 ? "ies" : "y") + " to read"));
+  }
+  function updateOwnerFeedbackBadge(data) {
+    var n = (data && data.counts && data.counts.new) || 0;
+    setTabCount("ad-tab-owner", n, n + " suggestion" + (n > 1 ? "s" : "") + " à lire");
+  }
+
+  async function renderFeedback(skipHash) {
+    if (!skipHash && location.hash !== "#/suggestions") history.pushState(null, "", "#/suggestions");
+    setActiveTab("feedback");
+    el.view.innerHTML = '<p class="ad-loading">' + L("Chargement…", "Loading…") + "</p>";
+    var data;
+    try {
+      data = await api("GET", "/feedback");
+    } catch (err) {
+      el.view.innerHTML = '<div class="ad-error-panel"><h2>' + L("Suggestions indisponibles", "Suggestions unavailable") + "</h2><p>" + esc(err.message) + "</p></div>";
+      return;
+    }
+    paintFeedback(data, data.unread > 0);
+    // Ouvrir l'onglet vaut lecture des réponses.
+    if (data.unread) api("POST", "/feedback/seen", {}).then(updateFeedbackBadge).catch(function () {});
+  }
+
+  function paintFeedback(data, highlightReplies) {
+    var items = data.items || [];
+    el.view.innerHTML =
+      '<header class="ad-detail-header"><div><h2>' + L("Suggestions", "Suggestions") + "</h2>" +
+      '<p class="ad-hint">' + L("Une option qui vous manque, une idée, un souci ? Dites-le-nous : chaque demande est lue, et la réponse arrive ici et par e-mail. Holypixx grandit avec vos besoins réels.",
+        "A missing option, an idea, a problem? Tell us: every request is read, and the answer comes here and by email. Holypixx grows with your real needs.") + "</p></div></header>" +
+      '<section><div class="ad-section-header"><h3>' + L("Nouvelle demande", "New request") + "</h3></div>" +
+      '<form id="ad-fb-form" class="ad-fb-form" novalidate>' +
+      '<div class="ad-bk-picks" role="radiogroup" aria-label="' + L("Type de demande", "Type of request") + '">' + FEEDBACK_KINDS.map(function (k, i) {
+        return '<label class="ad-bk-pick"><input type="radio" name="kind" value="' + k[0] + '"' + (i === 0 ? " checked" : "") + " /><span>" + esc(L(k[1], k[2])) + "</span></label>";
+      }).join("") + "</div>" +
+      '<label class="ad-field"><span>' + L("En une phrase", "In one sentence") + '</span><input name="title" maxlength="120" required placeholder="' +
+      L("ex. Pouvoir ajouter une vidéo dans la galerie du client", "e.g. Add a video to the client gallery") + '" /></label>' +
+      '<label class="ad-field"><span>' + L("Les détails", "Details") + " <em>" + L("(facultatif)", "(optional)") + '</em></span><textarea name="body" rows="5" maxlength="4000" placeholder="' +
+      L("Ce que vous aimeriez faire, pour quel type de séance, comment vous faites aujourd'hui…", "What you would like to do, for which kind of session, how you do it today…") + '"></textarea></label>' +
+      '<button type="submit" class="ad-btn ad-btn-primary">' + L("Envoyer", "Send") + "</button></form></section>" +
+      '<section><div class="ad-section-header"><h3>' + L("Vos demandes", "Your requests") + (items.length ? " (" + items.length + ")" : "") + "</h3></div>" +
+      (items.length
+        ? '<ul class="ad-fb-list">' + items.map(function (it) {
+            return '<li class="ad-fb-item' + (highlightReplies && it.replyUnread ? " ad-fb-item-new" : "") + '">' +
+              '<div class="ad-fb-head"><span class="ad-fb-kind">' + esc(feedbackKindLabel(it.kind)) + " · " + esc(shortDate(it.createdAt)) + "</span>" + feedbackStatusHtml(it.status) + "</div>" +
+              '<p class="ad-fb-title">' + esc(it.title) + "</p>" +
+              (it.body ? '<p class="ad-fb-body">' + esc(it.body) + "</p>" : "") +
+              (it.reply
+                ? '<div class="ad-fb-reply"><p class="ad-fb-reply-head">' + (highlightReplies && it.replyUnread ? '<span class="ad-badge ad-badge-due">' + L("Nouvelle réponse", "New reply") + "</span> " : "") +
+                  L("Réponse de l'équipe Holypixx", "Reply from the Holypixx team") + (it.repliedAt ? " · " + esc(shortDate(it.repliedAt)) : "") + "</p><p>" + esc(it.reply) + "</p></div>"
+                : "") +
+              "</li>";
+          }).join("") + "</ul>"
+        : '<p class="ad-hint">' + L("Vous n'avez encore rien envoyé : la première idée est la bienvenue !", "Nothing sent yet: your first idea is welcome!") + "</p>") +
+      "</section>";
+
+    var form = document.getElementById("ad-fb-form");
+    form.addEventListener("submit", async function (e) {
+      e.preventDefault();
+      var kind = form.querySelector('[name="kind"]:checked');
+      var body = { kind: kind ? kind.value : "idea", title: form.elements.title.value.trim(), body: form.elements.body.value.trim() };
+      if (!body.title) { toast(L("Résumez votre demande en une phrase.", "Sum up your request in one sentence."), true); form.elements.title.focus(); return; }
+      var submit = form.querySelector('[type="submit"]');
+      submit.disabled = true;
+      try {
+        var res = await api("POST", "/feedback", body);
+        toast(L("Merci ! Votre demande est bien partie.", "Thank you! Your request has been sent."));
+        paintFeedback(res, false);
+      } catch (err) {
+        toast(err.message, true);
+        submit.disabled = false;
+      }
+    });
+  }
+
+  // Onglet Admin : les suggestions de tous les photographes.
+  var ownerFeedbackFilter = "";
+  function ownerFeedbackHtml(data) {
+    if (!data) return "";
+    var items = data.items || [];
+    var counts = data.counts || {};
+    var filter = ownerFeedbackFilter || (counts.new ? "new" : "all");
+    var shown = filter === "all" ? items : items.filter(function (it) { return it.status === filter; });
+    var chips = [["all", "Toutes", items.length]].concat(Object.keys(FEEDBACK_STATUS).map(function (k) { return [k, FEEDBACK_STATUS[k][0], counts[k] || 0]; }));
+    return '<section id="ad-fb-owner"><div class="ad-section-header"><h3>Suggestions des photographes (' + items.length + ")</h3></div>" +
+      '<p class="ad-hint">Leurs idées et demandes, en direct. Changez le statut et répondez : la réponse leur arrive par e-mail et dans leur onglet Suggestions.</p>' +
+      '<div class="ad-seg ad-fb-filters" role="group" aria-label="Filtrer les suggestions">' + chips.map(function (c) {
+        return '<button type="button" class="ad-seg-btn" data-fb-filter="' + c[0] + '" aria-pressed="' + (filter === c[0]) + '">' + esc(c[1]) + " (" + c[2] + ")</button>";
+      }).join("") + "</div>" +
+      (shown.length
+        ? '<ul class="ad-fb-list">' + shown.map(function (it) {
+            return '<li class="ad-fb-item' + (it.status === "new" ? " ad-fb-item-new" : "") + '" data-fb-id="' + esc(it.id) + '">' +
+              '<div class="ad-fb-head"><span class="ad-fb-kind">' + esc(feedbackKindLabel(it.kind)) + " · " + esc(shortDate(it.createdAt)) + " · " +
+              esc(it.photographer.name) + ' · <a href="mailto:' + esc(it.photographer.email) + '">' + esc(it.photographer.email) + "</a></span>" + feedbackStatusHtml(it.status) + "</div>" +
+              '<p class="ad-fb-title">' + esc(it.title) + "</p>" +
+              (it.body ? '<p class="ad-fb-body">' + esc(it.body) + "</p>" : "") +
+              '<form class="ad-fb-answer" novalidate>' +
+              '<label class="ad-field"><span>Statut</span><select name="status">' + Object.keys(FEEDBACK_STATUS).map(function (k) {
+                return '<option value="' + k + '"' + (k === it.status ? " selected" : "") + ">" + esc(FEEDBACK_STATUS[k][0]) + "</option>";
+              }).join("") + "</select></label>" +
+              '<label class="ad-field"><span>Réponse <em>' + (it.repliedAt ? "(envoyée le " + esc(shortDate(it.repliedAt)) + ")" : "(facultatif : envoyée par e-mail)") + '</em></span><textarea name="reply" rows="3" maxlength="4000">' + esc(it.reply) + "</textarea></label>" +
+              '<button type="submit" class="ad-btn ad-btn-small">Enregistrer</button></form></li>';
+          }).join("") + "</ul>"
+        : '<p class="ad-hint">Rien ici pour l\'instant.</p>') +
+      "</section>";
+  }
+
+  function bindOwnerFeedback(data) {
+    var box = document.getElementById("ad-fb-owner");
+    if (!box) return;
+    function repaint(next) {
+      data = next;
+      box.outerHTML = ownerFeedbackHtml(next);
+      updateOwnerFeedbackBadge(next);
+      bindOwnerFeedback(next);
+    }
+    box.querySelectorAll("[data-fb-filter]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        ownerFeedbackFilter = btn.getAttribute("data-fb-filter");
+        repaint(data);
+      });
+    });
+    box.querySelectorAll(".ad-fb-answer").forEach(function (form) {
+      form.addEventListener("submit", async function (e) {
+        e.preventDefault();
+        var id = form.closest("[data-fb-id]").getAttribute("data-fb-id");
+        var before = (data.items.filter(function (it) { return it.id === id; })[0] || {}).reply || "";
+        var reply = form.elements.reply.value.trim();
+        try {
+          var next = await api("POST", "/owner/feedback/" + encodeURIComponent(id), { status: form.elements.status.value, reply: reply });
+          toast(reply && reply !== before ? "Réponse envoyée par e-mail." : "Statut enregistré.");
+          repaint(next);
+        } catch (err) {
+          toast(err.message, true);
+        }
+      });
+    });
+  }
+
   async function renderOwner(skipHash) {
     if (!skipHash && location.hash !== "#/proprietaire") history.pushState(null, "", "#/proprietaire");
     setActiveTab("owner");
     el.view.innerHTML = '<p class="ad-loading">Chargement…</p>';
 
-    var statsData, photographersData, waitlistData, funnelData;
+    var statsData, photographersData, waitlistData, funnelData, feedbackData;
+    // Les suggestions se chargent en même temps que le reste.
+    var feedbackPending = api("GET", "/owner/feedback").catch(function () { return null; });
     try {
       statsData = await api("GET", "/owner/stats");
       photographersData = await api("GET", "/owner/photographers");
       waitlistData = await api("GET", "/owner/waitlist").catch(function () { return null; });
       funnelData = await api("GET", "/owner/funnel?days=" + funnelDays).catch(function () { return null; });
+      feedbackData = await feedbackPending;
     } catch (err) {
       toast(err.message, true);
       return renderList();
@@ -3980,6 +4164,7 @@
       "</div></header>" +
 
       ownerStatsHtml(statsData) +
+      ownerFeedbackHtml(feedbackData) +
       stripeConfigHtml(statsData.stripe) +
 
       funnelSectionHtml(funnelData) +
@@ -4013,6 +4198,7 @@
     wireAccountsTable();
     wireWaitlist();
     wireFunnel();
+    if (feedbackData) { bindOwnerFeedback(feedbackData); updateOwnerFeedbackBadge(feedbackData); }
     document.getElementById("ad-run-reminders").addEventListener("click", async function () {
       var btn = this;
       var out = document.getElementById("ad-run-reminders-result");
@@ -10526,6 +10712,7 @@
     else if (location.hash === "#/parametres") renderSettings(true);
     else if (location.hash === "#/boutique") renderShop(true);
     else if (location.hash === "#/proprietaire") renderOwner(true);
+    else if (location.hash === "#/suggestions") renderFeedback(true);
     else if (location.hash.indexOf("#/scolaire") === 0) renderSchool(true);
     else renderList(true);
   }
@@ -10539,6 +10726,63 @@
     if (btn) openInvoiceFrom(btn.getAttribute("data-invoice-from"), btn.getAttribute("data-invoice-id"));
   });
 
+  /* ---------- Installer l'espace photographe sur l'écran d'accueil ---------- */
+
+  // Android, Chrome et Edge proposent l'installation eux-mêmes (on garde leur
+  // invitation pour le bouton « Installer l'appli ») ; sur iPhone et iPad,
+  // Safari ne le fait pas : le bouton explique les trois gestes.
+  (function () {
+    if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost" || location.hostname === "127.0.0.1")) {
+      window.addEventListener("load", function () { navigator.serviceWorker.register("/sw.js").catch(function () {}); });
+    }
+    var btn = document.getElementById("ad-install");
+    if (!btn) return;
+    var standalone = (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || window.navigator.standalone === true;
+    if (standalone) return;
+    var ua = navigator.userAgent;
+    var ios = /iPhone|iPad|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    var android = /Android/.test(ua);
+    var deferred = null;
+    window.addEventListener("beforeinstallprompt", function (e) {
+      e.preventDefault();
+      deferred = e;
+      btn.hidden = false;
+    });
+    window.addEventListener("appinstalled", function () {
+      deferred = null;
+      btn.hidden = true;
+      toast(L("Holypixx est sur votre écran d'accueil.", "Holypixx is on your home screen."));
+    });
+    if (ios || android) btn.hidden = false;
+    var SHARE = '<svg class="ad-install-glyph" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M8 7l4-4 4 4"/><path d="M6 11H5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1h-1"/></svg>';
+    btn.addEventListener("click", function () {
+      if (deferred) {
+        deferred.prompt();
+        deferred.userChoice.then(function () { deferred = null; }, function () { deferred = null; });
+        return;
+      }
+      var steps = ios
+        ? [
+            L("Dans Safari, touchez le bouton Partager ", "In Safari, tap the Share button ") + SHARE + L(" (en bas de l'écran, ou en haut sur iPad).", " (at the bottom of the screen, or at the top on iPad)."),
+            L("Faites défiler et choisissez <strong>« Sur l'écran d'accueil »</strong>.", "Scroll and choose <strong>“Add to Home Screen”</strong>."),
+            L("Touchez <strong>« Ajouter »</strong> : l'icône Holypixx apparaît avec vos applis.", "Tap <strong>“Add”</strong>: the Holypixx icon appears with your apps."),
+          ]
+        : android
+          ? [
+              L("Touchez le menu <strong>⋮</strong> de Chrome, en haut à droite.", "Tap Chrome's <strong>⋮</strong> menu, top right."),
+              L("Choisissez <strong>« Installer l'application »</strong> ou <strong>« Ajouter à l'écran d'accueil »</strong>.", "Choose <strong>“Install app”</strong> or <strong>“Add to Home screen”</strong>."),
+              L("Confirmez : l'icône Holypixx apparaît avec vos applis.", "Confirm: the Holypixx icon appears with your apps."),
+            ]
+          : [
+              L("Dans Chrome ou Edge : l'icône d'installation à droite de la barre d'adresse, ou le menu → <strong>« Installer Holypixx »</strong>.", "In Chrome or Edge: the install icon on the right of the address bar, or the menu → <strong>“Install Holypixx”</strong>."),
+              L("Sur Mac avec Safari : menu Fichier → <strong>« Ajouter au Dock »</strong>.", "On a Mac with Safari: File menu → <strong>“Add to Dock”</strong>."),
+              L("Holypixx s'ouvre ensuite dans sa propre fenêtre, comme une appli.", "Holypixx then opens in its own window, like an app."),
+            ];
+      document.getElementById("ad-install-steps").innerHTML = steps.map(function (st) { return "<li>" + st + "</li>"; }).join("");
+      openModal("ad-install-modal");
+    });
+  })();
+
   function bootstrap() {
     return api("GET", "/config").then(function (cfg) {
       state.config = cfg;
@@ -10549,6 +10793,9 @@
       // La pastille « à relancer » s'affiche dès l'ouverture, sans attendre l'onglet.
       if (location.hash.indexOf("#/clients") !== 0) api("GET", "/clients").then(updateClientsBadge).catch(function () {});
       if (location.hash !== "#/planning") api("GET", "/planning").then(updatePlanningBadge).catch(function () {});
+      // Réponses aux suggestions pas encore lues ; nouvelles suggestions (propriétaire).
+      if (location.hash !== "#/suggestions") api("GET", "/feedback").then(updateFeedbackBadge).catch(function () {});
+      if (state.isOwner && location.hash !== "#/proprietaire") api("GET", "/owner/feedback").then(updateOwnerFeedbackBadge).catch(function () {});
     });
   }
 

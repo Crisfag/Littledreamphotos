@@ -10,6 +10,7 @@
 
 import { waitlistForOwner, removeFromWaitlist } from "./waitlist.js";
 import { funnelForOwner } from "./funnel.js";
+import { feedbackForOwner, updateFeedbackAsOwner } from "./feedback.js";
 import { json, fail } from "./http.js";
 import { authenticatePhotographer } from "./authPhotographer.js";
 import { supplementFor } from "./admin.js";
@@ -227,6 +228,14 @@ export async function handleOwner(request, env, path) {
       const body = await request.json().catch(() => null);
       return json(await removeFromWaitlist(env, body?.email));
     }
+    return fail(404, "Route inconnue");
+  }
+  // Suggestions des photographes : toutes, statut et réponse (feedback.js).
+  if (action === "feedback") {
+    const owner = await requireOwner(env, photographerId);
+    if (!owner) return fail(403, "Accès réservé");
+    if (parts.length === 3 && request.method === "GET") return json(await feedbackForOwner(env));
+    if (parts.length === 4 && request.method === "POST") return updateFeedbackAsOwner(request, env, decodeURIComponent(parts[3]));
     return fail(404, "Route inconnue");
   }
   // Bibliothèque musicale commune : ajout et retrait de morceaux.

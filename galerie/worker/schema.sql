@@ -1348,3 +1348,21 @@ CREATE TABLE IF NOT EXISTS intro_texts (
   used_at         INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_intro_texts_photographer ON intro_texts(photographer_id, used_at);
+
+-- Suggestions des photographes (feedback.js) : idées, améliorations, soucis,
+-- avec le statut et la réponse du propriétaire de la plateforme.
+CREATE TABLE IF NOT EXISTS feedback (
+  id              TEXT PRIMARY KEY,
+  photographer_id TEXT NOT NULL REFERENCES photographers(id) ON DELETE CASCADE,
+  kind            TEXT NOT NULL DEFAULT 'idea',
+  title           TEXT NOT NULL,
+  body            TEXT NOT NULL DEFAULT '',
+  status          TEXT NOT NULL DEFAULT 'new',
+  reply           TEXT NOT NULL DEFAULT '',
+  replied_at      INTEGER,
+  reply_seen      INTEGER NOT NULL DEFAULT 1,
+  created_at      INTEGER NOT NULL,
+  updated_at      INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_feedback_photographer ON feedback(photographer_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_feedback_status ON feedback(status, created_at);

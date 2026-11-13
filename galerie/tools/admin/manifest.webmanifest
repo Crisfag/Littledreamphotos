@@ -1,0 +1,23 @@
+{
+  "name": "Holypixx — Espace photographe",
+  "short_name": "Holypixx",
+  "description": "Vos galeries clients, réservations, factures et ventes, depuis l'écran d'accueil.",
+  "lang": "fr",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f6f6f9",
+  "theme_color": "#f6f6f9",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Réservations", "url": "/#/reservations", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Planning", "url": "/#/planning", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Facturation", "url": "/#/facturation", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] }
+  ]
+}

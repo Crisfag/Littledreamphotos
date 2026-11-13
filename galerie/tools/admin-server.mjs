@@ -212,7 +212,11 @@ async function readBody(req, limit = MAX_UPLOAD_BYTES) {
   return Buffer.concat(chunks);
 }
 
-const STATIC_TYPES = { html: "text/html; charset=utf-8", css: "text/css; charset=utf-8", js: "text/javascript; charset=utf-8", svg: "image/svg+xml" };
+const STATIC_TYPES = {
+  html: "text/html; charset=utf-8", css: "text/css; charset=utf-8", js: "text/javascript; charset=utf-8", svg: "image/svg+xml",
+  // Installation sur l'écran d'accueil : manifeste et icônes.
+  png: "image/png", webmanifest: "application/manifest+json",
+};
 
 async function serveStatic(req, res, pathname) {
   const rel = pathname === "/" ? "/index.html" : pathname;
@@ -998,6 +1002,30 @@ async function handleApi(req, res, url) {
       return json(res, 200, await client.request(req.method, path, body));
     } catch (err) {
       return relayError(res, err, "Les réservations n'ont pas pu répondre");
+    }
+  }
+
+  // /local/feedback… — suggestions envoyées au propriétaire de la plateforme
+  // (les siennes, envoi, réponses lues) : relais JSON vers /api/admin/feedback….
+  if (parts[0] === "feedback" && ["GET", "POST"].includes(req.method)) {
+    const path = "/api/admin/feedback" + (parts.length > 1 ? "/" + parts.slice(1).map(encodeURIComponent).join("/") : "");
+    try {
+      const body = req.method === "POST" ? JSON.parse((await readBody(req, 20000)).toString("utf8") || "{}") : undefined;
+      return json(res, 200, await client.request(req.method, path, body));
+    } catch (err) {
+      return relayError(res, err, "Les suggestions n'ont pas pu répondre");
+    }
+  }
+
+  // /local/owner/feedback… — toutes les suggestions, statut et réponse
+  // (propriétaire seulement, revérifié par le Worker).
+  if (parts[0] === "owner" && parts[1] === "feedback" && parts.length <= 3 && ["GET", "POST"].includes(req.method)) {
+    const path = "/api/owner/feedback" + (parts[2] ? "/" + encodeURIComponent(parts[2]) : "");
+    try {
+      const body = req.method === "POST" ? JSON.parse((await readBody(req, 20000)).toString("utf8") || "{}") : undefined;
+      return json(res, 200, await client.request(req.method, path, body));
+    } catch (err) {
+      return relayError(res, err, "Les suggestions n'ont pas pu répondre");
     }
   }
 
