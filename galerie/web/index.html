@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Galeries photo clients protégées pour photographes | Holypixx</title>
-  <meta name="description" content="Galeries clients impossibles à télécharger, tirages, réservation, contrats signés et relances : le logiciel tout-en-un des photographes. Gratuit pour commencer." />
+  <meta name="description" content="Galeries clients impossibles à télécharger, tirages, agenda de réservation sur votre site, contrats signés et relances : le logiciel tout-en-un des photographes. Gratuit pour commencer." />
   <link rel="canonical" href="https://www.holypixx.com/" />
   <link rel="alternate" hreflang="fr" href="https://www.holypixx.com/" />
   <link rel="alternate" hreflang="en" href="https://www.holypixx.com/en/" />
@@ -142,7 +142,11 @@
       { "@type": "Question", "name": "Puis-je personnaliser l'apparence de mes galeries ?",
         "acceptedAnswer": { "@type": "Answer", "text": "Oui, avec toutes les formules. Neuf styles (classique, doux, architectural, moderne, nuit, éditorial, romantique, bohème, galerie d'art), chacun avec sa palette, ses formes et ses polices. Vous pouvez changer la police des titres (13 au choix) et du texte (10), écrire un mot d'accueil, choisir la photo de couverture ou placer un film YouTube ou Vimeo en tête de galerie, idéal pour un mariage. Votre style préféré se règle une fois dans vos paramètres et s'applique à chaque nouvelle galerie." } },
       { "@type": "Question", "name": "Mes clients peuvent-ils réserver et signer en ligne ?",
-        "acceptedAnswer": { "@type": "Answer", "text": "Oui, avec les formules Pro et Studio. Vous ouvrez vos créneaux (ou une série de mini-séances), vos clients réservent depuis votre portfolio et paient l'acompte sur votre compte Stripe. Pour une séance sur mesure, vous leur envoyez un devis qu'ils signent en ligne ; chacun reçoit le contrat signé en PDF." } },
+        "acceptedAnswer": { "@type": "Answer", "text": "Oui, avec les formules Pro et Studio. Vous ouvrez vos créneaux sur une date ou toute une période (ou une série de mini-séances) ; vos clients choisissent leur date dans votre agenda en ligne et paient l'acompte sur votre compte Stripe. Pour une séance sur mesure, vous leur envoyez un devis qu'ils signent en ligne ; chacun reçoit le contrat signé en PDF." } },
+      { "@type": "Question", "name": "J'ai déjà mon site : mes clients peuvent-ils réserver dessus ?",
+        "acceptedAnswer": { "@type": "Answer", "text": "Oui. Holypixx vous donne une page de réservation à votre nom, sans mini-site à créer : partagez son lien ou son QR code, collez un bouton sur votre site, ou intégrez directement l'agenda dans une page (WordPress, Wix, Squarespace…). Vous pouvez aussi garder la réservation sur votre portfolio Holypixx, ou les deux." } },
+      { "@type": "Question", "name": "Un client me paie par virement ou en espèces : comment je m'y retrouve ?",
+        "acceptedAnswer": { "@type": "Answer", "text": "Tous les suppléments et options en attente sont réunis dans un tableau : cochez « réglé par virement » ou « en espèces », la facture lui est envoyée. Sans règlement, votre client reçoit un rappel 3 puis 7 jours après avoir validé sa sélection, avec toutes les façons de payer ; vous pouvez couper ces rappels dans vos paramètres." } },
       { "@type": "Question", "name": "Un contrat signé en ligne est-il valable ?",
         "acceptedAnswer": { "@type": "Answer", "text": "C'est une signature électronique simple au sens du règlement européen eIDAS : elle ne peut pas être écartée au seul motif qu'elle est électronique. Holypixx conserve sa preuve : le nom saisi, la date, l'empreinte du document signé. Les conditions proposées sont un modèle à adapter, pas un conseil juridique." } },
       { "@type": "Question", "name": "Holypixx m'aide-t-il à faire revenir mes clients ?",
@@ -159,6 +163,10 @@
         "acceptedAnswer": { "@type": "Answer", "text": "Un module complet arrive très bientôt : établissements et classes, fiches parents avec QR code, espace famille, pochettes avec aperçu de la photo de l'enfant, commande groupée et envoi au laboratoire. Prévu : avec Essentiel, Pro ou la formule Scolaire (sans abonnement), 5 % des ventes scolaires ; avec Studio (490 € par an), sans commission." } },
       { "@type": "Question", "name": "Y a-t-il un programme de parrainage ?",
         "acceptedAnswer": { "@type": "Answer", "text": "Oui. Dans l'onglet Abonnement, vous trouvez votre lien de parrainage. Le confrère qui s'inscrit avec ce lien a −50 % sur son mois suivant dès son premier paiement. Vous, vous gagnez une case sur votre carte de parrain : trois confrères abonnés, un mois offert, deux mois offerts au plus par an." } },
+      { "@type": "Question", "name": "Existe-t-il une application ?",
+        "acceptedAnswer": { "@type": "Answer", "text": "Votre espace photographe s'installe sur l'écran d'accueil de votre téléphone, de votre tablette ou de votre ordinateur, comme une appli : une icône, une ouverture en plein écran, sans passer par un store. Le bouton « Installer l'appli » vous guide." } },
+      { "@type": "Question", "name": "Une fonction me manque : à qui le dire ?",
+        "acceptedAnswer": { "@type": "Answer", "text": "À nous, directement depuis l'onglet Suggestions de votre espace. Chaque demande est lue par la fondatrice, photographe elle aussi ; vous suivez son statut (à l'étude, prévue, faite) et sa réponse." } },
       { "@type": "Question", "name": "Où sont hébergées les photos ?",
         "acceptedAnswer": { "@type": "Answer", "text": "Sur l'infrastructure Cloudflare (stockage R2 et base D1). Les mots de passe ne sont jamais stockés en clair et chaque compte est strictement cloisonné." } }
     ]
@@ -324,7 +332,7 @@
       <div class="wrap">
         <div class="chapter-head">
           <h2>Réservé, signé, payé&nbsp;: avant même le premier déclic.</h2>
-          <p class="chapter-lede">Votre client choisit son créneau sur votre portfolio, signe votre contrat en ligne et règle l'acompte. Vous recevez la séance dans votre agenda, sans un seul PDF à imprimer ni un message à relancer. <span class="tagline">Formule Pro</span></p>
+          <p class="chapter-lede">Votre client choisit sa date dans votre agenda en ligne, signe votre contrat et règle l'acompte. Vous recevez la séance dans votre agenda, sans un seul PDF à imprimer ni un message à relancer. <span class="tagline">Formule Pro</span></p>
         </div>
 
         <div class="prep-desk" id="prep-desk">
@@ -346,6 +354,11 @@
                 <div><dt>Compris dans votre forfait</dt><dd>Photos retouchées, galerie privée</dd></div>
                 <div><dt>Conseil vestimentaire</dt><dd>Pulls en maille, tons crème ou bordeaux</dd></div>
               </dl>
+              <div class="bk-week" aria-hidden="true">
+                <span class="bk-week-head"><b>Décembre 2026</b><span class="bk-week-nav"><i>‹</i><i>›</i></span></span>
+                <span class="bk-wd">lun</span><span class="bk-wd">mar</span><span class="bk-wd">mer</span><span class="bk-wd">jeu</span><span class="bk-wd">ven</span><span class="bk-wd">sam</span><span class="bk-wd">dim</span>
+                <span class="bk-d off">30</span><span class="bk-d off">1</span><span class="bk-d open">2<i></i></span><span class="bk-d off">3</span><span class="bk-d open">4<i></i></span><span class="bk-d open sel">5<i></i><i></i><i></i></span><span class="bk-d off">6</span>
+              </div>
               <p class="bk-day">Samedi 5 décembre</p>
               <ul class="bk-slots" aria-label="Créneaux du samedi">
                 <li class="bk-slot taken"><span>10 h 00</span></li>
@@ -393,8 +406,54 @@
           </div>
         </div>
 
+        <!-- L'agenda, là où sont vos clients : votre site, un lien, un QR code -->
+        <div class="duo aw">
+          <div class="aw-stage">
+            <figure class="window aw-site" aria-label="L'agenda Holypixx intégré dans le site d'un studio : décembre, et les séances libres du samedi 12">
+              <div class="window-bar" aria-hidden="true">
+                <span class="window-dots"><i></i><i></i><i></i></span>
+                <span class="window-url"><svg class="ico ico-xs"><use href="#i-lock"/></svg>www.votre-site.be<span class="window-path">/reserver</span></span>
+              </div>
+              <div class="aw-site-body" aria-hidden="true">
+                <div class="aw-site-nav"><b>Votre studio</b><span>Portfolio</span><span>Tarifs</span><span class="on">Réserver</span></div>
+                <div class="aw-embed">
+                  <div class="aw-cal">
+                    <span class="aw-cal-head"><b>Décembre 2026</b><span class="bk-week-nav"><i>‹</i><i>›</i></span></span>
+                    <span class="aw-wd">l</span><span class="aw-wd">m</span><span class="aw-wd">m</span><span class="aw-wd">j</span><span class="aw-wd">v</span><span class="aw-wd">s</span><span class="aw-wd">d</span>
+                    <span></span><span>1</span><span class="open">2<i></i></span><span>3</span><span class="open">4<i></i></span><span class="open">5<i></i><i></i></span><span>6</span>
+                    <span>7</span><span>8</span><span class="open">9<i></i></span><span>10</span><span class="open">11<i></i></span><span class="open sel">12<i></i><i></i><i></i></span><span>13</span>
+                    <span>14</span><span>15</span><span class="open">16<i></i></span><span>17</span><span class="open">18<i></i></span><span class="open">19<i></i><i></i></span><span>20</span>
+                    <span>21</span><span>22</span><span>23</span><span>24</span><span>25</span><span>26</span><span>27</span>
+                  </div>
+                  <div class="aw-day">
+                    <p class="aw-day-title">Samedi 12 décembre<em>3 créneaux libres</em></p>
+                    <p class="aw-offer"><b>Séance grossesse</b> · 1 h</p>
+                    <span class="aw-times"><i>10 h 00</i><i>14 h 00</i></span>
+                    <p class="aw-offer"><b>Séance bambin</b> · 45 min</p>
+                    <span class="aw-times"><i>11 h 15</i></span>
+                  </div>
+                </div>
+              </div>
+            </figure>
+            <figure class="aw-qr" aria-label="QR code de la page de réservation, prêt à imprimer">
+              <svg class="aw-qr-code" viewBox="-2 -2 29 29" shape-rendering="crispEdges" aria-hidden="true"><rect x="-2" y="-2" width="29" height="29" fill="#fff"/><path d="M0 0h1v1h-1zM1 0h1v1h-1zM2 0h1v1h-1zM3 0h1v1h-1zM4 0h1v1h-1zM5 0h1v1h-1zM6 0h1v1h-1zM13 0h1v1h-1zM16 0h1v1h-1zM18 0h1v1h-1zM19 0h1v1h-1zM20 0h1v1h-1zM21 0h1v1h-1zM22 0h1v1h-1zM23 0h1v1h-1zM24 0h1v1h-1zM0 1h1v1h-1zM6 1h1v1h-1zM10 1h1v1h-1zM15 1h1v1h-1zM18 1h1v1h-1zM24 1h1v1h-1zM0 2h1v1h-1zM2 2h1v1h-1zM3 2h1v1h-1zM4 2h1v1h-1zM6 2h1v1h-1zM8 2h1v1h-1zM9 2h1v1h-1zM10 2h1v1h-1zM11 2h1v1h-1zM14 2h1v1h-1zM15 2h1v1h-1zM18 2h1v1h-1zM20 2h1v1h-1zM21 2h1v1h-1zM22 2h1v1h-1zM24 2h1v1h-1zM0 3h1v1h-1zM2 3h1v1h-1zM3 3h1v1h-1zM4 3h1v1h-1zM6 3h1v1h-1zM8 3h1v1h-1zM9 3h1v1h-1zM10 3h1v1h-1zM11 3h1v1h-1zM12 3h1v1h-1zM13 3h1v1h-1zM14 3h1v1h-1zM15 3h1v1h-1zM16 3h1v1h-1zM18 3h1v1h-1zM20 3h1v1h-1zM21 3h1v1h-1zM22 3h1v1h-1zM24 3h1v1h-1zM0 4h1v1h-1zM2 4h1v1h-1zM3 4h1v1h-1zM4 4h1v1h-1zM6 4h1v1h-1zM8 4h1v1h-1zM12 4h1v1h-1zM13 4h1v1h-1zM14 4h1v1h-1zM16 4h1v1h-1zM18 4h1v1h-1zM20 4h1v1h-1zM21 4h1v1h-1zM22 4h1v1h-1zM24 4h1v1h-1zM0 5h1v1h-1zM6 5h1v1h-1zM8 5h1v1h-1zM9 5h1v1h-1zM10 5h1v1h-1zM15 5h1v1h-1zM16 5h1v1h-1zM18 5h1v1h-1zM24 5h1v1h-1zM0 6h1v1h-1zM1 6h1v1h-1zM2 6h1v1h-1zM3 6h1v1h-1zM4 6h1v1h-1zM5 6h1v1h-1zM6 6h1v1h-1zM8 6h1v1h-1zM10 6h1v1h-1zM12 6h1v1h-1zM14 6h1v1h-1zM16 6h1v1h-1zM18 6h1v1h-1zM19 6h1v1h-1zM20 6h1v1h-1zM21 6h1v1h-1zM22 6h1v1h-1zM23 6h1v1h-1zM24 6h1v1h-1zM8 7h1v1h-1zM9 7h1v1h-1zM10 7h1v1h-1zM11 7h1v1h-1zM15 7h1v1h-1zM0 8h1v1h-1zM2 8h1v1h-1zM3 8h1v1h-1zM4 8h1v1h-1zM5 8h1v1h-1zM6 8h1v1h-1zM12 8h1v1h-1zM13 8h1v1h-1zM14 8h1v1h-1zM16 8h1v1h-1zM18 8h1v1h-1zM19 8h1v1h-1zM20 8h1v1h-1zM21 8h1v1h-1zM22 8h1v1h-1zM0 9h1v1h-1zM2 9h1v1h-1zM3 9h1v1h-1zM8 9h1v1h-1zM9 9h1v1h-1zM11 9h1v1h-1zM13 9h1v1h-1zM14 9h1v1h-1zM16 9h1v1h-1zM17 9h1v1h-1zM19 9h1v1h-1zM23 9h1v1h-1zM2 10h1v1h-1zM4 10h1v1h-1zM5 10h1v1h-1zM6 10h1v1h-1zM7 10h1v1h-1zM9 10h1v1h-1zM11 10h1v1h-1zM12 10h1v1h-1zM15 10h1v1h-1zM17 10h1v1h-1zM18 10h1v1h-1zM19 10h1v1h-1zM20 10h1v1h-1zM21 10h1v1h-1zM23 10h1v1h-1zM24 10h1v1h-1zM0 11h1v1h-1zM9 11h1v1h-1zM12 11h1v1h-1zM15 11h1v1h-1zM16 11h1v1h-1zM17 11h1v1h-1zM19 11h1v1h-1zM24 11h1v1h-1zM2 12h1v1h-1zM3 12h1v1h-1zM4 12h1v1h-1zM6 12h1v1h-1zM10 12h1v1h-1zM11 12h1v1h-1zM12 12h1v1h-1zM13 12h1v1h-1zM17 12h1v1h-1zM18 12h1v1h-1zM19 12h1v1h-1zM20 12h1v1h-1zM22 12h1v1h-1zM23 12h1v1h-1zM24 12h1v1h-1zM0 13h1v1h-1zM1 13h1v1h-1zM3 13h1v1h-1zM7 13h1v1h-1zM10 13h1v1h-1zM13 13h1v1h-1zM16 13h1v1h-1zM17 13h1v1h-1zM19 13h1v1h-1zM21 13h1v1h-1zM23 13h1v1h-1zM0 14h1v1h-1zM3 14h1v1h-1zM4 14h1v1h-1zM5 14h1v1h-1zM6 14h1v1h-1zM10 14h1v1h-1zM11 14h1v1h-1zM12 14h1v1h-1zM13 14h1v1h-1zM14 14h1v1h-1zM15 14h1v1h-1zM16 14h1v1h-1zM17 14h1v1h-1zM18 14h1v1h-1zM19 14h1v1h-1zM20 14h1v1h-1zM21 14h1v1h-1zM23 14h1v1h-1zM24 14h1v1h-1zM0 15h1v1h-1zM2 15h1v1h-1zM4 15h1v1h-1zM5 15h1v1h-1zM8 15h1v1h-1zM10 15h1v1h-1zM11 15h1v1h-1zM16 15h1v1h-1zM17 15h1v1h-1zM19 15h1v1h-1zM20 15h1v1h-1zM24 15h1v1h-1zM0 16h1v1h-1zM4 16h1v1h-1zM6 16h1v1h-1zM7 16h1v1h-1zM9 16h1v1h-1zM10 16h1v1h-1zM11 16h1v1h-1zM12 16h1v1h-1zM13 16h1v1h-1zM14 16h1v1h-1zM16 16h1v1h-1zM17 16h1v1h-1zM18 16h1v1h-1zM19 16h1v1h-1zM20 16h1v1h-1zM22 16h1v1h-1zM8 17h1v1h-1zM9 17h1v1h-1zM10 17h1v1h-1zM12 17h1v1h-1zM15 17h1v1h-1zM16 17h1v1h-1zM20 17h1v1h-1zM21 17h1v1h-1zM0 18h1v1h-1zM1 18h1v1h-1zM2 18h1v1h-1zM3 18h1v1h-1zM4 18h1v1h-1zM5 18h1v1h-1zM6 18h1v1h-1zM10 18h1v1h-1zM13 18h1v1h-1zM16 18h1v1h-1zM18 18h1v1h-1zM20 18h1v1h-1zM22 18h1v1h-1zM23 18h1v1h-1zM24 18h1v1h-1zM0 19h1v1h-1zM6 19h1v1h-1zM8 19h1v1h-1zM9 19h1v1h-1zM10 19h1v1h-1zM11 19h1v1h-1zM14 19h1v1h-1zM16 19h1v1h-1zM20 19h1v1h-1zM21 19h1v1h-1zM23 19h1v1h-1zM24 19h1v1h-1zM0 20h1v1h-1zM2 20h1v1h-1zM3 20h1v1h-1zM4 20h1v1h-1zM6 20h1v1h-1zM8 20h1v1h-1zM11 20h1v1h-1zM12 20h1v1h-1zM13 20h1v1h-1zM14 20h1v1h-1zM15 20h1v1h-1zM16 20h1v1h-1zM17 20h1v1h-1zM18 20h1v1h-1zM19 20h1v1h-1zM20 20h1v1h-1zM22 20h1v1h-1zM0 21h1v1h-1zM2 21h1v1h-1zM3 21h1v1h-1zM4 21h1v1h-1zM6 21h1v1h-1zM8 21h1v1h-1zM10 21h1v1h-1zM11 21h1v1h-1zM12 21h1v1h-1zM13 21h1v1h-1zM15 21h1v1h-1zM18 21h1v1h-1zM20 21h1v1h-1zM21 21h1v1h-1zM22 21h1v1h-1zM23 21h1v1h-1zM24 21h1v1h-1zM0 22h1v1h-1zM2 22h1v1h-1zM3 22h1v1h-1zM4 22h1v1h-1zM6 22h1v1h-1zM8 22h1v1h-1zM10 22h1v1h-1zM13 22h1v1h-1zM14 22h1v1h-1zM15 22h1v1h-1zM16 22h1v1h-1zM21 22h1v1h-1zM22 22h1v1h-1zM24 22h1v1h-1zM0 23h1v1h-1zM6 23h1v1h-1zM9 23h1v1h-1zM14 23h1v1h-1zM15 23h1v1h-1zM16 23h1v1h-1zM17 23h1v1h-1zM19 23h1v1h-1zM20 23h1v1h-1zM21 23h1v1h-1zM24 23h1v1h-1zM0 24h1v1h-1zM1 24h1v1h-1zM2 24h1v1h-1zM3 24h1v1h-1zM4 24h1v1h-1zM5 24h1v1h-1zM6 24h1v1h-1zM8 24h1v1h-1zM9 24h1v1h-1zM11 24h1v1h-1zM12 24h1v1h-1zM13 24h1v1h-1zM14 24h1v1h-1zM19 24h1v1h-1zM20 24h1v1h-1zM21 24h1v1h-1zM22 24h1v1h-1zM23 24h1v1h-1zM24 24h1v1h-1z"/></svg>
+              <figcaption><strong>Réservez votre séance</strong><span class="num">votre-studio.holypixx.com/reserver</span></figcaption>
+            </figure>
+            <div class="prep-note aw-note">
+              <span class="note-ico"><svg class="ico"><use href="#i-lock"/></svg></span>
+              <span><strong>Créneau privé, gardé pour Camille</strong><em>Lien envoyé · sam. 19 déc., 10 h 00</em></span>
+            </div>
+          </div>
+          <ul class="rows">
+            <li><svg class="ico"><use href="#i-calendar"/></svg><div><h3>Un vrai agenda pour vos clients</h3><p>Le mois en un coup d'œil&nbsp;: un clic sur une date, et toutes vos séances libres ce jour-là, heure par heure.</p></div></li>
+            <li><svg class="ico"><use href="#i-grid"/></svg><div><h3>Sur votre site, ou sans site du tout</h3><p>Une page de réservation à votre nom, son lien et son QR code. Vous avez déjà un site&nbsp;? Collez le bouton ou l'agenda dans WordPress, Wix ou Squarespace. Et votre portfolio, si vous le voulez.</p></div></li>
+            <li><svg class="ico"><use href="#i-check"/></svg><div><h3>Une période ouverte en un geste</h3><p>«&nbsp;Tous les samedis de décembre, à 10&nbsp;h et 14&nbsp;h&nbsp;», pour une ou plusieurs séances. Même horaire pour deux séances&nbsp;? La première réservée prend la place, l'autre disparaît.</p></div></li>
+            <li><svg class="ico"><use href="#i-lock"/></svg><div><h3>Des créneaux privés pour vos habitués</h3><p>Gardez un horaire pour un client&nbsp;: lui seul le voit, par le lien que vous lui envoyez. Ou réservez-le à son nom, d'un clic, choisi dans vos fiches clients.</p></div></li>
+          </ul>
+        </div>
+
         <ul class="prep-facts">
-          <li><h3>Réservation en ligne</h3><p>Formules, créneaux et séries de mini-séances ouverts en deux clics. Vos clients réservent depuis votre portfolio et paient l'acompte&nbsp;; un créneau ne se réserve jamais deux fois. Planifiez vos <a class="inline-link" href="/reservation-seance-photo">mini-séances de Noël</a> avec notre calculateur.</p></li>
+          <li><h3>Réservation en ligne</h3><p>Formules, créneaux sur une date ou toute une période, séries de mini-séances. Vos clients réservent et paient l'acompte&nbsp;; un même horaire ne se réserve jamais deux fois. Planifiez vos <a class="inline-link" href="/reservation-seance-photo">mini-séances de Noël</a> avec notre calculateur.</p></li>
           <li><h3>Des prestations qui donnent envie</h3><p>Une photo pour l'illustrer, plusieurs tarifs selon le nombre de photos, ce qui est compris dans le forfait et un conseil vestimentaire. Cochez «&nbsp;Sauvegarder le réglage&nbsp;»&nbsp;: la prochaine fois, choisissez-la dans la liste, tout est prêt.</p></li>
           <li><h3>Devis et contrats signés</h3><p>Vos prestations et vos conditions, signées en ligne sans imprimante. Chacun reçoit le contrat signé en PDF, avec la date et l'empreinte du document. Pas encore de conditions&nbsp;? Partez de notre <a class="inline-link" href="/contrat-photographe">modèle de contrat gratuit</a>.</p></li>
           <li><h3>Agenda et rappels</h3><p>Chaque séance arrive avec son invitation pour votre agenda, et votre client reçoit un rappel la veille. Moins d'oublis, moins de messages.</p></li>
@@ -572,7 +631,7 @@
         <ul class="facts">
           <li><h3>Neuf styles, vos polices</h3><p>Chaque style apporte sa palette, ses formes et son duo de polices. Changez la police des titres (13&nbsp;au choix, dont deux manuscrites) ou du texte (10)&nbsp;: l'aperçu suit en direct.</p></li>
           <li><h3>Le film du mariage en ouverture</h3><p>Collez un lien YouTube ou Vimeo&nbsp;: le film s'affiche en tête de galerie et ne se charge que lorsque vos clients lancent la lecture. Ou choisissez la photo de couverture d'un clic sur l'étoile. Notre guide de la <a class="inline-link" href="/galerie-photo-mariage">galerie de mariage</a> vous donne le planning de livraison.</p></li>
-          <li><h3>Un mot d'accueil, quatre mises en page</h3><p>Quelques lignes pour accueillir vos clients. Grille, mosaïque, éditorial ou récit, qui alterne grandes images et paires comme un livre photo.</p></li>
+          <li><h3>Un mot d'accueil, quatre mises en page</h3><p>Quelques lignes pour accueillir vos clients, enregistrées pour la prochaine fois&nbsp;: à la galerie suivante, choisissez-les dans un menu. Grille, mosaïque, éditorial ou récit, qui alterne grandes images et paires comme un livre photo.</p></li>
           <li><h3>Un style par type de séance</h3><p>Choisissez votre style par défaut une fois&nbsp;; à chaque nouvelle galerie, changez-le d'un survol, aperçu à l'appui. Rien ne change pour la protection&nbsp;: tuiles, filigrane et empreinte restent.</p></li>
         </ul>
       </div>
@@ -605,6 +664,8 @@
         <ul class="sale-facts">
           <li><h3>Boutique de tirages intégrée</h3><p>Choisissez vos formats, voyez le coût réel du labo, fixez votre prix. Prodigi imprime et livre chez votre client, avec suivi.</p></li>
           <li><h3>Forfait et suppléments payés en ligne</h3><p>Photos incluses, prix au-delà, paiement à la validation et facture PDF envoyée toute seule.</p></li>
+          <li><h3>Des options à cocher</h3><p>Retouche avancée, version noir et blanc, clé USB&nbsp;: vos clients cochent vos options dans leur galerie et les règlent avec leurs suppléments.</p></li>
+          <li><h3>Virement ou espèces, tout est suivi</h3><p>Un client règle par virement ou de la main à la main&nbsp;? Cochez «&nbsp;réglé&nbsp;» dans le tableau des suppléments en attente&nbsp;: sa facture part. S'il oublie, il reçoit un rappel 3 puis 7&nbsp;jours plus tard, avec votre IBAN.</p></li>
           <li><h3>Campagnes et tableau de bord</h3><p>Promotions à durée limitée, relance des paniers oubliés et des coups de cœur ; chiffre d'affaires, marge et formats qui se vendent.</p></li>
           <li><h3>Aucune commission</h3><p>Seuls les frais de paiement sont retenus : 2&nbsp;% + 0,30&nbsp;€ par vente, ce que coûtent la carte et le virement.</p></li>
         </ul>
@@ -662,6 +723,7 @@
             <li><svg class="ico"><use href="#i-user"/></svg><div><h3>Une fiche par client, toute seule</h3><p>Galeries, réservations, contrats et paiements se rangent sous l'adresse e-mail du client, avec son téléphone et vos notes.</p></div></li>
             <li><svg class="ico"><use href="#i-heart"/></svg><div><h3>Les dates qui comptent</h3><p>Étapes de bébé (3, 6, 9&nbsp;mois, 1&nbsp;an), anniversaire de mariage, séance de saison&nbsp;: chaque date a son rappel, au délai que vous choisissez.</p></div></li>
             <li><svg class="ico"><use href="#i-mail"/></svg><div><h3>Le message est déjà écrit</h3><p>«&nbsp;Proposer une séance&nbsp;» ouvre votre messagerie avec un texte prêt, lien de réservation compris. Les clients sans séance depuis bientôt un an remontent aussi.</p></div></li>
+            <li><svg class="ico"><use href="#i-check"/></svg><div><h3>Un habitué, choisi en un clic</h3><p>Facture, devis, nouvelle galerie ou séance&nbsp;: «&nbsp;Choisir dans mes fiches clients&nbsp;», et son nom et son e-mail se remplissent seuls, son adresse aussi sur une facture.</p></div></li>
             <li><svg class="ico"><use href="#i-calendar"/></svg><div><h3>Vos temps forts</h3><p>Noël, fête des mères, rentrée&nbsp;: six semaines avant, Holypixx vous rappelle qui prévenir et prépare un envoi groupé en copie cachée.</p></div></li>
           </ul>
 
@@ -705,6 +767,50 @@
         </div>
 
         <a class="chapter-cta" href="/fideliser-clients-photographe">Le calendrier de relances gratuit<svg class="ico"><use href="#i-arrow"/></svg></a>
+      </div>
+    </section>
+
+    <!-- ============ Appli et suggestions ============ -->
+    <section class="chapter" id="appli">
+      <div class="wrap">
+        <div class="chapter-head">
+          <h2>Dans votre poche.<br />Et construit avec vous.</h2>
+          <p class="chapter-lede">Votre espace s'installe comme une appli, sans passer par un store. Et quand une option vous manque, vous l'écrivez&nbsp;: Holypixx grandit avec les demandes des photographes qui l'utilisent.</p>
+        </div>
+
+        <div class="pocket">
+          <article class="panel panel-app">
+            <div class="phone" aria-hidden="true">
+              <div class="phone-screen">
+                <span class="phone-time num">9:41</span>
+                <div class="phone-apps">
+                  <i></i><i></i><i></i><i></i>
+                  <i></i><i></i><i></i>
+                  <span class="phone-hpx"><span class="phone-hpx-icon"><svg viewBox="0 0 32 32"><path d="M10 8v16M22 8v16M10 16h12"/></svg></span><span>Holypixx</span></span>
+                  <i></i><i></i><i></i><i></i>
+                </div>
+                <div class="phone-notif">
+                  <span class="phone-notif-icon"><svg viewBox="0 0 32 32"><path d="M10 8v16M22 8v16M10 16h12"/></svg></span>
+                  <span><b>Acompte reçu</b><em>Camille Dubois · <span class="num">30,00 €</span></em></span>
+                </div>
+              </div>
+            </div>
+            <h3>Une icône sur votre écran d'accueil</h3>
+            <p>Votre espace s'ouvre d'un geste, en plein écran, sur iPhone, Android ou ordinateur&nbsp;: réservations, ventes et galeries à portée de pouce.</p>
+          </article>
+
+          <article class="panel panel-ideas">
+            <div class="ideas" aria-hidden="true">
+              <p class="ideas-head">Vos demandes</p>
+              <span class="ideas-row"><span><b>Un agenda mensuel pour mes clients</b><em>Nouvelle fonction</em></span><span class="ideas-status done">Faite</span></span>
+              <span class="ideas-row"><span><b>Réserver sans mini-site</b><em>Nouvelle fonction</em></span><span class="ideas-status done">Faite</span></span>
+              <span class="ideas-reply">Réponse&nbsp;: c'est en ligne, dans l'onglet Réservations.</span>
+              <span class="ideas-row"><span><b>Votre prochaine idée</b><em>Amélioration</em></span><span class="ideas-status">Reçue</span></span>
+            </div>
+            <h3>Une idée&nbsp;? Elle arrive à la fondatrice</h3>
+            <p>L'onglet Suggestions envoie votre demande à Christine, photographe et fondatrice d'Holypixx. Vous suivez son statut et sa réponse au même endroit.</p>
+          </article>
+        </div>
       </div>
     </section>
 
@@ -787,6 +893,7 @@
               <li>Livraison des photos HD</li>
               <li>Fiches clients et rappels des dates</li>
               <li>Portfolio en ligne</li>
+              <li>Appli sur votre écran d'accueil</li>
             </ul>
           </article>
           <article class="plan">
@@ -799,7 +906,8 @@
               <li>25 galeries actives, 200 Go</li>
               <li>Tout Découverte</li>
               <li>Boutique de tirages intégrée</li>
-              <li>Suppléments payés en ligne, factures</li>
+              <li>Suppléments et options payés en ligne, factures</li>
+              <li>Virements et espèces suivis, relance des impayés</li>
               <li>Tableau de bord des ventes</li>
               <li>Bientôt : écoles, crèches et clubs, 5&nbsp;% des ventes scolaires</li>
             </ul>
@@ -815,6 +923,7 @@
               <li>Galeries illimitées, 1 To</li>
               <li>Tout Essentiel</li>
               <li>Réservation en ligne avec acompte, prestations illustrées</li>
+              <li>Agenda sur votre site ou page de réservation, QR code, créneaux privés</li>
               <li>Devis et contrats signés en ligne</li>
               <li>Campagnes de vente : promotions, relances des paniers</li>
               <li>Adresse à votre nom : <span class="nowrap">votre-studio.holypixx.com</span></li>
@@ -873,7 +982,9 @@
           <details><summary>Peut-on empêcher une capture d'écran ?</summary><p>Aucun site au monde ne le peut. Holypixx rend une capture inutile (basse définition, filigrane dense), vous prévient par e-mail quand une capture est tentée, et retrouve la galerie d'origine d'une image grâce à son empreinte invisible. Tout est expliqué dans notre guide <a class="inline-link" href="/proteger-ses-photos">protéger ses photos en ligne</a>.</p></details>
           <details><summary>Mon client doit-il créer un compte ?</summary><p>Non. Il reçoit un lien et un mot de passe, rien d'autre.</p></details>
           <details><summary>Puis-je personnaliser l'apparence de mes galeries ?</summary><p>Oui, avec toutes les formules. Neuf styles (classique, doux, architectural, moderne, nuit, éditorial, romantique, bohème, galerie d'art), chacun avec sa palette, ses formes et ses polices. Vous pouvez changer la police des titres (13&nbsp;au choix) et du texte (10), écrire un mot d'accueil, choisir la photo de couverture ou placer un film YouTube ou Vimeo en tête de galerie, idéal pour un mariage. Votre style préféré se règle une fois dans vos paramètres et s'applique à chaque nouvelle galerie.</p></details>
-          <details><summary>Mes clients peuvent-ils réserver et signer en ligne ?</summary><p>Oui, avec les formules Pro et Studio. Vous ouvrez vos créneaux (ou une série de mini-séances), vos clients réservent depuis votre portfolio et paient l'acompte sur votre compte Stripe. Pour une séance sur mesure, vous leur envoyez un devis qu'ils signent en ligne&nbsp;; chacun reçoit le contrat signé en PDF.</p></details>
+          <details><summary>Mes clients peuvent-ils réserver et signer en ligne ?</summary><p>Oui, avec les formules Pro et Studio. Vous ouvrez vos créneaux sur une date ou toute une période (ou une série de mini-séances)&nbsp;; vos clients choisissent leur date dans votre agenda en ligne et paient l'acompte sur votre compte Stripe. Pour une séance sur mesure, vous leur envoyez un devis qu'ils signent en ligne&nbsp;; chacun reçoit le contrat signé en PDF.</p></details>
+          <details><summary>J'ai déjà mon site : mes clients peuvent-ils réserver dessus ?</summary><p>Oui. Holypixx vous donne une page de réservation à votre nom, sans mini-site à créer&nbsp;: partagez son lien ou son QR code, collez un bouton sur votre site, ou intégrez directement l'agenda dans une page (WordPress, Wix, Squarespace…). Vous pouvez aussi garder la réservation sur votre portfolio Holypixx, ou les deux.</p></details>
+          <details><summary>Un client me paie par virement ou en espèces : comment je m'y retrouve ?</summary><p>Tous les suppléments et options en attente sont réunis dans un tableau&nbsp;: cochez «&nbsp;réglé par virement&nbsp;» ou «&nbsp;en espèces&nbsp;», la facture lui est envoyée. Sans règlement, votre client reçoit un rappel 3 puis 7&nbsp;jours après avoir validé sa sélection, avec toutes les façons de payer&nbsp;; vous pouvez couper ces rappels dans vos paramètres.</p></details>
           <details><summary>Un contrat signé en ligne est-il valable ?</summary><p>C'est une signature électronique simple au sens du règlement européen eIDAS&nbsp;: elle ne peut pas être écartée au seul motif qu'elle est électronique. Holypixx conserve sa preuve&nbsp;: le nom saisi, la date, l'empreinte du document signé. Les conditions proposées sont un modèle à adapter, pas un conseil juridique.</p></details>
           <details><summary>Holypixx m'aide-t-il à faire revenir mes clients ?</summary><p>Oui. Chaque client a sa fiche&nbsp;: historique, montants encaissés, notes. Holypixx vous prévient au bon moment, avec un message prêt à envoyer&nbsp;: le premier anniversaire d'un bébé photographié à 6&nbsp;mois, un anniversaire de mariage, vos séances de Noël à proposer à tous vos clients, ou un client sans séance depuis un an. Notre guide pour <a class="inline-link" href="/fideliser-clients-photographe">fidéliser ses clients</a> vous donne un calendrier gratuit et les messages à envoyer.</p></details>
           <details><summary>Comment fonctionne la boutique de tirages ?</summary><p>Vous choisissez vos formats et fixez votre marge. Le client commande depuis sa galerie et paie en ligne sur votre compte Stripe ; le laboratoire Prodigi imprime et livre directement chez lui, avec suivi, partout en Europe et, si vous fixez un port hors d'Europe, aux États-Unis, au Canada, en Australie et en Asie.</p></details>
@@ -882,6 +993,8 @@
           <details><summary>Puis-je avoir une adresse à mon nom ?</summary><p>Oui, avec la formule Pro : vos galeries et votre portfolio s'ouvrent sur <span class="nowrap">votre-studio.holypixx.com</span>, avec le nom de votre studio.</p></details>
           <details><summary>Et la photo scolaire ?</summary><p>Un module complet arrive très bientôt : établissements et classes, fiches parents avec QR code, espace famille, pochettes avec aperçu de la photo de l'enfant, commande groupée et envoi au laboratoire. Prévu : avec Essentiel, Pro ou la formule Scolaire (sans abonnement), 5&nbsp;% des ventes scolaires ; avec Studio (490&nbsp;€ par an), sans commission.</p></details>
           <details><summary>Y a-t-il un programme de parrainage ?</summary><p>Oui. Dans l'onglet Abonnement, vous trouvez votre lien de parrainage. Le confrère qui s'inscrit avec ce lien a −50&nbsp;% sur son mois suivant dès son premier paiement. Vous, vous gagnez une case sur votre carte de parrain&nbsp;: trois confrères abonnés, un mois offert, deux mois offerts au plus par an.</p></details>
+          <details><summary>Existe-t-il une application ?</summary><p>Votre espace photographe s'installe sur l'écran d'accueil de votre téléphone, de votre tablette ou de votre ordinateur, comme une appli&nbsp;: une icône, une ouverture en plein écran, sans passer par un store. Le bouton «&nbsp;Installer l'appli&nbsp;» vous guide.</p></details>
+          <details><summary>Une fonction me manque : à qui le dire ?</summary><p>À nous, directement depuis l'onglet Suggestions de votre espace. Chaque demande est lue par la fondatrice, photographe elle aussi&nbsp;; vous suivez son statut (à l'étude, prévue, faite) et sa réponse.</p></details>
           <details><summary>Où sont hébergées les photos ?</summary><p>Sur l'infrastructure Cloudflare (stockage R2 et base D1). Les mots de passe ne sont jamais stockés en clair et chaque compte est strictement cloisonné.</p></details>
         </div>
       </div>
@@ -910,6 +1023,7 @@
         <a href="#styles">Styles</a>
         <a href="#vente">Vente</a>
         <a href="#clients">Clients</a>
+        <a href="#appli">Appli</a>
         <a href="#tarifs">Tarifs</a>
         <a href="#faq">Questions</a>
         <a data-admin href="https://admin.holypixx.com/" rel="nofollow">Connexion</a>

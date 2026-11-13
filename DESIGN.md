@@ -348,6 +348,12 @@ Chapitre « Réservé, signé, payé », juste après l'ouverture : un plateau b
 ### Ticket de prix (signature)
 Carte blanche de 300 px à coins 14 px et ombre flottante, posée sur la bande photo pleine largeur : titre du tirage, lignes coût / marge (en vert) / prix client en mono tabulaire, total au-dessus d'un filet, note « Exemple de prix ». Sous 640 px, il passe sous la photo en pleine largeur, remonté de 56 px sur son bord.
 
+### Agenda partout (signature)
+Dans le chapitre Réservation, sous le plateau : à gauche, le site d'un photographe (une autre maison que Holypixx : fond ivoire `#fbfaf8`, marque en serif) qui accueille l'agenda Holypixx — un mois en grille de 7 colonnes, jours libres en brume avec un point outremer par créneau (trois au plus), jour choisi en outremer plein, et à côté les séances du jour, horaires en pilules. Posés dessus : le QR code imprimé (papier à coins 6 px, incliné de 2°, ombre de fenêtre, vrai QR vers holypixx.com, adresse en mono) et la notification d'un créneau privé. À droite, la liste à filets. La page de réservation du plateau porte la même semaine en tête de ses créneaux. Sous 640 px, QR et notification rentrent dans le flux.
+
+### Poche et suggestions (signature)
+Chapitre « Dans votre poche. Et construit avec vous. » : deux panneaux brume. Le premier montre un téléphone (cadre encre, coins 36 px, écran brume appuyée) dont l'unique icône colorée est celle d'Holypixx, avec une notification d'acompte ; le second, la carte « Vos demandes » de l'onglet Suggestions (statuts en pastille : « Faite » en vert produit, « Reçue » en brume, réponse sur fond brume). Pas d'animation.
+
 ## Do's and Don'ts
 
 ### Do:
