@@ -265,8 +265,8 @@ try {
 
   await page.click("#ad-tab-galleries");
   await page.click("#ad-tab-booking");
-  await page.waitForSelector("#ad-bk-upcoming .ad-bk-table", { timeout: 10000 });
-  const row = (await page.textContent("#ad-bk-upcoming tbody tr")).replace(/ /g, " ");
+  await page.waitForSelector("#ad-bk-upcoming .ad-bk-session", { timeout: 10000 });
+  const row = (await page.textContent("#ad-bk-upcoming .ad-bk-session")).replace(/ /g, " ");
   check("la séance réservée apparaît dans « Prochaines séances » avec le client et son message",
         row.includes("Camille Test") && row.includes("camille.test@example.com") && row.includes("Avec notre chien") && row.includes("Confirmée"), row);
   check("le créneau réservé porte le nom du client dans la liste des créneaux",
