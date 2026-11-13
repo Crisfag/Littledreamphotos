@@ -16,7 +16,7 @@
 
 import { json, fail } from "./http.js";
 import { randomBytes, b64url } from "./auth.js";
-import { cleanLine, cleanText, normalizePhone, displayName, portfolioUrls } from "./portfolio.js";
+import { cleanLine, cleanText, normalizePhone, displayName, portfolioUrls, bookingEntryUrl } from "./portfolio.js";
 import { hasFeature } from "./subscription.js";
 import { sendClientDateReminder, sendStudioSeasonReminder } from "./notify.js";
 
@@ -283,10 +283,9 @@ export function mailtoUrl(email, { subject, body }) {
 
 export async function bookingPageUrl(env, photographer) {
   if (!hasFeature(env, photographer, "booking")) return "";
-  const portfolio = await env.DB.prepare("SELECT handle, published FROM portfolios WHERE photographer_id = ?").bind(photographer.id).first();
-  if (!portfolio?.published) return "";
-  const urls = portfolioUrls(env, photographer, portfolio.handle);
-  return (urls.studio || urls.site) + "#reserver";
+  const portfolio = await env.DB.prepare("SELECT * FROM portfolios WHERE photographer_id = ?").bind(photographer.id).first();
+  // Page de réservation seule si elle est ouverte, sinon le mini-site.
+  return bookingEntryUrl(env, photographer, portfolio);
 }
 
 // Tout ce que Holypixx sait des clients d'un photographe, regroupé par e-mail.

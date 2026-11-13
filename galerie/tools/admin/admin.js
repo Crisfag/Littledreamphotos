@@ -8008,19 +8008,139 @@
       '<button type="button" class="ad-btn" id="ad-bk-book-cancel">Annuler</button></div></form>';
   }
 
+  /* ---------- Où vos clients réservent : page seule, mini-site, partage ---------- */
+
+  var page0 = { enabled: false, onSite: true, miniSitePublished: false, hasAddress: false, handle: "", url: "", embedUrl: "", scriptUrl: "", website: "", phone: "", qr: null };
+  function bookingPage(data) { return data.page || page0; }
+  // Les clients peuvent-ils réserver quelque part ?
+  function bookingOpen(data) {
+    var page = bookingPage(data);
+    return page.enabled || (data.portfolio.published && page.onSite);
+  }
+  // Là où un client réserve : la page seule d'abord, sinon le mini-site.
+  function bookingEntry(data) {
+    var page = bookingPage(data);
+    if (page.enabled && page.url) return page.url;
+    return data.portfolio.published && page.onSite ? data.portfolio.url : "";
+  }
+
+  function bookingButtonCode(url) {
+    return '<a href="' + url + '" target="_blank" rel="noopener" style="display:inline-block;padding:14px 28px;border-radius:999px;' +
+      'background:#a46a57;color:#ffffff;font:500 16px/1.2 -apple-system,BlinkMacSystemFont,\'Segoe UI\',sans-serif;text-decoration:none">Réserver une séance</a>';
+  }
+  function bookingEmbedCode(page) {
+    return '<div data-holypixx-reservation="' + page.handle + '"></div>\n<script src="' + page.scriptUrl + '" async></' + 'script>';
+  }
+  function qrSvgString(qr) {
+    var size = qr.size + 8;
+    return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="-4 -4 ' + size + " " + size + '" shape-rendering="crispEdges">' +
+      '<rect x="-4" y="-4" width="' + size + '" height="' + size + '" fill="#fff"/><path fill="#111" d="' + qr.path + '"/></svg>';
+  }
+
+  function shareSectionHtml(data) {
+    var page = bookingPage(data);
+    var published = data.portfolio.published;
+    var editableAddress = !published;
+    var copyRow = function (id, value, label) {
+      return '<div class="ad-bk-link-row"><input class="ad-bk-link-url" id="' + id + '" readonly value="' + esc(value) + '" aria-label="' + esc(label) + '" />' +
+        '<button type="button" class="ad-btn" data-copy="' + id + '">Copier</button></div>';
+    };
+    return '<section id="ad-bk-share"><div class="ad-section-header"><h3>Où vos clients réservent</h3></div>' +
+      '<p class="ad-hint">Votre agenda peut vivre sur votre mini-site, sur une page de réservation à part (sans mini-site : idéale si vous avez déjà votre propre site), ou les deux.</p>' +
+      '<form id="ad-bk-share-form" class="ad-bk-share-form" novalidate>' +
+      '<label class="ad-toggle"><input type="checkbox" name="enabled"' + (page.enabled ? " checked" : "") + ' /><span><strong>Page de réservation</strong> — un lien à partager, un bouton ou l\'agenda à intégrer sur votre site</span></label>' +
+      '<label class="ad-toggle"><input type="checkbox" name="onSite"' + (page.onSite && published ? " checked" : "") + (published ? "" : " disabled") + ' /><span><strong>Mini-site</strong> — la section « Réserver » de votre portfolio' +
+      (published ? "" : ' <em>(mini-site pas encore publié)</em>') + "</span></label>" +
+      (!bookingOpen(data) ? '<p class="ad-banner ad-banner-muted">Pour l\'instant, personne ne peut réserver en ligne.</p>' : "") +
+      (page.enabled
+        ? '<div class="ad-bk-share-grid"><div class="ad-bk-share-main">' +
+          '<h4>Votre lien</h4>' + copyRow("ad-bk-share-url", page.url, "Lien de votre page de réservation") +
+          '<p class="ad-bk-share-actions"><a class="ad-link-btn" href="' + esc(page.url) + '" target="_blank" rel="noopener">Ouvrir la page</a></p>' +
+          '<h4>Sur votre site</h4>' +
+          '<p class="ad-hint">Un bouton qui ouvre votre page de réservation :</p>' +
+          copyRow("ad-bk-share-button", bookingButtonCode(page.url), "Code du bouton") +
+          '<p class="ad-hint">Ou votre agenda directement dans une page de votre site (WordPress, Wix, Squarespace… : un bloc « HTML personnalisé » ou « Code ») :</p>' +
+          copyRow("ad-bk-share-embed", bookingEmbedCode(page), "Code de l\'agenda intégré") +
+          "</div>" +
+          (page.qr ? '<div class="ad-bk-share-qr"><div class="ad-bk-qr" aria-label="QR code de votre page de réservation" role="img">' + qrSvgString(page.qr) + "</div>" +
+            '<button type="button" class="ad-link-btn" id="ad-bk-qr-download">Télécharger le QR code</button><p class="ad-hint">Pour vos cartes de visite, flyers et réseaux.</p></div>' : "") +
+          "</div>" +
+          '<details class="ad-advanced"' + (page.hasAddress ? "" : " open") + '><summary>Adresse, site et téléphone</summary>' +
+          (editableAddress
+            ? '<label class="ad-field"><span>Identifiant de la page <em>(dans le lien : …?s=identifiant)</em></span><div class="ad-subdomain-row"><span class="ad-subdomain-suffix">?s=</span><input name="handle" maxlength="30" value="' + esc(page.handle) + '" autocapitalize="off" autocomplete="off" spellcheck="false" /></div></label>'
+            : '<p class="ad-hint">L\'adresse est celle de votre mini-site (<strong>' + esc(page.handle) + "</strong>) : elle se change dans l\'onglet Portfolio.</p>") +
+          '<div class="ad-field-row">' +
+          '<label class="ad-field"><span>Votre site <em>(lien « Retour au site »)</em></span><input name="website" type="url" maxlength="200" placeholder="https://www.monstudio.be" value="' + esc(page.website) + '" /></label>' +
+          '<label class="ad-field"><span>Téléphone <em>(affiché)</em></span><input name="phone" type="tel" maxlength="30" value="' + esc(page.phone) + '" /></label>' +
+          "</div>" +
+          '<button type="submit" class="ad-btn">Enregistrer</button></details>'
+        : "") +
+      "</form></section>";
+  }
+
+  function bindShareSection(data) {
+    var form = document.getElementById("ad-bk-share-form");
+    if (!form) return;
+    var page = bookingPage(data);
+    function save(extra, okMessage) {
+      // Mini-site pas encore publié : la case est grisée, le réglage reste tel quel.
+      var body = { enabled: form.elements.enabled.checked, onSite: form.elements.onSite.disabled ? page.onSite : form.elements.onSite.checked };
+      Object.keys(extra || {}).forEach(function (k) { body[k] = extra[k]; });
+      return bookingCall("POST", "/page", body, okMessage).then(function (ok) {
+        var box = document.getElementById("ad-bk-share");
+        if (box) box.scrollIntoView({ block: "nearest" });
+        return ok;
+      });
+    }
+    form.elements.enabled.addEventListener("change", function () {
+      save({}, form.elements.enabled.checked ? "Page de réservation ouverte : partagez son lien." : "Page de réservation fermée.");
+    });
+    form.elements.onSite.addEventListener("change", function () {
+      save({}, form.elements.onSite.checked ? "Réservation affichée sur votre mini-site." : "Réservation retirée de votre mini-site.");
+    });
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var extra = { website: form.elements.website.value.trim(), phone: form.elements.phone.value.trim() };
+      if (form.elements.handle) extra.handle = form.elements.handle.value.trim().toLowerCase();
+      save(extra, "Page de réservation enregistrée.");
+    });
+    form.querySelectorAll("[data-copy]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var input = document.getElementById(btn.getAttribute("data-copy"));
+        var done = function () { toast("Copié."); };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(input.value).then(done, function () { input.select(); document.execCommand("copy"); done(); });
+        } else { input.select(); document.execCommand("copy"); done(); }
+      });
+    });
+    var qrBtn = document.getElementById("ad-bk-qr-download");
+    if (qrBtn && page.qr) {
+      qrBtn.addEventListener("click", function () {
+        var url = URL.createObjectURL(new Blob([qrSvgString(page.qr)], { type: "image/svg+xml" }));
+        var a = document.createElement("a");
+        a.href = url;
+        a.download = "reservation-" + page.handle + "-qr.svg";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+      });
+    }
+  }
+
   // Créneau privé : son lien secret, à copier ou à envoyer à un client.
   function privateSlotHtml(data) {
     var slot = bookingState.linkFor && data.slots.filter(function (s) { return s.id === bookingState.linkFor && !s.bookingId && s.private; })[0];
     if (!slot) return "";
     var offer = data.offers.filter(function (o) { return o.id === slot.offerId; })[0] || { title: "", durationMin: 0 };
-    var published = data.portfolio && data.portfolio.published;
+    var published = bookingOpen(data);
     return '<form id="ad-bk-link" class="ad-bk-book" novalidate>' +
       '<div class="ad-bk-book-head"><h4>Créneau privé</h4>' +
       '<p class="ad-hint">' + esc(bookingDay(slot.startsAt)) + " à " + esc(bookingTime(slot.startsAt)) + " · " + esc(offer.title) +
       (offer.durationMin ? " (" + esc(durationText(offer.durationMin)) + ")" : "") + "</p></div>" +
       '<p class="ad-hint">Invisible sur votre mini-site : seul le client qui a le lien peut le réserver. Il choisit son tarif et règle l\'acompte comme d\'habitude.' +
       (offer.active === false ? " La formule n\'est pas proposée sur votre mini-site, mais elle reste réservable par ce lien." : "") + "</p>" +
-      (published ? "" : '<p class="ad-banner ad-banner-muted">Votre mini-site n\'est pas publié : le lien ne fonctionnera qu\'une fois publié (onglet Portfolio).</p>') +
+      (published ? "" : '<p class="ad-banner ad-banner-muted">Ouvrez d\'abord votre page de réservation (en bas de cette page) ou publiez votre mini-site : c\'est là que le lien mène.</p>') +
       '<div class="ad-bk-link-row"><input class="ad-bk-link-url" readonly value="' + esc(slot.privateUrl) + '" aria-label="Lien privé du créneau" />' +
       '<button type="button" class="ad-btn" id="ad-bk-link-copy">Copier le lien</button></div>' +
       '<h5 class="ad-bk-link-sub">Envoyer le lien par e-mail</h5>' +
@@ -8089,9 +8209,9 @@
       notices += '<p class="ad-banner ad-banner-muted">La réservation en ligne est incluse dans la formule Pro. ' +
         '<button type="button" class="ad-link-btn" data-bk-goto="subscription">Voir les formules</button></p>';
     } else {
-      if (!data.portfolio.published) {
-        notices += '<p class="ad-banner ad-banner-muted">Vos clients réservent depuis votre mini-site : publiez-le pour ouvrir les réservations. ' +
-          '<button type="button" class="ad-link-btn" data-bk-goto="portfolio">Onglet Portfolio</button></p>';
+      if (!bookingOpen(data)) {
+        notices += '<p class="ad-banner ad-banner-muted">Vos clients ne peuvent pas encore réserver en ligne : ouvrez votre page de réservation (sans mini-site, ci-dessous), ou publiez votre mini-site. ' +
+          '<button type="button" class="ad-link-btn" data-bk-goto="share">Où vos clients réservent</button></p>';
       }
       if (!data.stripeReady && data.offers.some(function (o) { return o.depositCents > 0; })) {
         notices += '<p class="ad-banner ad-banner-muted">Les formules avec acompte seront proposées dès que le paiement en ligne sera activé. Celles sans acompte sont déjà réservables. ' +
@@ -8101,8 +8221,8 @@
 
     el.view.innerHTML =
       '<header class="ad-detail-header"><div><h2>Réservations</h2>' +
-      '<p class="ad-hint">Vos clients choisissent un créneau sur votre mini-site et règlent l\'acompte en ligne ; vous recevez la réservation par e-mail, avec l\'invitation pour votre agenda.</p></div>' +
-      (data.portfolio.published && data.portfolio.url ? '<a class="ad-btn" href="' + esc(data.portfolio.url) + '" target="_blank" rel="noopener">Voir la page de réservation</a>' : "") +
+      '<p class="ad-hint">Vos clients choisissent un créneau sur votre page de réservation ou votre mini-site, et règlent l\'acompte en ligne ; vous recevez la réservation par e-mail, avec l\'invitation pour votre agenda.</p></div>' +
+      (bookingEntry(data) ? '<a class="ad-btn" href="' + esc(bookingEntry(data)) + '" target="_blank" rel="noopener">Voir la page de réservation</a>' : "") +
       "</header>" +
       notices +
       (data.enabled
@@ -8116,7 +8236,8 @@
           (past.length ? '<details class="ad-advanced"><summary>Séances passées et annulées (' + past.length + ")</summary>" + bookingsTableHtml(past, false) + "</details>" : "") +
           "</section>" +
           offersSectionHtml(data) +
-          slotsSectionHtml(data)
+          slotsSectionHtml(data) +
+          shareSectionHtml(data)
         : "");
 
     bindBooking(data);
@@ -8135,9 +8256,11 @@
   }
 
   function bindBooking(data) {
+    bindShareSection(data);
     el.view.querySelectorAll("[data-bk-goto]").forEach(function (btn) {
       btn.addEventListener("click", function () {
         var target = btn.getAttribute("data-bk-goto");
+        if (target === "share") { var box = document.getElementById("ad-bk-share"); if (box) box.scrollIntoView({ block: "start", behavior: "smooth" }); return; }
         if (target === "subscription") renderSubscription();
         else if (target === "portfolio") renderPortfolio();
         else renderBilling();

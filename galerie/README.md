@@ -1343,6 +1343,28 @@ cd worker
 npx wrangler d1 execute galerie-protegee --remote --file=migrations/2026-11-creneaux-prives.sql
 ```
 
+### Page de réservation seule (sans mini-site)
+
+Onglet **Réservations**, section **Où vos clients réservent** : la case
+**Page de réservation** ouvre une page qui ne montre que l'agenda du studio
+(`reserver.html?s=<identifiant>`, ou `<studio>.holypixx.com/reserver` avec
+la formule Pro) — pour le photographe qui a déjà son propre site. La case
+**Mini-site** affiche (ou retire) la section « Réserver » du mini-site
+publié ; les deux peuvent être ouvertes en même temps. Une fois la page
+ouverte : son lien et son QR code, un **bouton** à coller sur son site, et
+l'**agenda intégré** (`reserver-integre.js` : un bloc
+`data-holypixx-reservation` dont le cadre prend la hauteur de son contenu ;
+le paiement de l'acompte s'ouvre en pleine page). Un studio sans mini-site
+reçoit une ligne `portfolios` non publiée pour son identifiant. Le parcours
+de réservation est partagé par le mini-site et la page
+(`web/booking-flow.js`) ; les liens des créneaux privés et des relances
+mènent à la page quand elle est ouverte.
+
+```bash
+cd worker
+npx wrangler d1 execute galerie-protegee --remote --file=migrations/2026-11-page-reservation.sql
+```
+
 ### Devis et contrats signés en ligne
 
 Onglet **Devis & contrats** (formules Pro et Studio) :
@@ -2249,6 +2271,7 @@ node tests/settlesupplement.test.mjs  # Facturation : suppléments en attente de
 node tests/introtexts.test.mjs        # textes d'accompagnement enregistrés : case, menu déroulant, retrait, autonome (admin-server.mjs lancé)
 node tests/clientpicker.test.mjs       # « Choisir dans mes fiches clients » (facture, devis, galerie, planning) et créneau réservé pour un client (admin-server.mjs lancé)
 node tests/privateslot.test.mjs        # créneau privé : lien secret, envoi au client, réservation par le lien, lien à usage unique (admin-server.mjs lancé)
+node tests/bookingpage.test.mjs        # page de réservation seule : ouverture, lien, QR, bouton, agenda intégré, lien privé, fermeture (admin-server.mjs lancé)
 node tests/options.test.mjs           # options payantes : catalogue, cases à cocher dans la galerie, virement, relance, « Marquer comme reçu », autonome (admin-server.mjs lancé)
 node tests/giftcards.test.mjs         # bons cadeaux : vente sur le mini-site, page du bon, suivi et bon à la main, autonome (admin-server.mjs lancé)
 node tests/schoolpack.test.mjs        # pack « toutes les photos », ordre de la gamme, liste de prénoms collée, autonome

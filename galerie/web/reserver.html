@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Réserver une séance — Holypixx</title>
+  <meta name="description" content="Réservez votre séance photo en ligne : choisissez votre formule et votre créneau." />
+  <meta name="referrer" content="strict-origin-when-cross-origin" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Jost:wght@300;400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="portfolio.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%23b98a7a'/><text y='72' x='50' text-anchor='middle' font-size='60' font-family='Georgia'>H</text></svg>" />
+
+  <script>
+    /* Page de réservation seule d'un studio (sans mini-site) : même parcours
+       que la section « Réserver » du mini-site (booking-flow.js). Adresse du
+       Worker remplacée automatiquement sous l'adresse d'un studio ;
+       identifiant lu dans « ?s=… ». « &integre=1 » : version à intégrer
+       dans le site du photographe (reserver-integre.js). */
+    window.PORTFOLIO_CONFIG = {
+      api: "https://galerie-protegee.littledreamphotos-be.workers.dev",
+      handle: "",
+    };
+    if (/[?&]integre=1/.test(location.search)) document.documentElement.classList.add("pf-embedded");
+  </script>
+</head>
+<body class="pf-resa-body">
+
+  <div class="pf-state" id="pf-loading" role="status">
+    <span class="pf-spinner" aria-hidden="true"></span>
+    <span class="pf-sr">Chargement des disponibilités…</span>
+  </div>
+
+  <div class="pf-state" id="pf-missing" hidden>
+    <div>
+      <h1>Cette page de réservation n'est pas disponible</h1>
+      <p>Le studio ne prend pas de réservation en ligne pour le moment. Vérifiez l'adresse reçue, ou contactez-le directement.</p>
+    </div>
+  </div>
+
+  <div id="pf-page" hidden>
+    <header class="pf-resa-top">
+      <div class="pf-wrap pf-resa-top-inner">
+        <div>
+          <p class="pf-eyebrow pf-resa-city" id="pf-resa-city" hidden></p>
+          <h1 class="pf-resa-studio" id="pf-resa-studio"></h1>
+        </div>
+        <nav class="pf-resa-links" aria-label="Le studio">
+          <a id="pf-resa-portfolio" hidden>Portfolio</a>
+          <a id="pf-resa-website" hidden>Retour au site</a>
+        </nav>
+      </div>
+    </header>
+
+    <main>
+      <section class="pf-section pf-wrap pf-booking" id="reserver" aria-labelledby="pf-booking-title" hidden>
+        <h2 id="pf-booking-title">Réserver une séance</h2>
+        <p class="pf-resa-empty" id="pf-resa-empty" hidden>Aucun créneau n'est ouvert pour le moment. Revenez bientôt, ou contactez directement le studio.</p>
+        <p class="pf-bk-private" id="pf-bk-private" role="status" hidden></p>
+        <div class="pf-bk-result" id="pf-bk-result" role="status" hidden></div>
+        <div id="pf-bk-flow">
+          <p class="pf-bk-step">1. Choisissez votre séance</p>
+          <div class="pf-bk-offers" id="pf-bk-offers"></div>
+          <div id="pf-bk-when" hidden>
+            <p class="pf-bk-step">2. Choisissez votre créneau</p>
+            <div class="pf-bk-days" id="pf-bk-days"></div>
+          </div>
+          <form class="pf-form pf-bk-form" id="pf-bk-form" novalidate hidden>
+            <div id="pf-bk-tier-step" hidden>
+              <p class="pf-bk-step">3. Combien de photos&nbsp;?</p>
+              <div class="pf-bk-tiers" id="pf-bk-tiers" role="group" aria-label="Choisissez votre formule"></div>
+            </div>
+            <p class="pf-bk-step" id="pf-bk-step-contact">3. Vos coordonnées</p>
+            <p class="pf-bk-summary" id="pf-bk-summary"></p>
+            <div class="pf-bk-dress" id="pf-bk-dress" hidden><strong>Conseil vestimentaire</strong><p id="pf-bk-dress-text"></p></div>
+            <div class="pf-row">
+              <label class="pf-field">
+                <span>Nom</span>
+                <input type="text" name="name" autocomplete="name" maxlength="100" required />
+              </label>
+              <label class="pf-field">
+                <span>E-mail</span>
+                <input type="email" name="email" autocomplete="email" maxlength="200" required />
+              </label>
+            </div>
+            <label class="pf-field">
+              <span>Téléphone <em>(facultatif)</em></span>
+              <input type="tel" name="phone" autocomplete="tel" maxlength="30" />
+            </label>
+            <label class="pf-field">
+              <span>Un mot pour le photographe <em>(facultatif)</em></span>
+              <textarea name="message" rows="3" maxlength="2000" placeholder="Prénoms et âges des enfants, envies, questions…"></textarea>
+            </label>
+            <label class="pf-trap" aria-hidden="true">Site web <input type="text" name="website" tabindex="-1" autocomplete="off" /></label>
+            <p class="pf-privacy">Vos coordonnées sont transmises uniquement à <span class="pf-bk-studio">ce studio</span> pour organiser la séance.</p>
+            <p class="pf-error" id="pf-bk-error" role="alert" hidden></p>
+            <button type="submit" class="pf-btn" id="pf-bk-submit">Réserver</button>
+          </form>
+        </div>
+      </section>
+    </main>
+
+    <footer class="pf-resa-foot">
+      <div class="pf-wrap">
+        <p id="pf-resa-contact" hidden></p>
+        <p class="pf-resa-credit">Réservation en ligne avec <a href="https://www.holypixx.com/" target="_blank" rel="noopener">Holypixx</a></p>
+      </div>
+    </footer>
+  </div>
+
+  <script src="booking-flow.js"></script>
+  <script src="reserver.js"></script>
+</body>
+</html>

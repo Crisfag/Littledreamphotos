@@ -2194,3 +2194,24 @@ main section.ad-demo {
 }
 .ad-cpick-head { padding: .35rem .6rem .2rem; font-size: .72rem; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-soft); }
 .ad-cpick-empty { padding: .7rem .6rem; font-size: .85rem; color: var(--muted); }
+
+/* ---------- Réservations : où vos clients réservent, partage ---------- */
+.ad-bk-share-form { display: flex; flex-direction: column; gap: .7rem; }
+.ad-bk-share-form > .ad-toggle { align-items: flex-start; }
+.ad-bk-share-form > .ad-toggle input { margin-top: .2rem; flex: none; }
+.ad-bk-share-form > .ad-toggle input:disabled + span { color: var(--muted); }
+.ad-bk-share-grid { display: grid; grid-template-columns: minmax(0, 1fr) 180px; gap: 1.2rem 2rem; margin-top: .6rem; padding: 1.1rem; border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper); }
+.ad-bk-share-main h4 { font-size: .9rem; font-weight: 600; margin: .2rem 0 .4rem; }
+.ad-bk-share-main h4 + .ad-bk-link-row { margin-top: 0; }
+.ad-bk-share-main .ad-hint { margin: .2rem 0 .1rem; }
+.ad-bk-share-main .ad-bk-link-row { margin: .35rem 0 .8rem; }
+.ad-bk-share-actions { margin: -.4rem 0 1rem; font-size: .88rem; }
+.ad-bk-share-qr { display: flex; flex-direction: column; align-items: flex-start; gap: .4rem; }
+.ad-bk-qr { width: 160px; height: 160px; padding: 6px; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+.ad-bk-qr svg { display: block; width: 100%; height: 100%; }
+.ad-bk-share-form details { margin-top: .4rem; }
+.ad-bk-share-form details .ad-field-row { margin-top: .6rem; }
+.ad-bk-share-form details > .ad-btn { margin-top: .4rem; }
+@media (max-width: 720px) {
+  .ad-bk-share-grid { grid-template-columns: minmax(0, 1fr); }
+}

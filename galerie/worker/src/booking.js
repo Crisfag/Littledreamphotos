@@ -21,9 +21,15 @@
 import { json, fail } from "./http.js";
 import { randomBytes, b64url, hashIp } from "./auth.js";
 import { hasFeature, featureRefusal } from "./subscription.js";
-import { publishedPortfolioByHandle, cleanLine, cleanText, normalizePhone, displayName, portfolioUrls } from "./portfolio.js";
+import {
+  bookingPortfolioByHandle, bookingPageUrls, bookingEntryUrl, suggestHandle, normalizeHandle, normalizeWebsite,
+  cleanLine, cleanText, normalizePhone, displayName, portfolioUrls,
+} from "./portfolio.js";
 import { createCheckoutSession, retrieveCheckoutSession } from "./stripe.js";
 import { paymentFeeCents } from "./fees.js";
+// QR code du lien de la page de réservation (même générateur que les bons
+// cadeaux ; import circulaire sans risque : appelé seulement à la demande).
+import { qrMatrix, qrSvgPath } from "./giftcards.js";
 import {
   sendBookingConfirmation,
   sendBookingPhotographerNotice,
@@ -411,13 +417,33 @@ async function privateSlotFor(env, photographer, token) {
 export async function handleBookingPublic(request, env, path) {
   const parts = path.split("/").filter(Boolean); // api, booking, handle, …
   const handle = decodeURIComponent(parts[2] || "");
-  const row = handle ? await publishedPortfolioByHandle(env, handle) : null;
+  const row = handle ? await bookingPortfolioByHandle(env, handle) : null;
   if (!row) return fail(404, "Portfolio introuvable");
   const photographer = await photographerById(env, row.photographer_id);
   if (!photographer || !hasFeature(env, photographer, "booking")) return fail(404, "Réservation indisponible");
+  // Deux portes d'entrée : la section « Réserver » du mini-site publié, et
+  // la page de réservation seule (?page=1, reserver.html), chacune ouvrable
+  // séparément par le photographe.
+  const onSite = Boolean(row.published) && row.booking_on_site !== 0;
+  const onPage = Boolean(row.booking_page);
+  const fromPage = new URL(request.url).searchParams.get("page") === "1";
+  if (!onSite && !onPage) return fail(404, "Réservation indisponible");
 
   if (parts.length === 3 && request.method === "GET") {
+    if (fromPage ? !onPage : !onSite) return fail(404, "Réservation indisponible");
     const out = { studioName: displayName(row), offers: await publicOffers(env, photographer) };
+    if (fromPage) {
+      // La page seule présente le studio : nom, ville, contact, retour vers son site.
+      const urls = portfolioUrls(env, photographer, row.handle);
+      out.studio = {
+        name: displayName(row),
+        city: row.city || "",
+        phone: row.phone || "",
+        website: row.website || "",
+        instagram: row.instagram || "",
+        miniSite: row.published ? urls.studio || urls.site : "",
+      };
+    }
     const token = new URL(request.url).searchParams.get("creneau");
     if (token) {
       const priv = await privateSlotFor(env, photographer, token);
@@ -696,20 +722,106 @@ export async function runBookingReminders(env) {
   return sent;
 }
 
+/* ---------- Photographe : page de réservation seule ---------- */
+
+// Où les clients réservent, et de quoi partager la page (lien, bouton,
+// agenda intégré à un autre site).
+function bookingPageOut(env, photographer, portfolio) {
+  const handle = portfolio?.handle || suggestHandle(photographer);
+  const urls = bookingPageUrls(env, photographer, handle);
+  const url = urls.studio || urls.site;
+  const site = (env.PUBLIC_SITE_ORIGIN || "https://www.holypixx.com").replace(/\/+$/, "");
+  return {
+    enabled: Boolean(portfolio?.booking_page),
+    onSite: portfolio ? portfolio.booking_on_site !== 0 : true,
+    miniSitePublished: Boolean(portfolio?.published),
+    hasAddress: Boolean(portfolio),
+    handle,
+    url,
+    embedUrl: urls.site ? `${urls.site}&integre=1` : "",
+    scriptUrl: `${site}/reserver-integre.js`,
+    website: portfolio?.website || "",
+    phone: portfolio?.phone || "",
+    qr: url ? (() => { const m = qrMatrix(url); return { size: m.length, path: qrSvgPath(m) }; })() : null,
+  };
+}
+
+// Identifiant proposé d'office (nom du studio) : s'il est déjà pris par un
+// autre studio, on lui ajoute un numéro (« studio-lumiere-2 »…).
+async function freeHandle(env, photographer) {
+  const base = suggestHandle(photographer) || "studio";
+  for (let i = 1; i <= 20; i++) {
+    const candidate = i === 1 ? base : `${base.slice(0, 26)}-${i}`;
+    const taken = await env.DB.prepare(
+      `SELECT 1 AS x FROM portfolios WHERE handle = ? AND photographer_id != ?
+       UNION SELECT 1 FROM photographers WHERE subdomain = ? AND id != ?`
+    ).bind(candidate, photographer.id, candidate, photographer.id).first();
+    if (!taken) return candidate;
+  }
+  return `${base.slice(0, 20)}-${b64url(randomBytes(3)).toLowerCase().replace(/[^a-z0-9]/g, "")}`;
+}
+
+// POST /api/admin/booking/page { enabled, onSite, handle?, website?, phone? }
+async function saveBookingPage(env, photographer, body) {
+  const enabled = body.enabled === true;
+  const onSite = body.onSite !== false;
+  const row = await env.DB.prepare("SELECT * FROM portfolios WHERE photographer_id = ?").bind(photographer.id).first();
+  const website = body.website === undefined ? null : normalizeWebsite(body.website);
+  if (website && website.error) return fail(400, website.error);
+  const phone = body.phone === undefined ? null : normalizePhone(body.phone);
+  if (phone && phone.error) return fail(400, phone.error);
+  // Rien à fermer : pas encore d'adresse, pas de page.
+  if (!row && !enabled) return json(await bookingForAdmin(env, photographer));
+
+  // L'adresse se choisit tant que le mini-site n'est pas publié ; ensuite,
+  // elle se change dans l'onglet Portfolio (elle est partagée).
+  let handle = row?.handle || "";
+  if (body.handle !== undefined && !row?.published) {
+    const wanted = normalizeHandle(body.handle);
+    if (wanted.error) return fail(400, wanted.error.replace("Adresse du portfolio", "Adresse de la page"));
+    const taken = await env.DB.prepare(
+      `SELECT 1 AS x FROM portfolios WHERE handle = ? AND photographer_id != ?
+       UNION SELECT 1 FROM photographers WHERE subdomain = ? AND id != ?`
+    ).bind(wanted.handle, photographer.id, wanted.handle, photographer.id).first();
+    if (taken) return fail(409, "Cette adresse est déjà prise par un autre studio");
+    handle = wanted.handle;
+  }
+  if (!handle) handle = await freeHandle(env, photographer);
+  if (!handle) return fail(400, "Choisissez l'adresse de votre page de réservation");
+
+  try {
+    if (!row) {
+      await env.DB.prepare(
+        `INSERT INTO portfolios (photographer_id, handle, published, website, phone, updated_at, booking_page, booking_on_site)
+         VALUES (?, ?, 0, ?, ?, ?, ?, ?)`
+      ).bind(photographer.id, handle, website ? website.website : "", phone ? phone.phone : "", now(), enabled ? 1 : 0, onSite ? 1 : 0).run();
+    } else {
+      await env.DB.prepare(
+        `UPDATE portfolios SET handle = ?, booking_page = ?, booking_on_site = ?,
+           website = COALESCE(?, website), phone = COALESCE(?, phone), updated_at = ?
+         WHERE photographer_id = ?`
+      ).bind(handle, enabled ? 1 : 0, onSite ? 1 : 0, website ? website.website : null, phone ? phone.phone : null, now(), photographer.id).run();
+    }
+  } catch {
+    return fail(409, "Cette adresse est déjà prise par un autre studio");
+  }
+  return json(await bookingForAdmin(env, photographer));
+}
+
 /* ---------- Photographe : créneaux privés ---------- */
 
 function privateToken() {
   return b64url(randomBytes(18));
 }
 
-// Lien du mini-site qui n'affiche que ce créneau (adresse du studio si la
-// formule le permet, sinon holypixx.com/portfolio.html?s=…).
-export function privateSlotUrl(env, photographer, handle, token) {
-  if (!handle || !token) return "";
-  const urls = portfolioUrls(env, photographer, handle);
-  const url = new URL(urls.studio || urls.site);
+// Lien qui n'affiche que ce créneau : sur la page de réservation seule si
+// elle est ouverte, sinon sur le mini-site (adresse du studio si la formule
+// le permet, sinon holypixx.com/…?s=…).
+export function privateSlotUrl(env, photographer, portfolio, token) {
+  const entry = token ? bookingEntryUrl(env, photographer, portfolio) : "";
+  if (!entry) return "";
+  const url = new URL(entry);
   url.searchParams.set("creneau", token);
-  url.hash = "reserver";
   return url.toString();
 }
 
@@ -732,7 +844,9 @@ async function inviteToPrivateSlot(env, photographer, slotId, body) {
   const slot = await freeSlotOf(env, photographer, slotId);
   if (slot.error) return slot.error;
   const portfolio = await env.DB.prepare("SELECT * FROM portfolios WHERE photographer_id = ?").bind(photographer.id).first();
-  if (!portfolio?.published || !portfolio.handle) return fail(409, "Publiez d'abord votre mini-site (onglet Portfolio) : c'est là que votre client réserve.");
+  if (!bookingEntryUrl(env, photographer, portfolio)) {
+    return fail(409, "Ouvrez d'abord votre page de réservation (ou publiez votre mini-site) : c'est là que votre client réserve.");
+  }
   const token = slot.private_token || privateToken();
   await env.DB.prepare("UPDATE booking_slots SET private_token = ?, private_name = ?, private_email = ? WHERE id = ?")
     .bind(token, name, email, slot.id).run();
@@ -752,7 +866,7 @@ async function inviteToPrivateSlot(env, photographer, slotId, body) {
       priceCents: offer?.price_cents || 0,
       depositCents: offer?.deposit_cents || 0,
       hasTiers: parseTiers(offer?.tiers).length > 0,
-      url: privateSlotUrl(env, photographer, portfolio.handle, token),
+      url: privateSlotUrl(env, photographer, portfolio, token),
     });
   }
   return json({ ...(await bookingForAdmin(env, photographer)), invited: email });
@@ -888,7 +1002,7 @@ async function bookingForAdmin(env, photographer) {
       `SELECT * FROM bookings WHERE photographer_id = ? AND status IN ('pending', 'confirmed', 'cancelled', 'conflict') AND starts_at > ?
         ORDER BY starts_at ASC LIMIT 300`
     ).bind(photographer.id, ts - 60 * 86400).all(),
-    env.DB.prepare("SELECT handle, published FROM portfolios WHERE photographer_id = ?").bind(photographer.id).first(),
+    env.DB.prepare("SELECT * FROM portfolios WHERE photographer_id = ?").bind(photographer.id).first(),
     env.DB.prepare("SELECT * FROM booking_templates WHERE photographer_id = ? ORDER BY lower(title) ASC").bind(photographer.id).all(),
   ]);
   return {
@@ -900,6 +1014,7 @@ async function bookingForAdmin(env, photographer) {
       // Page publique : l'adresse du studio quand il en a une, sinon le site.
       url: portfolio?.handle ? (() => { const u = portfolioUrls(env, photographer, portfolio.handle); return (u.studio || u.site) + "#reserver"; })() : "",
     },
+    page: bookingPageOut(env, photographer, portfolio),
     offers: (offers || []).map(offerOut),
     templates: (templates || []).map(templateOut),
     slots: (slots || []).map((s) => ({
@@ -907,7 +1022,7 @@ async function bookingForAdmin(env, photographer) {
       private: Boolean(s.private_token),
       privateName: s.private_name || "",
       privateEmail: s.private_email || "",
-      privateUrl: s.private_token ? privateSlotUrl(env, photographer, portfolio?.handle, s.private_token) : "",
+      privateUrl: s.private_token ? privateSlotUrl(env, photographer, portfolio, s.private_token) : "",
     })),
     bookings: (bookings || []).map(bookingAdminOut),
   };
@@ -1027,6 +1142,9 @@ export async function handleBookingAdmin(request, env, photographer, parts) {
       ));
     }
     return json({ ...(await bookingForAdmin(env, photographer)), created: fresh.length, skipped: starts.length - fresh.length }, { status: 201 });
+  }
+  if (parts[0] === "page" && parts.length === 1 && method === "POST") {
+    return saveBookingPage(env, photographer, body);
   }
   // Rendre un créneau libre privé (lien secret) ou de nouveau public.
   if (parts[0] === "slots" && parts[1] && parts[2] === "private" && parts.length === 3 && method === "POST") {

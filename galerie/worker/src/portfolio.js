@@ -151,6 +151,45 @@ async function photosOf(env, photographerId) {
   return results || [];
 }
 
+// Studio dont la réservation en ligne peut être ouverte : mini-site publié,
+// ou page de réservation seule (booking.js, reserver.html).
+export async function bookingPortfolioByHandle(env, handle) {
+  const row = await env.DB.prepare(
+    `SELECT p.*, ph.studio_name, ph.first_name, ph.last_name, ph.email, ph.subdomain, ph.plan, ph.plan_status
+       FROM portfolios p JOIN photographers ph ON ph.id = p.photographer_id
+      WHERE p.handle = ? AND (p.published = 1 OR p.booking_page = 1)`
+  )
+    .bind(String(handle || "").toLowerCase())
+    .first();
+  return row || null;
+}
+
+// Adresses de la page de réservation seule : sur holypixx.com, et sous
+// l'adresse du studio (formule Pro).
+export function bookingPageUrls(env, photographer, handle) {
+  const site = (env.PUBLIC_SITE_ORIGIN || "https://www.holypixx.com").replace(/\/+$/, "");
+  const urls = portfolioUrls(env, photographer, handle);
+  return {
+    site: handle ? `${site}/reserver.html?s=${encodeURIComponent(handle)}` : "",
+    studio: urls.studio ? `${urls.studio}reserver` : "",
+  };
+}
+
+// Où un client réserve : la page de réservation seule si elle est ouverte,
+// sinon la section « Réserver » du mini-site publié ; "" si aucune des deux.
+export function bookingEntryUrl(env, photographer, portfolio) {
+  if (!portfolio?.handle) return "";
+  if (portfolio.booking_page) {
+    const page = bookingPageUrls(env, photographer, portfolio.handle);
+    return page.studio || page.site;
+  }
+  if (portfolio.published && portfolio.booking_on_site !== 0) {
+    const urls = portfolioUrls(env, photographer, portfolio.handle);
+    return (urls.studio || urls.site) + "#reserver";
+  }
+  return "";
+}
+
 export async function publishedPortfolioByHandle(env, handle) {
   const row = await env.DB.prepare(
     `SELECT p.*, ph.studio_name, ph.first_name, ph.last_name, ph.email, ph.subdomain, ph.plan, ph.plan_status
