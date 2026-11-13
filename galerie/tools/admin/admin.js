@@ -714,6 +714,7 @@
   }
 
   function openCreateModal() {
+    galleryForBooking = "";
     var form = document.getElementById("ad-create-form");
     form.reset();
     form.sessionType.innerHTML = sessionTypeOptions("", L("Deviné d'après le titre", "Guessed from the title"));
@@ -5791,6 +5792,10 @@
       '<button type="button" class="ad-btn" data-copy="ad-detail-link">' + L("Copier", "Copy") + "</button>" +
       '<button type="button" class="ad-btn" id="ad-preview" title="' + L("Voir la galerie comme votre client, sans mot de passe et sans rien enregistrer", "See the gallery as your client does, with no password and nothing saved") + '">' + L("Aperçu client ↗", "Client preview ↗") + "</button>" +
       "</div></label>" +
+      (data.gallery.demo ? "" : '<div class="ad-send-row"><button type="button" class="ad-btn" id="ad-send-gallery">' + L("Envoyer au client par e-mail", "Email it to the client") + "</button>" +
+        '<span class="ad-hint">' + (data.gallery.invite_sent_at
+          ? L("Envoyée le ", "Sent on ") + esc(formatDateTime(data.gallery.invite_sent_at)) + (data.gallery.client_email ? " · " + esc(data.gallery.client_email) : "")
+          : L("Le lien et le mot de passe, dans un e-mail à votre nom.", "The link and the password, in an email in your name.")) + "</span></div>") +
       '<p class="ad-hint">' + (data.gallery.demo && data.gallery.demo_password
         ? L("Le mot de passe de cette démo est affiché plus haut. ", "This demo's password is shown above. ")
         : L("Le mot de passe n'est plus récupérable ici : il n'a été affiché qu'à la création. ", "The password can't be retrieved here: it was only shown when the gallery was created. ")) +
@@ -6127,6 +6132,15 @@
         toast(err.message, true);
       }
     });
+    var sendBtn = document.getElementById("ad-send-gallery");
+    if (sendBtn) {
+      sendBtn.addEventListener("click", function () {
+        openSendGallery({
+          slug: slug, title: data.gallery.title, email: data.gallery.client_email, sentAt: data.gallery.invite_sent_at,
+          onSent: function () { renderDetail(slug, true); },
+        });
+      });
+    }
     document.getElementById("ad-new-password").addEventListener("click", function () {
       confirmAction(L("Générer un nouveau mot de passe ? L'ancien cessera aussitôt de fonctionner.", "Generate a new password? The old one stops working immediately."), async function () {
         try {
@@ -6523,6 +6537,12 @@
     try {
       var created = await api("POST", "/galleries", payload);
       closeModal("ad-create-modal");
+      if (galleryForBooking) {
+        var bookingId = galleryForBooking;
+        galleryForBooking = "";
+        await api("POST", "/booking/bookings/" + encodeURIComponent(bookingId) + "/gallery", { slug: created.slug || payload.slug })
+          .catch(function (err) { toast(err.message, true); });
+      }
       document.getElementById("ad-created-link").value = created.link;
       document.getElementById("ad-created-password").value = created.password;
       document.getElementById("ad-created-hint").hidden = created.link.indexOf("http") === 0;
@@ -7923,7 +7943,9 @@
   };
   // formOpen : formulaire de création ouvert ; draft : réglages de départ
   // (prestation enregistrée choisie dans « Type de séance »).
-  var bookingState = { data: null, editingOfferId: "", slotMode: "times", formOpen: false, draft: null };
+  var bookingState = { data: null, editingOfferId: "", slotMode: "times", formOpen: false, draft: null, flow: null };
+  // Galerie créée depuis une séance : rattachée à la réservation une fois créée.
+  var galleryForBooking = "";
 
   function bookingDay(ts) {
     return new Date(ts * 1000).toLocaleDateString("fr-BE", { weekday: "long", day: "numeric", month: "long", timeZone: BOOKING_ZONE });
@@ -7997,7 +8019,7 @@
   }
 
   function offerFormHtml(o) {
-    o = o || { title: "", durationMin: 60, priceCents: 0, depositCents: 0, tiers: [], location: "", description: "", included: "", dressCode: "", imageId: "" };
+    o = o || { title: "", durationMin: 60, priceCents: 0, depositCents: 0, tiers: [], location: "", description: "", included: "", dressCode: "", prep: "", imageId: "" };
     var editing = Boolean(o.id);
     var tiered = Boolean(o.tiers && o.tiers.length);
     var tierRows = tiered ? o.tiers : [null, null];
@@ -8031,6 +8053,10 @@
       '<label class="ad-field"><span>Compris dans votre forfait <em>(une ligne par élément)</em></span><textarea name="included" rows="4" maxlength="1000" placeholder="10 photos retouchées&#10;Galerie privée en ligne&#10;Accessoires et tenues bébé fournis">' + esc(o.included || "") + "</textarea></label>" +
       '<label class="ad-field"><span>Conseil vestimentaire <em>(facultatif)</em></span><textarea name="dressCode" rows="4" maxlength="1000" placeholder="Tons doux et unis, sans logo ni grosse inscription. Prévoyez une tenue de rechange pour les plus petits.">' + esc(o.dressCode || "") + "</textarea></label>" +
       "</div>" +
+      // Liste récapitulative : envoyée en un clic depuis la réservation,
+      // quelques jours avant la séance (suivi de la séance).
+      '<label class="ad-field"><span>Liste récapitulative avant la séance <em>(une ligne par point, envoyée depuis la réservation)</em></span>' +
+      '<textarea name="prep" rows="5" maxlength="3000" placeholder="2 ou 3 tenues aux couleurs douces, sans logo&#10;Ambiance : lumière naturelle, plaid et coussins fournis&#10;Un doudou ou un objet qui compte pour vous&#10;Arrivez 10 minutes avant, bébé nourri et au chaud">' + esc(o.prep || "") + "</textarea></label>" +
       '<label class="ad-check ad-bk-save"><input type="checkbox" name="saveTemplate"' + (save ? " checked" : "") + " />" +
       "<span><strong>Sauvegarder le réglage de cette prestation</strong>" +
       '<span class="ad-hint">Vous la retrouverez dans « Type de séance » pour la remettre en ligne sans tout reparamétrer.</span></span></label>' +
@@ -8097,7 +8123,7 @@
               offerFormHtml(draft ? {
                 title: draft.title, durationMin: draft.durationMin, priceCents: draft.priceCents, depositCents: draft.depositCents,
                 tiers: draft.tiers, location: draft.location, description: draft.description, included: draft.included,
-                dressCode: draft.dressCode, imageId: draft.imageId,
+                dressCode: draft.dressCode, prep: draft.prep || "", imageId: draft.imageId,
               } : null)
             : "")) +
       "</section>";
@@ -8494,31 +8520,6 @@
       '<button type="button" class="ad-link-btn" id="ad-bk-link-public">Rendre public</button></span></div></form>';
   }
 
-  function bookingRowHtml(b, actionable) {
-    var status = BOOKING_STATUS[b.status] || [b.status, ""];
-    return "<tr>" +
-      '<td><strong>' + esc(bookingDay(b.startsAt)) + "</strong><br>" + esc(bookingTime(b.startsAt)) + " · " + esc(durationText(b.durationMin)) + "</td>" +
-      "<td>" + esc(b.offerTitle) +
-      (b.photos ? '<br><span class="ad-hint">' + esc(b.photos + " photo" + (b.photos > 1 ? "s" : "") + (b.tierLabel ? " (" + b.tierLabel + ")" : "") + " · " + formatEuros(b.priceCents)) + "</span>" : "") +
-      (b.location ? '<br><span class="ad-hint">' + esc(b.location) + "</span>" : "") + "</td>" +
-      '<td><span class="ad-acc-name">' + clLink(b.clientName, b.clientEmail) + "</span>" +
-      '<a class="ad-acc-sub" href="mailto:' + esc(b.clientEmail) + '">' + esc(b.clientEmail) + "</a>" +
-      (b.clientPhone ? '<span class="ad-acc-sub">' + esc(b.clientPhone) + "</span>" : "") +
-      (b.message ? '<span class="ad-bk-message">« ' + esc(b.message) + " »</span>" : "") + "</td>" +
-      '<td class="ad-num">' + (b.depositCents ? formatEuros(b.depositCents) : "—") + "</td>" +
-      '<td><span class="ad-badge ' + status[1] + '">' + esc(status[0]) + "</span></td>" +
-      '<td class="ad-row-actions">' + (b.status === "confirmed" && (b.priceCents || b.depositCents)
-        ? '<button type="button" class="ad-btn ad-btn-small ad-btn-ghost" data-invoice-from="booking" data-invoice-id="' + esc(b.id) + '">Facturer</button>'
-        : "") + (actionable && b.status !== "cancelled"
-        ? '<button type="button" class="ad-btn ad-btn-small ad-btn-danger" data-bk-cancel="' + esc(b.id) + '">Annuler</button>'
-        : "") + "</td></tr>";
-  }
-
-  function bookingsTableHtml(list, actionable) {
-    return '<div class="ad-table-wrap"><table class="ad-table ad-bk-table"><thead><tr><th>Quand</th><th>Séance</th><th>Client</th><th class="ad-num">Acompte</th><th>État</th><th><span class="ad-visually-hidden">Actions</span></th></tr></thead><tbody>' +
-      list.map(function (b) { return bookingRowHtml(b, actionable); }).join("") + "</tbody></table></div>";
-  }
-
   async function renderBooking(skipHash) {
     if (!skipHash && location.hash !== "#/reservations") history.pushState(null, "", "#/reservations");
     setActiveTab("booking");
@@ -8538,7 +8539,17 @@
     bookingState.data = data;
     var nowTs = Date.now() / 1000;
     var upcoming = data.bookings.filter(function (b) { return b.startsAt >= nowTs - 3600 && b.status !== "cancelled"; });
-    var past = data.bookings.filter(function (b) { return b.startsAt < nowTs - 3600 || b.status === "cancelled"; }).reverse();
+    // Séances passées dont le suivi n'est pas fini (galerie pas encore envoyée).
+    var toFinish = data.bookings.filter(function (b) { return b.startsAt < nowTs - 3600 && b.status === "confirmed" && !followUpDone(b); }).reverse();
+    var past = data.bookings.filter(function (b) {
+      return (b.startsAt < nowTs - 3600 || b.status === "cancelled") && toFinish.indexOf(b) === -1;
+    }).reverse();
+    var todo = followUpCounts(upcoming, toFinish, data);
+    var todoParts = [];
+    if (todo.contract) todoParts.push(todo.contract + " contrat" + (todo.contract > 1 ? "s" : "") + " à envoyer");
+    if (todo.waiting) todoParts.push(todo.waiting + " en attente de signature");
+    if (todo.prep) todoParts.push(todo.prep + " liste" + (todo.prep > 1 ? "s" : "") + " récapitulative" + (todo.prep > 1 ? "s" : ""));
+    if (todo.gallery) todoParts.push(todo.gallery + " galerie" + (todo.gallery > 1 ? "s" : "") + " à envoyer ou livrer");
     var freeSlots = data.slots.filter(function (s) { return !s.bookingId && s.startsAt > nowTs; }).length;
     var depositsAhead = upcoming.filter(function (b) { return b.status === "confirmed"; })
       .reduce(function (sum, b) { return sum + b.depositCents; }, 0);
@@ -8570,10 +8581,16 @@
           salesStatHtml("Créneaux libres", String(freeSlots), "") +
           salesStatHtml("Acomptes encaissés", depositsAhead ? formatEuros(depositsAhead) : "—", "Séances à venir") +
           "</div>" +
+          (todoParts.length ? '<p class="ad-flow-todo"><strong>À faire</strong> ' + esc(todoParts.join(" · ")) + "</p>" : "") +
           '<section id="ad-bk-upcoming"><div class="ad-section-header"><h3>Prochaines séances</h3></div>' +
-          (upcoming.length ? bookingsTableHtml(upcoming, true) : '<p class="ad-hint">Aucune séance réservée pour l\'instant. Ouvrez des créneaux ci-dessous : ils apparaissent aussitôt sur votre mini-site.</p>') +
-          (past.length ? '<details class="ad-advanced"><summary>Séances passées et annulées (' + past.length + ")</summary>" + bookingsTableHtml(past, false) + "</details>" : "") +
+          (upcoming.length ? sessionsHtml(upcoming, data, true) : '<p class="ad-hint">Aucune séance réservée pour l\'instant. Ouvrez des créneaux ci-dessous : ils apparaissent aussitôt sur votre mini-site.</p>') +
           "</section>" +
+          (toFinish.length
+            ? '<section id="ad-bk-finish"><div class="ad-section-header"><h3>Séances à finaliser</h3></div>' +
+              '<p class="ad-hint">Séances passées dont les photos ne sont pas encore livrées : créez la galerie, ajoutez les photos, envoyez-la d\'un clic.</p>' +
+              sessionsHtml(toFinish, data, false) + "</section>"
+            : "") +
+          (past.length ? '<details class="ad-advanced ad-bk-past" id="ad-bk-past"' + (bookingState.pastOpen ? " open" : "") + '><summary>Séances passées et annulées (' + past.length + ")</summary>" + sessionsHtml(past, data, false) + "</details>" : "") +
           offersSectionHtml(data) +
           slotsSectionHtml(data) +
           shareSectionHtml(data)
@@ -8596,6 +8613,10 @@
 
   function bindBooking(data) {
     bindShareSection(data);
+    bindFollowUp(data);
+    // Les séances passées restent dépliées d'un affichage à l'autre.
+    var pastBox = document.getElementById("ad-bk-past");
+    if (pastBox) pastBox.addEventListener("toggle", function () { bookingState.pastOpen = pastBox.open; });
     el.view.querySelectorAll("[data-bk-goto]").forEach(function (btn) {
       btn.addEventListener("click", function () {
         var target = btn.getAttribute("data-bk-goto");
@@ -8637,7 +8658,7 @@
         var body = {
           title: f.title.value, durationMin: Number(f.durationMin.value), priceCents: priceCents, depositCents: depositCents,
           tiers: tiers, location: f.location.value, description: f.description.value,
-          included: f.included.value, dressCode: f.dressCode.value, imageId: f.imageId.value,
+          included: f.included.value, dressCode: f.dressCode.value, prep: f.prep.value, imageId: f.imageId.value,
           saveTemplate: f.saveTemplate.checked,
         };
         var editing = bookingState.editingOfferId;
@@ -8911,6 +8932,398 @@
     });
   }
 
+  /* ---------- Suivi d'une séance : de la réservation à la livraison ---------- */
+
+  // Chaque séance confirmée porte sa « piste » : fiche client, contrat,
+  // liste récapitulative, galerie, livraison. L'étape à faire maintenant est
+  // mise en avant ; chacune se règle d'un clic, sans quitter l'onglet.
+  function flowDay(ts) {
+    return ts ? new Date(ts * 1000).toLocaleDateString("fr-BE", { day: "numeric", month: "short", timeZone: BOOKING_ZONE }) : "";
+  }
+
+  function followSteps(b, data) {
+    var f = b.followUp;
+    var past = b.startsAt < Date.now() / 1000;
+    var c = f.contract;
+    var g = f.gallery;
+    var steps = [];
+    steps.push({ key: "client", label: "Fiche client", state: "done", text: "Créée à la réservation",
+      actions: ['<a class="ad-btn ad-btn-small ad-btn-ghost" href="' + clHref(b.clientEmail) + '">Ouvrir la fiche</a>'] });
+
+    var contract = { key: "contract", label: "Contrat", actions: [] };
+    if (!data.contractsEnabled) {
+      contract.state = "off"; contract.text = "Inclus dans la formule Pro";
+    } else if (!c || c.status === "cancelled" || c.status === "declined") {
+      contract.state = past ? "skip" : "todo";
+      contract.text = c && c.status === "declined" ? "Refusé par le client" : past ? "Aucun contrat" : "À envoyer";
+      contract.actions.push(flowBtn("Envoyer le contrat", "contract", b.id));
+    } else if (c.status === "draft") {
+      contract.state = "todo"; contract.text = "Brouillon n° " + c.number;
+      contract.actions.push('<button type="button" class="ad-btn ad-btn-small" data-flow-open-contract="' + esc(c.id) + '" data-flow-main>Relire et envoyer</button>');
+    } else if (c.status === "sent" || c.status === "viewed") {
+      contract.state = "wait";
+      contract.text = (c.status === "viewed" ? "Lu le " + flowDay(c.viewedAt) : "Envoyé le " + flowDay(c.sentAt)) + ", pas encore signé" +
+        (f.contractRemindedAt ? " · relancé le " + flowDay(f.contractRemindedAt) : "");
+      var canRemind = !f.contractRemindAt || f.contractRemindAt <= Date.now() / 1000;
+      contract.actions.push('<button type="button" class="ad-btn ad-btn-small" data-flow-remind="' + esc(b.id) + '"' + (canRemind ? " data-flow-main" : " disabled title=\"Une relance par jour au plus\"") + ">Relancer</button>");
+    } else if (c.status === "signed" && c.depositCents && !c.paidAt) {
+      contract.state = "wait"; contract.text = "Signé le " + flowDay(c.signedAt) + " · acompte de " + formatEuros(c.depositCents) + " en attente";
+    } else {
+      contract.state = "done"; contract.text = "Signé le " + flowDay(c.signedAt) + (c.paidAt && c.depositCents ? " · acompte reçu" : "");
+      contract.actions.push('<a class="ad-btn ad-btn-small ad-btn-ghost" href="/local/contracts/' + encodeURIComponent(c.id) + '/pdf" download>PDF signé</a>');
+    }
+    steps.push(contract);
+
+    var prep = { key: "prep", label: "Liste récapitulative", actions: [] };
+    if (f.prepSentAt) {
+      prep.state = "done"; prep.text = "Envoyée le " + flowDay(f.prepSentAt);
+      prep.actions.push('<button type="button" class="ad-btn ad-btn-small ad-btn-ghost" data-flow="prep" data-flow-id="' + esc(b.id) + '">Renvoyer</button>');
+    } else {
+      prep.state = past ? "skip" : "todo"; prep.text = past ? "Pas envoyée" : "Tenues, ambiance, à prévoir";
+      prep.actions.push(flowBtn("Envoyer la liste", "prep", b.id));
+    }
+    steps.push(prep);
+
+    var gallery = { key: "gallery", label: "Galerie", actions: [] };
+    if (!g) {
+      gallery.state = past ? "todo" : "later"; gallery.text = past ? "À créer" : "Après la séance";
+      gallery.actions.push('<button type="button" class="ad-btn ad-btn-small" data-flow-create-gallery="' + esc(b.id) + '"' + (past ? " data-flow-main" : "") + ">Créer la galerie</button>");
+      if (f.galleryChoices.length) gallery.actions.push(flowBtn("Associer une galerie", "gallery", b.id, true));
+    } else {
+      var open = '<button type="button" class="ad-btn ad-btn-small ad-btn-ghost" data-flow-goto-gallery="' + esc(g.slug) + '">Ouvrir</button>';
+      if (g.inviteSentAt) {
+        gallery.state = "done"; gallery.text = "« " + g.title + " » envoyée le " + flowDay(g.inviteSentAt);
+        gallery.actions.push('<button type="button" class="ad-btn ad-btn-small ad-btn-ghost" data-flow-send-gallery="' + esc(b.id) + '">Renvoyer</button>', open);
+      } else if (!g.photoCount) {
+        gallery.state = "wait"; gallery.text = "« " + g.title + " » : ajoutez les photos";
+        gallery.actions.push('<button type="button" class="ad-btn ad-btn-small" data-flow-goto-gallery="' + esc(g.slug) + '" data-flow-main>Ajouter les photos</button>');
+      } else {
+        gallery.state = "todo"; gallery.text = "« " + g.title + " » · " + g.photoCount + " photo" + (g.photoCount > 1 ? "s" : "");
+        gallery.actions.push('<button type="button" class="ad-btn ad-btn-small" data-flow-send-gallery="' + esc(b.id) + '" data-flow-main>Envoyer au client</button>', open);
+      }
+    }
+    steps.push(gallery);
+
+    var delivery = { key: "delivery", label: "Livraison", actions: [] };
+    if (g && g.deliveryOpen) {
+      delivery.state = "done"; delivery.text = "Photos HD livrées" + (g.deliveryOpenedAt ? " le " + flowDay(g.deliveryOpenedAt) : "");
+    } else if (g && g.inviteSentAt) {
+      delivery.state = "todo"; delivery.text = "Photos définitives à déposer";
+      delivery.actions.push('<button type="button" class="ad-btn ad-btn-small" data-flow-goto-gallery="' + esc(g.slug) + '" data-flow-main>Préparer la livraison</button>');
+    } else {
+      delivery.state = "later"; delivery.text = "Après la galerie";
+    }
+    steps.push(delivery);
+
+    // Le prochain geste : la première étape à faire ou en attente.
+    var next = steps.filter(function (st) { return st.state === "todo" || st.state === "wait"; })[0];
+    if (next) next.next = true;
+    return steps;
+  }
+
+  function flowBtn(label, kind, id, ghost) {
+    return '<button type="button" class="ad-btn ad-btn-small' + (ghost ? " ad-btn-ghost" : "") + '" data-flow="' + kind + '" data-flow-id="' + esc(id) + '"' + (ghost ? "" : " data-flow-main") + ">" + esc(label) + "</button>";
+  }
+
+  var FLOW_MARK = {
+    done: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7"/></svg>',
+    wait: '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.5"/><path d="M8 5v3.2l2 1.3"/></svg>',
+  };
+  var FLOW_STATE_LABEL = { done: "fait", wait: "en attente", todo: "à faire", skip: "passé", later: "plus tard", off: "non inclus" };
+
+  function followTrackHtml(b, data) {
+    var steps = followSteps(b, data);
+    return '<ol class="ad-flow">' + steps.map(function (st, i) {
+      var actions = st.actions.map(function (html) {
+        // Le bouton principal du prochain geste prend la couleur d'action.
+        return st.next ? html.replace('class="ad-btn ad-btn-small"', 'class="ad-btn ad-btn-small ad-btn-primary"') : html;
+      }).join("");
+      return '<li class="ad-flow-step is-' + st.state + (st.next ? " is-next" : "") + '" data-step="' + st.key + '">' +
+        '<span class="ad-flow-mark">' + (FLOW_MARK[st.state] || '<span class="ad-flow-num">' + (i + 1) + "</span>") + "</span>" +
+        '<span class="ad-flow-body"><span class="ad-flow-label">' + esc(st.label) + '<span class="ad-visually-hidden"> (' + FLOW_STATE_LABEL[st.state] + ")</span></span>" +
+        '<span class="ad-flow-text">' + esc(st.text) + "</span>" +
+        (actions ? '<span class="ad-flow-actions">' + actions + "</span>" : "") + "</span></li>";
+    }).join("") + "</ol>";
+  }
+
+  function flowPanelHtml(b, data) {
+    var open = bookingState.flow;
+    if (!open || open.id !== b.id) return "";
+    var f = b.followUp;
+    var first = String(b.clientName || "").split(/\s+/)[0];
+    if (open.kind === "contract") {
+      if (!data.contractsEnabled) return "";
+      var paidDeposit = b.paidAt && b.depositCents ? b.depositCents : 0;
+      return '<form class="ad-flow-panel" data-flow-form="contract" novalidate>' +
+        '<div class="ad-bk-book-head"><h4>Contrat pour ' + esc(b.clientName) + "</h4>" +
+        '<p class="ad-hint">« ' + esc(b.offerTitle) + " », " + esc(bookingDay(b.startsAt)) + " à " + esc(bookingTime(b.startsAt)) +
+        ", avec vos conditions par défaut (onglet Devis et contrats). " + esc(first || "Votre client") + " le lit, le signe en ligne" +
+        " et règle l'acompte s'il y en a un.</p></div>" +
+        '<div class="ad-field-row">' +
+        '<label class="ad-field"><span>Prix de la séance <em>(€)</em></span><input name="price" inputmode="decimal" value="' + esc(bookingEurosInput(b.priceCents)) + '" placeholder="ex. 180" /></label>' +
+        '<label class="ad-field"><span>Acompte à la signature <em>(€, 0 = aucun)</em></span><input name="deposit" inputmode="decimal" value="" placeholder="0" /></label>' +
+        "</div>" +
+        (paidDeposit ? '<p class="ad-hint">L\'acompte de ' + formatEuros(paidDeposit) + " réglé à la réservation est rappelé dans le contrat : il n'est pas redemandé.</p>" : "") +
+        '<div class="ad-bk-book-actions"><button type="submit" class="ad-btn ad-btn-primary">Envoyer le contrat</button>' +
+        '<button type="button" class="ad-btn" data-flow-draft>Relire dans l\'éditeur d\'abord</button>' +
+        '<button type="button" class="ad-btn ad-btn-ghost" data-flow-close>Fermer</button></div></form>';
+    }
+    if (open.kind === "prep") {
+      var offer = data.offers.filter(function (o) { return o.id === b.offerId; })[0];
+      return '<form class="ad-flow-panel" data-flow-form="prep" novalidate>' +
+        '<div class="ad-bk-book-head"><h4>Liste récapitulative pour ' + esc(b.clientName) + "</h4>" +
+        '<p class="ad-hint">Envoyée par e-mail avec le jour, l\'heure et le lieu de la séance. Modifiez-la librement pour ce client.</p></div>' +
+        '<label class="ad-field"><span>À prévoir <em>(une ligne par point)</em></span><textarea name="prep" rows="6" maxlength="3000" placeholder="2 ou 3 tenues aux couleurs douces, sans logo&#10;Ambiance : lumière naturelle, plaid fourni&#10;Arrivez 10 minutes avant">' + esc(f.prep) + "</textarea></label>" +
+        '<label class="ad-field"><span>Petit mot <em>(facultatif)</em></span><textarea name="note" rows="2" maxlength="2000" placeholder="Hâte de vous retrouver samedi !"></textarea></label>' +
+        (offer ? '<label class="ad-check"><input type="checkbox" name="saveToOffer"' + (f.offerPrep ? "" : " checked") + ' /> <span>Garder cette liste pour la formule « ' + esc(offer.title) + " » <em>(proposée à chaque réservation)</em></span></label>" : "") +
+        '<div class="ad-bk-book-actions"><button type="submit" class="ad-btn ad-btn-primary">Envoyer à ' + esc(first || "votre client") + "</button>" +
+        '<button type="button" class="ad-btn ad-btn-ghost" data-flow-close>Fermer</button></div></form>';
+    }
+    if (open.kind === "gallery") {
+      return '<form class="ad-flow-panel" data-flow-form="gallery" novalidate>' +
+        '<div class="ad-bk-book-head"><h4>Galerie de cette séance</h4>' +
+        '<p class="ad-hint">Galeries déjà créées pour ' + esc(b.clientName) + ".</p></div>" +
+        '<label class="ad-field"><span>Galerie</span><select name="slug">' + f.galleryChoices.map(function (g) {
+          return '<option value="' + esc(g.slug) + '">' + esc(g.title) + " — créée le " + esc(flowDay(g.createdAt)) + "</option>";
+        }).join("") + "</select></label>" +
+        '<div class="ad-bk-book-actions"><button type="submit" class="ad-btn ad-btn-primary">Associer</button>' +
+        '<button type="button" class="ad-btn ad-btn-ghost" data-flow-close>Fermer</button></div></form>';
+    }
+    return "";
+  }
+
+  function sessionCardHtml(b, data, actionable) {
+    var status = BOOKING_STATUS[b.status] || [b.status, ""];
+    return '<li class="ad-bk-session" data-booking="' + esc(b.id) + '">' +
+      '<div class="ad-bk-session-head">' +
+      '<div class="ad-bk-session-when"><strong>' + esc(bookingDay(b.startsAt)) + "</strong>" +
+      "<span>" + esc(bookingTime(b.startsAt)) + " · " + esc(durationText(b.durationMin)) + "</span></div>" +
+      '<div class="ad-bk-session-what"><span class="ad-acc-name">' + esc(b.offerTitle) + "</span>" +
+      (b.photos ? '<span class="ad-acc-sub">' + esc(b.photos + " photo" + (b.photos > 1 ? "s" : "") + (b.tierLabel ? " (" + b.tierLabel + ")" : "")) + "</span>" : "") +
+      (b.priceCents ? '<span class="ad-acc-sub">' + formatEuros(b.priceCents) + (b.depositCents ? " · acompte " + formatEuros(b.depositCents) + (b.paidAt ? " réglé" : "") : "") + "</span>" : "") +
+      (b.location ? '<span class="ad-acc-sub">' + esc(b.location) + "</span>" : "") + "</div>" +
+      '<div class="ad-bk-session-who"><span class="ad-acc-name">' + clLink(b.clientName, b.clientEmail) + "</span>" +
+      '<a class="ad-acc-sub" href="mailto:' + esc(b.clientEmail) + '">' + esc(b.clientEmail) + "</a>" +
+      (b.clientPhone ? '<a class="ad-acc-sub" href="tel:' + esc(b.clientPhone.replace(/\s/g, "")) + '">' + esc(b.clientPhone) + "</a>" : "") +
+      (b.message ? '<span class="ad-bk-message">« ' + esc(b.message) + " »</span>" : "") + "</div>" +
+      '<div class="ad-bk-session-side"><span class="ad-badge ' + status[1] + '">' + esc(status[0]) + "</span>" +
+      '<span class="ad-bk-session-more">' + (b.status === "confirmed" && (b.priceCents || b.depositCents)
+        ? '<button type="button" class="ad-link-btn" data-invoice-from="booking" data-invoice-id="' + esc(b.id) + '">Facturer</button>' : "") +
+      (actionable && b.status !== "cancelled" ? '<button type="button" class="ad-link-btn ad-link-danger" data-bk-cancel="' + esc(b.id) + '">Annuler</button>' : "") +
+      "</span></div></div>" +
+      (b.followUp ? followTrackHtml(b, data) + flowPanelHtml(b, data) : "") +
+      "</li>";
+  }
+
+  function sessionsHtml(list, data, actionable) {
+    return '<ul class="ad-bk-sessions">' + list.map(function (b) { return sessionCardHtml(b, data, actionable); }).join("") + "</ul>";
+  }
+
+  // Une séance passée reste « à finaliser » jusqu'à la livraison des photos
+  // définitives, ou trois semaines après l'envoi de la galerie (pour qui ne
+  // livre pas de fichiers HD à part).
+  function followUpDone(b) {
+    var g = b.followUp && b.followUp.gallery;
+    return Boolean(g && (g.deliveryOpen || (g.inviteSentAt && g.inviteSentAt < Date.now() / 1000 - 21 * 86400)));
+  }
+
+  // Ce qui attend le photographe, toutes séances confondues.
+  function followUpCounts(upcoming, toFinish, data) {
+    var n = { contract: 0, waiting: 0, prep: 0, gallery: 0 };
+    upcoming.concat(toFinish).forEach(function (b) {
+      if (!b.followUp) return;
+      followSteps(b, data).forEach(function (st) {
+        if (st.key === "contract" && st.state === "todo") n.contract++;
+        if (st.key === "contract" && st.state === "wait") n.waiting++;
+        if (st.key === "prep" && st.state === "todo") n.prep++;
+        if ((st.key === "gallery" || st.key === "delivery") && st.state === "todo") n.gallery++;
+      });
+    });
+    return n;
+  }
+
+  function bindFollowUp(data) {
+    var byId = {};
+    data.bookings.forEach(function (b) { byId[b.id] = b; });
+    var view = el.view;
+    view.querySelectorAll("[data-flow]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var id = btn.getAttribute("data-flow-id");
+        var kind = btn.getAttribute("data-flow");
+        var same = bookingState.flow && bookingState.flow.id === id && bookingState.flow.kind === kind;
+        bookingState.flow = same ? null : { id: id, kind: kind };
+        paintBooking(data);
+        var panel = view.querySelector('[data-booking="' + id + '"] .ad-flow-panel');
+        if (panel) {
+          panel.scrollIntoView({ block: "nearest", behavior: "smooth" });
+          var field = panel.querySelector("textarea, input, select");
+          if (field) field.focus({ preventScroll: true });
+        }
+      });
+    });
+    view.querySelectorAll("[data-flow-close]").forEach(function (btn) {
+      btn.addEventListener("click", function () { bookingState.flow = null; paintBooking(data); });
+    });
+    view.querySelectorAll("[data-flow-remind]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var b = byId[btn.getAttribute("data-flow-remind")];
+        btn.disabled = true;
+        bookingCall("POST", "/bookings/" + encodeURIComponent(b.id) + "/contract/remind", {}, "Rappel envoyé à " + b.clientEmail + ".")
+          .then(function (ok) { if (!ok) btn.disabled = false; });
+      });
+    });
+    view.querySelectorAll("[data-flow-open-contract]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        contractsState.openId = btn.getAttribute("data-flow-open-contract");
+        renderContracts();
+      });
+    });
+    view.querySelectorAll("[data-flow-goto-gallery]").forEach(function (btn) {
+      btn.addEventListener("click", function () { renderDetail(btn.getAttribute("data-flow-goto-gallery")); });
+    });
+    view.querySelectorAll("[data-flow-create-gallery]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var b = byId[btn.getAttribute("data-flow-create-gallery")];
+        openCreateModal();
+        var form = document.getElementById("ad-create-form");
+        form.title.value = b.offerTitle + " — " + b.clientName;
+        form.clientName.value = b.clientName;
+        form.clientEmail.value = b.clientEmail;
+        if (b.photos) form.includedPhotos.value = String(b.photos);
+        // Une fois créée, la galerie est rattachée à la séance.
+        galleryForBooking = b.id;
+      });
+    });
+    view.querySelectorAll("[data-flow-send-gallery]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var b = byId[btn.getAttribute("data-flow-send-gallery")];
+        var g = b.followUp.gallery;
+        openSendGallery({
+          slug: g.slug, title: g.title, email: b.clientEmail, sentAt: g.inviteSentAt,
+          onSent: function () { renderBooking(true); },
+        });
+      });
+    });
+
+    var form = view.querySelector(".ad-flow-panel");
+    if (!form) return;
+    var b = byId[bookingState.flow.id];
+    var kind = form.getAttribute("data-flow-form");
+    var path = "/bookings/" + encodeURIComponent(b.id);
+    if (kind === "contract") {
+      var readAmounts = function () {
+        var price = bookingCents(form.elements.price.value);
+        var deposit = bookingCents(form.elements.deposit.value);
+        if (isNaN(price) || isNaN(deposit)) { toast("Montant illisible : écrivez par exemple 180 ou 180,50.", true); return null; }
+        return { priceCents: price, depositCents: deposit };
+      };
+      form.addEventListener("submit", async function (e) {
+        e.preventDefault();
+        var amounts = readAmounts();
+        if (!amounts) return;
+        var submit = form.querySelector('[type="submit"]');
+        submit.disabled = true;
+        bookingState.flow = null;
+        var ok = await bookingCall("POST", path + "/contract", Object.assign({ send: true }, amounts), "Contrat envoyé à " + b.clientEmail + ".");
+        if (!ok) { bookingState.flow = { id: b.id, kind: "contract" }; submit.disabled = false; }
+      });
+      form.querySelector("[data-flow-draft]").addEventListener("click", async function () {
+        var amounts = readAmounts();
+        if (!amounts) return;
+        try {
+          var res = await api("POST", "/booking" + path + "/contract", Object.assign({ send: false }, amounts));
+          bookingState.flow = null;
+          bookingState.data = res;
+          contractsState.openId = res.contractId;
+          renderContracts();
+        } catch (err) {
+          toast(err.message, true);
+        }
+      });
+    }
+    if (kind === "prep") {
+      form.addEventListener("submit", async function (e) {
+        e.preventDefault();
+        var submit = form.querySelector('[type="submit"]');
+        submit.disabled = true;
+        var body = { prep: form.elements.prep.value, note: form.elements.note.value, saveToOffer: Boolean(form.elements.saveToOffer && form.elements.saveToOffer.checked) };
+        bookingState.flow = null;
+        var ok = await bookingCall("POST", path + "/prep", body, "Liste récapitulative envoyée à " + b.clientEmail + ".");
+        if (!ok) { bookingState.flow = { id: b.id, kind: "prep" }; submit.disabled = false; }
+      });
+    }
+    if (kind === "gallery") {
+      form.addEventListener("submit", async function (e) {
+        e.preventDefault();
+        bookingState.flow = null;
+        await bookingCall("POST", path + "/gallery", { slug: form.elements.slug.value }, "Galerie associée à la séance.");
+      });
+    }
+  }
+
+  /* ---------- Envoyer une galerie au client (lien et mot de passe) ---------- */
+
+  // Partagée par le suivi des séances et la page d'une galerie. Le mot de
+  // passe n'est connu qu'en empreinte : un nouveau est créé à l'envoi (le
+  // plus simple), ou le photographe redonne celui qu'il a déjà transmis.
+  var sendGalleryState = null;
+  function openSendGallery(opts) {
+    sendGalleryState = opts;
+    var form = document.getElementById("ad-send-gallery-form");
+    form.reset();
+    document.getElementById("ad-send-gallery-name").textContent = opts.title;
+    form.email.value = opts.email || "";
+    form.mode.value = opts.sentAt ? "current" : "new";
+    syncSendGalleryMode();
+    var sent = document.getElementById("ad-send-gallery-sent");
+    sent.hidden = !opts.sentAt;
+    if (opts.sentAt) sent.textContent = L("Déjà envoyée le ", "Already sent on ") + formatDateTime(opts.sentAt) + ".";
+    document.getElementById("ad-send-gallery-error").hidden = true;
+    openModal("ad-send-gallery-modal");
+    (form.email.value ? form.querySelector('[name="mode"]:checked') : form.email).focus();
+  }
+  function syncSendGalleryMode() {
+    var form = document.getElementById("ad-send-gallery-form");
+    var current = form.mode.value === "current";
+    var box = document.getElementById("ad-send-gallery-current");
+    box.hidden = !current;
+    form.password.required = current;
+  }
+  (function () {
+    var form = document.getElementById("ad-send-gallery-form");
+    if (!form) return;
+    form.addEventListener("change", function (e) { if (e.target.name === "mode") syncSendGalleryMode(); });
+    form.addEventListener("submit", async function (e) {
+      e.preventDefault();
+      if (!sendGalleryState) return;
+      var errorBox = document.getElementById("ad-send-gallery-error");
+      var submit = document.getElementById("ad-send-gallery-submit");
+      errorBox.hidden = true;
+      var fresh = form.mode.value === "new";
+      if (!fresh && !form.password.value.trim()) {
+        errorBox.textContent = L("Indiquez le mot de passe actuel, ou choisissez d'en créer un nouveau.", "Enter the current password, or choose to create a new one.");
+        errorBox.hidden = false;
+        return;
+      }
+      submit.disabled = true;
+      try {
+        var res = await api("POST", "/galleries/" + encodeURIComponent(sendGalleryState.slug) + "/send", {
+          email: form.email.value.trim(), note: form.note.value, newPassword: fresh, password: fresh ? "" : form.password.value.trim(),
+        });
+        closeModal("ad-send-gallery-modal");
+        toast(L("Galerie envoyée à ", "Gallery sent to ") + res.to + (res.password ? L(" · nouveau mot de passe : ", " · new password: ") + res.password : "") + ".");
+        var done = sendGalleryState.onSent;
+        sendGalleryState = null;
+        if (done) done(res);
+      } catch (err) {
+        errorBox.textContent = err.message;
+        errorBox.hidden = false;
+      } finally {
+        submit.disabled = false;
+      }
+    });
+  })();
+
   /* ---------- Sélecteur de fiche client (factures, devis, galeries, séances) ---------- */
 
   // Un bouton « Choisir dans mes fiches clients » qui déroule une recherche
@@ -9177,6 +9590,10 @@
 
   function paintContracts(data) {
     contractsState.data = data;
+    if (contractsState.openId) {
+      contractsState.editing = data.contracts.filter(function (c) { return c.id === contractsState.openId; })[0] || null;
+      contractsState.openId = "";
+    }
     var list = data.contracts;
     var editing = contractsState.editing;
     var waiting = list.filter(function (c) { return c.status === "sent" || c.status === "viewed"; }).length;

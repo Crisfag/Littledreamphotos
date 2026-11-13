@@ -1507,18 +1507,28 @@ async function handleApi(req, res, url) {
 
       const brand = await brandFor(client);
       const watermarkText = [brand, String(body.clientName || "").trim()].filter(Boolean).join("  ·  ");
-      try {
-        const created = await client.createGallery({
-          slug, title, clientName: body.clientName || "", clientEmail: body.clientEmail || "",
-          password, watermarkText, expiresAt,
-          includedPhotos: body.includedPhotos, extraPhotoPrice: body.extraPhotoPrice,
-          theme: body.theme ? String(body.theme) : undefined,
-          sessionType: body.sessionType ? String(body.sessionType).slice(0, 20) : undefined,
-          language: body.language === "en" ? "en" : undefined,
-        });
-        return json(res, 201, { id: created.id, slug, password, link: await linkFor(client, slug) });
-      } catch (err) {
-        return relayError(res, err, "Impossible de créer la galerie");
+      // Les adresses de galerie sont uniques sur toute la plateforme : un
+      // titre courant (« Mariage Julie et Thomas ») peut déjà servir chez un
+      // autre photographe. Sans adresse choisie, on ajoute un petit suffixe.
+      let finalSlug = slug;
+      for (let attempt = 0; ; attempt++) {
+        try {
+          const created = await client.createGallery({
+            slug: finalSlug, title, clientName: body.clientName || "", clientEmail: body.clientEmail || "",
+            password, watermarkText, expiresAt,
+            includedPhotos: body.includedPhotos, extraPhotoPrice: body.extraPhotoPrice,
+            theme: body.theme ? String(body.theme) : undefined,
+            sessionType: body.sessionType ? String(body.sessionType).slice(0, 20) : undefined,
+            language: body.language === "en" ? "en" : undefined,
+          });
+          return json(res, 201, { id: created.id, slug: finalSlug, password, link: await linkFor(client, finalSlug) });
+        } catch (err) {
+          if (err.status === 409 && /slug/i.test(String(err.message)) && !String(body.slug || "").trim() && attempt < 4) {
+            finalSlug = `${slug.slice(0, 54)}-${randomBytes(3).toString("hex").slice(0, 4)}`;
+            continue;
+          }
+          return relayError(res, err, "Impossible de créer la galerie");
+        }
       }
     }
     return json(res, 405, { error: "Méthode non autorisée" });
@@ -1561,6 +1571,31 @@ async function handleApi(req, res, url) {
       return json(res, 200, { password: newPassword, link: await linkFor(client, slug) });
     } catch (err) {
       return relayError(res, err, "Impossible de générer un nouveau mot de passe");
+    }
+  }
+
+  // POST /local/galleries/:slug/send — lien et mot de passe envoyés au client
+  // par e-mail. Soit le photographe redonne le mot de passe actuel (vérifié
+  // par le Worker), soit un nouveau est créé ici (jamais par le navigateur),
+  // et remplace l'ancien au moment de l'envoi.
+  if (parts.length === 3 && parts[2] === "send" && req.method === "POST") {
+    let body;
+    try {
+      body = JSON.parse((await readBody(req, 8000)).toString("utf8") || "{}");
+    } catch {
+      return json(res, 400, { error: "Requête invalide" });
+    }
+    // Le nouveau mot de passe n'est enregistré par le Worker qu'au moment
+    // de l'envoi : rien ne change si l'envoi est refusé (galerie vide…).
+    const fresh = body.newPassword === true ? generatePassword() : "";
+    try {
+      const sent = await client.request("POST", `/api/admin/galleries/${encodeURIComponent(slug)}/send`, {
+        password: fresh ? "" : String(body.password || "").trim(), newPassword: fresh || undefined,
+        email: String(body.email || ""), note: String(body.note || "").slice(0, 2000),
+      });
+      return json(res, 200, { ...sent, password: fresh || undefined });
+    } catch (err) {
+      return relayError(res, err, "La galerie n'a pas pu être envoyée");
     }
   }
 

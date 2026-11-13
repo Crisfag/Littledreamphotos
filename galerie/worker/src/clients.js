@@ -581,6 +581,26 @@ async function detailForAdmin(env, photographer, email) {
 
 /* ---------- Photographe : /api/admin/clients[/…] ---------- */
 
+// Une réservation confirmée crée la fiche du client s'il n'en a pas encore
+// (et complète un nom ou un téléphone manquant) : il apparaît aussitôt dans
+// l'onglet Clients, prêt pour le contrat, la galerie et les relances.
+export async function ensureClientRecord(env, photographerId, { email, name, phone }) {
+  const key = normEmail(email);
+  if (!EMAIL_RE.test(key)) return;
+  const ts = now();
+  try {
+    await env.DB.prepare(
+      `INSERT INTO clients (id, photographer_id, email, name, phone, notes, tags, created_at, updated_at) VALUES (?, ?, ?, ?, ?, '', '', ?, ?)
+       ON CONFLICT(photographer_id, email) DO UPDATE SET
+         name = CASE WHEN clients.name = '' THEN excluded.name ELSE clients.name END,
+         phone = CASE WHEN clients.phone = '' THEN excluded.phone ELSE clients.phone END`
+    ).bind(newId("cli"), photographerId, key, cleanLine(name, 120), String(phone || "").slice(0, 40), ts, ts).run();
+  } catch (err) {
+    // La réservation compte avant tout : une fiche manquée se rattrape.
+    console.error("Fiche client : création impossible :", err);
+  }
+}
+
 async function upsertRecord(env, photographerId, email, fields) {
   const ts = now();
   const existing = await env.DB.prepare("SELECT * FROM clients WHERE photographer_id = ? AND email = ?").bind(photographerId, email).first();

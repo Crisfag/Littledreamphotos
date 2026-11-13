@@ -242,8 +242,8 @@ try {
   /* ---------- Les autres écrans mènent à la fiche ---------- */
 
   await page.click("#ad-tab-booking");
-  await page.waitForSelector('.ad-bk-table a.ad-cl-link', { timeout: 10000 });
-  await page.click('.ad-bk-table a.ad-cl-link');
+  await page.waitForSelector('.ad-bk-session-who a.ad-cl-link', { timeout: 10000 });
+  await page.click('.ad-bk-session-who a.ad-cl-link');
   await page.waitForSelector(".ad-cl-head h2");
   check("réservation → fiche du client", (await page.textContent(".ad-cl-head h2")) === "Camille Dubois");
   await page.click("#ad-tab-contracts");

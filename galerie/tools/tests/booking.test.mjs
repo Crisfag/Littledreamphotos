@@ -275,7 +275,7 @@ try {
   await page.click(`[data-bk-cancel="${booked.id}"]`);
   await page.waitForSelector("#ad-confirm-modal:not([hidden])");
   await page.click("#ad-confirm-ok");
-  await page.waitForFunction(() => !document.querySelector("#ad-bk-upcoming tbody tr") || !document.querySelector("[data-bk-cancel]"), null, { timeout: 10000 });
+  await page.waitForFunction(() => !document.querySelector("#ad-bk-upcoming .ad-bk-session") || !document.querySelector("[data-bk-cancel]"), null, { timeout: 10000 });
   offers = await publicOffers();
   check("annuler la séance libère le créneau sur le mini-site", offers.find((o) => o.title === "Mini-séance de Noël").slots.length === 4);
 
@@ -353,9 +353,9 @@ try {
   check("un tarif qui n'existe pas est refusé", badTier.status === 400);
   await page.click("#ad-tab-galleries");
   await page.click("#ad-tab-booking");
-  await page.waitForSelector("#ad-bk-upcoming .ad-bk-table", { timeout: 10000 });
-  const tierRowText = (await page.locator("#ad-bk-upcoming tbody tr", { hasText: "Inès Tarif" }).innerText()).replace(/ /g, " ");
-  check("dans « Prochaines séances » : 10 photos (Complète) · 120,00 €", tierRowText.includes("10 photos (Complète) · 120,00 €"), tierRowText);
+  await page.waitForSelector("#ad-bk-upcoming .ad-bk-session", { timeout: 10000 });
+  const tierRowText = (await page.locator("#ad-bk-upcoming .ad-bk-session", { hasText: "Inès Tarif" }).innerText()).replace(/ /g, " ");
+  check("dans « Prochaines séances » : 10 photos (Complète), 120,00 €", tierRowText.includes("10 photos (Complète)") && tierRowText.includes("120,00 €"), tierRowText);
   await client.request("POST", `/api/admin/booking/offers/${tiered.id}`, { tiers: [], priceCents: 10000 });
   admin = await client.request("GET", "/api/admin/booking");
   const single = admin.offers.find((o) => o.id === tiered.id);
