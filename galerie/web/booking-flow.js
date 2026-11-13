@@ -20,7 +20,7 @@
     var BOOKING_ZONE = "Europe/Brussels";
     // Créneau privé : lien secret envoyé par le photographe (?creneau=…), qui
     // n'affiche que ce créneau et pré-remplit les coordonnées du client.
-    var booking = { offers: [], offer: null, slot: null, tier: 0, privateToken: new URLSearchParams(location.search).get("creneau") || "", private: null };
+    var booking = { offers: [], offer: null, slot: null, tier: 0, filter: "", date: "", month: "", privateToken: new URLSearchParams(location.search).get("creneau") || "", private: null };
 
     function euros(cents) {
       return (cents / 100).toLocaleString("fr-BE", { minimumFractionDigits: cents % 100 ? 2 : 0, maximumFractionDigits: 2 }) + " €";
@@ -53,38 +53,174 @@
       container.querySelectorAll(selector).forEach(function (n) { n.setAttribute("aria-pressed", String(n === active)); });
     }
 
-    function chooseOffer(offer, button) {
-      booking.offer = offer;
+    /* ---------- Agenda : un mois, les jours où une séance est libre ---------- */
+
+    // « 2026-11-30 » à l'heure de Bruxelles.
+    function dayKey(ts) {
+      return new Date(ts * 1000).toLocaleDateString("en-CA", { timeZone: BOOKING_ZONE });
+    }
+    function keyLabel(key) {
+      var p = key.split("-").map(Number);
+      return new Date(Date.UTC(p[0], p[1] - 1, p[2], 12)).toLocaleDateString("fr-BE", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" });
+    }
+    function monthOf(key) { return key.slice(0, 7); }
+    function shiftMonth(month, delta) {
+      var p = month.split("-").map(Number);
+      var d = new Date(Date.UTC(p[0], p[1] - 1 + delta, 1));
+      return d.toISOString().slice(0, 7);
+    }
+
+    // Créneaux visibles (formule choisie, ou toutes), groupés par jour.
+    function slotsByDay() {
+      var map = {};
+      booking.offers.forEach(function (o) {
+        if (booking.filter && booking.filter !== o.id) return;
+        o.slots.forEach(function (s) {
+          var key = dayKey(s.startsAt);
+          (map[key] = map[key] || []).push({ slot: s, offer: o });
+        });
+      });
+      Object.keys(map).forEach(function (k) { map[k].sort(function (a, b) { return a.slot.startsAt - b.slot.startsAt; }); });
+      return map;
+    }
+
+    function renderCalendar() {
+      var map = slotsByDay();
+      var keys = Object.keys(map).sort();
+      var cal = $("pf-bk-cal");
+      cal.textContent = "";
+      if (!keys.length) {
+        cal.appendChild(el("p", "pf-bk-cal-empty", "Plus aucun créneau libre pour cette séance. Choisissez-en une autre, ou contactez le studio."));
+        $("pf-bk-days").textContent = "";
+        return;
+      }
+      var first = monthOf(keys[0]);
+      var last = monthOf(keys[keys.length - 1]);
+      if (!booking.month || booking.month < first) booking.month = first;
+      if (booking.month > last) booking.month = last;
+      var month = booking.month;
+      var p = month.split("-").map(Number);
+
+      var head = el("div", "pf-bk-cal-head");
+      var prev = el("button", "pf-bk-cal-nav", "‹");
+      prev.type = "button";
+      prev.setAttribute("aria-label", "Mois précédent");
+      prev.disabled = month <= first;
+      prev.addEventListener("click", function () { booking.month = shiftMonth(month, -1); renderCalendar(); });
+      var next = el("button", "pf-bk-cal-nav", "›");
+      next.type = "button";
+      next.setAttribute("aria-label", "Mois suivant");
+      next.disabled = month >= last;
+      next.addEventListener("click", function () { booking.month = shiftMonth(month, 1); renderCalendar(); });
+      var title = el("h3", "pf-bk-cal-month", new Date(Date.UTC(p[0], p[1] - 1, 1)).toLocaleDateString("fr-BE", { month: "long", year: "numeric", timeZone: "UTC" }));
+      title.id = "pf-bk-cal-title";
+      head.appendChild(prev);
+      head.appendChild(title);
+      head.appendChild(next);
+      cal.appendChild(head);
+
+      var grid = el("div", "pf-bk-cal-grid");
+      grid.setAttribute("role", "group");
+      grid.setAttribute("aria-labelledby", "pf-bk-cal-title");
+      ["lun", "mar", "mer", "jeu", "ven", "sam", "dim"].forEach(function (d) {
+        var h = el("span", "pf-bk-cal-wd", d);
+        h.setAttribute("aria-hidden", "true");
+        grid.appendChild(h);
+      });
+      var offset = (new Date(Date.UTC(p[0], p[1] - 1, 1)).getUTCDay() + 6) % 7;
+      for (var i = 0; i < offset; i++) grid.appendChild(el("span", "pf-bk-cal-pad"));
+      var daysInMonth = new Date(Date.UTC(p[0], p[1], 0)).getUTCDate();
+      var today = new Date().toLocaleDateString("en-CA", { timeZone: BOOKING_ZONE });
+      for (var d = 1; d <= daysInMonth; d++) {
+        var key = month + "-" + String(d).padStart(2, "0");
+        var list = map[key];
+        if (!list) {
+          var off = el("span", "pf-bk-cal-day" + (key === today ? " pf-bk-cal-today" : ""), String(d));
+          off.setAttribute("aria-hidden", "true");
+          grid.appendChild(off);
+          continue;
+        }
+        var b = el("button", "pf-bk-cal-day pf-bk-cal-open" + (key === today ? " pf-bk-cal-today" : ""));
+        b.type = "button";
+        b.appendChild(el("span", "pf-bk-cal-num", String(d)));
+        // Un point par créneau (trois au plus) : le nombre exact est dans l'étiquette.
+        var dots = el("span", "pf-bk-cal-count");
+        dots.setAttribute("data-count", String(list.length));
+        for (var k = 0; k < Math.min(3, list.length); k++) dots.appendChild(el("i"));
+        b.appendChild(dots);
+        b.setAttribute("aria-pressed", String(key === booking.date));
+        b.setAttribute("aria-label", keyLabel(key) + " : " + list.length + " créneau" + (list.length > 1 ? "x" : "") + " libre" + (list.length > 1 ? "s" : ""));
+        b.setAttribute("data-date", key);
+        b.addEventListener("click", (function (k) { return function () { chooseDate(k, true); }; })(key));
+        grid.appendChild(b);
+      }
+      cal.appendChild(grid);
+    }
+
+    // Les séances libres d'un jour, groupées par formule.
+    function chooseDate(key, byUser) {
+      booking.date = key;
+      booking.month = monthOf(key);
       booking.slot = null;
-      booking.tier = 0;
-      pressOnly($("pf-bk-offers"), ".pf-bk-offer", button);
       $("pf-bk-form").hidden = true;
+      renderCalendar();
+      var list = slotsByDay()[key] || [];
       var days = $("pf-bk-days");
       days.textContent = "";
-      var byDay = [];
+      var label = keyLabel(key);
+      var heading = el("h3", "pf-bk-day-title", label.charAt(0).toUpperCase() + label.slice(1));
+      heading.appendChild(el("span", "pf-bk-day-count", list.length + " créneau" + (list.length > 1 ? "x" : "") + " libre" + (list.length > 1 ? "s" : "")));
+      days.appendChild(heading);
+      var groups = [];
       var index = {};
-      offer.slots.forEach(function (s) {
-        var key = slotDay(s.startsAt);
-        if (!(key in index)) { index[key] = byDay.length; byDay.push({ label: key, slots: [] }); }
-        byDay[index[key]].slots.push(s);
+      list.forEach(function (item) {
+        if (!(item.offer.id in index)) { index[item.offer.id] = groups.length; groups.push({ offer: item.offer, slots: [] }); }
+        groups[index[item.offer.id]].slots.push(item.slot);
       });
-      byDay.forEach(function (day) {
+      groups.forEach(function (g) {
+        var o = g.offer;
         var wrap = el("div", "pf-bk-day");
-        wrap.appendChild(el("h3", "", day.label));
+        var name = el("p", "pf-bk-day-offer");
+        name.appendChild(el("strong", "", o.title));
+        var tiers = o.tiers || [];
+        name.appendChild(el("span", "", " · " + [duration(o.durationMin), tiers.length ? "dès " + euros(o.priceCents) : (o.priceCents ? euros(o.priceCents) : "")].filter(Boolean).join(" · ")));
+        wrap.appendChild(name);
         var times = el("div", "pf-bk-times");
-        day.slots.forEach(function (s) {
+        g.slots.forEach(function (s) {
           var b = el("button", "pf-bk-time", slotTime(s.startsAt));
           b.type = "button";
           b.setAttribute("aria-pressed", "false");
-          b.setAttribute("aria-label", day.label + " à " + slotTime(s.startsAt));
-          b.addEventListener("click", function () { chooseSlot(s, b); });
+          b.setAttribute("aria-label", o.title + ", " + label + " à " + slotTime(s.startsAt));
+          b.addEventListener("click", function () {
+            if (booking.offer !== o) booking.tier = 0;
+            booking.offer = o;
+            chooseSlot(s, b);
+          });
           times.appendChild(b);
         });
         wrap.appendChild(times);
         days.appendChild(wrap);
       });
+      if (byUser) days.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+
+    // Une formule choisie filtre l'agenda ; un second clic les remontre toutes.
+    function chooseOffer(offer, button) {
+      var all = booking.offers.length > 1 && booking.filter === offer.id;
+      booking.filter = all ? "" : offer.id;
+      pressOnly($("pf-bk-offers"), ".pf-bk-offer", all ? null : button);
+      showCalendar(true);
+    }
+
+    function showCalendar(byUser) {
+      var map = slotsByDay();
+      var keys = Object.keys(map).sort();
+      if (!booking.date || !map[booking.date]) booking.date = keys[0] || "";
+      booking.month = booking.date ? monthOf(booking.date) : "";
       $("pf-bk-when").hidden = false;
-      $("pf-bk-when").scrollIntoView({ behavior: "smooth", block: "nearest" });
+      if (booking.date) chooseDate(booking.date, false);
+      else renderCalendar();
+      if (byUser) $("pf-bk-when").scrollIntoView({ behavior: "smooth", block: "nearest" });
     }
 
     function photosText(n) {
@@ -206,9 +342,14 @@
         b.addEventListener("click", function () { chooseOffer(o, b); });
         list.appendChild(b);
       });
-      $("pf-bk-when").hidden = true;
       $("pf-bk-form").hidden = true;
-      if (offers.length === 1) chooseOffer(offers[0], list.firstChild);
+      // Une seule formule : choisie d'office ; plusieurs : l'agenda les montre toutes.
+      booking.filter = offers.length === 1 ? offers[0].id : "";
+      booking.date = "";
+      if (offers.length === 1) pressOnly(list, ".pf-bk-offer", list.firstChild);
+      var hint = $("pf-bk-offers-hint");
+      if (hint) hint.hidden = offers.length < 2;
+      showCalendar(false);
     }
 
     function showPrivateNote(text, isError) {

@@ -105,7 +105,8 @@ try {
 
   await page.click("#ad-tab-booking");
   await page.waitForSelector("#ad-bk-slot-form", { timeout: 10000 });
-  await page.selectOption('#ad-bk-slot-form [name="offerId"]', loyalOffer.id);
+  await page.uncheck(`#ad-bk-slot-form [name="offerIds"][value="${publicOffer.id}"]`, { force: true });
+  await page.check(`#ad-bk-slot-form [name="offerIds"][value="${loyalOffer.id}"]`, { force: true });
   await page.fill('#ad-bk-slot-form [name="date"]', DAY);
   await page.fill('#ad-bk-slot-form [name="times"]', "14:00");
   await page.check('#ad-bk-slot-form [name="private"]');

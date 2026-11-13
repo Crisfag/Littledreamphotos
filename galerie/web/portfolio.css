@@ -215,9 +215,47 @@ h3 { font-size: 1.4rem; margin-bottom: .8rem; }
 .pf-bk-dress { margin-top: .8rem; padding: .9rem 1.1rem; border-radius: 12px; border: 1px solid var(--line); background: #fff; }
 .pf-bk-dress strong { display: block; font-family: var(--sans); font-size: .85rem; font-weight: 600; color: var(--ink); margin-bottom: .2rem; }
 .pf-bk-dress p { margin: 0; font-size: .92rem; white-space: pre-line; }
-.pf-bk-days { display: grid; gap: 1rem; }
-.pf-bk-day h3 { font-family: var(--sans); font-size: .95rem; font-weight: 500; margin-bottom: .5rem; }
-.pf-bk-day h3::first-letter { text-transform: uppercase; }
+.pf-bk-hint { margin: -.4rem 0 .9rem; font-size: .9rem; color: var(--muted); }
+
+/* Agenda : le mois à gauche, les séances du jour choisi à droite. */
+.pf-bk-when-grid { display: grid; gap: 1.4rem 2.4rem; align-items: start; }
+@media (min-width: 820px) { .pf-bk-when-grid { grid-template-columns: minmax(300px, 380px) minmax(0, 1fr); } }
+.pf-bk-cal { padding: 1rem 1rem 1.1rem; background: #fff; border: 1px solid var(--line); border-radius: 16px; max-width: 420px; }
+.pf-bk-cal-head { display: flex; align-items: center; justify-content: space-between; gap: .5rem; margin-bottom: .6rem; }
+.pf-bk-cal-month { font-family: var(--serif); font-size: 1.35rem; margin: 0; text-transform: capitalize; }
+.pf-bk-cal-nav {
+  width: 40px; height: 40px; display: grid; place-items: center; font: inherit; font-size: 1.4rem; line-height: 1;
+  color: var(--ink); background: transparent; border: 1px solid var(--line); border-radius: 50%; cursor: pointer;
+  transition: border-color .2s, background-color .2s;
+}
+.pf-bk-cal-nav:hover:not(:disabled) { border-color: var(--rose); background: var(--ivory); }
+.pf-bk-cal-nav:disabled { opacity: .3; cursor: default; }
+.pf-bk-cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.pf-bk-cal-wd { text-align: center; font-size: .72rem; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); padding: .2rem 0 .35rem; }
+.pf-bk-cal-day {
+  position: relative; aspect-ratio: 1; min-height: 40px; display: grid; place-items: center;
+  font: inherit; font-size: .92rem; font-variant-numeric: tabular-nums; color: #b8ada4; border-radius: 10px;
+}
+.pf-bk-cal-today { box-shadow: inset 0 0 0 1px var(--line); }
+.pf-bk-cal-open {
+  color: var(--ink); font-weight: 500; background: var(--sand); border: 0; cursor: pointer;
+  transition: background-color .2s, color .2s, transform .15s;
+}
+.pf-bk-cal-open:hover { background: #e8dccd; }
+.pf-bk-cal-open[aria-pressed="true"] { background: var(--rose-deep); color: #fff; }
+.pf-bk-cal-num { line-height: 1; }
+.pf-bk-cal-open { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
+.pf-bk-cal-count {
+  display: flex; gap: 2px; justify-content: center; height: 5px;
+}
+.pf-bk-cal-count i { width: 5px; height: 5px; border-radius: 50%; background: var(--rose-deep); }
+.pf-bk-cal-open[aria-pressed="true"] .pf-bk-cal-count i { background: #fff; }
+.pf-bk-day-count { display: block; margin-top: .15rem; font-family: var(--sans); font-size: .88rem; color: var(--muted); }
+.pf-bk-cal-empty { color: var(--muted); font-size: .92rem; }
+.pf-bk-days { display: grid; gap: 1.1rem; align-content: start; }
+.pf-bk-day-title { font-family: var(--serif); font-size: 1.5rem; margin: 0; }
+.pf-bk-day-offer { margin: 0 0 .5rem; font-size: .92rem; color: var(--muted); }
+.pf-bk-day-offer strong { font-weight: 500; color: var(--ink); }
 .pf-bk-times { display: flex; flex-wrap: wrap; gap: .5rem; }
 .pf-bk-time {
   min-width: 5.2rem; min-height: 44px; padding: 0 1rem; font: inherit; font-size: .95rem; font-variant-numeric: tabular-nums;

@@ -7893,6 +7893,7 @@
         '<span class="ad-hint">' + slotsLeft + " créneau" + (slotsLeft > 1 ? "x" : "") + " libre" + (slotsLeft > 1 ? "s" : "") +
         (o.depositCents && !data.stripeReady ? " · en attente du paiement en ligne" : "") + "</span></div>" +
         '<label class="ad-sc-toggle"><input type="checkbox" data-bk-active ' + (o.active ? "checked" : "") + " /> Proposée</label>" +
+        '<button type="button" class="ad-btn ad-btn-small ad-btn-primary" data-bk-open-slots>Ouvrir des créneaux</button>' +
         '<button type="button" class="ad-btn ad-btn-small" data-bk-edit>Modifier</button>' +
         '<button type="button" class="ad-btn ad-btn-small ad-btn-danger" data-bk-delete>Supprimer</button>' +
         "</li>";
@@ -7916,6 +7917,40 @@
       "</section>";
   }
 
+  /* ---------- Créneaux : ouvrir une date ou une période, plusieurs séances ---------- */
+
+  var WEEKDAYS = ["lun", "mar", "mer", "jeu", "ven", "sam", "dim"];
+  var MAX_RANGE_DAYS = 92;
+
+  // Mêmes règles que le Worker (booking.js, datesBetween).
+  function slotDates(from, until, weekdays) {
+    var parse = function (v) {
+      var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(v || ""));
+      return m ? Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null;
+    };
+    var start = parse(from);
+    var end = until ? parse(until) : start;
+    if (start === null || end === null || end < start || (end - start) / 86400000 >= MAX_RANGE_DAYS) return [];
+    var out = [];
+    for (var t = start; t <= end; t += 86400000) {
+      var wd = new Date(t).getUTCDay() || 7;
+      if (!until || weekdays.indexOf(wd) !== -1) out.push(new Date(t).toISOString().slice(0, 10));
+    }
+    return out;
+  }
+  function slotTimesList(value) {
+    return String(value || "").split(/[,;\s]+/).map(function (t) { return t.replace(/h/i, ":").replace(/:$/, ":00"); })
+      .filter(function (t) { return /^\d{1,2}:\d{2}$/.test(t); });
+  }
+  function seriesCount(from, to, every, length) {
+    var mins = function (v) { var m = /^(\d{1,2}):(\d{2})$/.exec(v || ""); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
+    var a = mins(from), b = mins(to), step = Number(every) || length;
+    if (a === null || b === null || b <= a || !(step >= 5)) return 0;
+    var n = 0;
+    for (var t = a; t + Math.max(length, 1) <= b; t += step) n++;
+    return n;
+  }
+
   function slotsSectionHtml(data) {
     if (!data.offers.length) return "";
     var today = new Date().toLocaleDateString("en-CA", { timeZone: BOOKING_ZONE });
@@ -7924,61 +7959,179 @@
     var offersById = {};
     data.offers.forEach(function (o) { offersById[o.id] = o; });
     var future = data.slots.filter(function (s) { return s.startsAt > Date.now() / 1000; });
-    var days = [];
-    var byDay = {};
+    // Mois → jours → créneaux.
+    var months = [];
+    var byMonth = {};
     future.forEach(function (s) {
-      var key = bookingDay(s.startsAt);
-      if (!byDay[key]) { byDay[key] = []; days.push(key); }
-      byDay[key].push(s);
+      var key = new Date(s.startsAt * 1000).toLocaleDateString("en-CA", { timeZone: BOOKING_ZONE });
+      var mk = key.slice(0, 7);
+      if (!byMonth[mk]) { byMonth[mk] = { days: [], byDay: {}, free: 0 }; months.push(mk); }
+      var m = byMonth[mk];
+      if (!m.byDay[key]) { m.byDay[key] = []; m.days.push(key); }
+      m.byDay[key].push(s);
+      if (!s.bookingId && !s.busy) m.free++;
     });
     var series = bookingState.slotMode === "series";
+    var chosen = (bookingState.slotOffers || []).filter(function (id) { return offersById[id]; });
+    if (!chosen.length) chosen = [data.offers[0].id];
+    var fieldsTimes = '<div class="ad-bk-slot-fields" data-bk-fields="times"' + (series ? " hidden" : "") + ">" +
+      '<label class="ad-field ad-bk-times"><span>Heure(s) <em>(séparées par des virgules)</em></span><input name="times" placeholder="ex. 10:00, 14:30" /></label></div>';
+    var fieldsSeries = '<div class="ad-bk-slot-fields" data-bk-fields="series"' + (series ? "" : " hidden") + ">" +
+      '<label class="ad-field"><span>De</span><input type="time" name="from" value="10:00" /></label>' +
+      '<label class="ad-field"><span>À</span><input type="time" name="to" value="16:00" /></label>' +
+      '<label class="ad-field"><span>Toutes les <em>(min)</em></span><input type="number" name="every" min="5" max="720" step="5" placeholder="durée" /></label></div>';
     return '<section id="ad-bk-slots"><div class="ad-section-header"><h3>Créneaux</h3></div>' +
-      '<p class="ad-hint">Ouvrez des horaires précis, ou une série pour vos mini-séances (par exemple de 10 h à 16 h, toutes les 20 minutes). Heure de Bruxelles.</p>' +
+      '<p class="ad-hint">Vos clients voient vos créneaux dans un agenda : ils cliquent sur une date et choisissent l\'heure. Ouvrez une date, ou toute une période d\'un coup (par exemple tous les samedis de décembre à 10 h et 14 h). Heure de Bruxelles.</p>' +
       '<form id="ad-bk-slot-form" class="ad-bk-slot-form" novalidate>' +
-      '<div class="ad-seg" role="group" aria-label="Type de créneaux">' +
-      '<button type="button" class="ad-seg-btn" data-bk-mode="times" aria-pressed="' + !series + '">Horaires précis</button>' +
-      '<button type="button" class="ad-seg-btn" data-bk-mode="series" aria-pressed="' + series + '">Série (mini-séances)</button></div>' +
+      '<fieldset class="ad-bk-fs"><legend>1. Pour quelle' + (data.offers.length > 1 ? "(s) séance(s)" : " séance") + " ?</legend>" +
+      '<div class="ad-bk-picks">' + data.offers.map(function (o) {
+        return '<label class="ad-bk-pick"><input type="checkbox" name="offerIds" value="' + esc(o.id) + '"' + (chosen.indexOf(o.id) !== -1 ? " checked" : "") + " />" +
+          "<span>" + esc(o.title) + " <em>(" + esc(durationText(o.durationMin)) + ")</em></span></label>";
+      }).join("") + "</div>" +
+      (data.offers.length > 1 ? '<p class="ad-hint">Plusieurs séances au même horaire : la première réservée prend la place, les autres disparaissent de l\'agenda.</p>' : "") +
+      "</fieldset>" +
+      '<fieldset class="ad-bk-fs"><legend>2. Quels jours ?</legend>' +
       '<div class="ad-bk-slot-fields">' +
-      '<label class="ad-field"><span>Formule</span><select name="offerId">' + data.offers.map(function (o) {
-        return '<option value="' + esc(o.id) + '">' + esc(o.title) + " (" + esc(durationText(o.durationMin)) + ")</option>";
-      }).join("") + "</select></label>" +
-      '<label class="ad-field"><span>Date</span><input type="date" name="date" min="' + today + '" required /></label>' +
-      (series
-        ? '<label class="ad-field"><span>De</span><input type="time" name="from" value="10:00" required /></label>' +
-          '<label class="ad-field"><span>À</span><input type="time" name="to" value="16:00" required /></label>' +
-          '<label class="ad-field"><span>Toutes les <em>(min)</em></span><input type="number" name="every" min="5" max="720" step="5" placeholder="durée" /></label>'
-        : '<label class="ad-field ad-bk-times"><span>Heure(s) <em>(séparées par des virgules)</em></span><input name="times" placeholder="ex. 10:00, 14:30" required /></label>') +
-      '<button type="submit" class="ad-btn ad-btn-primary">Ouvrir ' + (series ? "la série" : "les créneaux") + "</button>" +
-      "</div>" +
-      (series ? "" : '<label class="ad-check ad-bk-private-check"><input type="checkbox" name="private" /> <span>Créneau privé <em>— invisible sur votre mini-site, réservable seulement par le lien que vous envoyez à un client</em></span></label>') +
+      '<label class="ad-field"><span>Le <em>(ou du)</em></span><input type="date" name="date" min="' + today + '" required /></label>' +
+      '<label class="ad-field"><span>Au <em>(facultatif : pour une période)</em></span><input type="date" name="until" min="' + today + '" /></label></div>' +
+      '<div class="ad-bk-weekdays" id="ad-bk-weekdays" role="group" aria-label="Jours de la semaine de la période" data-off="1">' +
+      WEEKDAYS.map(function (d, i) {
+        return '<label class="ad-bk-wd"><input type="checkbox" name="wd" value="' + (i + 1) + '" checked /><span>' + d + "</span></label>";
+      }).join("") + '<span class="ad-hint">Avec une période : seulement les jours cochés.</span></div>' +
+      "</fieldset>" +
+      '<fieldset class="ad-bk-fs"><legend>3. À quelles heures ?</legend>' +
+      '<div class="ad-seg" role="group" aria-label="Type d\'horaires">' +
+      '<button type="button" class="ad-seg-btn" data-bk-mode="times" aria-pressed="' + !series + '">Horaires précis</button>' +
+      '<button type="button" class="ad-seg-btn" data-bk-mode="series" aria-pressed="' + series + '">Plage découpée (mini-séances)</button></div>' +
+      fieldsTimes + fieldsSeries + "</fieldset>" +
+      '<label class="ad-check ad-bk-private-check"><input type="checkbox" name="private" /> <span>Créneau privé <em>— invisible sur votre agenda public, réservable seulement par le lien que vous envoyez à un client</em></span></label>' +
+      '<div class="ad-bk-slot-submit"><p class="ad-bk-slot-preview" id="ad-bk-slot-preview" aria-live="polite"></p>' +
+      '<button type="submit" class="ad-btn ad-btn-primary">Ouvrir les créneaux</button></div>' +
       "</form>" +
       bookForClientHtml(data) +
       privateSlotHtml(data) +
-      (days.length
+      (months.length
         ? '<p class="ad-hint ad-bk-book-hint">Sur un horaire libre : <strong>+</strong> le réserve au nom d\'un client, le <strong>lien</strong> en fait un créneau privé à lui envoyer, que lui seul peut réserver.</p>' +
-          '<div class="ad-bk-days">' + days.map(function (day) {
-            // Le nom de la formule n'est utile que si plusieurs se partagent la journée.
-            var mixed = byDay[day].some(function (s) { return s.offerId !== byDay[day][0].offerId; });
-            var single = !mixed && offersById[byDay[day][0].offerId];
-            return '<div class="ad-bk-day"><h4>' + esc(day) + (single && data.offers.length > 1 ? ' <span class="ad-hint">· ' + esc(single.title) + "</span>" : "") +
-              '</h4><ul class="ad-bk-chips">' + byDay[day].map(function (s) {
-              var b = s.bookingId ? bookingsById[s.bookingId] : null;
-              var o = offersById[s.offerId];
-              var label = bookingTime(s.startsAt) + (mixed && o ? " · " + o.title : "");
-              return b
-                ? '<li class="ad-bk-chip ad-bk-chip-booked" title="' + esc(o ? o.title : "") + '">' + esc(label) + " · " + esc(b.clientName) + "</li>"
-                : '<li class="ad-bk-chip' + (s.private ? " ad-bk-chip-private" : "") + (bookingState.bookFor === s.id || bookingState.linkFor === s.id ? " ad-bk-chip-active" : "") +
-                  '" title="' + esc((o ? o.title : "") + (s.private ? " · créneau privé" + (s.privateName || s.privateEmail ? " pour " + (s.privateName || s.privateEmail) : "") : "")) + '">' +
-                  (s.private ? '<span class="ad-bk-chip-lock"><svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span>' : "") + esc(label) +
-                  (s.private && (s.privateName || s.privateEmail) ? '<span class="ad-bk-chip-for"> · ' + esc(s.privateName || s.privateEmail) + "</span>" : "") +
-                  '<button type="button" class="ad-bk-chip-link" data-bk-slot-link="' + esc(s.id) + '" aria-label="' + (s.private ? "Lien privé du créneau de " : "Créneau privé : lien pour un client, ") + esc(label) + '" title="' + (s.private ? "Lien privé" : "Créneau privé, à envoyer à un client") + '"><svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg></button>' +
-                  '<button type="button" class="ad-bk-chip-book" data-bk-slot-book="' + esc(s.id) + '" aria-label="Réserver le créneau de ' + esc(label) + ' pour un client" title="Réserver pour un client">' +
-                  '<svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>' +
-                  '<button type="button" data-bk-slot-delete="' + esc(s.id) + '" aria-label="Supprimer le créneau de ' + esc(label) + '">×</button></li>';
-            }).join("") + "</ul></div>";
-          }).join("") + "</div>"
+          months.map(function (mk, mi) {
+            var m = byMonth[mk];
+            var p = mk.split("-").map(Number);
+            var monthLabel = new Date(Date.UTC(p[0], p[1] - 1, 1)).toLocaleDateString("fr-BE", { month: "long", year: "numeric", timeZone: "UTC" });
+            return '<details class="ad-bk-month"' + (mi === 0 || months.length < 3 ? " open" : "") + '><summary><strong>' + esc(monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1)) + "</strong>" +
+              ' <span class="ad-hint">' + m.free + " créneau" + (m.free > 1 ? "x" : "") + " libre" + (m.free > 1 ? "s" : "") + "</span></summary>" +
+              '<div class="ad-bk-days">' + m.days.map(function (key) { return slotDayHtml(key, m.byDay[key], data, offersById, bookingsById); }).join("") + "</div></details>";
+          }).join("")
         : '<p class="ad-hint">Aucun créneau ouvert pour l\'instant.</p>') +
       "</section>";
+  }
+
+  function bindSlotForm(form, data) {
+    var f = form.elements;
+    var preview = document.getElementById("ad-bk-slot-preview");
+    var weekdays = document.getElementById("ad-bk-weekdays");
+    function mode() { return bookingState.slotMode === "series" ? "series" : "times"; }
+    function checkedValues(name) {
+      return Array.prototype.filter.call(form.querySelectorAll('[name="' + name + '"]'), function (i) { return i.checked; }).map(function (i) { return i.value; });
+    }
+    function read() {
+      var offerIds = checkedValues("offerIds");
+      var until = f.until.value && f.until.value !== f.date.value ? f.until.value : "";
+      var wd = checkedValues("wd").map(Number);
+      var dates = slotDates(f.date.value, until, wd);
+      var body = { offerIds: offerIds, date: f.date.value };
+      if (until) { body.until = until; body.weekdays = wd; }
+      var perOffer = [];
+      if (mode() === "series") {
+        body.from = f.from.value;
+        body.to = f.to.value;
+        if (f.every.value) body.every = Number(f.every.value);
+        perOffer = offerIds.map(function (id) {
+          var o = data.offers.filter(function (x) { return x.id === id; })[0];
+          return seriesCount(f.from.value, f.to.value, f.every.value, o ? o.durationMin : 0);
+        });
+      } else {
+        body.times = slotTimesList(f.times.value);
+        perOffer = offerIds.map(function () { return body.times.length; });
+      }
+      if (f.private.checked) body.private = true;
+      var total = perOffer.reduce(function (n, k) { return n + k * dates.length; }, 0);
+      return { body: body, dates: dates, perOffer: perOffer, total: total, until: until };
+    }
+    function refresh() {
+      weekdays.setAttribute("data-off", f.until.value && f.until.value !== f.date.value ? "0" : "1");
+      var r = read();
+      var parts = [];
+      if (!r.body.offerIds.length) { preview.textContent = "Cochez au moins une séance."; return; }
+      if (!f.date.value) { preview.textContent = ""; return; }
+      if (!r.dates.length) { preview.textContent = r.until ? "Aucun jour dans cette période (" + MAX_RANGE_DAYS + " jours au plus)." : ""; return; }
+      var perDay = r.perOffer.reduce(function (n, k) { return n + k; }, 0);
+      if (!perDay) { preview.textContent = mode() === "series" ? "Aucune séance ne tient dans cette plage horaire." : "Indiquez une ou plusieurs heures."; return; }
+      parts.push(r.dates.length + " jour" + (r.dates.length > 1 ? "s" : ""));
+      parts.push(perDay + " créneau" + (perDay > 1 ? "x" : "") + " par jour");
+      preview.textContent = "→ " + r.total + " créneau" + (r.total > 1 ? "x" : "") + " à ouvrir (" + parts.join(" × ") + ")" + (r.total > 400 ? " : c'est trop d'un coup, 400 au plus." : ".");
+    }
+    form.addEventListener("input", refresh);
+    form.addEventListener("change", refresh);
+    form.querySelectorAll("[data-bk-mode]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        bookingState.slotMode = btn.getAttribute("data-bk-mode");
+        form.querySelectorAll("[data-bk-mode]").forEach(function (b) { b.setAttribute("aria-pressed", String(b === btn)); });
+        form.querySelectorAll("[data-bk-fields]").forEach(function (box) { box.hidden = box.getAttribute("data-bk-fields") !== mode(); });
+        refresh();
+      });
+    });
+    refresh();
+
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var r = read();
+      var body = r.body;
+      bookingState.slotOffers = body.offerIds;
+      if (!body.offerIds.length) { toast("Cochez au moins une séance.", true); return; }
+      if (!body.date) { toast("Choisissez une date.", true); f.date.focus(); return; }
+      if (mode() === "times" && !body.times.length) { toast("Indiquez une ou plusieurs heures (ex. 10:00, 14:30).", true); f.times.focus(); return; }
+      var before = {};
+      data.slots.forEach(function (sl) { before[sl.id] = true; });
+      bookingCall("POST", "/slots", body, function (res) {
+        return res.created
+          ? res.created + " créneau" + (res.created > 1 ? "x" : "") + (body.private ? " privé" + (res.created > 1 ? "s" : "") : "") + (res.created > 1 ? " ouverts" : " ouvert") +
+            (res.skipped ? " (" + res.skipped + " déjà ouvert" + (res.skipped > 1 ? "s" : "") + ")" : "") + "."
+          : "Ces créneaux étaient déjà ouverts.";
+      }).then(function (ok) {
+        // Un seul créneau privé ouvert : son lien s'affiche aussitôt.
+        var fresh = ok && body.private ? bookingState.data.slots.filter(function (sl) { return sl.private && !before[sl.id]; }) : [];
+        if (fresh.length !== 1) return;
+        bookingState.linkFor = fresh[0].id;
+        paintBooking(bookingState.data);
+        var panel = document.getElementById("ad-bk-link");
+        if (panel) panel.scrollIntoView({ block: "center", behavior: "smooth" });
+      });
+    });
+  }
+
+  function slotDayHtml(key, slots, data, offersById, bookingsById) {
+    // Le nom de la formule n'est utile que si plusieurs se partagent la journée.
+    var mixed = slots.some(function (s) { return s.offerId !== slots[0].offerId; });
+    var single = !mixed && offersById[slots[0].offerId];
+    var free = slots.filter(function (s) { return !s.bookingId; });
+    return '<div class="ad-bk-day"><h4>' + esc(bookingDay(slots[0].startsAt)) + (single && data.offers.length > 1 ? ' <span class="ad-hint">· ' + esc(single.title) + "</span>" : "") +
+      (free.length > 1 ? ' <button type="button" class="ad-link-btn ad-bk-day-clear" data-bk-day-clear="' + esc(key) + '">Retirer les ' + free.length + " créneaux libres</button>" : "") +
+      '</h4><ul class="ad-bk-chips">' + slots.map(function (s) {
+      var b = s.bookingId ? bookingsById[s.bookingId] : null;
+      var o = offersById[s.offerId];
+      var label = bookingTime(s.startsAt) + (mixed && o ? " · " + o.title : "");
+      if (b) return '<li class="ad-bk-chip ad-bk-chip-booked" title="' + esc(o ? o.title : "") + '">' + esc(label) + " · " + esc(b.clientName) + "</li>";
+      if (s.busy) {
+        return '<li class="ad-bk-chip ad-bk-chip-busy" title="Une autre séance est réservée à cette heure : ce créneau n\'est plus proposé">' + esc(label) +
+          ' <span class="ad-bk-chip-for">· pris</span><button type="button" data-bk-slot-delete="' + esc(s.id) + '" aria-label="Supprimer le créneau de ' + esc(label) + '">×</button></li>';
+      }
+      return '<li class="ad-bk-chip' + (s.private ? " ad-bk-chip-private" : "") + (bookingState.bookFor === s.id || bookingState.linkFor === s.id ? " ad-bk-chip-active" : "") +
+        '" title="' + esc((o ? o.title : "") + (s.private ? " · créneau privé" + (s.privateName || s.privateEmail ? " pour " + (s.privateName || s.privateEmail) : "") : "")) + '">' +
+        (s.private ? '<span class="ad-bk-chip-lock"><svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span>' : "") + esc(label) +
+        (s.private && (s.privateName || s.privateEmail) ? '<span class="ad-bk-chip-for"> · ' + esc(s.privateName || s.privateEmail) + "</span>" : "") +
+        '<button type="button" class="ad-bk-chip-link" data-bk-slot-link="' + esc(s.id) + '" aria-label="' + (s.private ? "Lien privé du créneau de " : "Créneau privé : lien pour un client, ") + esc(label) + '" title="' + (s.private ? "Lien privé" : "Créneau privé, à envoyer à un client") + '"><svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg></button>' +
+        '<button type="button" class="ad-bk-chip-book" data-bk-slot-book="' + esc(s.id) + '" aria-label="Réserver le créneau de ' + esc(label) + ' pour un client" title="Réserver pour un client"><svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>' +
+        '<button type="button" data-bk-slot-delete="' + esc(s.id) + '" aria-label="Supprimer le créneau de ' + esc(label) + '">×</button></li>';
+    }).join("") + "</ul></div>";
   }
 
   // Réserver un créneau libre au nom d'un client (fiches clients ou saisie).
@@ -8425,6 +8578,13 @@
         bookingCall("POST", "/offers/" + encodeURIComponent(id), { active: e.target.checked },
           e.target.checked ? "Formule proposée sur votre mini-site." : "Formule retirée de votre mini-site.");
       });
+      // Ouvrir des créneaux pour cette séance : le formulaire, déjà réglé.
+      row.querySelector("[data-bk-open-slots]").addEventListener("click", function () {
+        bookingState.slotOffers = [id];
+        paintBooking(data);
+        var form = document.getElementById("ad-bk-slot-form");
+        if (form) { form.scrollIntoView({ block: "start", behavior: "smooth" }); form.elements.date.focus({ preventScroll: true }); }
+      });
       row.querySelector("[data-bk-edit]").addEventListener("click", function () {
         bookingState.editingOfferId = id;
         paintBooking(data);
@@ -8439,46 +8599,19 @@
       });
     });
 
-    el.view.querySelectorAll("[data-bk-mode]").forEach(function (btn) {
-      btn.addEventListener("click", function () {
-        bookingState.slotMode = btn.getAttribute("data-bk-mode");
-        paintBooking(data);
-        document.getElementById("ad-bk-slots").scrollIntoView({ block: "start" });
-      });
-    });
     var slotForm = document.getElementById("ad-bk-slot-form");
-    if (slotForm) {
-      slotForm.addEventListener("submit", function (e) {
-        e.preventDefault();
-        var f = slotForm.elements;
-        var body = { offerId: f.offerId.value, date: f.date.value };
-        if (f.private && f.private.checked) body.private = true;
-        if (!body.date) { toast("Choisissez une date.", true); return; }
-        if (bookingState.slotMode === "series") {
-          body.from = f.from.value;
-          body.to = f.to.value;
-          if (f.every.value) body.every = Number(f.every.value);
-        } else {
-          body.times = String(f.times.value).split(/[,;\s]+/).map(function (t) { return t.replace(/h/i, ":").replace(/:$/, ":00"); }).filter(Boolean);
-        }
-        var before = {};
-        data.slots.forEach(function (sl) { before[sl.id] = true; });
-        bookingCall("POST", "/slots", body, function (res) {
-          return res.created
-            ? res.created + " créneau" + (res.created > 1 ? "x" : "") + (body.private ? " privé" + (res.created > 1 ? "s" : "") : "") + (res.created > 1 ? " ouverts" : " ouvert") +
-              (res.skipped ? " (" + res.skipped + " déjà ouvert" + (res.skipped > 1 ? "s" : "") + ")" : "") + "."
-            : "Ces créneaux étaient déjà ouverts.";
-        }).then(function (ok) {
-          // Un seul créneau privé ouvert : son lien s'affiche aussitôt.
-          var fresh = ok && body.private ? bookingState.data.slots.filter(function (sl) { return sl.private && !before[sl.id]; }) : [];
-          if (fresh.length !== 1) return;
-          bookingState.linkFor = fresh[0].id;
-          paintBooking(bookingState.data);
-          var panel = document.getElementById("ad-bk-link");
-          if (panel) panel.scrollIntoView({ block: "center", behavior: "smooth" });
+    if (slotForm) bindSlotForm(slotForm, data);
+    el.view.querySelectorAll("[data-bk-day-clear]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var key = btn.getAttribute("data-bk-day-clear");
+        var ids = data.slots.filter(function (sl) {
+          return !sl.bookingId && new Date(sl.startsAt * 1000).toLocaleDateString("en-CA", { timeZone: BOOKING_ZONE }) === key;
+        }).map(function (sl) { return sl.id; });
+        confirmAction("Retirer les " + ids.length + " créneaux libres de cette journée ? Les séances déjà réservées restent.", function () {
+          bookingCall("POST", "/slots/remove", { ids: ids }, function (res) { return res.removed + " créneau" + (res.removed > 1 ? "x retirés" : " retiré") + "."; });
         });
       });
-    }
+    });
     el.view.querySelectorAll("[data-bk-slot-book]").forEach(function (btn) {
       btn.addEventListener("click", function () {
         bookingState.bookFor = btn.getAttribute("data-bk-slot-book");

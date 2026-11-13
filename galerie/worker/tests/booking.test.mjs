@@ -4,7 +4,7 @@
 //
 //   node tests/booking.test.mjs
 
-import { localToEpoch, seriesTimes, formatSlot, buildIcs, readTiers, parseTiers, MAX_TIERS, privateSlotUrl, PRIVATE_TOKEN_RE } from "../src/booking.js";
+import { localToEpoch, seriesTimes, formatSlot, buildIcs, readTiers, parseTiers, MAX_TIERS, privateSlotUrl, PRIVATE_TOKEN_RE, datesBetween, MAX_RANGE_DAYS } from "../src/booking.js";
 import { PLANS } from "../src/subscription.js";
 import {
   buildBookingConfirmationEmail,
@@ -115,6 +115,18 @@ check("invitation : prénom, créneau, acompte, bouton vers le lien, titre écha
 const inviteTiers = buildPrivateSlotInviteEmail({ studioName: "S", offerTitle: "T", when: "w", priceCents: 9000, depositCents: 0, hasTiers: true, url: "u" });
 check("invitation : formule à plusieurs tarifs, pas de prix unique annoncé ; sans nom, titre neutre",
       !inviteTiers.html.includes("Prix") && inviteTiers.html.includes("Ce créneau est pour vous"));
+
+// Période : jours d'une plage, filtrés par jour de la semaine.
+check("période : du lundi 30 novembre au dimanche 6 décembre, tous les jours = 7 dates",
+      datesBetween("2026-11-30", "2026-12-06").length === 7 && datesBetween("2026-11-30", "2026-12-06")[6] === "2026-12-06");
+check("période : les samedis de décembre 2026 (5, 12, 19, 26)",
+      datesBetween("2026-12-01", "2026-12-31", [6]).join(",") === "2026-12-05,2026-12-12,2026-12-19,2026-12-26", datesBetween("2026-12-01", "2026-12-31", [6]).join(","));
+check("période : du lundi au vendredi d'une semaine (1 à 5)", datesBetween("2026-11-30", "2026-12-06", [1, 2, 3, 4, 5]).length === 5);
+check("période : sans date de fin, la seule date de début", datesBetween("2026-12-05").join() === "2026-12-05");
+check("période invalide, à l'envers, ou trop longue : refusée",
+      datesBetween("2026-12-10", "2026-12-01").length === 0 && datesBetween("2026-02-30", "2026-03-02").length === 0 &&
+      datesBetween("2026-01-01", "2026-12-31").length === 0 && datesBetween("2026-01-01", "2026-04-02").length === MAX_RANGE_DAYS);
+check("période : le changement d'heure ne décale pas les jours", datesBetween("2027-03-26", "2027-03-30").join(",") === "2027-03-26,2027-03-27,2027-03-28,2027-03-29,2027-03-30");
 
 const failed = checks.filter((c) => !c.ok).length;
 console.log(`\n${checks.length - failed}/${checks.length} vérifications réussies`);

@@ -1343,6 +1343,23 @@ cd worker
 npx wrangler d1 execute galerie-protegee --remote --file=migrations/2026-11-creneaux-prives.sql
 ```
 
+### Agenda de réservation et créneaux par période
+
+Vos clients voient un **agenda mensuel** (mini-site et page de réservation) :
+les jours libres sont cliquables, un point par créneau ; un clic sur une date
+montre ses horaires, séance par séance. Avec plusieurs formules, l'agenda les
+montre toutes ; cliquer sur une formule le filtre.
+
+Onglet **Réservations**, section **Créneaux** : 1. une ou plusieurs séances,
+2. une date ou une période (« Au », trois mois au plus) avec les jours de la
+semaine voulus, 3. des horaires précis ou une plage découpée ; un aperçu
+annonce le nombre de créneaux avant de les ouvrir (400 au plus d'un coup).
+« Ouvrir des créneaux » sur une formule prépare le formulaire pour elle. Un
+même horaire peut être ouvert pour plusieurs séances : dès que l'une est
+réservée, les créneaux qui la chevauchent (toutes formules) disparaissent de
+l'agenda et s'affichent « pris » côté photographe. Les créneaux sont rangés
+par mois ; « Retirer les créneaux libres » vide une journée.
+
 ### Page de réservation seule (sans mini-site)
 
 Onglet **Réservations**, section **Où vos clients réservent** : la case
@@ -2272,6 +2289,7 @@ node tests/introtexts.test.mjs        # textes d'accompagnement enregistrés : c
 node tests/clientpicker.test.mjs       # « Choisir dans mes fiches clients » (facture, devis, galerie, planning) et créneau réservé pour un client (admin-server.mjs lancé)
 node tests/privateslot.test.mjs        # créneau privé : lien secret, envoi au client, réservation par le lien, lien à usage unique (admin-server.mjs lancé)
 node tests/bookingpage.test.mjs        # page de réservation seule : ouverture, lien, QR, bouton, agenda intégré, lien privé, fermeture (admin-server.mjs lancé)
+node tests/agenda.test.mjs             # agenda : période et jours de la semaine, deux séances, agenda mensuel, chevauchement, journée retirée (admin-server.mjs lancé)
 node tests/options.test.mjs           # options payantes : catalogue, cases à cocher dans la galerie, virement, relance, « Marquer comme reçu », autonome (admin-server.mjs lancé)
 node tests/giftcards.test.mjs         # bons cadeaux : vente sur le mini-site, page du bon, suivi et bon à la main, autonome (admin-server.mjs lancé)
 node tests/schoolpack.test.mjs        # pack « toutes les photos », ordre de la gamme, liste de prénoms collée, autonome
