@@ -2381,65 +2381,65 @@ main section.ad-demo {
 }
 
 /* ---------- Lumi, l'assistante ---------- */
-/* Un petit appareil photo rond : l'objectif est son visage. Ses yeux suivent
-   le pointeur, il cligne, flotte, son flash clignote quand il réfléchit et il
-   sautille de joie en répondant. Tout s'arrête si l'animation est réduite. */
+/* Une photographe en 3D douce (tête ronde en dégradé, béret, appareil sur la
+   poitrine). Elle respire, cligne des yeux, suit le pointeur du regard ; au
+   repos, elle regarde à gauche et à droite ou rentre la tête dans son col ;
+   elle penche la tête et fait clignoter son flash en réfléchissant, sautille
+   en répondant. Tout s'arrête si l'animation est réduite. */
 .lumi { display: block; width: 100%; height: 100%; overflow: visible; }
-.lumi-shell { fill: var(--accent); }
-.lumi-top { fill: var(--accent-deep); }
-.lumi-strap { fill: none; stroke: rgba(255, 255, 255, .28); stroke-width: 2; stroke-linecap: round; }
-.lumi-flash { fill: #ffd36b; transform-box: fill-box; transform-origin: center; }
-.lumi-ring { fill: #1c1c9e; }
-.lumi-rim { fill: none; stroke: rgba(255, 255, 255, .55); stroke-width: 1.2; }
-.lumi-face { fill: #fff; }
-.lumi-eyes ellipse { fill: var(--ink); }
-.lumi-eyes .lumi-glint { fill: #fff; }
-.lumi-cheek { fill: #ff9fb2; opacity: .8; }
-.lumi-smile, .lumi-happy { fill: none; stroke: var(--ink); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.lumi-all, .lumi-head, .lumi-tilt { transform-box: view-box; }
+.lumi-all { transform-origin: 60px 118px; }
+.lumi-head { transform-origin: 60px 76px; }
+.lumi-tilt { transform-origin: 60px 76px; transition: transform .45s var(--ease); }
+.lumi-look { transform: translate(var(--lumi-x, 0px), var(--lumi-y, 0px)); transition: transform .2s var(--ease); }
+.lumi-eyes, .lumi-flash { transform-box: fill-box; transform-origin: center; }
 .lumi-happy { opacity: 0; }
-.lumi-shadow { fill: rgba(11, 11, 16, .14); transform-box: fill-box; transform-origin: center; }
-.lumi-body { transform-box: view-box; transform-origin: 40px 66px; }
-.lumi-look { transform: translate(var(--lumi-x, 0px), var(--lumi-y, 0px)); transition: transform .18s var(--ease); }
-.lumi-eyes { transform-box: fill-box; transform-origin: center; }
+.lumi-sparkles path { fill: #ffd36b; opacity: 0; transform-box: fill-box; transform-origin: center; }
+.is-happy .lumi-eyes, .is-hello .lumi-eyes { opacity: 0; }
+.is-happy .lumi-happy, .is-hello .lumi-happy { opacity: 1; }
+.is-happy .lumi-sparkles path { opacity: 1; }
+.is-thinking .lumi-look { transform: translate(2.6px, -3.2px); }
+.is-thinking .lumi-tilt { transform: rotate(7deg); }
 
 @media (prefers-reduced-motion: no-preference) {
-  .lumi-body { animation: lumi-float 3.2s ease-in-out infinite; }
-  .lumi-shadow { animation: lumi-shadow 3.2s ease-in-out infinite; }
-  .lumi-eyes { animation: lumi-blink 5.5s infinite; }
-  .is-thinking .lumi-body { animation: lumi-bob .7s ease-in-out infinite; }
-  .is-thinking .lumi-flash { animation: lumi-flash .9s ease-in-out infinite; }
-  .is-happy .lumi-body { animation: lumi-hop .6s var(--ease) 2; }
-  .is-hello .lumi-body { animation: lumi-wiggle .9s var(--ease) 1; }
-}
-.is-thinking .lumi-look { transform: translate(2.2px, -2.4px); }
-.lumi-sparkles path { fill: #ffd36b; opacity: 0; transform-box: fill-box; transform-origin: center; }
-.is-happy .lumi-sparkles path { opacity: 1; }
-@media (prefers-reduced-motion: no-preference) {
+  .lumi-all { animation: lumi-breathe 4.2s ease-in-out infinite; }
+  .lumi-eyes { animation: lumi-blink 5.2s infinite; }
+  .lumi-tilt { animation: lumi-sway 7s ease-in-out infinite; }
+  .is-thinking .lumi-tilt { animation: none; }
+  .is-thinking .lumi-flash { animation: lumi-flash .8s ease-in-out infinite; }
+  .is-thinking .lumi-all { animation: lumi-bob .9s ease-in-out infinite; }
+  .is-happy .lumi-all, .is-hello .lumi-all { animation: lumi-hop .62s var(--ease) 2; }
   .is-happy .lumi-sparkles path { animation: lumi-sparkle .7s var(--ease) 2 both; }
   .is-happy .lumi-sparkles path + path { animation-delay: .15s; }
+  .is-scan .lumi-scan { animation: lumi-scan 2.6s var(--ease) both; }
+  .is-peek .lumi-head { animation: lumi-peek 1.9s var(--ease) both; }
+  .is-peek .lumi-eyes { animation: lumi-peek-eyes 1.9s step-end both; }
+  .is-peek .lumi-happy { animation: lumi-peek-smile 1.9s step-end both; }
 }
+@keyframes lumi-breathe { 0%, 100% { transform: scale(1, 1); } 50% { transform: scale(1.012, 1.025); } }
+@keyframes lumi-blink { 0%, 92%, 96.5%, 100% { transform: scaleY(1); } 94% { transform: scaleY(.1); } }
+@keyframes lumi-sway { 0%, 100% { transform: rotate(0); } 30% { transform: rotate(-2.5deg); } 70% { transform: rotate(2.5deg); } }
+@keyframes lumi-scan { 0%, 100% { transform: translateX(0); } 18%, 42% { transform: translateX(-4px); } 58%, 84% { transform: translateX(4px); } }
+@keyframes lumi-peek { 0%, 100% { transform: translateY(0); } 28%, 52% { transform: translateY(23px); } 72% { transform: translateY(-4px); } 86% { transform: translateY(1px); } }
+@keyframes lumi-peek-eyes { 0% { opacity: 1; } 60% { opacity: 0; } 96% { opacity: 1; } }
+@keyframes lumi-peek-smile { 0% { opacity: 0; } 60% { opacity: 1; } 96% { opacity: 0; } }
+@keyframes lumi-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
+@keyframes lumi-flash { 0%, 100% { transform: scale(1); fill: #ffd36b; } 50% { transform: scale(1.7); fill: #fffbe8; } }
+@keyframes lumi-hop { 0%, 100% { transform: translateY(0) scale(1, 1); } 30% { transform: translateY(0) scale(1.06, .93); } 60% { transform: translateY(-8px) scale(.97, 1.04); } }
 @keyframes lumi-sparkle { 0% { transform: scale(0) rotate(0); opacity: 0; } 50% { transform: scale(1.2) rotate(45deg); opacity: 1; } 100% { transform: scale(.9) rotate(90deg); opacity: .9; } }
-.is-happy .lumi-eyes { opacity: 0; }
-.is-happy .lumi-happy { opacity: 1; }
-@keyframes lumi-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2.5px); } }
-@keyframes lumi-shadow { 0%, 100% { transform: scaleX(1); opacity: 1; } 50% { transform: scaleX(.86); opacity: .7; } }
-@keyframes lumi-blink { 0%, 93%, 97%, 100% { transform: scaleY(1); } 95% { transform: scaleY(.12); } }
-@keyframes lumi-bob { 0%, 100% { transform: translateY(0) rotate(0); } 25% { transform: translateY(-2px) rotate(-3deg); } 75% { transform: translateY(-2px) rotate(3deg); } }
-@keyframes lumi-flash { 0%, 100% { transform: scale(1); fill: #ffd36b; } 50% { transform: scale(1.45); fill: #fff6d6; } }
-@keyframes lumi-hop { 0%, 100% { transform: translateY(0) scale(1, 1); } 30% { transform: translateY(0) scale(1.08, .9); } 60% { transform: translateY(-7px) scale(.95, 1.06); } }
-@keyframes lumi-wiggle { 0%, 100% { transform: rotate(0); } 20% { transform: rotate(-9deg); } 45% { transform: rotate(7deg); } 70% { transform: rotate(-4deg); } }
 
 .lumi-launcher {
   position: fixed; right: 1.1rem; bottom: 1.1rem; z-index: 45;
-  width: 68px; height: 68px; padding: 0; border: 0; background: none; cursor: pointer;
+  width: 66px; height: 66px; padding: 0; border: 0; cursor: pointer; border-radius: 50%;
+  background: radial-gradient(circle at 50% 35%, #ffffff 0%, #eef0ff 70%, #dfe3ff 100%);
+  box-shadow: 0 10px 24px -10px rgba(38, 38, 212, .5), 0 0 0 1px rgba(59, 59, 246, .14);
   -webkit-tap-highlight-color: transparent;
+  transition: opacity .2s var(--ease), transform .25s var(--ease), box-shadow .2s var(--ease);
 }
-.lumi-launcher .lumi-figure { display: block; width: 100%; height: 100%; filter: drop-shadow(0 8px 14px rgba(38, 38, 212, .28)); transition: transform .25s var(--ease); }
-.lumi-launcher:hover .lumi-figure { transform: translateY(-3px) rotate(-4deg); }
-.lumi-launcher:focus-visible { outline: none; }
-.lumi-launcher:focus-visible .lumi-figure { filter: drop-shadow(0 0 0 var(--accent)) drop-shadow(0 0 6px rgba(59, 59, 246, .55)); }
+.lumi-launcher .lumi-figure { position: absolute; left: 4px; right: 4px; bottom: 0; height: 64px; display: block; }
+.lumi-launcher:hover { transform: translateY(-3px); box-shadow: 0 14px 28px -10px rgba(38, 38, 212, .55), 0 0 0 1px rgba(59, 59, 246, .22); }
+.lumi-launcher:focus-visible { outline: none; box-shadow: var(--ring), 0 10px 24px -10px rgba(38, 38, 212, .5); }
 .lumi-launcher[aria-expanded="true"] { opacity: 0; pointer-events: none; transform: scale(.8); }
-.lumi-launcher { transition: opacity .2s var(--ease), transform .2s var(--ease); }
 /* Pendant un envoi de photos, le panneau des envois prend le coin. */
 body:has(.ad-uploads-panel:not([hidden])) .lumi-launcher { visibility: hidden; }
 .lumi-tip {
@@ -2485,7 +2485,7 @@ body:has(.ad-uploads-panel:not([hidden])) .lumi-launcher { visibility: hidden; }
 
 .lumi-log { flex: 1; overflow-y: auto; padding: 1rem .9rem .5rem; display: flex; flex-direction: column; gap: .7rem; overscroll-behavior: contain; }
 .lumi-msg { display: flex; gap: .5rem; align-items: flex-end; max-width: 100%; }
-.lumi-msg-bot .lumi-mini { width: 28px; height: 28px; flex: none; }
+.lumi-msg-bot .lumi-mini { width: 32px; height: 32px; flex: none; }
 .lumi-bubble {
   max-width: 85%; padding: .6rem .8rem; border-radius: 14px; font-size: .88rem; line-height: 1.5;
   overflow-wrap: anywhere;
@@ -2516,12 +2516,20 @@ body:has(.ad-uploads-panel:not([hidden])) .lumi-launcher { visibility: hidden; }
 }
 @keyframes lumi-dot { 0%, 60%, 100% { transform: translateY(0); opacity: .45; } 30% { transform: translateY(-4px); opacity: 1; } }
 @keyframes lumi-msg-in { from { opacity: 0; transform: translateY(4px); } }
-.lumi-suggest { display: flex; flex-wrap: wrap; gap: .4rem; padding-left: 36px; }
+/* Accueil : grand Lumi centré, salutation, suggestions en grille. */
+.lumi-welcome { margin: auto 0; display: flex; flex-direction: column; align-items: center; text-align: center; padding: .5rem .2rem .4rem; }
+.lumi-hero { display: block; width: 124px; height: 124px; margin-bottom: .5rem; }
+.lumi-welcome h3 { font-size: 1.3rem; font-weight: 650; letter-spacing: -.02em; color: var(--ink); }
+.lumi-welcome p { margin-top: .3rem; font-size: .88rem; line-height: 1.45; color: var(--muted); max-width: 30ch; }
+.lumi-suggest { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; width: 100%; margin-top: 1.4rem; }
 .lumi-suggest button {
-  font: inherit; font-size: .8rem; padding: .35rem .7rem; border-radius: 999px; cursor: pointer; text-align: left;
+  font: inherit; font-size: .82rem; font-weight: 500; line-height: 1.3; text-align: left; cursor: pointer;
+  padding: .7rem .8rem; border-radius: 14px; min-height: 48px;
   border: 1px solid var(--line-2); background: var(--paper); color: var(--ink-2);
+  transition: border-color .15s var(--ease), background-color .15s var(--ease), color .15s var(--ease), transform .15s var(--ease);
 }
-.lumi-suggest button:hover { border-color: var(--accent); color: var(--accent-deep); background: var(--accent-soft); }
+.lumi-suggest button:last-child:nth-child(odd) { grid-column: 1 / -1; }
+.lumi-suggest button:hover { border-color: var(--accent); color: var(--accent-deep); background: var(--accent-soft); transform: translateY(-1px); }
 .lumi-suggest button:focus-visible { outline: none; box-shadow: var(--ring); }
 
 .lumi-form { display: flex; align-items: flex-end; gap: .5rem; padding: .6rem .7rem .3rem; border-top: 1px solid var(--line); }
@@ -2543,6 +2551,7 @@ body:has(.ad-uploads-panel:not([hidden])) .lumi-launcher { visibility: hidden; }
 @media (max-width: 560px) {
   .lumi-panel { right: 8px; left: 8px; bottom: 8px; top: 8px; width: auto; height: auto; border-radius: 16px; }
   .lumi-launcher { right: .8rem; bottom: .8rem; width: 60px; height: 60px; }
+  .lumi-launcher .lumi-figure { height: 58px; }
   .lumi-tip { right: 64px; bottom: 14px; }
   .lumi-form textarea { font-size: 16px; }
 }

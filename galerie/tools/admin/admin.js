@@ -11347,31 +11347,66 @@
     ];
     var state = { enabled: false, messages: [], busy: false, remaining: null };
 
-    var FIGURE = '<svg class="lumi" viewBox="0 0 80 80" aria-hidden="true" focusable="false">' +
-      '<ellipse class="lumi-shadow" cx="40" cy="74" rx="19" ry="3"/>' +
-      '<g class="lumi-body">' +
-      '<rect class="lumi-top" x="20" y="13" width="20" height="11" rx="4.5"/>' +
-      '<circle class="lumi-flash" cx="57" cy="19.5" r="4"/>' +
-      '<rect class="lumi-shell" x="9" y="20" width="62" height="48" rx="17"/>' +
-      '<path class="lumi-strap" d="M17 32 q0 -5 5 -5"/>' +
-      '<circle class="lumi-ring" cx="40" cy="44" r="19.5"/>' +
-      '<circle class="lumi-rim" cx="40" cy="44" r="17.6"/>' +
-      '<circle class="lumi-face" cx="40" cy="44" r="15.5"/>' +
-      '<g class="lumi-look"><g class="lumi-eyes">' +
-      '<ellipse cx="34.6" cy="42" rx="2.5" ry="3.3"/><ellipse cx="45.4" cy="42" rx="2.5" ry="3.3"/>' +
-      '<circle class="lumi-glint" cx="35.4" cy="40.7" r=".9"/><circle class="lumi-glint" cx="46.2" cy="40.7" r=".9"/>' +
-      "</g></g>" +
-      '<path class="lumi-happy" d="M32 43 q2.6 -3.2 5.2 0 M42.8 43 q2.6 -3.2 5.2 0"/>' +
-      '<circle class="lumi-cheek" cx="30.2" cy="48.2" r="2.3"/><circle class="lumi-cheek" cx="49.8" cy="48.2" r="2.3"/>' +
-      '<path class="lumi-smile" d="M36.6 49.2 q3.4 3.2 6.8 0"/>' +
-      "</g>" +
-      // Étincelles de joie, quand Lumi vient de répondre.
-      '<g class="lumi-sparkles"><path d="M70 9 l1.6 3.8 3.8 1.6 -3.8 1.6 -1.6 3.8 -1.6 -3.8 -3.8 -1.6 3.8 -1.6z"/>' +
-      '<path d="M8 12 l1.1 2.6 2.6 1.1 -2.6 1.1 -1.1 2.6 -1.1 -2.6 -2.6 -1.1 2.6 -1.1z"/></g>' +
-      "</svg>";
+    // Une photographe en 3D douce : tête ronde en dégradé, grands yeux, béret
+    // rouge, veste marine, appareil photo sur la poitrine. Chaque exemplaire a
+    // ses propres identifiants de dégradés.
+    var figureCount = 0;
+    function lumiFigure(u) {
+      return '<svg class="lumi" viewBox="0 0 120 120" aria-hidden="true" focusable="false">' +
+        "<defs>" +
+        '<radialGradient id="lh' + u + '" cx="36%" cy="30%" r="78%"><stop offset="0" stop-color="#a5f4ff"/><stop offset=".3" stop-color="#3fd0f4"/><stop offset=".66" stop-color="#3a7cf5"/><stop offset="1" stop-color="#2f37d6"/></radialGradient>' +
+        '<radialGradient id="lb' + u + '" cx="38%" cy="28%" r="80%"><stop offset="0" stop-color="#ff9b86"/><stop offset=".45" stop-color="#ec4a3c"/><stop offset="1" stop-color="#a8231f"/></radialGradient>' +
+        '<linearGradient id="lj' + u + '" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3d4bb8"/><stop offset=".55" stop-color="#2a3594"/><stop offset="1" stop-color="#1d2470"/></linearGradient>' +
+        '<linearGradient id="lc' + u + '" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fffdf8"/><stop offset="1" stop-color="#d9d3c6"/></linearGradient>' +
+        '<radialGradient id="ll' + u + '" cx="40%" cy="35%" r="70%"><stop offset="0" stop-color="#5b6690"/><stop offset=".55" stop-color="#1b2036"/><stop offset="1" stop-color="#07080f"/></radialGradient>' +
+        '<radialGradient id="le' + u + '" cx="40%" cy="30%" r="80%"><stop offset="0" stop-color="#26306e"/><stop offset="1" stop-color="#080b24"/></radialGradient>' +
+        '<filter id="ls' + u + '" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="4" stdDeviation="3.5" flood-color="#0b0b30" flood-opacity=".28"/></filter>' +
+        '<filter id="lsoft' + u + '"><feGaussianBlur stdDeviation="1.6"/></filter>' +
+        '<clipPath id="lk' + u + '"><circle cx="60" cy="50" r="27"/></clipPath>' +
+        "</defs>" +
+        '<g class="lumi-all" filter="url(#ls' + u + ')">' +
+        // Tête (derrière la veste : elle peut s'y cacher).
+        '<g class="lumi-head"><g class="lumi-tilt">' +
+        '<circle cx="60" cy="50" r="27" fill="url(#lh' + u + ')"/>' +
+        '<ellipse cx="50" cy="40" rx="11" ry="7" fill="#fff" opacity=".32" filter="url(#lsoft' + u + ')"/>' +
+        '<ellipse cx="60" cy="33" rx="27" ry="5" fill="#0b1a6e" opacity=".28" filter="url(#lsoft' + u + ')" clip-path="url(#lk' + u + ')"/>' +
+        // Béret.
+        '<g class="lumi-beret" transform="rotate(-7 60 26)"><path d="M33 33 C 34 18, 60 12, 80 19 C 92 23, 93 31, 86 33 C 72 29, 48 29, 33 33 Z" fill="url(#lb' + u + ')"/>' +
+        '<path d="M35 32.5 C 50 28.5, 72 28.5, 86 32.5" fill="none" stroke="#8d1c19" stroke-width="2.4" stroke-linecap="round" opacity=".55"/>' +
+        '<circle cx="62" cy="15.5" r="2.6" fill="#c9332c"/>' +
+        '<ellipse cx="52" cy="22" rx="8" ry="3" fill="#fff" opacity=".3" filter="url(#lsoft' + u + ')"/></g>' +
+        // Visage : regard (pointeur), balayage, clignement ; yeux rieurs.
+        '<g class="lumi-look"><g class="lumi-scan"><g class="lumi-eyes">' +
+        '<ellipse cx="50.5" cy="52" rx="4.4" ry="6.2" fill="url(#le' + u + ')"/><ellipse cx="69.5" cy="52" rx="4.4" ry="6.2" fill="url(#le' + u + ')"/>' +
+        '<ellipse cx="49.3" cy="49.2" rx="1.4" ry="1.9" fill="#fff" opacity=".85"/><ellipse cx="68.3" cy="49.2" rx="1.4" ry="1.9" fill="#fff" opacity=".85"/>' +
+        "</g></g></g>" +
+        '<path class="lumi-happy" d="M45.5 53 q5 -6 10 0 M64.5 53 q5 -6 10 0" fill="none" stroke="#0b0f2e" stroke-width="3" stroke-linecap="round"/>' +
+        '<ellipse class="lumi-cheek" cx="43" cy="61" rx="4" ry="2.4" fill="#ff7fa8" opacity=".35"/><ellipse class="lumi-cheek" cx="77" cy="61" rx="4" ry="2.4" fill="#ff7fa8" opacity=".35"/>' +
+        "</g></g>" +
+        // Veste, sangle de l'appareil, appareil photo.
+        '<g class="lumi-torso">' +
+        '<path d="M24 109 C 23 90, 35 76, 60 76 C 85 76, 97 90, 96 109 Q 96 118 87 118 L 33 118 Q 24 118 24 109 Z" fill="url(#lj' + u + ')"/>' +
+        '<path d="M30 92 C 36 82, 46 79, 52 79" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" opacity=".18"/>' +
+        '<path d="M38 80 C 46 76, 74 76, 82 80 C 76 84, 44 84, 38 80 Z" fill="#1a2166" opacity=".6"/>' +
+        '<path d="M40 79 L 50 100 M80 79 L 70 100" stroke="#e9e7f2" stroke-width="4.2" stroke-linecap="round"/>' +
+        '<path d="M30 104 C 40 103, 80 103, 90 104" stroke="#e9e7f2" stroke-width="3.6" stroke-linecap="round" fill="none" opacity=".9"/>' +
+        '<g class="lumi-camera">' +
+        '<rect x="44" y="92" width="32" height="21" rx="6" fill="url(#lc' + u + ')"/>' +
+        '<rect x="48" y="88.5" width="10" height="5" rx="2" fill="#cfc8b9"/>' +
+        '<circle cx="60" cy="102.5" r="7.4" fill="#e8e2d6"/><circle cx="60" cy="102.5" r="5.8" fill="url(#ll' + u + ')"/>' +
+        '<circle cx="58" cy="100.5" r="1.5" fill="#fff" opacity=".8"/>' +
+        '<circle class="lumi-flash" cx="71" cy="96" r="2" fill="#ffd36b"/>' +
+        "</g></g>" +
+        // Étincelles de joie, quand Lumi vient de répondre.
+        '<g class="lumi-sparkles"><path d="M100 14 l2.2 5 5 2.2 -5 2.2 -2.2 5 -2.2 -5 -5 -2.2 5 -2.2z"/><path d="M18 22 l1.5 3.4 3.4 1.5 -3.4 1.5 -1.5 3.4 -1.5 -3.4 -3.4 -1.5 3.4 -1.5z"/></g>' +
+        "</g></svg>";
+    }
+    function newFigure() { figureCount += 1; return lumiFigure("lu" + figureCount); }
 
-    document.querySelectorAll("[data-lumi]").forEach(function (node) { node.innerHTML = FIGURE; });
-    var figures = Array.prototype.slice.call(document.querySelectorAll("[data-lumi]"));
+    document.querySelectorAll("[data-lumi]").forEach(function (node) { node.innerHTML = newFigure(); });
+    // Tous les Lumi visibles : bouton, en-tête, grand avatar d'accueil.
+    function figures() { return Array.prototype.slice.call(document.querySelectorAll("[data-lumi], .lumi-hero")); }
+    var calm = window.matchMedia ? window.matchMedia("(prefers-reduced-motion: reduce)") : { matches: false };
 
     // Les yeux suivent le pointeur (3 px au plus), une image par rafraîchissement.
     var pending = null;
@@ -11379,7 +11414,7 @@
       if (pending) return;
       pending = requestAnimationFrame(function () {
         pending = null;
-        figures.forEach(function (fig) {
+        figures().forEach(function (fig) {
           if (!fig.offsetParent) return;
           var r = fig.getBoundingClientRect();
           var dx = e.clientX - (r.left + r.width / 2);
@@ -11393,12 +11428,28 @@
     }, { passive: true });
 
     function mood(name, ms) {
-      figures.forEach(function (fig) {
+      figures().forEach(function (fig) {
         fig.classList.remove("is-thinking", "is-happy", "is-hello");
         if (name) fig.classList.add(name);
       });
-      if (ms) setTimeout(function () { figures.forEach(function (fig) { fig.classList.remove(name); }); }, ms);
+      if (ms) setTimeout(function () { figures().forEach(function (fig) { fig.classList.remove(name); }); }, ms);
     }
+
+    // Petits gestes au repos, comme un personnage vivant : regarder à gauche
+    // puis à droite, ou rentrer la tête dans son col et ressurgir, ravi.
+    var GESTURES = [["is-scan", 2600], ["is-peek", 1900], ["is-scan", 2600]];
+    setInterval(function () {
+      if (calm.matches || state.busy || document.hidden) return;
+      var pick = GESTURES[Math.floor(Math.random() * GESTURES.length)];
+      figures().forEach(function (fig) {
+        if (!fig.offsetParent || fig.classList.contains("is-thinking") || fig.classList.contains("is-happy")) return;
+        // Les exemplaires ne bougent pas tous en même temps.
+        setTimeout(function () {
+          fig.classList.add(pick[0]);
+          setTimeout(function () { fig.classList.remove(pick[0]); }, pick[1]);
+        }, Math.random() * 1200);
+      });
+    }, 9000);
 
     function save() {
       try { sessionStorage.setItem(STORE, JSON.stringify(state.messages.slice(-30))); } catch (err) { /* rien */ }
@@ -11441,27 +11492,39 @@
     function bubble(role, html, extraClass) {
       var row = document.createElement("div");
       row.className = "lumi-msg " + (role === "user" ? "lumi-msg-me" : "lumi-msg-bot") + (extraClass ? " " + extraClass : "");
-      row.innerHTML = (role === "user" ? "" : '<span class="lumi-mini" aria-hidden="true">' + FIGURE + "</span>") +
+      row.innerHTML = (role === "user" ? "" : '<span class="lumi-mini" aria-hidden="true">' + newFigure() + "</span>") +
         '<div class="lumi-bubble">' + html + "</div>";
       log.appendChild(row);
       log.scrollTop = log.scrollHeight;
       return row;
     }
 
+    // Accueil : grand Lumi, salutation selon l'heure, suggestions en grille.
+    function greeting() {
+      var h = new Date().getHours();
+      var name = state.me && (state.me.firstName || state.me.studioName) || "";
+      return {
+        hello: (h >= 18 || h < 5 ? "Bonsoir" : "Bonjour") + (name ? " " + name : "") + ".",
+        sub: "Je suis Lumi, votre guide Holypixx. Que puis-je faire pour vous " +
+          (h >= 22 || h < 5 ? "cette nuit" : h >= 18 ? "ce soir" : "aujourd'hui") + " ?",
+      };
+    }
+
     function paint() {
       log.innerHTML = "";
-      bubble("assistant", render(
-        "Bonjour" + (state.me && state.me.studioName ? " " + state.me.studioName : "") + " ! Je suis **Lumi**, votre guide Holypixx.\n" +
-        "Posez-moi n'importe quelle question : configurer votre compte, envoyer une galerie, ouvrir la réservation, préparer vos contrats…"));
+      panel.classList.toggle("is-empty", !state.messages.length);
+      if (!state.messages.length) {
+        var g = greeting();
+        var welcome = document.createElement("div");
+        welcome.className = "lumi-welcome";
+        welcome.innerHTML = '<span class="lumi-hero" aria-hidden="true">' + newFigure() + "</span>" +
+          "<h3>" + esc(g.hello) + "</h3><p>" + esc(g.sub) + "</p>" +
+          '<div class="lumi-suggest">' + SUGGESTIONS.map(function (q) { return '<button type="button" data-lumi-ask="' + esc(q) + '">' + esc(q) + "</button>"; }).join("") + "</div>";
+        log.appendChild(welcome);
+      }
       state.messages.forEach(function (m) {
         bubble(m.role, m.role === "user" ? esc(m.content) : render(m.content));
       });
-      if (!state.messages.length) {
-        var box = document.createElement("div");
-        box.className = "lumi-suggest";
-        box.innerHTML = SUGGESTIONS.map(function (q) { return '<button type="button" data-lumi-ask="' + esc(q) + '">' + esc(q) + "</button>"; }).join("");
-        log.appendChild(box);
-      }
       footText();
     }
 
@@ -11500,8 +11563,9 @@
       if (!question || state.busy) return;
       state.busy = true;
       send.disabled = true;
-      var suggest = log.querySelector(".lumi-suggest");
-      if (suggest) suggest.remove();
+      var welcome = log.querySelector(".lumi-welcome");
+      if (welcome) welcome.remove();
+      panel.classList.remove("is-empty");
       state.messages.push({ role: "user", content: question.slice(0, 2000) });
       save();
       bubble("user", esc(question));

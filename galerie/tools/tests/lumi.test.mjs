@@ -77,7 +77,10 @@ try {
 
   await page.click("#lumi-launcher");
   await page.waitForSelector("#lumi-panel:not([hidden])");
-  check("panneau ouvert : accueil de Lumi et 5 suggestions", (await page.textContent("#lumi-log")).includes("Je suis Lumi") && (await page.locator(".lumi-suggest button").count()) === 5);
+  check("panneau ouvert : grand Lumi, salutation à son nom, 5 suggestions",
+        await page.isVisible(".lumi-welcome .lumi-hero svg") && /^Bon(jour|soir) /.test(await page.textContent(".lumi-welcome h3")) &&
+        (await page.textContent(".lumi-welcome p")).includes("Je suis Lumi") && (await page.locator(".lumi-suggest button").count()) === 5);
+  if (SHOTS) await page.locator("#lumi-panel").screenshot({ path: `${SHOTS}/lumi-accueil.png` });
   check("la bulle d'accueil ne revient plus", await page.isHidden("#lumi-tip"));
 
   await page.click('.lumi-suggest button:has-text("Comment ouvrir des créneaux")');
