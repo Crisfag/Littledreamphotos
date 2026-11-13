@@ -441,6 +441,8 @@
 
   function showLoginCard(visibleId) {
     if (typeof lumi !== "undefined") lumi.stop();
+    var helpSheet = document.getElementById("ad-help");
+    if (helpSheet) helpSheet.hidden = true;
     el.app.hidden = true;
     el.login.hidden = false;
     LOGIN_CARD_IDS.forEach(function (id) {
@@ -11323,7 +11325,7 @@
   var lumi = (function () {
     var launcher = document.getElementById("lumi-launcher");
     var panel = document.getElementById("lumi-panel");
-    if (!launcher || !panel) return { start: function () {}, stop: function () {} };
+    if (!launcher || !panel) return { start: function () {}, stop: function () {}, available: function () { return false; }, ask: function () {} };
     var log = document.getElementById("lumi-log");
     var form = document.getElementById("lumi-form");
     var input = document.getElementById("lumi-input");
@@ -11782,6 +11784,13 @@
     });
 
     return {
+      // Pour l'aide de page : Lumi est-elle là, et lui poser une question.
+      available: function () { return state.enabled && !launcher.hidden; },
+      ask: function (question) {
+        if (!state.enabled) return;
+        if (panel.hidden) open();
+        ask(question);
+      },
       start: async function (me) {
         state.me = me;
         try {
@@ -11813,6 +11822,308 @@
   })();
   // Session déjà ouverte avant que Lumi soit prête : on la lance maintenant.
   if (state.me && !el.app.hidden) lumi.start(state.me);
+
+  /* ---------- Aide de page : le petit « i » à côté du titre ---------- */
+
+  // Chaque écran a son explication : un résumé au survol, puis au clic un
+  // volet « Comment ça marche » (étapes, bon à savoir) et un raccourci pour
+  // poser la question à Lumi. [français, anglais].
+  var PAGE_HELP = {
+    galleries: {
+      title: ["Galeries", "Galleries"],
+      summary: ["Vos galeries clients protégées : créez-en une, ajoutez les photos, envoyez le lien.", "Your protected client galleries: create one, add photos, send the link."],
+      steps: [
+        ["« + Nouvelle galerie » : titre, client (choisi dans vos fiches), forfait de photos incluses, style et langue.", "“+ New gallery”: title, client (picked from your records), included photos, style and language."],
+        ["Notez le mot de passe affiché à la création : il n'est montré qu'une fois.", "Note the password shown at creation: it is only shown once."],
+        ["Ouvrez la galerie et glissez-y vos photos : elles sont protégées automatiquement (tuiles, filigrane, empreinte invisible).", "Open the gallery and drop your photos in: they are protected automatically (tiles, watermark, invisible fingerprint)."],
+        ["Envoyez-la au client d'un clic (« Envoyer au client par e-mail ») : il choisit ses coups de cœur et valide sa sélection.", "Send it to your client in one click (“Email it to the client”): they pick favourites and confirm their selection."],
+      ],
+      tips: [
+        ["Une galerie de démonstration montre le rendu côté client, sans compter dans votre quota.", "A demo gallery shows the client side without counting towards your quota."],
+        ["Les compteurs du haut résument l'activité : galeries créées, ventes, montant encaissé, suppléments réglés.", "The counters at the top sum up activity: galleries created, sales, amount received, extras paid."],
+      ],
+    },
+    gallery: {
+      title: ["Une galerie", "A gallery"],
+      summary: ["Tout pour cette galerie : photos, présentation, forfait, envoi au client et livraison HD.", "Everything for this gallery: photos, presentation, package, sending to the client and HD delivery."],
+      steps: [
+        ["Ajoutez les photos en les glissant ici ; « Aperçu client ↗ » montre ce que voit votre client.", "Add photos by dropping them here; “Client preview ↗” shows what your client sees."],
+        ["Réglez la présentation (style, polices, mot d'accueil, couverture ou film) et le forfait (photos incluses, prix d'une photo en plus).", "Set the presentation (style, fonts, welcome note, cover or film) and the package (included photos, price per extra photo)."],
+        ["« Envoyer au client par e-mail » : le lien et un mot de passe partent dans un e-mail à votre nom.", "“Email it to the client”: the link and a password go out in an email in your name."],
+        ["Après la sélection, déposez les fichiers définitifs puis « Ouvrir la livraison au client » : il télécharge en HD.", "After the selection, drop the final files then “Open delivery to the client”: they download in HD."],
+      ],
+      tips: [
+        ["Mot de passe perdu : « Générer un nouveau mot de passe » (l'ancien cesse de fonctionner).", "Lost password: “Generate a new password” (the old one stops working)."],
+        ["Le journal en bas montre les visites, les sélections et les alertes de capture.", "The log at the bottom shows visits, selections and capture alerts."],
+      ],
+    },
+    planning: {
+      title: ["Planning", "Planning"],
+      summary: ["Votre agenda et vos tâches : séances réservées, contrats datés, choses à faire.", "Your calendar and tasks: booked sessions, dated contracts, things to do."],
+      steps: [
+        ["Les séances réservées et les contrats datés s'y ajoutent tout seuls.", "Booked sessions and dated contracts appear on their own."],
+        ["Holypixx y place aussi les tâches utiles : sélection à retoucher, galerie à créer, client à relancer.", "Holypixx also adds useful tasks: selection to edit, gallery to create, client to follow up."],
+        ["Ajoutez vos propres tâches ou rendez-vous, avec ou sans date ; cochez-les quand c'est fait.", "Add your own tasks or appointments, dated or not; tick them off when done."],
+      ],
+      tips: [["Une tâche liée à un client mène à sa fiche d'un clic.", "A task linked to a client opens their record in one click."]],
+    },
+    clients: {
+      title: ["Clients", "Clients"],
+      summary: ["Vos fiches clients, les dates à retenir et les clients à relancer, avec un message prêt.", "Your client records, dates to remember and clients to follow up, with a ready message."],
+      steps: [
+        ["Les fiches se créent toutes seules (galerie, réservation, devis, facture, demande du mini-site) ; « + » pour en ajouter une.", "Records create themselves (gallery, booking, quote, invoice, website enquiry); “+” to add one."],
+        ["Ajoutez des dates à retenir (naissance, anniversaire, mariage) : Holypixx vous prévient quelques semaines avant.", "Add dates to remember (birth, birthday, wedding): Holypixx reminds you a few weeks ahead."],
+        ["« À relancer » propose un message prêt à envoyer, pour une séance de saison ou un client sans nouvelle depuis un an.", "“To follow up” suggests a ready message, for a seasonal session or a client not seen for a year."],
+      ],
+      tips: [["Les tags (mariage, fidèle…) filtrent la liste en un clic.", "Tags (wedding, loyal…) filter the list in one click."]],
+    },
+    client: {
+      title: ["Fiche client", "Client record"],
+      summary: ["Tout ce que vous savez de ce client : historique, montants, notes, dates à retenir.", "Everything about this client: history, amounts, notes, dates to remember."],
+      steps: [
+        ["L'historique réunit galeries, réservations, devis, factures et paiements.", "The history gathers galleries, bookings, quotes, invoices and payments."],
+        ["Complétez téléphone, notes et tags ; ajoutez ses dates à retenir pour être prévenu à temps.", "Fill in phone, notes and tags; add their dates to remember to be reminded in time."],
+        ["« Nouvelle galerie », « Nouvelle facture » ou « Nouveau devis » ouvrent le formulaire déjà rempli pour ce client.", "“New gallery”, “New invoice” or “New quote” open the form already filled in for this client."],
+      ],
+      tips: [["« Effacer » retire vos notes et dates ; ses galeries et factures restent.", "“Clear” removes your notes and dates; their galleries and invoices stay."]],
+    },
+    booking: {
+      title: ["Réservations", "Bookings"],
+      summary: ["Vos formules de séance, vos créneaux, et le suivi de chaque séance réservée jusqu'à la livraison.", "Your session types, your slots, and each booked session followed through to delivery."],
+      steps: [
+        ["Créez une formule de séance : durée, prix, acompte, ce qui est compris, liste récapitulative, contrat proposé.", "Create a session type: length, price, deposit, what's included, prep list, contract to send."],
+        ["Ouvrez des créneaux : une date ou toute une période, plusieurs formules d'un coup ; un créneau peut être privé (lien secret).", "Open slots: one date or a whole period, several session types at once; a slot can be private (secret link)."],
+        ["Partagez votre page de réservation (lien, QR code, bouton ou agenda à intégrer à votre site).", "Share your booking page (link, QR code, button or calendar to embed in your site)."],
+        ["Chaque séance réservée a sa piste : contrat, liste récapitulative, galerie, livraison ; le prochain geste est en bleu.", "Each booked session has its track: contract, prep list, gallery, delivery; the next step is in blue."],
+      ],
+      tips: [
+        ["Le « + » d'un créneau libre réserve pour un client (habitué, demande par téléphone).", "A free slot's “+” books it for a client (regular, phone request)."],
+        ["Inclus dans les formules Pro et Studio ; l'acompte en ligne demande Stripe (onglet Facturation).", "Included in Pro and Studio; online deposits need Stripe (Billing tab)."],
+      ],
+    },
+    contracts: {
+      title: ["Devis et contrats", "Quotes and contracts"],
+      summary: ["Des devis que vos clients signent en ligne, avec acompte, et vos modèles par type de séance.", "Quotes your clients sign online, with a deposit, and your templates per session type."],
+      steps: [
+        ["Préparez vos modèles de contrat (grossesse, mariage, naissance…) : conditions et acompte suggéré.", "Prepare your contract templates (maternity, wedding, newborn…): terms and suggested deposit."],
+        ["« + Nouveau devis » : client, date, prestations, acompte, modèle ; ou envoyez-le depuis une réservation.", "“+ New quote”: client, date, services, deposit, template; or send it from a booking."],
+        ["Votre client le lit, le signe en tapant son nom et règle l'acompte ; chacun reçoit le PDF signé.", "Your client reads it, signs by typing their name and pays the deposit; both get the signed PDF."],
+      ],
+      tips: [
+        ["« Renvoyer » relance un devis pas encore signé ; « Facturer » prépare la facture d'un contrat signé.", "“Resend” chases an unsigned quote; “Invoice” prepares the invoice of a signed contract."],
+        ["Les modèles proposés sont un point de départ à adapter, pas un conseil juridique.", "The suggested templates are a starting point to adapt, not legal advice."],
+      ],
+    },
+    sales: {
+      title: ["Ventes", "Sales"],
+      summary: ["Vos chiffres : ce que vous encaissez chaque mois, par type de vente, et vos marges.", "Your numbers: what you take each month, by type of sale, and your margins."],
+      steps: [
+        ["Le chiffre d'affaires par mois réunit suppléments, options, tirages, acomptes et factures.", "Monthly revenue gathers extras, options, prints, deposits and invoices."],
+        ["Les marges des tirages montrent ce qu'il vous reste après le laboratoire.", "Print margins show what you keep after the lab."],
+      ],
+      tips: [["Sur les paiements en ligne, seuls les frais de paiement sont retenus : 2 % + 0,30 €.", "On online payments only the payment fees are kept: 2% + €0.30."]],
+    },
+    insights: {
+      title: ["Statistiques", "Statistics"],
+      summary: ["Ce qui marche : vos séances par type, les paniers moyens, les prestations les plus réservées.", "What works: your sessions by type, average baskets, most booked services."],
+      steps: [
+        ["Chaque galerie a un type de séance (deviné d'après le titre, modifiable sur la galerie).", "Each gallery has a session type (guessed from its title, editable on the gallery)."],
+        ["Comparez les paniers moyens par type pour savoir quelles séances rapportent le plus.", "Compare average baskets by type to see which sessions earn the most."],
+      ],
+      tips: [["« Séances à classer » : donnez un type aux galeries non reconnues pour des chiffres justes.", "“Sessions to classify”: give a type to unrecognised galleries for accurate figures."]],
+    },
+    billing: {
+      title: ["Facturation", "Billing"],
+      summary: ["Paiement en ligne (Stripe), factures clients, suppléments en attente et virements.", "Online payment (Stripe), client invoices, pending extras and bank transfers."],
+      steps: [
+        ["« Connecter Stripe » : vos clients paient en ligne directement sur votre compte (suppléments, tirages, acomptes).", "“Connect Stripe”: your clients pay online straight into your account (extras, prints, deposits)."],
+        ["Créez une facture (client choisi dans vos fiches), avec un échéancier si besoin, et envoyez-la.", "Create an invoice (client picked from your records), with a schedule if needed, and send it."],
+        ["« Suppléments en attente » : cochez « réglé par virement » ou « en espèces », la facture part au client.", "“Pending extras”: tick “paid by transfer” or “in cash”, the invoice goes to the client."],
+      ],
+      tips: [["Vos coordonnées fiscales (TVA, adresse) se règlent dans Paramètres et figurent sur chaque facture.", "Your tax details (VAT, address) are set in Settings and appear on every invoice."]],
+    },
+    shop: {
+      title: ["Boutique de tirages", "Print shop"],
+      summary: ["Vos clients commandent des tirages depuis leur galerie ; le laboratoire imprime et livre chez eux.", "Your clients order prints from their gallery; the lab prints and ships to them."],
+      steps: [
+        ["Choisissez vos produits et formats, et fixez votre marge sur chacun.", "Choose your products and sizes, and set your margin on each."],
+        ["Réglez les frais de port (Europe, et hors Europe si vous le souhaitez).", "Set shipping costs (Europe, and outside Europe if you wish)."],
+        ["Activez la boutique sur une galerie : le client paie en ligne, Prodigi imprime et livre avec suivi.", "Turn the shop on for a gallery: the client pays online, Prodigi prints and ships with tracking."],
+      ],
+      tips: [["Demande Stripe connecté (Facturation) et la formule Essentiel ou plus.", "Needs Stripe connected (Billing) and the Essentials plan or above."]],
+    },
+    portfolio: {
+      title: ["Portfolio", "Portfolio"],
+      summary: ["Votre mini-site vitrine : présentation, photos, prestations, contact, réservation et bons cadeaux.", "Your showcase mini-site: about, photos, services, contact, booking and gift cards."],
+      steps: [
+        ["Choisissez l'adresse, rédigez votre présentation et ajoutez vos plus belles photos.", "Choose the address, write your introduction and add your best photos."],
+        ["Activez ce que vous proposez : formulaire de contact, réservation en ligne, vente de bons cadeaux.", "Turn on what you offer: contact form, online booking, gift card sales."],
+        ["« Publier le portfolio » : il est en ligne ; les demandes de contact arrivent dans Clients.", "“Publish the portfolio”: it goes live; contact requests land in Clients."],
+      ],
+      tips: [["Avec Pro, l'adresse votre-studio.holypixx.com (Paramètres) sert aussi à vos galeries.", "With Pro, the your-studio.holypixx.com address (Settings) is also used by your galleries."]],
+    },
+    giftcards: {
+      title: ["Bons cadeaux", "Gift cards"],
+      summary: ["Vendez des séances en cadeau, en ligne ou à la main, et suivez les bons à utiliser.", "Sell sessions as gifts, online or by hand, and track the cards to use."],
+      steps: [
+        ["Réglez ce que vous vendez : une séance précise ou un montant, et la durée de validité.", "Set what you sell: a specific session or an amount, and how long it is valid."],
+        ["Les bons s'achètent sur votre mini-site ; le bénéficiaire reçoit son bon en PDF avec un code.", "Cards are bought on your mini-site; the recipient gets their card as a PDF with a code."],
+        ["À la séance, marquez le bon comme utilisé.", "At the session, mark the card as used."],
+      ],
+      tips: [["Un bon vendu en main propre se crée ici aussi, sans paiement en ligne.", "A card sold in person can be created here too, without online payment."]],
+    },
+    subscription: {
+      title: ["Abonnement", "Subscription"],
+      summary: ["Votre formule Holypixx, ce qu'elle inclut, et votre lien de parrainage.", "Your Holypixx plan, what it includes, and your referral link."],
+      steps: [
+        ["Comparez les formules (Découverte, Essentiel, Pro, Studio) et choisissez la vôtre, au mois ou à l'année.", "Compare plans (Free, Essentials, Pro, Studio) and choose yours, monthly or yearly."],
+        ["Gérez votre carte, vos factures ou la résiliation depuis le portail de paiement.", "Manage your card, invoices or cancellation from the billing portal."],
+        ["Partagez votre lien de parrainage : −50 % pour le confrère, des mois offerts pour vous.", "Share your referral link: 50% off for your colleague, free months for you."],
+      ],
+      tips: [["Le tarif fondateur reste le vôtre tant que vous restez abonné.", "The founder price stays yours as long as you stay subscribed."]],
+    },
+    settings: {
+      title: ["Paramètres", "Settings"],
+      summary: ["Votre studio, vos coordonnées fiscales, vos réglages par défaut et vos relances automatiques.", "Your studio, tax details, default settings and automatic reminders."],
+      steps: [
+        ["Votre identité : nom du studio, prénom, langue de l'espace, adresse à votre nom (Pro).", "Your identity: studio name, first name, dashboard language, your own address (Pro)."],
+        ["Vos coordonnées fiscales, reprises sur vos factures et contrats.", "Your tax details, used on your invoices and contracts."],
+        ["Vos réglages par défaut (style de galerie, présentation) et vos relances automatiques.", "Your defaults (gallery style, presentation) and your automatic reminders."],
+      ],
+      tips: [["« Mes données » : exportez tout, ou supprimez votre compte.", "“My data”: export everything, or delete your account."]],
+    },
+    feedback: {
+      title: ["Suggestions", "Suggestions"],
+      summary: ["Une idée, une fonction qui manque, un souci : dites-le directement à l'équipe Holypixx.", "An idea, a missing feature, an issue: tell the Holypixx team directly."],
+      steps: [
+        ["Choisissez le type (idée, amélioration, souci), donnez un titre et quelques détails.", "Choose the type (idea, improvement, issue), add a title and a few details."],
+        ["Suivez le statut de chaque demande (à l'étude, prévue, faite) et lisez la réponse ici.", "Follow each request's status (considering, planned, done) and read the reply here."],
+      ],
+      tips: [["Une pastille sur l'onglet signale une nouvelle réponse.", "A badge on the tab flags a new reply."]],
+    },
+    detect: {
+      title: ["Vérifier une photo", "Check a photo"],
+      summary: ["Retrouvez d'où vient une photo trouvée en ligne grâce à son empreinte invisible.", "Find where a photo found online comes from, thanks to its invisible fingerprint."],
+      steps: [
+        ["Déposez la photo (une capture d'écran convient).", "Drop the photo (a screenshot works)."],
+        ["Holypixx la compare aux empreintes de toutes vos galeries et vous dit de quelle galerie, et de quel client, elle provient.", "Holypixx compares it with the fingerprints of all your galleries and tells you which gallery, and which client, it comes from."],
+      ],
+      tips: [["Plus l'image est grande et peu retouchée, plus la recherche est sûre.", "The larger and less edited the image, the surer the match."]],
+    },
+    school: {
+      title: ["Écoles, crèches et clubs", "Schools and clubs"],
+      summary: ["La photo de groupe : établissements, classes, fiches parents et commandes groupées.", "Group photography: schools, classes, parent cards and grouped orders."],
+      steps: [
+        ["Créez l'établissement et ses groupes (classes, sections).", "Create the school and its groups (classes, sections)."],
+        ["Déposez les photos, triez-les par enfant, imprimez les fiches parents avec QR code.", "Upload photos, sort them by child, print parent cards with a QR code."],
+        ["Les familles commandent en ligne ; vous envoyez la commande groupée au laboratoire.", "Families order online; you send the grouped order to the lab."],
+      ],
+      tips: [["Commission de 5 % sur les ventes scolaires, sauf avec Studio.", "5% commission on school sales, except with Studio."]],
+    },
+  };
+
+  function helpKey() {
+    var h = location.hash;
+    if (/^#\/g\//.test(h)) return "gallery";
+    if (/^#\/clients\/.+/.test(h)) return "client";
+    var map = {
+      "#/planning": "planning", "#/clients": "clients", "#/reservations": "booking", "#/contrats": "contracts", "#/ventes": "sales",
+      "#/statistiques": "insights", "#/boutique": "shop", "#/portfolio": "portfolio", "#/bons-cadeaux": "giftcards",
+      "#/parametres": "settings", "#/suggestions": "feedback", "#/detect": "detect",
+    };
+    if (map[h]) return map[h];
+    if (h.indexOf("#/facturation") === 0) return "billing";
+    if (h.indexOf("#/abonnement") === 0) return "subscription";
+    if (h.indexOf("#/scolaire") === 0) return "school";
+    if (h === "#/proprietaire") return "";
+    return "galleries";
+  }
+  function helpText(pair) { return LANG === "en" ? pair[1] : pair[0]; }
+
+  var HELP_SEEN = "holypixx-aide-vue";
+  function helpSeen() {
+    try { return JSON.parse(localStorage.getItem(HELP_SEEN) || "{}") || {}; } catch (err) { return {}; }
+  }
+  function markHelpSeen(key) {
+    try { var seen = helpSeen(); seen[key] = 1; localStorage.setItem(HELP_SEEN, JSON.stringify(seen)); } catch (err) { /* rien */ }
+  }
+
+  // Le « i » se pose à côté du premier titre de l'écran, à chaque affichage.
+  var helpOpenKey = "";
+  function placeHelpButton() {
+    if (!el.view || el.app.hidden) return;
+    var key = helpKey();
+    // Changement d'écran : le volet d'aide de l'écran précédent se ferme.
+    if (helpOpenKey && helpOpenKey !== key) closeHelp(true);
+    var help = PAGE_HELP[key];
+    var heading = el.view.querySelector(".ad-detail-header h2, .ad-cl-head h2, .ad-section-header h2, .ad-empty h2");
+    if (!help || !heading) return;
+    var existing = heading.querySelector(".ad-help-btn");
+    if (existing && existing.getAttribute("data-help") === key) return;
+    if (existing) existing.remove();
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "ad-help-btn" + (helpSeen()[key] ? "" : " is-new");
+    btn.setAttribute("data-help", key);
+    btn.setAttribute("aria-label", L("Comment fonctionne cette page ?", "How does this page work?"));
+    btn.setAttribute("aria-haspopup", "dialog");
+    // La bulle de survol est dessinée en CSS (attribut data-tip) : son texte
+    // ne se mêle pas à celui du titre.
+    btn.setAttribute("data-tip", helpText(help.summary) + " " + L("Cliquez pour le mode d'emploi.", "Click for the how-to."));
+    btn.innerHTML = '<svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8.2"/><path d="M10 9v5"/><circle class="ad-help-dot" cx="10" cy="6.2" r=".6"/></svg>';
+    heading.appendChild(btn);
+  }
+
+  function openHelp(key) {
+    var help = PAGE_HELP[key];
+    if (!help) return;
+    markHelpSeen(key);
+    helpOpenKey = key;
+    var b = el.view.querySelector(".ad-help-btn");
+    if (b) b.classList.remove("is-new");
+    var sheet = document.getElementById("ad-help");
+    document.getElementById("ad-help-title").textContent = L("Comment fonctionne : ", "How it works: ") + helpText(help.title);
+    document.getElementById("ad-help-body").innerHTML =
+      '<p class="ad-help-summary">' + esc(helpText(help.summary)) + "</p>" +
+      "<h3>" + L("Pas à pas", "Step by step") + "</h3><ol>" + help.steps.map(function (s) { return "<li>" + esc(helpText(s)) + "</li>"; }).join("") + "</ol>" +
+      (help.tips && help.tips.length ? "<h3>" + L("Bon à savoir", "Good to know") + "</h3><ul>" + help.tips.map(function (s) { return "<li>" + esc(helpText(s)) + "</li>"; }).join("") + "</ul>" : "");
+    var ask = document.getElementById("ad-help-ask");
+    ask.hidden = !lumi.available();
+    ask.onclick = function () {
+      closeHelp();
+      lumi.ask(L("Comment fonctionne la page « ", "How does the “") + helpText(help.title) + L(" » ? Explique-moi l'essentiel et par où commencer.", "” page work? Explain the essentials and where to start."));
+    };
+    sheet.hidden = false;
+    requestAnimationFrame(function () { sheet.classList.add("is-open"); });
+    document.getElementById("ad-help-close").focus({ preventScroll: true });
+  }
+  function closeHelp(silent) {
+    var sheet = document.getElementById("ad-help");
+    helpOpenKey = "";
+    if (!sheet || sheet.hidden) return;
+    sheet.classList.remove("is-open");
+    sheet.hidden = true;
+    var b = !silent && el.view && el.view.querySelector(".ad-help-btn");
+    if (b) b.focus({ preventScroll: true });
+  }
+
+  (function () {
+    var sheet = document.getElementById("ad-help");
+    if (!sheet || !el.view) return;
+    new MutationObserver(placeHelpButton).observe(el.view, { childList: true, subtree: false });
+    window.addEventListener("hashchange", function () { closeHelp(); placeHelpButton(); });
+    el.view.addEventListener("click", function (e) {
+      var btn = e.target.closest(".ad-help-btn");
+      if (!btn) return;
+      e.preventDefault();
+      e.stopPropagation();
+      var sheetOpen = !sheet.hidden;
+      if (sheetOpen) closeHelp(); else openHelp(btn.getAttribute("data-help"));
+    });
+    document.getElementById("ad-help-close").addEventListener("click", closeHelp);
+    sheet.addEventListener("keydown", function (e) { if (e.key === "Escape") { e.stopPropagation(); closeHelp(); } });
+    placeHelpButton();
+  })();
 
   /* ---------- Installer l'espace photographe sur l'écran d'accueil ---------- */
 

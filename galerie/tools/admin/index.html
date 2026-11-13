@@ -460,6 +460,23 @@
     <p class="lumi-foot" id="lumi-foot">Lumi peut se tromper : vérifiez les points importants.</p>
   </section>
 
+  <!-- ============ Aide de page : le « i » à côté du titre ============ -->
+  <aside class="ad-help" id="ad-help" role="dialog" aria-modal="false" aria-labelledby="ad-help-title" hidden>
+    <header class="ad-help-head">
+      <span class="ad-help-badge" aria-hidden="true"><svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="8.2"/><path d="M10 9v5"/><circle class="ad-help-dot" cx="10" cy="6.2" r=".6"/></svg></span>
+      <h2 id="ad-help-title">Comment ça marche</h2>
+      <button type="button" class="lumi-icon-btn" id="ad-help-close" aria-label="Fermer">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </header>
+    <div class="ad-help-body" id="ad-help-body"></div>
+    <footer class="ad-help-foot">
+      <button type="button" class="ad-btn ad-help-ask" id="ad-help-ask" hidden>
+        <span class="ad-help-ask-face" data-lumi aria-hidden="true"></span>
+        <span data-en="Ask Lumi about this page">Demander à Lumi</span>
+      </button>
+    </footer>
+  </aside>
   <script src="admin.js"></script>
 </body>
 </html>
