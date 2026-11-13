@@ -2517,14 +2517,14 @@ body:has(.ad-uploads-panel:not([hidden])) .lumi-launcher { visibility: hidden; }
 @keyframes lumi-dot { 0%, 60%, 100% { transform: translateY(0); opacity: .45; } 30% { transform: translateY(-4px); opacity: 1; } }
 @keyframes lumi-msg-in { from { opacity: 0; transform: translateY(4px); } }
 /* Accueil : grand Lumi centré, salutation, suggestions en grille. */
-.lumi-welcome { margin: auto 0; display: flex; flex-direction: column; align-items: center; text-align: center; padding: .5rem .2rem .4rem; }
+.lumi-welcome { margin: auto 0; display: flex; flex-direction: column; align-items: center; text-align: center; padding: .2rem .1rem .3rem; }
 .lumi-hero { display: block; width: 124px; height: 124px; margin-bottom: .5rem; }
 .lumi-welcome h3 { font-size: 1.3rem; font-weight: 650; letter-spacing: -.02em; color: var(--ink); }
 .lumi-welcome p { margin-top: .3rem; font-size: .88rem; line-height: 1.45; color: var(--muted); max-width: 30ch; }
-.lumi-suggest { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; width: 100%; margin-top: 1.4rem; }
+.lumi-suggest { display: grid; grid-template-columns: 1fr 1fr; gap: .45rem; width: 100%; margin-top: 1.1rem; }
 .lumi-suggest button {
   font: inherit; font-size: .82rem; font-weight: 500; line-height: 1.3; text-align: left; cursor: pointer;
-  padding: .7rem .8rem; border-radius: 14px; min-height: 48px;
+  padding: .6rem .75rem; border-radius: 14px; min-height: 44px;
   border: 1px solid var(--line-2); background: var(--paper); color: var(--ink-2);
   transition: border-color .15s var(--ease), background-color .15s var(--ease), color .15s var(--ease), transform .15s var(--ease);
 }
@@ -2555,3 +2555,85 @@ body:has(.ad-uploads-panel:not([hidden])) .lumi-launcher { visibility: hidden; }
   .lumi-tip { right: 64px; bottom: 14px; }
   .lumi-form textarea { font-size: 16px; }
 }
+
+/* ---------- Lumi : décors de saison ---------- */
+/* Noël (sapin, neige), hiver (bonhomme de neige), Saint-Valentin (ballon,
+   cœurs), Pâques (lapin, œufs), printemps (arbre en fleurs, pétales), été
+   (palmier, soleil), automne (arbre roux, feuilles), Halloween (citrouille,
+   chauve-souris) : voir lumiSeason() dans admin.js. */
+.lumi-xmas { display: none; }
+.lumi-season-noel .lumi-xmas { display: inline; }
+.lumi-season-noel .lumi-beret > circle { display: none; }
+.lumi-stage { position: relative; width: 240px; height: 124px; margin-bottom: .35rem; }
+.lumi-stage .lumi-hero { position: absolute; left: 50%; bottom: 0; width: 120px; height: 120px; margin: 0; transform: translateX(-60%); }
+.lumi-decor { position: absolute; right: 4px; bottom: 2px; width: 80px; height: 96px; }
+.lumi-stage-ete .lumi-decor, .lumi-stage-printemps .lumi-decor, .lumi-stage-automne .lumi-decor { width: 88px; height: 106px; right: -4px; }
+.lumi-wish {
+  display: inline-block; margin-bottom: .45rem; padding: .22rem .65rem; border-radius: 999px;
+  font-size: .74rem; font-weight: 600; letter-spacing: .01em; color: var(--accent-deep); background: var(--accent-soft);
+}
+.lumi-launcher-decor { position: absolute; left: -16px; bottom: -3px; width: 30px; height: 36px; pointer-events: none; }
+/* Particules (dans la scène d'accueil seulement). */
+.lumi-sky { position: absolute; inset: -6px -10px 0; overflow: hidden; pointer-events: none; }
+.lumi-sky i { position: absolute; top: -10px; left: var(--x); display: block; opacity: 0; }
+.lumi-sky-snow i { width: 6px; height: 6px; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #fff 0 35%, #bcd2ff 70%); box-shadow: 0 0 0 .5px rgba(120, 150, 230, .25); }
+.lumi-sky-petal i { width: 7px; height: 5px; border-radius: 70% 0 70% 0; background: linear-gradient(135deg, #ffd6e6, #f58bb3); }
+.lumi-sky-leaf i { width: 8px; height: 8px; border-radius: 0 80% 0 80%; background: linear-gradient(135deg, #ffbf6b, #d9541f); }
+.lumi-sky-heart i { top: auto; bottom: -10px; width: 9px; height: 9px; }
+.lumi-sky-heart i::before { content: "♥"; position: absolute; inset: -4px 0 0; font-size: 11px; line-height: 1; color: #f2466e; }
+@media (prefers-reduced-motion: no-preference) {
+  .lumi-sky i { animation: lumi-fall var(--d) linear var(--w) infinite; }
+  .lumi-sky-heart i { animation-name: lumi-rise; }
+}
+@keyframes lumi-fall {
+  0% { transform: translate(0, 0) rotate(var(--r)) scale(var(--s)); opacity: 0; }
+  10% { opacity: .95; }
+  50% { transform: translate(12px, 70px) rotate(calc(var(--r) + 140deg)) scale(var(--s)); }
+  90% { opacity: .9; }
+  100% { transform: translate(-6px, 150px) rotate(calc(var(--r) + 300deg)) scale(var(--s)); opacity: 0; }
+}
+@keyframes lumi-rise {
+  0% { transform: translate(0, 0) scale(var(--s)); opacity: 0; }
+  15% { opacity: .9; }
+  100% { transform: translate(10px, -150px) scale(var(--s)); opacity: 0; }
+}
+.lumi-decor-svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.lumi-decor-svg g, .lumi-decor-svg path, .lumi-decor-svg circle { transform-box: fill-box; }
+@media (prefers-reduced-motion: no-preference) {
+  .dc-sway { transform-origin: 50% 100%; animation: dc-sway 5s ease-in-out infinite; }
+  .dc-light { animation: dc-twinkle 1.8s ease-in-out infinite; }
+  .dc-l2 { animation-delay: .6s; } .dc-l3 { animation-delay: 1.2s; }
+  .dc-star { transform-origin: center; animation: dc-star 3s ease-in-out infinite; }
+  .dc-gift { transform-origin: 50% 100%; animation: dc-gift 6s ease-in-out infinite; }
+  .dc-hop { transform-origin: 50% 100%; animation: dc-hop 2.4s var(--ease, ease) infinite; }
+  .dc-ear { transform-origin: 50% 100%; animation: dc-ear 3.2s ease-in-out infinite; }
+  .dc-ear2 { animation-delay: .4s; }
+  .dc-egg { transform-origin: 50% 100%; animation: dc-wobble 2.8s ease-in-out infinite; }
+  .dc-egg2 { animation-delay: .9s; } .dc-egg3 { animation-delay: 1.6s; }
+  .dc-rays { transform-origin: center; animation: dc-spin 14s linear infinite; }
+  .dc-sun { animation: dc-float 4s ease-in-out infinite; }
+  .dc-fronds { transform-origin: 50% 60%; animation: dc-fronds 4.5s ease-in-out infinite; }
+  .dc-flower { animation: dc-bloom 3s ease-in-out infinite; }
+  .dc-flower > * { transform-box: view-box; }
+  .dc-f2 { animation-delay: 1.5s; }
+  .dc-bat { animation: dc-bat 5s ease-in-out infinite; }
+  .dc-glow { animation: dc-flicker 2.2s steps(1) infinite; }
+  .dc-balloon { transform-origin: 50% 100%; animation: dc-balloon 4s ease-in-out infinite; }
+  .dc-arm { transform-origin: 100% 100%; animation: dc-wave 2.6s ease-in-out infinite; }
+  .dc-mush { animation: dc-float 3.5s ease-in-out infinite; }
+}
+@keyframes dc-sway { 0%, 100% { transform: rotate(-1.8deg); } 50% { transform: rotate(1.8deg); } }
+@keyframes dc-twinkle { 0%, 100% { opacity: 1; filter: brightness(1); } 50% { opacity: .55; filter: brightness(1.5); } }
+@keyframes dc-star { 0%, 100% { transform: scale(1) rotate(0); } 50% { transform: scale(1.18) rotate(12deg); } }
+@keyframes dc-gift { 0%, 80%, 100% { transform: rotate(0); } 84% { transform: rotate(-6deg); } 88% { transform: rotate(5deg); } 92% { transform: rotate(-3deg); } }
+@keyframes dc-hop { 0%, 55%, 100% { transform: translateY(0) scale(1, 1); } 62% { transform: translateY(0) scale(1.08, .9); } 75% { transform: translateY(-14px) scale(.96, 1.05); } 88% { transform: translateY(0) scale(1.05, .94); } }
+@keyframes dc-ear { 0%, 70%, 100% { transform: rotate(0); } 78% { transform: rotate(-9deg); } 86% { transform: rotate(5deg); } }
+@keyframes dc-wobble { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-8deg); } 75% { transform: rotate(8deg); } }
+@keyframes dc-spin { to { transform: rotate(360deg); } }
+@keyframes dc-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+@keyframes dc-fronds { 0%, 100% { transform: rotate(-3deg); } 50% { transform: rotate(3deg); } }
+@keyframes dc-bloom { 0%, 100% { opacity: 1; } 50% { opacity: .7; } }
+@keyframes dc-bat { 0%, 100% { transform: translate(0, 0); } 25% { transform: translate(-14px, 6px); } 50% { transform: translate(-4px, -4px); } 75% { transform: translate(8px, 4px); } }
+@keyframes dc-flicker { 0%, 100% { opacity: 1; } 30% { opacity: .75; } 34% { opacity: 1; } 62% { opacity: .85; } }
+@keyframes dc-balloon { 0%, 100% { transform: rotate(-4deg) translateY(0); } 50% { transform: rotate(4deg) translateY(-4px); } }
+@keyframes dc-wave { 0%, 60%, 100% { transform: rotate(0); } 70% { transform: rotate(14deg); } 80% { transform: rotate(-4deg); } 90% { transform: rotate(12deg); } }

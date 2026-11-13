@@ -69,6 +69,11 @@ try {
   check("Lumi apparaît en bas à droite, avec sa bulle « Une question ? »", await page.isVisible("#lumi-launcher .lumi") && await page.isVisible("#lumi-tip"));
   if (SHOTS) await page.screenshot({ path: `${SHOTS}/lumi-bouton.png`, clip: { x: 980, y: 760, width: 300, height: 140 } });
 
+  // Décor de la saison du jour (calendrier : voir lumiSeason dans admin.js).
+  const md = (() => { const d = new Date(); return (d.getMonth() + 1) * 100 + d.getDate(); })();
+  const seasonClass = await page.evaluate(() => [...document.body.classList].find((c) => c.startsWith("lumi-season-")));
+  check("décor de saison posé à côté du bouton", await page.isVisible(".lumi-launcher-decor svg") && Boolean(seasonClass), `${seasonClass} (${md})`);
+
   // Les yeux suivent le pointeur.
   await page.mouse.move(100, 100);
   await page.waitForTimeout(150);
@@ -124,6 +129,23 @@ try {
   check("« Nouvelle conversation » repart de zéro", (await page.locator(".lumi-msg-me").count()) === 0 && (await page.locator(".lumi-suggest button").count()) === 5);
   await page.keyboard.press("Escape");
   check("Échap ferme Lumi", await page.isHidden("#lumi-panel"));
+
+  // Saison choisie dans l'adresse (aperçu) : Pâques, lapin et souhait.
+  await page.goto(`${BASE}/?lumi-saison=paques`, { waitUntil: "domcontentloaded" });
+  await page.waitForSelector("#lumi-launcher:not([hidden])", { timeout: 10000 });
+  await page.click("#lumi-launcher");
+  check("Pâques : lapin et œufs à côté de Lumi, « Joyeuses Pâques ! »",
+        (await page.locator(".lumi-stage-paques .lumi-decor .dc-hop").count()) === 1 && (await page.locator(".lumi-decor .dc-egg").count()) === 3 &&
+        (await page.textContent(".lumi-wish")) === "Joyeuses Pâques !");
+  await page.goto(`${BASE}/?lumi-saison=noel`, { waitUntil: "domcontentloaded" });
+  await page.waitForSelector("#lumi-launcher:not([hidden])", { timeout: 10000 });
+  await page.click("#lumi-launcher");
+  check("Noël : sapin, flocons qui tombent, béret de Noël",
+        (await page.locator(".lumi-decor .dc-star").count()) === 1 && (await page.locator(".lumi-sky-snow i").count()) === 12 &&
+        await page.isVisible(".lumi-hero .lumi-xmas"));
+  if (SHOTS) await page.locator("#lumi-panel").screenshot({ path: `${SHOTS}/lumi-noel.png` });
+  await page.keyboard.press("Escape");
+
 
   // Téléphone : panneau plein écran, rien ne déborde, l'onglet ouvert ferme Lumi.
   const phoneContext = await browser.newContext({ ...devices["iPhone 13"], serviceWorkers: "block" });

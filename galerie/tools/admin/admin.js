@@ -11374,7 +11374,9 @@
         '<g class="lumi-beret" transform="rotate(-7 60 26)"><path d="M33 33 C 34 18, 60 12, 80 19 C 92 23, 93 31, 86 33 C 72 29, 48 29, 33 33 Z" fill="url(#lb' + u + ')"/>' +
         '<path d="M35 32.5 C 50 28.5, 72 28.5, 86 32.5" fill="none" stroke="#8d1c19" stroke-width="2.4" stroke-linecap="round" opacity=".55"/>' +
         '<circle cx="62" cy="15.5" r="2.6" fill="#c9332c"/>' +
-        '<ellipse cx="52" cy="22" rx="8" ry="3" fill="#fff" opacity=".3" filter="url(#lsoft' + u + ')"/></g>' +
+        '<ellipse cx="52" cy="22" rx="8" ry="3" fill="#fff" opacity=".3" filter="url(#lsoft' + u + ')"/>' +
+      // À Noël, le béret prend un liseré blanc et un pompon.
+      '<g class="lumi-xmas"><path d="M33.5 33 C 48 28.6, 72 28.6, 86.5 33 L 86 37 C 72 33, 48 33, 34 37 Z" fill="#fff"/><circle cx="62" cy="14.5" r="4.6" fill="#fff"/></g></g>' +
         // Visage : regard (pointeur), balayage, clignement ; yeux rieurs.
         '<g class="lumi-look"><g class="lumi-scan"><g class="lumi-eyes">' +
         '<ellipse cx="50.5" cy="52" rx="4.4" ry="6.2" fill="url(#le' + u + ')"/><ellipse cx="69.5" cy="52" rx="4.4" ry="6.2" fill="url(#le' + u + ')"/>' +
@@ -11401,9 +11403,159 @@
         '<g class="lumi-sparkles"><path d="M100 14 l2.2 5 5 2.2 -5 2.2 -2.2 5 -2.2 -5 -5 -2.2 5 -2.2z"/><path d="M18 22 l1.5 3.4 3.4 1.5 -3.4 1.5 -1.5 3.4 -1.5 -3.4 -3.4 -1.5 3.4 -1.5z"/></g>' +
         "</g></svg>";
     }
+    // Décor de saison (même style 3D doux que Lumi), dessiné à côté d'elle.
+    function lumiDecor(key, u) {
+      var g = function (id, a, b, c) {
+        return '<radialGradient id="' + id + u + '" cx="38%" cy="30%" r="80%"><stop offset="0" stop-color="' + a + '"/><stop offset=".55" stop-color="' + b + '"/><stop offset="1" stop-color="' + c + '"/></radialGradient>';
+      };
+      var open = '<svg class="lumi-decor-svg" viewBox="0 0 100 120" aria-hidden="true" focusable="false"><defs>';
+      var shadow = '<ellipse cx="50" cy="115" rx="30" ry="3.5" fill="rgba(11,11,40,.14)"/>';
+      if (key === "noel") {
+        return open + g("sa", "#7fe08f", "#2fa45a", "#17683a") + g("ba", "#ff9b8e", "#e5372f", "#9d1f1b") + g("bo", "#ffe7a3", "#f5b729", "#b8770c") + g("bb", "#9fd8ff", "#3b7cf5", "#2433a8") + "</defs>" + shadow +
+          '<rect x="45" y="96" width="10" height="16" rx="3" fill="#8a5a3c"/>' +
+          '<g class="dc-sway"><path d="M50 52 L80 96 Q82 101 76 101 L24 101 Q18 101 20 96 Z" fill="url(#sa' + u + ')"/>' +
+          '<path d="M50 34 L74 70 Q76 75 70 75 L30 75 Q24 75 26 70 Z" fill="url(#sa' + u + ')"/>' +
+          '<path d="M50 18 L66 46 Q68 51 62 51 L38 51 Q32 51 34 46 Z" fill="url(#sa' + u + ')"/>' +
+          '<path d="M30 70 Q50 78 72 66 M28 95 Q50 104 76 90" fill="none" stroke="#ffe7a3" stroke-width="1.6" stroke-linecap="round" opacity=".9"/>' +
+          '<circle class="dc-light" cx="40" cy="60" r="3.6" fill="url(#ba' + u + ')"/><circle class="dc-light dc-l2" cx="58" cy="66" r="3.6" fill="url(#bo' + u + ')"/>' +
+          '<circle class="dc-light dc-l3" cx="50" cy="44" r="3.2" fill="url(#bb' + u + ')"/><circle class="dc-light dc-l2" cx="34" cy="88" r="3.8" fill="url(#bb' + u + ')"/>' +
+          '<circle class="dc-light" cx="64" cy="90" r="3.8" fill="url(#ba' + u + ')"/><circle class="dc-light dc-l3" cx="50" cy="82" r="3.4" fill="url(#bo' + u + ')"/></g>' +
+          '<path class="dc-star" d="M50 6 l3.4 7 7.6 1.1 -5.5 5.3 1.3 7.6 -6.8 -3.6 -6.8 3.6 1.3 -7.6 -5.5 -5.3 7.6 -1.1z" fill="url(#bo' + u + ')"/>' +
+          '<g class="dc-gift"><rect x="62" y="100" width="18" height="13" rx="3" fill="url(#ba' + u + ')"/><rect x="69" y="100" width="4" height="13" fill="#ffe7a3"/>' +
+          '<path d="M71 100 q-6 -7 -8 -2 q2 3 8 2 q6 -7 8 -2 q-2 3 -8 2" fill="#ffe7a3"/></g></svg>';
+      }
+      if (key === "paques") {
+        return open + g("bu", "#ffffff", "#f3eee8", "#cfc6bb") + g("e1", "#ffd1e3", "#ff7fb0", "#c94a7d") + g("e2", "#c9f2ff", "#59c6f2", "#2b7fb8") + g("e3", "#fff3b0", "#ffd24d", "#c9921a") + "</defs>" + shadow +
+          '<g class="dc-hop">' +
+          '<g class="dc-ear"><ellipse cx="41" cy="44" rx="6" ry="17" fill="url(#bu' + u + ')" transform="rotate(-12 41 44)"/><ellipse cx="41" cy="45" rx="3" ry="12" fill="#ffc2d3" transform="rotate(-12 41 45)"/></g>' +
+          '<g class="dc-ear dc-ear2"><ellipse cx="57" cy="43" rx="6" ry="17" fill="url(#bu' + u + ')" transform="rotate(10 57 43)"/><ellipse cx="57" cy="44" rx="3" ry="12" fill="#ffc2d3" transform="rotate(10 57 44)"/></g>' +
+          '<ellipse cx="50" cy="94" rx="21" ry="17" fill="url(#bu' + u + ')"/>' +
+          '<circle cx="49" cy="68" r="15" fill="url(#bu' + u + ')"/>' +
+          '<ellipse cx="44" cy="66" rx="2" ry="2.6" fill="#141833"/><ellipse cx="55" cy="66" rx="2" ry="2.6" fill="#141833"/>' +
+          '<ellipse cx="49.5" cy="72" rx="2.2" ry="1.6" fill="#ff8fb0"/><ellipse cx="40" cy="72" rx="3" ry="1.8" fill="#ff9fb8" opacity=".5"/><ellipse cx="59" cy="72" rx="3" ry="1.8" fill="#ff9fb8" opacity=".5"/>' +
+          '<circle cx="70" cy="98" r="5" fill="#fff"/><ellipse cx="40" cy="110" rx="7" ry="3.5" fill="#f3eee8"/><ellipse cx="59" cy="110" rx="7" ry="3.5" fill="#f3eee8"/></g>' +
+          '<g class="dc-egg"><ellipse cx="16" cy="104" rx="8" ry="10" fill="url(#e1' + u + ')"/><path d="M9 101 q3.5 -3 7 0 t7 0" fill="none" stroke="#fff" stroke-width="1.6"/><path d="M9 107 q3.5 3 7 0 t7 0" fill="none" stroke="#fff" stroke-width="1.6"/></g>' +
+          '<g class="dc-egg dc-egg2"><ellipse cx="84" cy="106" rx="7.5" ry="9.5" fill="url(#e2' + u + ')"/><circle cx="81" cy="103" r="1.5" fill="#fff"/><circle cx="87" cy="106" r="1.5" fill="#fff"/><circle cx="82" cy="110" r="1.5" fill="#fff"/></g>' +
+          '<g class="dc-egg dc-egg3"><ellipse cx="94" cy="110" rx="5" ry="6.5" fill="url(#e3' + u + ')"/></g></svg>';
+      }
+      if (key === "ete") {
+        return open + g("su", "#fff6c2", "#ffd34d", "#f59e0b") + g("pa", "#8ef0a0", "#30b45e", "#18703c") + "</defs>" +
+          '<ellipse cx="50" cy="112" rx="40" ry="7" fill="#f3d9a4"/>' +
+          '<g class="dc-sun"><g class="dc-rays" fill="#ffd34d">' +
+          [0, 45, 90, 135, 180, 225, 270, 315].map(function (a) { return '<rect x="80" y="2" width="3.4" height="7" rx="1.7" transform="rotate(' + a + ' 81.7 17)"/>'; }).join("") +
+          '</g><circle cx="81.7" cy="17" r="9.5" fill="url(#su' + u + ')"/><circle cx="78.6" cy="16" r="1.1" fill="#7a4a00"/><circle cx="84.8" cy="16" r="1.1" fill="#7a4a00"/><path d="M78.6 19.6 q3.1 2.6 6.2 0" fill="none" stroke="#7a4a00" stroke-width="1.2" stroke-linecap="round"/></g>' +
+          '<path d="M44 112 C 44 92, 46 70, 52 48" fill="none" stroke="#a06a3f" stroke-width="7" stroke-linecap="round"/>' +
+          '<path d="M45 104 l5 -1 M45 94 l5.4 -1 M46 84 l5.6 -1 M47.5 74 l5.6 -1 M49 64 l5.4 -1" stroke="#7d4f2c" stroke-width="1.6" stroke-linecap="round"/>' +
+          '<g class="dc-fronds">' +
+          '<path d="M52 48 C 40 38, 24 40, 14 52 C 28 46, 40 48, 52 50 Z" fill="url(#pa' + u + ')"/>' +
+          '<path d="M52 48 C 64 36, 80 38, 90 50 C 76 45, 64 47, 52 50 Z" fill="url(#pa' + u + ')"/>' +
+          '<path d="M52 47 C 46 32, 34 26, 22 28 C 34 32, 44 38, 51 49 Z" fill="url(#pa' + u + ')"/>' +
+          '<path d="M52 47 C 60 31, 72 26, 84 29 C 72 33, 62 38, 53 49 Z" fill="url(#pa' + u + ')"/>' +
+          '<circle cx="50" cy="52" r="3.4" fill="#8a5a3c"/><circle cx="55" cy="53" r="3.2" fill="#7a4d31"/></g></svg>';
+      }
+      if (key === "printemps") {
+        return open + g("bl", "#ffe3ee", "#ffb3cf", "#f07aa6") + "</defs>" + shadow +
+          '<path d="M50 113 C 50 96, 48 82, 50 66 M50 86 C 56 80, 62 78, 68 70 M49 80 C 42 74, 38 70, 32 64" fill="none" stroke="#8a5a3c" stroke-width="6" stroke-linecap="round"/>' +
+          '<g class="dc-sway">' +
+          '<circle cx="30" cy="56" r="17" fill="url(#bl' + u + ')"/><circle cx="70" cy="56" r="18" fill="url(#bl' + u + ')"/><circle cx="50" cy="40" r="22" fill="url(#bl' + u + ')"/>' +
+          '<circle cx="50" cy="64" r="15" fill="url(#bl' + u + ')"/>' +
+          [[36, 40], [58, 30], [68, 52], [28, 58], [48, 58], [80, 60]].map(function (p, i) {
+            return '<g class="dc-flower' + (i % 2 ? " dc-f2" : "") + '" transform="translate(' + p[0] + " " + p[1] + ')"><circle r="2.4" cx="0" cy="-2.4" fill="#fff"/><circle r="2.4" cx="2.3" cy="-.7" fill="#fff"/><circle r="2.4" cx="1.4" cy="2" fill="#fff"/><circle r="2.4" cx="-1.4" cy="2" fill="#fff"/><circle r="2.4" cx="-2.3" cy="-.7" fill="#fff"/><circle r="1.4" fill="#ffd34d"/></g>';
+          }).join("") + "</g></svg>";
+      }
+      if (key === "automne") {
+        return open + g("au", "#ffd08a", "#f28b30", "#b9481a") + g("au2", "#ffb48a", "#e2572f", "#9a2d17") + "</defs>" + shadow +
+          '<path d="M50 113 C 50 96, 49 84, 50 68 M50 88 C 56 82, 62 80, 66 74" fill="none" stroke="#7d4f2c" stroke-width="6" stroke-linecap="round"/>' +
+          '<g class="dc-sway"><circle cx="32" cy="58" r="17" fill="url(#au2' + u + ')"/><circle cx="68" cy="58" r="18" fill="url(#au' + u + ')"/><circle cx="50" cy="42" r="22" fill="url(#au' + u + ')"/><circle cx="50" cy="66" r="14" fill="url(#au2' + u + ')"/></g>' +
+          '<g transform="translate(78 104)"><g class="dc-mush"><rect x="-3" y="0" width="6" height="9" rx="2.5" fill="#f5ecdc"/><path d="M-10 1 Q0 -12 10 1 Z" fill="#e2453c"/><circle cx="-4" cy="-3" r="1.4" fill="#fff"/><circle cx="3" cy="-5" r="1.2" fill="#fff"/></g></g></svg>';
+      }
+      if (key === "halloween") {
+        return open + g("pu", "#ffc77d", "#f48a1e", "#b44a0c") + "</defs>" + shadow +
+          '<g class="dc-bat"><path d="M66 22 q-6 -6 -12 -2 q4 2 3 6 q4 -2 6 1 q2 -3 3 -5 q1 2 3 5 q2 -3 6 -1 q-1 -4 3 -6 q-6 -4 -12 2 z" fill="#2a2440"/><circle cx="64.6" cy="24" r=".8" fill="#ffd34d"/><circle cx="67.4" cy="24" r=".8" fill="#ffd34d"/></g>' +
+          '<g class="dc-pumpkin"><path d="M50 64 q-3 -9 4 -12" fill="none" stroke="#3f7a2d" stroke-width="4" stroke-linecap="round"/>' +
+          '<ellipse cx="34" cy="90" rx="16" ry="22" fill="url(#pu' + u + ')"/><ellipse cx="66" cy="90" rx="16" ry="22" fill="url(#pu' + u + ')"/><ellipse cx="50" cy="90" rx="18" ry="24" fill="url(#pu' + u + ')"/>' +
+          '<g class="dc-glow" fill="#ffe27a"><path d="M38 84 l5 -7 5 7 z"/><path d="M52 84 l5 -7 5 7 z"/><path d="M36 96 q14 12 28 0 q-4 3 -7 2 l-2 3 -2 -3 q-3 1 -5 1 l-2 3 -2 -3 q-4 0 -8 -3 z"/></g></g></svg>';
+      }
+      if (key === "valentin") {
+        return open + g("he", "#ffb8c9", "#f2466e", "#a8163f") + "</defs>" + shadow +
+          '<g class="dc-balloon"><path d="M52 66 C 50 80, 56 92, 50 112" fill="none" stroke="#c9c3d6" stroke-width="1.4"/>' +
+          '<path d="M52 66 C 30 50, 26 28, 40 22 C 48 18, 52 26, 52 30 C 52 26, 56 18, 64 22 C 78 28, 74 50, 52 66 Z" fill="url(#he' + u + ')"/>' +
+          '<ellipse cx="42" cy="32" rx="5" ry="3" fill="#fff" opacity=".45" transform="rotate(-30 42 32)"/></g></svg>';
+      }
+      // Hiver : bonhomme de neige.
+      return open + g("sn", "#ffffff", "#eef3fb", "#c6d2e6") + "</defs>" + shadow +
+        '<circle cx="50" cy="92" r="21" fill="url(#sn' + u + ')"/>' +
+        '<g class="dc-arm"><path d="M30 78 L14 68 M18 70 l-3 -5" stroke="#7d4f2c" stroke-width="2.6" stroke-linecap="round" fill="none"/></g>' +
+        '<path d="M70 78 L86 70 M82 72 l4 -5" stroke="#7d4f2c" stroke-width="2.6" stroke-linecap="round" fill="none"/>' +
+        '<circle cx="50" cy="58" r="15" fill="url(#sn' + u + ')"/>' +
+        '<path d="M37 68 Q50 75 63 68 L63 73 Q50 80 37 73 Z" fill="#e5372f"/><path d="M58 72 l3 14 6 -2 -4 -12 z" fill="#c9302a"/>' +
+        '<ellipse cx="45" cy="55" rx="1.8" ry="2.3" fill="#141833"/><ellipse cx="55" cy="55" rx="1.8" ry="2.3" fill="#141833"/>' +
+        '<path d="M50 59 l9 2.4 -9 1.6 z" fill="#f28b30"/>' +
+        '<circle cx="50" cy="86" r="1.8" fill="#141833"/><circle cx="50" cy="95" r="1.8" fill="#141833"/>' +
+        '<path d="M38 46 L62 46 L60 42 L58 30 Q50 27 42 30 L40 42 Z" fill="#2a2f4a"/><rect x="38" y="42" width="24" height="4" fill="#e5372f"/></svg>';
+    }
+
+    // Période de l'année → décor. Pâques : du deuxième dimanche avant au
+    // lundi de Pâques (date calculée chaque année, calendrier grégorien).
+    function easterOf(y) {
+      var a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4;
+      var f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3);
+      var h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4;
+      var l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
+      var month = Math.floor((h + l - 7 * m + 114) / 31), day = ((h + l - 7 * m + 114) % 31) + 1;
+      return new Date(y, month - 1, day);
+    }
+    function lumiSeason(date) {
+      var y = date.getFullYear();
+      var day = new Date(y, date.getMonth(), date.getDate());
+      var easter = easterOf(y);
+      var from = new Date(easter); from.setDate(easter.getDate() - 14);
+      var to = new Date(easter); to.setDate(easter.getDate() + 1);
+      if (day >= from && day <= to) return "paques";
+      var md = (date.getMonth() + 1) * 100 + date.getDate();
+      if (md >= 1201 || md <= 106) return "noel";
+      if (md >= 207 && md <= 214) return "valentin";
+      if (md <= 319) return "hiver";
+      if (md <= 620) return "printemps";
+      if (md <= 831) return "ete";
+      if (md >= 1020 && md <= 1031) return "halloween";
+      return "automne";
+    }
+
+    // Particules du décor : neige, pétales, feuilles, cœurs.
+    var SKY = { noel: "snow", hiver: "snow", printemps: "petal", automne: "leaf", valentin: "heart" };
+    var WISH = {
+      noel: "Belles fêtes de fin d'année !", hiver: "Bien au chaud cet hiver ?", valentin: "Belle Saint-Valentin !",
+      paques: "Joyeuses Pâques !", printemps: "Le printemps est là !", ete: "Bel été !", automne: "Bel automne !", halloween: "Joyeux Halloween !",
+    };
+    function skyHtml(key) {
+      var kind = SKY[key];
+      if (!kind) return "";
+      var out = "";
+      for (var i = 0; i < 12; i++) {
+        out += '<i style="--x:' + Math.round(Math.random() * 100) + "%;--d:" + (5 + Math.random() * 5).toFixed(1) + "s;--w:" + (-Math.random() * 9).toFixed(1) +
+          "s;--s:" + (0.6 + Math.random() * 0.7).toFixed(2) + ";--r:" + Math.round(Math.random() * 360) + 'deg"></i>';
+      }
+      return '<span class="lumi-sky lumi-sky-' + kind + '" aria-hidden="true">' + out + "</span>";
+    }
+    // Saison du décor ; « ?lumi-saison=paques » (ou ete, noel…) pour la voir avant l'heure.
+    function seasonNow() {
+      var forced = (/[?&]lumi-saison=([a-z]+)/.exec(location.search) || [])[1];
+      return forced && WISH[forced] ? forced : lumiSeason(new Date());
+    }
+    var season = seasonNow();
+    var decorCount = 0;
+
     function newFigure() { figureCount += 1; return lumiFigure("lu" + figureCount); }
 
     document.querySelectorAll("[data-lumi]").forEach(function (node) { node.innerHTML = newFigure(); });
+    document.body.classList.add("lumi-season-" + season);
+    // Un petit décor de saison à côté du bouton.
+    var launcherDecor = document.createElement("span");
+    launcherDecor.className = "lumi-launcher-decor";
+    launcherDecor.setAttribute("aria-hidden", "true");
+    launcherDecor.innerHTML = lumiDecor(season, "ldc");
+    launcher.appendChild(launcherDecor);
     // Tous les Lumi visibles : bouton, en-tête, grand avatar d'accueil.
     function figures() { return Array.prototype.slice.call(document.querySelectorAll("[data-lumi], .lumi-hero")); }
     var calm = window.matchMedia ? window.matchMedia("(prefers-reduced-motion: reduce)") : { matches: false };
@@ -11517,7 +11669,11 @@
         var g = greeting();
         var welcome = document.createElement("div");
         welcome.className = "lumi-welcome";
-        welcome.innerHTML = '<span class="lumi-hero" aria-hidden="true">' + newFigure() + "</span>" +
+        decorCount += 1;
+        welcome.innerHTML = '<div class="lumi-stage lumi-stage-' + season + '">' + skyHtml(season) +
+          '<span class="lumi-hero" aria-hidden="true">' + newFigure() + "</span>" +
+          '<span class="lumi-decor" aria-hidden="true">' + lumiDecor(season, "wd" + decorCount) + "</span></div>" +
+          '<span class="lumi-wish">' + esc(WISH[season]) + "</span>" +
           "<h3>" + esc(g.hello) + "</h3><p>" + esc(g.sub) + "</p>" +
           '<div class="lumi-suggest">' + SUGGESTIONS.map(function (q) { return '<button type="button" data-lumi-ask="' + esc(q) + '">' + esc(q) + "</button>"; }).join("") + "</div>";
         log.appendChild(welcome);
