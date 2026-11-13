@@ -40,6 +40,7 @@ import { handlePortfolioAdmin, deletePortfolioFiles } from "./portfolio.js";
 import { storageRefusal, TILE_BYTES_PER_PHOTO } from "./storage.js";
 import { authenticatePhotographer } from "./authPhotographer.js";
 import { handleFeedbackAdmin } from "./feedback.js";
+import { handleAssistantAdmin } from "./assistant.js";
 import { connectStripe, refreshStripeStatus, setBillingProfile } from "./billing.js";
 import { updateStudioName, updateName, changePassword, requestEmailChange, updateDefaults, updateReminders, updateSubdomain, updateUiLanguage } from "./account.js";
 
@@ -1107,6 +1108,10 @@ export async function handleAdmin(request, env, ctx, path) {
 
   // Suggestions envoyées au propriétaire de la plateforme (feedback.js).
   if (section === "feedback") return handleFeedbackAdmin(request, env, photographerId, parts.slice(3));
+  if (section === "assistant" && parts.length === 3) {
+    const photographer = await env.DB.prepare("SELECT * FROM photographers WHERE id = ?").bind(photographerId).first();
+    return handleAssistantAdmin(request, env, photographer);
+  }
 
   // Fiches clients et dates à retenir (clients.js).
   if (section === "clients") {

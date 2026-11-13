@@ -440,6 +440,7 @@
   var LOGIN_CARD_IDS = ["ad-login-card", "ad-signup-card", "ad-forgot-card", "ad-reset-card"];
 
   function showLoginCard(visibleId) {
+    if (typeof lumi !== "undefined") lumi.stop();
     el.app.hidden = true;
     el.login.hidden = false;
     LOGIN_CARD_IDS.forEach(function (id) {
@@ -522,6 +523,7 @@
     state.me = photographer;
     if (el.tabOwner) el.tabOwner.hidden = !state.isOwner;
     if (el.tabSchool) el.tabSchool.hidden = !photographer.schoolTab;
+    if (typeof lumi !== "undefined") lumi.start(photographer);
   }
 
   /* ---------- Requêtes ---------- */
@@ -11311,6 +11313,286 @@
     var btn = e.target.closest("[data-invoice-from]");
     if (btn) openInvoiceFrom(btn.getAttribute("data-invoice-from"), btn.getAttribute("data-invoice-id"));
   });
+
+  /* ---------- Lumi, l'assistante : questions sur Holypixx ---------- */
+
+  // Un petit appareil photo qui répond aux questions des photographes
+  // (fonctions, configuration, marche à suivre). La conversation reste dans
+  // l'onglet du navigateur (sessionStorage) ; chaque question renvoie les
+  // derniers échanges au serveur, qui interroge Claude (voir assistant.js).
+  var lumi = (function () {
+    var launcher = document.getElementById("lumi-launcher");
+    var panel = document.getElementById("lumi-panel");
+    if (!launcher || !panel) return { start: function () {}, stop: function () {} };
+    var log = document.getElementById("lumi-log");
+    var form = document.getElementById("lumi-form");
+    var input = document.getElementById("lumi-input");
+    var send = document.getElementById("lumi-send");
+    var foot = document.getElementById("lumi-foot");
+    var STORE = "holypixx-lumi";
+    var TIP_SEEN = "holypixx-lumi-tip";
+    var GOTO = {
+      galeries: ["galleries", "Galeries"], planning: ["planning", "Planning"], clients: ["clients", "Clients"],
+      reservations: ["booking", "Réservations"], contrats: ["contracts", "Devis et contrats"], ventes: ["sales", "Ventes"],
+      statistiques: ["insights", "Statistiques"], facturation: ["billing", "Facturation"], boutique: ["shop", "Boutique"],
+      portfolio: ["portfolio", "Portfolio"], "bons-cadeaux": ["giftcards", "Bons cadeaux"], abonnement: ["subscription", "Abonnement"],
+      parametres: ["settings", "Paramètres"], suggestions: ["feedback", "Suggestions"],
+    };
+    var SUGGESTIONS = [
+      "Par où commencer ?",
+      "Comment envoyer une galerie à mon client ?",
+      "Comment ouvrir des créneaux de réservation ?",
+      "Mes photos sont-elles vraiment protégées ?",
+      "Comment préparer mes modèles de contrat ?",
+    ];
+    var state = { enabled: false, messages: [], busy: false, remaining: null };
+
+    var FIGURE = '<svg class="lumi" viewBox="0 0 80 80" aria-hidden="true" focusable="false">' +
+      '<ellipse class="lumi-shadow" cx="40" cy="74" rx="19" ry="3"/>' +
+      '<g class="lumi-body">' +
+      '<rect class="lumi-top" x="20" y="13" width="20" height="11" rx="4.5"/>' +
+      '<circle class="lumi-flash" cx="57" cy="19.5" r="4"/>' +
+      '<rect class="lumi-shell" x="9" y="20" width="62" height="48" rx="17"/>' +
+      '<path class="lumi-strap" d="M17 32 q0 -5 5 -5"/>' +
+      '<circle class="lumi-ring" cx="40" cy="44" r="19.5"/>' +
+      '<circle class="lumi-rim" cx="40" cy="44" r="17.6"/>' +
+      '<circle class="lumi-face" cx="40" cy="44" r="15.5"/>' +
+      '<g class="lumi-look"><g class="lumi-eyes">' +
+      '<ellipse cx="34.6" cy="42" rx="2.5" ry="3.3"/><ellipse cx="45.4" cy="42" rx="2.5" ry="3.3"/>' +
+      '<circle class="lumi-glint" cx="35.4" cy="40.7" r=".9"/><circle class="lumi-glint" cx="46.2" cy="40.7" r=".9"/>' +
+      "</g></g>" +
+      '<path class="lumi-happy" d="M32 43 q2.6 -3.2 5.2 0 M42.8 43 q2.6 -3.2 5.2 0"/>' +
+      '<circle class="lumi-cheek" cx="30.2" cy="48.2" r="2.3"/><circle class="lumi-cheek" cx="49.8" cy="48.2" r="2.3"/>' +
+      '<path class="lumi-smile" d="M36.6 49.2 q3.4 3.2 6.8 0"/>' +
+      "</g>" +
+      // Étincelles de joie, quand Lumi vient de répondre.
+      '<g class="lumi-sparkles"><path d="M70 9 l1.6 3.8 3.8 1.6 -3.8 1.6 -1.6 3.8 -1.6 -3.8 -3.8 -1.6 3.8 -1.6z"/>' +
+      '<path d="M8 12 l1.1 2.6 2.6 1.1 -2.6 1.1 -1.1 2.6 -1.1 -2.6 -2.6 -1.1 2.6 -1.1z"/></g>' +
+      "</svg>";
+
+    document.querySelectorAll("[data-lumi]").forEach(function (node) { node.innerHTML = FIGURE; });
+    var figures = Array.prototype.slice.call(document.querySelectorAll("[data-lumi]"));
+
+    // Les yeux suivent le pointeur (3 px au plus), une image par rafraîchissement.
+    var pending = null;
+    window.addEventListener("pointermove", function (e) {
+      if (pending) return;
+      pending = requestAnimationFrame(function () {
+        pending = null;
+        figures.forEach(function (fig) {
+          if (!fig.offsetParent) return;
+          var r = fig.getBoundingClientRect();
+          var dx = e.clientX - (r.left + r.width / 2);
+          var dy = e.clientY - (r.top + r.height * 0.55);
+          var d = Math.max(1, Math.hypot(dx, dy));
+          var k = Math.min(1, d / 220) * 2.8;
+          fig.style.setProperty("--lumi-x", (dx / d * k).toFixed(2) + "px");
+          fig.style.setProperty("--lumi-y", (dy / d * k).toFixed(2) + "px");
+        });
+      });
+    }, { passive: true });
+
+    function mood(name, ms) {
+      figures.forEach(function (fig) {
+        fig.classList.remove("is-thinking", "is-happy", "is-hello");
+        if (name) fig.classList.add(name);
+      });
+      if (ms) setTimeout(function () { figures.forEach(function (fig) { fig.classList.remove(name); }); }, ms);
+    }
+
+    function save() {
+      try { sessionStorage.setItem(STORE, JSON.stringify(state.messages.slice(-30))); } catch (err) { /* rien */ }
+    }
+    function restore() {
+      try {
+        var saved = JSON.parse(sessionStorage.getItem(STORE) || "[]");
+        if (Array.isArray(saved)) state.messages = saved.filter(function (m) { return m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string"; });
+      } catch (err) { state.messages = []; }
+    }
+
+    // Texte de Lumi → HTML sûr : paragraphes, listes, gras, boutons d'onglet.
+    function inline(text) {
+      return esc(text)
+        .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+        .replace(/\[\[([a-z-]+)\]\]/g, function (all, key) {
+          var target = GOTO[key];
+          return target ? '<button type="button" class="lumi-goto" data-lumi-goto="' + key + '">' + esc(target[1]) + "</button>" : "";
+        });
+    }
+    function render(text) {
+      var out = [];
+      var list = null;
+      String(text).split(/\r?\n/).forEach(function (line) {
+        var bullet = /^\s*[-•*]\s+(.*)$/.exec(line);
+        var number = /^\s*\d+[.)]\s+(.*)$/.exec(line);
+        if (bullet || number) {
+          var kind = bullet ? "ul" : "ol";
+          if (!list || list.kind !== kind) { if (list) out.push(list.html + "</" + list.kind + ">"); list = { kind: kind, html: "<" + kind + ">" }; }
+          list.html += "<li>" + inline((bullet || number)[1]) + "</li>";
+          return;
+        }
+        if (list) { out.push(list.html + "</" + list.kind + ">"); list = null; }
+        if (line.trim()) out.push("<p>" + inline(line.trim()) + "</p>");
+      });
+      if (list) out.push(list.html + "</" + list.kind + ">");
+      return out.join("");
+    }
+
+    function bubble(role, html, extraClass) {
+      var row = document.createElement("div");
+      row.className = "lumi-msg " + (role === "user" ? "lumi-msg-me" : "lumi-msg-bot") + (extraClass ? " " + extraClass : "");
+      row.innerHTML = (role === "user" ? "" : '<span class="lumi-mini" aria-hidden="true">' + FIGURE + "</span>") +
+        '<div class="lumi-bubble">' + html + "</div>";
+      log.appendChild(row);
+      log.scrollTop = log.scrollHeight;
+      return row;
+    }
+
+    function paint() {
+      log.innerHTML = "";
+      bubble("assistant", render(
+        "Bonjour" + (state.me && state.me.studioName ? " " + state.me.studioName : "") + " ! Je suis **Lumi**, votre guide Holypixx.\n" +
+        "Posez-moi n'importe quelle question : configurer votre compte, envoyer une galerie, ouvrir la réservation, préparer vos contrats…"));
+      state.messages.forEach(function (m) {
+        bubble(m.role, m.role === "user" ? esc(m.content) : render(m.content));
+      });
+      if (!state.messages.length) {
+        var box = document.createElement("div");
+        box.className = "lumi-suggest";
+        box.innerHTML = SUGGESTIONS.map(function (q) { return '<button type="button" data-lumi-ask="' + esc(q) + '">' + esc(q) + "</button>"; }).join("");
+        log.appendChild(box);
+      }
+      footText();
+    }
+
+    function footText() {
+      foot.textContent = "Lumi peut se tromper : vérifiez les points importants." +
+        (state.remaining !== null && state.remaining <= 10 ? " · " + state.remaining + " question" + (state.remaining > 1 ? "s" : "") + " restante" + (state.remaining > 1 ? "s" : "") + " aujourd'hui" : "");
+    }
+
+    function open() {
+      panel.hidden = false;
+      launcher.setAttribute("aria-expanded", "true");
+      hideTip(true);
+      paint();
+      mood("is-hello", 1000);
+      setTimeout(function () { input.focus({ preventScroll: true }); }, 60);
+    }
+    function close() {
+      panel.hidden = true;
+      launcher.setAttribute("aria-expanded", "false");
+      launcher.focus({ preventScroll: true });
+    }
+
+    function hideTip(remember) {
+      var tip = document.getElementById("lumi-tip");
+      if (tip) tip.hidden = true;
+      if (remember) { try { localStorage.setItem(TIP_SEEN, "1"); } catch (err) { /* rien */ } }
+    }
+
+    function autosize() {
+      input.style.height = "auto";
+      input.style.height = Math.min(140, input.scrollHeight + 2) + "px";
+    }
+
+    async function ask(question) {
+      question = String(question || "").trim();
+      if (!question || state.busy) return;
+      state.busy = true;
+      send.disabled = true;
+      var suggest = log.querySelector(".lumi-suggest");
+      if (suggest) suggest.remove();
+      state.messages.push({ role: "user", content: question.slice(0, 2000) });
+      save();
+      bubble("user", esc(question));
+      input.value = "";
+      autosize();
+      var typing = bubble("assistant", '<span class="lumi-typing" aria-label="Lumi réfléchit"><i></i><i></i><i></i></span>');
+      mood("is-thinking");
+      try {
+        var res = await api("POST", "/assistant", { messages: state.messages.slice(-16) });
+        typing.remove();
+        state.messages.push({ role: "assistant", content: res.reply });
+        state.remaining = typeof res.remaining === "number" ? res.remaining : state.remaining;
+        save();
+        bubble("assistant", render(res.reply));
+        mood("is-happy", 1300);
+      } catch (err) {
+        typing.remove();
+        // La question reste dans le champ : on peut la renvoyer telle quelle.
+        state.messages.pop();
+        save();
+        log.lastElementChild && log.lastElementChild.classList.contains("lumi-msg-me") && log.lastElementChild.remove();
+        input.value = question;
+        autosize();
+        bubble("assistant", esc(err.message || "Lumi n'a pas pu répondre."), "lumi-error");
+        mood(null);
+      } finally {
+        state.busy = false;
+        send.disabled = false;
+        footText();
+      }
+    }
+
+    launcher.addEventListener("click", open);
+    document.getElementById("lumi-close").addEventListener("click", close);
+    document.getElementById("lumi-reset").addEventListener("click", function () {
+      state.messages = [];
+      save();
+      paint();
+      input.focus();
+    });
+    panel.addEventListener("keydown", function (e) { if (e.key === "Escape") { e.stopPropagation(); close(); } });
+    form.addEventListener("submit", function (e) { e.preventDefault(); ask(input.value); });
+    input.addEventListener("input", autosize);
+    input.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); ask(input.value); }
+    });
+    log.addEventListener("click", function (e) {
+      var q = e.target.closest("[data-lumi-ask]");
+      if (q) { ask(q.getAttribute("data-lumi-ask")); return; }
+      var go = e.target.closest("[data-lumi-goto]");
+      if (go) {
+        var target = GOTO[go.getAttribute("data-lumi-goto")];
+        var tab = target && document.getElementById("ad-tab-" + target[0]);
+        if (tab) tab.click();
+        // Sur téléphone, la conversation cède la place à l'onglet ouvert.
+        if (window.matchMedia("(max-width: 560px)").matches) close();
+      }
+    });
+
+    return {
+      start: async function (me) {
+        state.me = me;
+        try {
+          var status = await api("GET", "/assistant");
+          state.enabled = Boolean(status && status.enabled);
+          state.remaining = status && typeof status.remaining === "number" ? status.remaining : null;
+        } catch (err) {
+          state.enabled = false;
+        }
+        launcher.hidden = !state.enabled;
+        if (!state.enabled) return;
+        restore();
+        var seen = false;
+        try { seen = localStorage.getItem(TIP_SEEN) === "1"; } catch (err) { seen = true; }
+        if (!seen) {
+          var tip = document.getElementById("lumi-tip");
+          tip.hidden = false;
+          mood("is-hello", 1000);
+          setTimeout(function () { hideTip(false); }, 9000);
+        }
+      },
+      stop: function () {
+        launcher.hidden = true;
+        panel.hidden = true;
+        state.messages = [];
+        try { sessionStorage.removeItem(STORE); } catch (err) { /* rien */ }
+      },
+    };
+  })();
+  // Session déjà ouverte avant que Lumi soit prête : on la lance maintenant.
+  if (state.me && !el.app.hidden) lumi.start(state.me);
 
   /* ---------- Installer l'espace photographe sur l'écran d'accueil ---------- */
 

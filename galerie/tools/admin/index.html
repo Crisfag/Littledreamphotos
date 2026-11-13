@@ -429,6 +429,37 @@
 
   <div class="ad-toast" id="ad-toast" hidden></div>
 
+  <!-- ============ Lumi, l'assistante (questions sur Holypixx) ============ -->
+  <button type="button" class="lumi-launcher" id="lumi-launcher" hidden aria-controls="lumi-panel" aria-expanded="false">
+    <span class="lumi-tip" id="lumi-tip" hidden>Une question ? <strong>Je suis Lumi.</strong></span>
+    <span class="lumi-figure" data-lumi aria-hidden="true"></span>
+    <span class="ad-visually-hidden">Poser une question à Lumi, votre guide Holypixx</span>
+  </button>
+  <section class="lumi-panel" id="lumi-panel" role="dialog" aria-modal="false" aria-labelledby="lumi-title" hidden>
+    <header class="lumi-head">
+      <span class="lumi-figure lumi-figure-head" data-lumi aria-hidden="true"></span>
+      <div class="lumi-head-text">
+        <h2 id="lumi-title">Lumi</h2>
+        <p>Votre guide Holypixx</p>
+      </div>
+      <button type="button" class="lumi-icon-btn" id="lumi-reset" title="Nouvelle conversation" aria-label="Nouvelle conversation">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v4h4"/></svg>
+      </button>
+      <button type="button" class="lumi-icon-btn" id="lumi-close" title="Fermer" aria-label="Fermer">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </header>
+    <div class="lumi-log" id="lumi-log" aria-live="polite"></div>
+    <form class="lumi-form" id="lumi-form" novalidate>
+      <label class="ad-visually-hidden" for="lumi-input">Votre question</label>
+      <textarea id="lumi-input" rows="1" maxlength="2000" placeholder="Posez votre question…" autocomplete="off"></textarea>
+      <button type="submit" class="lumi-send" id="lumi-send" aria-label="Envoyer">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"/></svg>
+      </button>
+    </form>
+    <p class="lumi-foot" id="lumi-foot">Lumi peut se tromper : vérifiez les points importants.</p>
+  </section>
+
   <script src="admin.js"></script>
 </body>
 </html>

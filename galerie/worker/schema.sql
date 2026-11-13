@@ -1389,3 +1389,12 @@ CREATE TABLE IF NOT EXISTS feedback (
 );
 CREATE INDEX IF NOT EXISTS idx_feedback_photographer ON feedback(photographer_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_feedback_status ON feedback(status, created_at);
+
+-- Lumi, l'assistante de l'espace photographe (assistant.js) : questions
+-- posées par photographe et par jour. La conversation reste dans le navigateur.
+CREATE TABLE IF NOT EXISTS assistant_usage (
+  photographer_id TEXT NOT NULL REFERENCES photographers(id) ON DELETE CASCADE,
+  day             TEXT NOT NULL,              -- AAAA-MM-JJ (UTC)
+  count           INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (photographer_id, day)
+);
