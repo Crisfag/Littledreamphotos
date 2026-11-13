@@ -195,6 +195,20 @@ try {
   const pub = await fetch(`${API}/api/booking/${HANDLE}`).then((r) => r.json());
   check("« Rendre public » : le créneau revient sur le mini-site", pub.offers.reduce((n, o) => n + o.slots.length, 0) === 2, JSON.stringify(pub.offers.map((o) => o.slots.length)));
 
+  /* ---------- Réservation retirée du mini-site ---------- */
+
+  await client.request("POST", "/api/admin/booking/page", { enabled: false, onSite: false });
+  const hidden = await fetch(`${API}/api/booking/${HANDLE}`);
+  await visitor.goto("about:blank");
+  await visitor.goto(`http://localhost:${SITE_PORT}/portfolio.html?s=${HANDLE}`, { waitUntil: "domcontentloaded" });
+  await visitor.waitForSelector("#pf-page:not([hidden])", { timeout: 15000 });
+  await visitor.waitForTimeout(800);
+  check("case « Mini-site » décochée : plus de section Réserver (404 côté Worker)",
+        hidden.status === 404 && (await visitor.isHidden("#reserver")) && (await visitor.isHidden("#pf-nav-booking")), String(hidden.status));
+  await client.request("POST", "/api/admin/booking/page", { enabled: false, onSite: true });
+  const back = await fetch(`${API}/api/booking/${HANDLE}`);
+  check("recochée : la réservation revient sur le mini-site", back.status === 200);
+
   /* ---------- Téléphone ---------- */
 
   await page.setViewportSize({ width: 390, height: 844 });

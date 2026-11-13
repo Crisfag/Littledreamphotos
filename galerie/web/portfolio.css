@@ -271,3 +271,32 @@ h3 { font-size: 1.4rem; margin-bottom: .8rem; }
 .pf-gift-actions { display: flex; flex-wrap: wrap; gap: .6rem; margin-top: 1rem; }
 .pf-gift-actions .pf-btn { margin-top: 0; }
 .pf-bk-form .pf-bk-step { margin-bottom: 0; }
+
+/* ---------- Page de réservation seule (reserver.html) ---------- */
+
+.pf-resa-top { border-bottom: 1px solid var(--line); background: var(--ivory); }
+.pf-resa-top-inner { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: .6rem 1.4rem; padding-top: clamp(28px, 6vw, 56px); padding-bottom: 1.4rem; }
+.pf-resa-top .pf-eyebrow { color: var(--muted); margin-bottom: .4rem; }
+.pf-resa-studio { font-size: clamp(2.1rem, 6vw, 3.2rem); overflow-wrap: anywhere; }
+.pf-resa-links { display: flex; flex-wrap: wrap; gap: .5rem 1.2rem; font-size: .92rem; padding-bottom: .35rem; }
+.pf-resa-links a { color: var(--text); text-decoration: none; border-bottom: 1px solid var(--line); }
+.pf-resa-links a:hover { color: var(--ink); border-color: var(--rose); }
+.pf-resa-body .pf-booking { padding-top: clamp(36px, 6vw, 64px); }
+.pf-resa-body .pf-booking h2 { font-size: clamp(1.7rem, 4vw, 2.3rem); }
+.pf-resa-empty {
+  max-width: 640px; padding: 1.4rem 1.6rem; background: #fff; border: 1px solid var(--line); border-radius: 14px; color: var(--text);
+}
+.pf-resa-foot { padding: 2.4rem 0 3rem; font-size: .88rem; color: var(--muted); }
+.pf-resa-foot p + p { margin-top: .4rem; }
+.pf-resa-credit a { color: var(--muted); }
+.pf-bk-error .pf-btn { margin-left: .6rem; }
+
+/* Intégrée au site du photographe (&integre=1) : seulement le parcours,
+   sur fond transparent, sans en-tête ni pied de page. */
+.pf-embedded, .pf-embedded body { background: transparent; }
+.pf-embedded .pf-resa-top, .pf-embedded .pf-resa-foot .pf-resa-credit { display: none; }
+.pf-embedded .pf-resa-foot { padding: 1rem 0 0; }
+.pf-embedded .pf-state { min-height: 320px; }
+.pf-embedded .pf-resa-body .pf-booking { padding-top: 8px; padding-bottom: 8px; }
+.pf-embedded .pf-wrap { padding-left: 4px; padding-right: 4px; }
+.pf-embedded html, .pf-embedded { scroll-behavior: auto; }

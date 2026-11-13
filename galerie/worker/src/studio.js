@@ -67,12 +67,24 @@ const PAGE_FILES = {
   "/gallery.js": { file: "gallery.js", type: "text/javascript; charset=utf-8" },
   "/portfolio.css": { file: "portfolio.css", type: "text/css; charset=utf-8" },
   "/portfolio.js": { file: "portfolio.js", type: "text/javascript; charset=utf-8" },
+  "/booking-flow.js": { file: "booking-flow.js", type: "text/javascript; charset=utf-8" },
+  "/reserver.js": { file: "reserver.js", type: "text/javascript; charset=utf-8" },
   "/bon-cadeau": { file: "bon-cadeau.html", type: "text/html; charset=utf-8" },
   "/bon-cadeau.html": { file: "bon-cadeau.html", type: "text/html; charset=utf-8" },
   "/bon-cadeau.css": { file: "bon-cadeau.css", type: "text/css; charset=utf-8" },
   "/bon-cadeau.js": { file: "bon-cadeau.js", type: "text/javascript; charset=utf-8" },
 };
 const PORTFOLIO_PAGE = { file: "portfolio.html", type: "text/html; charset=utf-8" };
+const BOOKING_PAGE = { file: "reserver.html", type: "text/html; charset=utf-8" };
+
+// Identifiant du studio si sa page de réservation seule est ouverte.
+async function bookingPageHandle(env, photographerId) {
+  const row = await env.DB.prepare("SELECT handle FROM portfolios WHERE photographer_id = ? AND booking_page = 1")
+    .bind(photographerId)
+    .first()
+    .catch(() => null);
+  return row?.handle || "";
+}
 
 // Identifiant du portfolio publié de ce studio, ou "" s'il n'en a pas.
 async function publishedHandle(env, photographerId) {
@@ -119,7 +131,7 @@ async function servePage(request, env, url, { entry = PAGE_FILES[url.pathname], 
   // de lien, données structurées).
   if (handle) {
     body = body.replace(/handle:\s*"[^"]*"/, `handle: ${JSON.stringify(handle)}`);
-    const seo = await portfolioSeo(env, handle, `https://${url.host}`).catch(() => null);
+    const seo = entry === PORTFOLIO_PAGE ? await portfolioSeo(env, handle, `https://${url.host}`).catch(() => null) : null;
     if (seo) body = injectPortfolioSeo(body, seo);
   }
   const headers = {
@@ -142,6 +154,12 @@ export async function handleStudioHost(request, env, url, subdomain, path) {
     // Moteurs de recherche : seul le portfolio (la racine) est à indexer.
     if (url.pathname === "/robots.txt" || url.pathname === "/sitemap.xml") {
       return studioCrawlFile(env, studio, url);
+    }
+    // Page de réservation seule du studio (julie.holypixx.com/reserver).
+    if (url.pathname === "/reserver" || url.pathname === "/reserver.html") {
+      // Page fermée : la page s'affiche sans identifiant (« pas disponible »).
+      const handle = await bookingPageHandle(env, studio.id);
+      return servePage(request, env, url, { entry: BOOKING_PAGE, handle });
     }
     // Racine du studio sans lien de galerie : son portfolio, s'il est publié.
     if (url.pathname === "/" && !url.searchParams.get("g")) {

@@ -141,6 +141,26 @@ check("sous l'adresse d'un studio, la galerie d'un autre studio reste introuvabl
       await page.isHidden("#gp-gallery") && (await page.textContent("#gp-error")).length > 0,
       await page.textContent("#gp-error"));
 
+/* ---------- Page de réservation seule : <studio>.holypixx.com/reserver ---------- */
+
+const offers = await client.request("POST", "/api/admin/booking/offers", { title: "Séance découverte", durationMin: 30, priceCents: 6000, depositCents: 0 });
+const resaDay = new Date(Date.now() + 10 * 86400000).toLocaleDateString("en-CA", { timeZone: "Europe/Brussels" });
+await client.request("POST", "/api/admin/booking/slots", { offerId: offers.offers[0].id, date: resaDay, times: ["11:00"] });
+const opened = await client.request("POST", "/api/admin/booking/page", { enabled: true, onSite: true });
+check("adresse de la page de réservation : celle du studio", opened.page.url === `https://${STUDIO_HOST}/reserver`, opened.page.url);
+seenOnStudio.length = 0;
+await page.goto(`${STUDIO_ORIGIN}/reserver`, { waitUntil: "domcontentloaded" });
+await page.waitForSelector("#pf-page:not([hidden])", { timeout: 15000 });
+check("<studio>/reserver : la page de réservation du studio, sans « ?s= »",
+      (await page.textContent("#pf-resa-studio")).trim() === "Studio Lumière" && (await page.locator(".pf-bk-time").count()) === 1,
+      await page.textContent("#pf-resa-studio"));
+check("<studio>/reserver : scripts et API servis par l'adresse du studio",
+      seenOnStudio.includes("/booking-flow.js") && seenOnStudio.includes("/reserver.js") && seenOnStudio.some((p) => p.startsWith("/api/booking/")), seenOnStudio.join(" "));
+await client.request("POST", "/api/admin/booking/page", { enabled: false, onSite: true });
+await page.goto(`${STUDIO_ORIGIN}/reserver`, { waitUntil: "domcontentloaded" });
+await page.waitForSelector("#pf-missing:not([hidden])", { timeout: 15000 });
+check("page fermée : « pas disponible »", (await page.textContent("#pf-missing h1")).includes("réservation n'est pas disponible"));
+
 check("aucune exception JavaScript", exceptions.length === 0, exceptions.join(" | "));
 
 /* ---------- Nettoyage ---------- */

@@ -682,7 +682,11 @@ CREATE TABLE IF NOT EXISTS portfolios (
   instagram       TEXT NOT NULL DEFAULT '',
   website         TEXT NOT NULL DEFAULT '',
   contact_enabled INTEGER NOT NULL DEFAULT 1,
-  updated_at      INTEGER NOT NULL
+  updated_at      INTEGER NOT NULL,
+  -- Réservation en ligne : page de réservation seule (reserver.html, même
+  -- sans mini-site publié) et/ou section « Réserver » du mini-site.
+  booking_page    INTEGER NOT NULL DEFAULT 0,
+  booking_on_site INTEGER NOT NULL DEFAULT 1
 );
 
 CREATE TABLE IF NOT EXISTS portfolio_photos (

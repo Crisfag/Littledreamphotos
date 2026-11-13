@@ -87,10 +87,22 @@ check("sans ces champs, les e-mails restent inchangés",
 
 // Créneau privé : lien du mini-site, e-mail d'invitation.
 const env = { PUBLIC_SITE_ORIGIN: "https://www.holypixx.com" };
-check("lien privé : mini-site, ?creneau=…, ancre #reserver",
-      privateSlotUrl(env, {}, "little-dream", "tok_ABCDEFGHIJKLMNOP") === "https://www.holypixx.com/portfolio.html?s=little-dream&creneau=tok_ABCDEFGHIJKLMNOP#reserver",
-      privateSlotUrl(env, {}, "little-dream", "tok_ABCDEFGHIJKLMNOP"));
-check("sans mini-site, pas de lien", privateSlotUrl(env, {}, "", "tok") === "");
+const miniSite = { handle: "little-dream", published: 1, booking_page: 0, booking_on_site: 1 };
+check("lien privé (mini-site) : ?creneau=…, ancre #reserver",
+      privateSlotUrl(env, {}, miniSite, "tok_ABCDEFGHIJKLMNOP") === "https://www.holypixx.com/portfolio.html?s=little-dream&creneau=tok_ABCDEFGHIJKLMNOP#reserver",
+      privateSlotUrl(env, {}, miniSite, "tok_ABCDEFGHIJKLMNOP"));
+check("lien privé : la page de réservation seule quand elle est ouverte",
+      privateSlotUrl(env, {}, { ...miniSite, booking_page: 1 }, "tok_ABCDEFGHIJKLMNOP") === "https://www.holypixx.com/reserver.html?s=little-dream&creneau=tok_ABCDEFGHIJKLMNOP");
+check("lien privé : page seule, sans mini-site publié",
+      privateSlotUrl(env, {}, { handle: "studio-x", published: 0, booking_page: 1 }, "tok_ABCDEFGHIJKLMNOP").startsWith("https://www.holypixx.com/reserver.html?s=studio-x&"));
+check("ni mini-site publié, ni page : pas de lien",
+      privateSlotUrl(env, {}, { handle: "studio-x", published: 0, booking_page: 0 }, "tok") === "" &&
+      privateSlotUrl(env, {}, { ...miniSite, booking_on_site: 0 }, "tok") === "");
+const studioEnv = { ...env, STUDIO_DOMAIN: "holypixx.com" };
+check("formule Pro avec adresse de studio : julie.holypixx.com/reserver",
+      privateSlotUrl(studioEnv, { subdomain: "julie", plan: "pro", plan_status: "active" }, { handle: "julie", published: 0, booking_page: 1 }, "tok_ABCDEFGHIJKLMNOP")
+        .startsWith("https://julie.holypixx.com/reserver?creneau="),
+      privateSlotUrl(studioEnv, { subdomain: "julie", plan: "pro", plan_status: "active" }, { handle: "julie", published: 0, booking_page: 1 }, "tok_ABCDEFGHIJKLMNOP"));
 check("jeton de lien : 16 à 64 caractères sûrs", PRIVATE_TOKEN_RE.test("abcdEFGH1234_-xy") && !PRIVATE_TOKEN_RE.test("court") && !PRIVATE_TOKEN_RE.test("abcdEFGH1234_-xy<script>"));
 const invite = buildPrivateSlotInviteEmail({
   studioName: "Little Dream Photos", studioEmail: "studio@example.com", studioPhone: "", clientName: "Camille Dubois",
