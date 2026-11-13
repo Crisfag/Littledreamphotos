@@ -184,15 +184,26 @@ try {
         (await visitor.textContent("#pf-hero-cta")) === "Réserver une séance" && (await visitor.evaluate(() => !document.getElementById("pf-nav-booking").hidden)));
   check("seule la formule sans acompte est proposée tant que le paiement en ligne n'est pas actif",
         (await visitor.locator(".pf-bk-offer").count()) === 1 && (await visitor.textContent(".pf-bk-offer strong")) === "Mini-séance de Noël");
-  check("la formule unique est présélectionnée, ses 4 créneaux affichés par jour",
-        (await visitor.locator(".pf-bk-time").count()) === 4 && (await visitor.locator(".pf-bk-day").count()) === 2);
+  // Agenda : le premier jour libre est ouvert d'office ; un autre jour se
+  // choisit d'un clic (en passant au mois suivant si besoin).
+  const openDay = async (key) => {
+    for (let i = 0; i < 3 && !(await visitor.locator(`.pf-bk-cal-open[data-date="${key}"]`).count()); i++) await visitor.click(".pf-bk-cal-nav >> nth=1");
+    await visitor.click(`.pf-bk-cal-open[data-date="${key}"]`);
+  };
+  check("la formule unique est présélectionnée ; l'agenda ouvre le premier jour libre (1 créneau, 14 h 30)",
+        (await visitor.getAttribute(".pf-bk-offer", "aria-pressed")) === "true" && (await visitor.getAttribute(`.pf-bk-cal-open[data-date="${DAY_A}"]`, "aria-pressed")) === "true" &&
+        (await visitor.locator(".pf-bk-time").count()) === 1 && (await visitor.textContent(".pf-bk-time")) === "14 h 30");
+  check("le jour libre porte le nombre de créneaux", (await visitor.getAttribute(`.pf-bk-cal-open[data-date="${DAY_A}"] .pf-bk-cal-count`, "data-count")) === "1");
+  await openDay(DAY_B);
+  check("un clic sur une autre date montre ses 3 horaires (série de mini-séances)", (await visitor.locator(".pf-bk-time").count()) === 3 &&
+        (await visitor.textContent(".pf-bk-day-title")).length > 5, await visitor.textContent("#pf-bk-days"));
   check("la formule s'affiche avec son image d'illustration",
         await visitor.waitForFunction(() => { const img = document.querySelector(".pf-bk-offer img.pf-bk-offer-img"); return Boolean(img && img.complete && img.naturalWidth > 0); }, null, { timeout: 10000 }).then(() => true, () => false));
   check("« Compris dans votre forfait » liste chaque ligne (tirets retirés)",
         (await visitor.locator(".pf-bk-included-item").allTextContents()).join("|") === "10 photos retouchées|Galerie privée en ligne",
         (await visitor.locator(".pf-bk-included-item").allTextContents()).join("|"));
 
-  await visitor.locator(".pf-bk-time").nth(1).click();
+  await visitor.locator(".pf-bk-time").nth(0).click();
   check("le conseil vestimentaire s'affiche avant la réservation",
         await visitor.isVisible("#pf-bk-dress") && (await visitor.textContent("#pf-bk-dress-text")) === "Tons doux et unis, sans logo.");
   check("le récapitulatif reprend la formule et l'horaire choisis",

@@ -87,10 +87,14 @@
         <div class="pf-bk-result" id="pf-bk-result" role="status" hidden></div>
         <div id="pf-bk-flow">
           <p class="pf-bk-step">1. Choisissez votre séance</p>
+          <p class="pf-bk-hint" id="pf-bk-offers-hint" hidden>Ou passez directement à l'agenda : il montre toutes les séances, jour par jour.</p>
           <div class="pf-bk-offers" id="pf-bk-offers"></div>
           <div id="pf-bk-when" hidden>
-            <p class="pf-bk-step">2. Choisissez votre créneau</p>
-            <div class="pf-bk-days" id="pf-bk-days"></div>
+            <p class="pf-bk-step">2. Choisissez votre date et votre heure</p>
+            <div class="pf-bk-when-grid">
+              <div class="pf-bk-cal" id="pf-bk-cal"></div>
+              <div class="pf-bk-days" id="pf-bk-days" aria-live="polite"></div>
+            </div>
           </div>
           <form class="pf-form pf-bk-form" id="pf-bk-form" novalidate hidden>
             <div id="pf-bk-tier-step" hidden>

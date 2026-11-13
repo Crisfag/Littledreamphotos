@@ -50,7 +50,9 @@ const HOLD_SECONDS = 32 * 60;
 const MIN_NOTICE_SECONDS = 12 * 3600;
 // Créneaux proposés au plus loin, et nombre de créneaux créés d'un coup.
 const MAX_AHEAD_SECONDS = 400 * 86400;
-const MAX_SLOTS_PER_REQUEST = 80;
+const MAX_SLOTS_PER_REQUEST = 400;
+// Période ouverte d'un coup (« tous les samedis de décembre ») : trois mois au plus.
+export const MAX_RANGE_DAYS = 92;
 const BOOKINGS_PER_VISITOR_PER_HOUR = 6;
 export const MAX_OFFER_IMAGE_BYTES = 1536 * 1024;
 const MAX_OFFER_IMAGES = 60;
@@ -78,6 +80,29 @@ function zoneOffsetMinutes(utcMs, timeZone = BOOKING_TIME_ZONE) {
   const get = (type) => Number(parts.find((p) => p.type === type).value);
   const asUtc = Date.UTC(get("year"), get("month") - 1, get("day"), get("hour"), get("minute"), get("second"));
   return Math.round((asUtc - utcMs) / 60000);
+}
+
+// Jours d'une période, filtrés par jour de la semaine (1 = lundi … 7 =
+// dimanche) : « du 1er au 31 décembre, les samedis » → ["2026-12-05", …].
+// Liste vide si la période est invalide ou dépasse MAX_RANGE_DAYS.
+export function datesBetween(from, until, weekdays) {
+  const parse = (v) => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(v || ""));
+    if (!m) return null;
+    const t = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    return new Date(t).toISOString().slice(0, 10) === m[0] ? t : null;
+  };
+  const start = parse(from);
+  const end = until ? parse(until) : start;
+  if (start === null || end === null || end < start) return [];
+  if ((end - start) / 86400000 >= MAX_RANGE_DAYS) return [];
+  const allowed = new Set((Array.isArray(weekdays) && weekdays.length ? weekdays : [1, 2, 3, 4, 5, 6, 7]).map(Number));
+  const out = [];
+  for (let t = start; t <= end; t += 86400000) {
+    const day = new Date(t).getUTCDay() || 7;
+    if (allowed.has(day)) out.push(new Date(t).toISOString().slice(0, 10));
+  }
+  return out;
 }
 
 // « 2026-12-06 » + « 10:20 » (heure de Bruxelles) → epoch secondes. null si
@@ -373,9 +398,9 @@ async function publicOffers(env, photographer) {
   if (!usable.length) return [];
   const ts = now();
   const { results: slots } = await env.DB.prepare(
-    `SELECT s.id, s.offer_id, s.starts_at FROM booking_slots s
+    `SELECT s.id, s.offer_id, s.starts_at FROM booking_slots s JOIN booking_offers o ON o.id = s.offer_id
       WHERE s.photographer_id = ? AND s.starts_at > ? AND s.starts_at < ? AND s.private_token = ''
-        AND NOT EXISTS (SELECT 1 FROM bookings b WHERE b.slot_id = s.id AND b.status IN ('pending', 'confirmed'))
+        AND NOT EXISTS (${OVERLAP_SQL})
       ORDER BY s.starts_at ASC`
   ).bind(photographer.id, ts + MIN_NOTICE_SECONDS, ts + MAX_AHEAD_SECONDS).all();
   return usable
@@ -403,6 +428,7 @@ async function privateSlotFor(env, photographer, token) {
   ).bind(photographer.id, token).first();
   if (!row) return gone;
   if (row.booking_id) return { error: "Ce créneau est déjà réservé. Si c'est vous, vous avez reçu la confirmation par e-mail." };
+  if (await clashingBooking(env, photographer.id, row.starts_at, row.duration_min)) return { error: "Ce créneau n'est plus disponible : une autre séance a été réservée à cette heure. Contactez le studio pour en trouver un autre." };
   if (row.starts_at <= now() + MIN_NOTICE_SECONDS) return { error: "Ce créneau est trop proche pour être réservé en ligne. Contactez directement le studio." };
   if (row.deposit_cents > 0 && !stripeReady(photographer)) return { error: "Le paiement en ligne de ce studio n'est pas disponible pour le moment. Contactez directement le studio." };
   return {
@@ -413,6 +439,21 @@ async function privateSlotFor(env, photographer, token) {
 }
 
 /* ---------- Public : /api/booking/:handle[/…] ---------- */
+
+// Un créneau n'est plus libre dès qu'une séance réservée (ou en cours de
+// paiement) le chevauche, quelle que soit sa formule : un même horaire peut
+// être ouvert pour plusieurs séances, la première réservée l'emporte.
+// (s = le créneau, o = sa formule.)
+const OVERLAP_SQL = `SELECT 1 FROM bookings b
+  WHERE b.photographer_id = s.photographer_id AND b.status IN ('pending', 'confirmed')
+    AND b.starts_at < s.starts_at + o.duration_min * 60 AND s.starts_at < b.starts_at + b.duration_min * 60`;
+
+async function clashingBooking(env, photographerId, startsAt, durationMin) {
+  return env.DB.prepare(
+    `SELECT id FROM bookings WHERE photographer_id = ? AND status IN ('pending', 'confirmed')
+       AND starts_at < ? AND ? < starts_at + duration_min * 60 LIMIT 1`
+  ).bind(photographerId, startsAt + durationMin * 60, startsAt).first();
+}
 
 export async function handleBookingPublic(request, env, path) {
   const parts = path.split("/").filter(Boolean); // api, booking, handle, …
@@ -539,6 +580,9 @@ async function book(request, env, row, photographer) {
   }
 
   await expireHolds(env, photographer.id);
+  if (await clashingBooking(env, photographer.id, slot.starts_at, slot.duration_min)) {
+    return fail(409, "Ce créneau vient d'être réservé. Choisissez-en un autre.");
+  }
   const id = newId("bkg");
   const withDeposit = slot.deposit_cents > 0;
   const feeCents = withDeposit ? paymentFeeCents(env, photographer, slot.deposit_cents) : 0;
@@ -907,6 +951,9 @@ async function bookForClient(env, photographer, slotId, body) {
   }
 
   await expireHolds(env, photographer.id);
+  if (await clashingBooking(env, photographer.id, slot.starts_at, slot.duration_min)) {
+    return fail(409, "Une séance est déjà réservée à cette heure-là.");
+  }
   const id = newId("bkg");
   try {
     await env.DB.prepare(
@@ -995,8 +1042,10 @@ async function bookingForAdmin(env, photographer) {
     env.DB.prepare("SELECT * FROM booking_offers WHERE photographer_id = ? ORDER BY position ASC, created_at ASC").bind(photographer.id).all(),
     env.DB.prepare(
       `SELECT s.id, s.offer_id, s.starts_at, s.private_token, s.private_name, s.private_email,
-              (SELECT b.id FROM bookings b WHERE b.slot_id = s.id AND b.status IN ('pending', 'confirmed') LIMIT 1) AS booking_id
-         FROM booking_slots s WHERE s.photographer_id = ? AND s.starts_at > ? ORDER BY s.starts_at ASC LIMIT 500`
+              (SELECT b.id FROM bookings b WHERE b.slot_id = s.id AND b.status IN ('pending', 'confirmed') LIMIT 1) AS booking_id,
+              EXISTS (${OVERLAP_SQL}) AS busy
+         FROM booking_slots s JOIN booking_offers o ON o.id = s.offer_id
+        WHERE s.photographer_id = ? AND s.starts_at > ? ORDER BY s.starts_at ASC LIMIT 2000`
     ).bind(photographer.id, ts - 86400).all(),
     env.DB.prepare(
       `SELECT * FROM bookings WHERE photographer_id = ? AND status IN ('pending', 'confirmed', 'cancelled', 'conflict') AND starts_at > ?
@@ -1019,6 +1068,8 @@ async function bookingForAdmin(env, photographer) {
     templates: (templates || []).map(templateOut),
     slots: (slots || []).map((s) => ({
       id: s.id, offerId: s.offer_id, startsAt: s.starts_at, bookingId: s.booking_id || "",
+      // Libre, mais une séance d'une autre formule est réservée à cette heure.
+      busy: !s.booking_id && Boolean(s.busy),
       private: Boolean(s.private_token),
       privateName: s.private_name || "",
       privateEmail: s.private_email || "",
@@ -1107,41 +1158,72 @@ export async function handleBookingAdmin(request, env, photographer, parts) {
   if (parts[0] === "slots" && parts[1] && parts[2] === "book" && parts.length === 3 && method === "POST") {
     return bookForClient(env, photographer, decodeURIComponent(parts[1]), body);
   }
+  // Ouvrir des créneaux : une ou plusieurs formules ; une date, une liste
+  // de dates, ou une période (« date » → « until ») filtrée par jour de la
+  // semaine ; des horaires précis, ou une plage découpée en série.
   if (parts[0] === "slots" && parts.length === 1 && method === "POST") {
-    const offer = await env.DB.prepare("SELECT * FROM booking_offers WHERE id = ? AND photographer_id = ?")
-      .bind(String(body.offerId || ""), photographer.id)
-      .first();
-    if (!offer) return fail(404, "Formule introuvable");
-    const dates = (Array.isArray(body.dates) ? body.dates : [body.date]).map((d) => String(d || "")).filter(Boolean).slice(0, 31);
-    const times = body.from
-      ? seriesTimes(body.from, body.to, body.every || offer.duration_min, offer.duration_min)
-      : (Array.isArray(body.times) ? body.times : [body.time]).map((t) => String(t || "")).filter(Boolean);
+    const ids = [...new Set((Array.isArray(body.offerIds) ? body.offerIds : [body.offerId]).map((v) => String(v || "")).filter(Boolean))].slice(0, 30);
+    if (!ids.length) return fail(400, "Choisissez au moins une formule");
+    const { results: offerRows } = await env.DB.prepare(
+      `SELECT * FROM booking_offers WHERE photographer_id = ? AND id IN (${ids.map(() => "?").join(",")})`
+    ).bind(photographer.id, ...ids).all();
+    if (!offerRows || offerRows.length !== ids.length) return fail(404, "Formule introuvable");
+    let dates;
+    if (Array.isArray(body.dates)) {
+      dates = body.dates.map((d) => String(d || "")).filter(Boolean).slice(0, MAX_RANGE_DAYS);
+    } else if (body.until) {
+      dates = datesBetween(body.date, body.until, body.weekdays);
+      if (!dates.length) return fail(400, `Période invalide, ou aucun jour choisi (${MAX_RANGE_DAYS} jours au plus d'un coup)`);
+    } else {
+      dates = body.date ? [String(body.date)] : [];
+    }
     if (!dates.length) return fail(400, "Choisissez une date");
-    if (!times.length) return fail(400, body.from ? "Aucun créneau ne tient dans cette plage horaire" : "Indiquez une heure");
-    const starts = [];
-    for (const date of dates) {
-      for (const time of times) {
-        const at = localToEpoch(date, time);
-        if (at === null) return fail(400, `Date ou heure invalide (${date} ${time})`);
-        if (at <= ts) return fail(400, "Ce créneau est déjà passé");
-        if (at > ts + MAX_AHEAD_SECONDS) return fail(400, "Les créneaux s'ouvrent au plus un an à l'avance");
-        starts.push(at);
+
+    const makePrivate = body.private === true;
+    const inserts = [];
+    let requested = 0;
+    for (const offer of offerRows) {
+      const times = body.from
+        ? seriesTimes(body.from, body.to, body.every || offer.duration_min, offer.duration_min)
+        : (Array.isArray(body.times) ? body.times : [body.time]).map((t) => String(t || "")).filter(Boolean);
+      if (!times.length) return fail(400, body.from ? `Aucune séance « ${offer.title} » ne tient dans cette plage horaire` : "Indiquez une heure");
+      const starts = [];
+      for (const date of dates) {
+        for (const time of times) {
+          const at = localToEpoch(date, time);
+          if (at === null) return fail(400, `Date ou heure invalide (${date} ${time})`);
+          if (at <= ts) continue; // période qui commence aujourd'hui : les heures passées sont sautées
+          if (at > ts + MAX_AHEAD_SECONDS) return fail(400, "Les créneaux s'ouvrent au plus un an à l'avance");
+          starts.push(at);
+        }
+      }
+      requested += starts.length;
+      if (requested > MAX_SLOTS_PER_REQUEST) return fail(400, `${MAX_SLOTS_PER_REQUEST} créneaux au maximum à la fois : choisissez une période plus courte`);
+      // Les horaires déjà ouverts pour cette formule ne sont pas recréés.
+      const { results: existing } = await env.DB.prepare("SELECT starts_at FROM booking_slots WHERE offer_id = ?").bind(offer.id).all();
+      const taken = new Set((existing || []).map((s) => s.starts_at));
+      for (const at of new Set(starts)) {
+        if (taken.has(at)) continue;
+        // Créneau privé : chacun son lien secret.
+        inserts.push(env.DB.prepare("INSERT INTO booking_slots (id, photographer_id, offer_id, starts_at, created_at, private_token) VALUES (?, ?, ?, ?, ?, ?)")
+          .bind(newId("bks"), photographer.id, offer.id, at, ts, makePrivate ? privateToken() : ""));
       }
     }
-    if (starts.length > MAX_SLOTS_PER_REQUEST) return fail(400, `${MAX_SLOTS_PER_REQUEST} créneaux au maximum à la fois`);
-    // Les horaires déjà ouverts pour cette formule ne sont pas recréés.
-    const { results: existing } = await env.DB.prepare("SELECT starts_at FROM booking_slots WHERE offer_id = ?").bind(offer.id).all();
-    const taken = new Set((existing || []).map((s) => s.starts_at));
-    const fresh = [...new Set(starts)].filter((at) => !taken.has(at));
-    // Créneau privé : chacun son lien secret.
-    const makePrivate = body.private === true;
-    if (fresh.length) {
-      await env.DB.batch(fresh.map((at) =>
-        env.DB.prepare("INSERT INTO booking_slots (id, photographer_id, offer_id, starts_at, created_at, private_token) VALUES (?, ?, ?, ?, ?, ?)")
-          .bind(newId("bks"), photographer.id, offer.id, at, ts, makePrivate ? privateToken() : "")
-      ));
-    }
-    return json({ ...(await bookingForAdmin(env, photographer)), created: fresh.length, skipped: starts.length - fresh.length }, { status: 201 });
+    if (!requested) return fail(400, "Ce créneau est déjà passé");
+    for (let i = 0; i < inserts.length; i += 100) await env.DB.batch(inserts.slice(i, i + 100));
+    return json({ ...(await bookingForAdmin(env, photographer)), created: inserts.length, skipped: requested - inserts.length }, { status: 201 });
+  }
+  // Retirer plusieurs créneaux libres d'un coup (une journée entière…).
+  if (parts[0] === "slots" && parts[1] === "remove" && parts.length === 2 && method === "POST") {
+    const ids = (Array.isArray(body.ids) ? body.ids : []).map((v) => String(v || "")).filter(Boolean).slice(0, 500);
+    if (!ids.length) return fail(400, "Aucun créneau choisi");
+    await expireHolds(env, photographer.id);
+    const marks = ids.map(() => "?").join(",");
+    const result = await env.DB.prepare(
+      `DELETE FROM booking_slots WHERE photographer_id = ? AND id IN (${marks})
+         AND NOT EXISTS (SELECT 1 FROM bookings b WHERE b.slot_id = booking_slots.id AND b.status IN ('pending', 'confirmed'))`
+    ).bind(photographer.id, ...ids).run();
+    return json({ ...(await bookingForAdmin(env, photographer)), removed: result.meta?.changes || 0 });
   }
   if (parts[0] === "page" && parts.length === 1 && method === "POST") {
     return saveBookingPage(env, photographer, body);
