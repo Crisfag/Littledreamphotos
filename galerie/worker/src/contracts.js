@@ -537,6 +537,42 @@ export async function markContractPaid(env, session) {
 
 /* ---------- Photographe : /api/admin/contracts[/…] ---------- */
 
+/* ---------- Modèles de contrat ---------- */
+
+// Plusieurs jeux de conditions par studio (« Séance grossesse », « Mariage »,
+// « Mini-séance »…), chacun avec un acompte suggéré en % du prix. Une formule
+// de séance peut proposer le sien : le contrat envoyé depuis une réservation
+// le reprend d'office.
+export const MAX_CONTRACT_TEMPLATES = 30;
+
+export function contractTemplateOut(t) {
+  return { id: t.id, name: t.name, terms: t.terms, depositPercent: t.deposit_percent || 0, updatedAt: t.updated_at };
+}
+
+export function readContractTemplate(body) {
+  const name = cleanLine(body.name, 80);
+  const terms = cleanText(body.terms, 20000);
+  const depositPercent = Math.round(Number(body.depositPercent) || 0);
+  if (!name) return { error: "Donnez un nom au modèle (ex. Séance naissance)" };
+  if (terms.length < 20) return { error: "Les conditions du modèle sont trop courtes" };
+  if (!(depositPercent >= 0 && depositPercent <= 100)) return { error: "Acompte suggéré invalide (0 à 100 %)" };
+  return { template: { name, terms, depositPercent } };
+}
+
+// Acompte suggéré d'un modèle pour un prix donné, arrondi à l'euro.
+export function suggestedDeposit(priceCents, depositPercent) {
+  if (!priceCents || !depositPercent) return 0;
+  return Math.round((priceCents * depositPercent) / 100 / 100) * 100;
+}
+
+async function contractTemplatesOf(env, photographerId) {
+  const { results } = await env.DB.prepare("SELECT * FROM contract_templates WHERE photographer_id = ? ORDER BY lower(name) ASC")
+    .bind(photographerId)
+    .all();
+  return (results || []).map(contractTemplateOut);
+}
+export { contractTemplatesOf };
+
 async function termsOf(env, photographerId) {
   const row = await env.DB.prepare("SELECT terms FROM contract_settings WHERE photographer_id = ?").bind(photographerId).first();
   return row?.terms || DEFAULT_TERMS;
@@ -616,6 +652,7 @@ async function listForAdmin(env, photographer) {
     stripeReady: stripeReady(photographer),
     terms: await termsOf(env, photographer.id),
     defaultTerms: DEFAULT_TERMS,
+    templates: await contractTemplatesOf(env, photographer.id),
     contracts: (results || []).map((c) => adminOut(c, env)),
   };
 }
@@ -642,6 +679,40 @@ export async function handleContractsAdmin(request, env, photographer, parts) {
        ON CONFLICT(photographer_id) DO UPDATE SET terms = excluded.terms, updated_at = excluded.updated_at`
     ).bind(photographer.id, terms, ts).run();
     return json(await listForAdmin(env, photographer));
+  }
+
+  // Modèles de contrat.
+  if (parts[0] === "templates" && parts.length === 1 && method === "POST") {
+    const { template, error } = readContractTemplate(body);
+    if (error) return fail(400, error);
+    const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM contract_templates WHERE photographer_id = ?").bind(photographer.id).first();
+    if ((count?.n || 0) >= MAX_CONTRACT_TEMPLATES) return fail(409, `${MAX_CONTRACT_TEMPLATES} modèles au maximum`);
+    const id = newId("ctt");
+    await env.DB.prepare(
+      "INSERT INTO contract_templates (id, photographer_id, name, terms, deposit_percent, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
+    ).bind(id, photographer.id, template.name, template.terms, template.depositPercent, ts, ts).run();
+    return json({ ...(await listForAdmin(env, photographer)), createdTemplateId: id }, { status: 201 });
+  }
+  if (parts[0] === "templates" && parts[1] && parts.length === 2) {
+    const id = decodeURIComponent(parts[1]);
+    const existing = await env.DB.prepare("SELECT id FROM contract_templates WHERE id = ? AND photographer_id = ?").bind(id, photographer.id).first();
+    if (!existing) return fail(404, "Modèle introuvable");
+    if (method === "POST") {
+      const { template, error } = readContractTemplate(body);
+      if (error) return fail(400, error);
+      await env.DB.prepare("UPDATE contract_templates SET name = ?, terms = ?, deposit_percent = ?, updated_at = ? WHERE id = ?")
+        .bind(template.name, template.terms, template.depositPercent, ts, id).run();
+      return json(await listForAdmin(env, photographer));
+    }
+    if (method === "DELETE") {
+      // Les formules qui le proposaient reviennent aux conditions par défaut ;
+      // les contrats déjà faits gardent leur texte (il y est copié).
+      await env.DB.batch([
+        env.DB.prepare("DELETE FROM contract_templates WHERE id = ?").bind(id),
+        env.DB.prepare("UPDATE booking_offers SET contract_template_id = '' WHERE photographer_id = ? AND contract_template_id = ?").bind(photographer.id, id),
+      ]);
+      return json(await listForAdmin(env, photographer));
+    }
   }
 
   // Nouveau devis (brouillon, ou envoyé tout de suite). Ouvert depuis une
@@ -758,9 +829,26 @@ export async function createContractForBooking(env, photographer, bookingId, bod
   const booking = await linkableBooking(env, photographer, bookingId);
   if (booking.error) return fail(booking.error === "Réservation introuvable" ? 404 : 409, booking.error);
   const priceCents = body.priceCents === undefined || body.priceCents === null || body.priceCents === "" ? undefined : Math.round(Number(body.priceCents));
-  const depositCents = Math.round(Number(body.depositCents) || 0);
   if (priceCents !== undefined && !(priceCents >= 0)) return fail(400, "Montant invalide");
-  const { draft, error } = readDraft(bookingContractDraft(booking, { priceCents, depositCents, terms: await termsOf(env, photographer.id) }));
+  // Modèle choisi à l'envoi, sinon celui de la formule, sinon les conditions
+  // par défaut (« templateId: "" » demande explicitement ces dernières).
+  let templateId = body.templateId;
+  if (templateId === undefined || templateId === null) {
+    const offer = await env.DB.prepare("SELECT contract_template_id FROM booking_offers WHERE id = ? AND photographer_id = ?").bind(booking.offer_id, photographer.id).first();
+    templateId = offer?.contract_template_id || "";
+  }
+  let template = null;
+  if (templateId) {
+    template = await env.DB.prepare("SELECT * FROM contract_templates WHERE id = ? AND photographer_id = ?").bind(String(templateId), photographer.id).first();
+    if (!template && body.templateId) return fail(404, "Modèle de contrat introuvable");
+  }
+  const depositCents = body.depositCents === undefined || body.depositCents === null || body.depositCents === ""
+    // Acompte suggéré par le modèle, moins celui déjà réglé à la réservation.
+    ? Math.max(0, suggestedDeposit(priceCents === undefined ? booking.price_cents : priceCents, template?.deposit_percent || 0) -
+        (booking.paid_at ? booking.deposit_cents || 0 : 0))
+    : Math.round(Number(body.depositCents) || 0);
+  const terms = template ? template.terms : await termsOf(env, photographer.id);
+  const { draft, error } = readDraft(bookingContractDraft(booking, { priceCents, depositCents, terms }));
   if (error) return fail(400, error);
   const id = await insertContract(env, photographer, draft);
   await env.DB.prepare("UPDATE bookings SET contract_id = ? WHERE id = ?").bind(id, booking.id).run();

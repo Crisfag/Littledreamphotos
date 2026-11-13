@@ -5,7 +5,7 @@
 //   node tests/suivi.test.mjs
 
 import { prepItems, buildBookingPrepEmail, buildGalleryInviteEmail, buildContractToClientEmail } from "../src/notify.js";
-import { bookingContractDraft } from "../src/contracts.js";
+import { bookingContractDraft, readContractTemplate, suggestedDeposit } from "../src/contracts.js";
 import { defaultPrep } from "../src/booking.js";
 
 const checks = [];
@@ -71,6 +71,15 @@ check("galerie FR : version texte avec lien et mot de passe", fr.text.includes("
 const en = buildGalleryInviteEmail({ studioName: "Studio", galleryTitle: "Wedding", clientName: "", galleryUrl: "https://x/?g=w", password: "pw-123456", lang: "en" });
 check("galerie EN : anglais, sans date de fermeture", en.subject === "Your gallery “Wedding” is online" && en.html.includes('lang="en"') &&
       en.html.includes("Open my gallery") && en.text.includes("Password: pw-123456") && !en.html.includes("open until"), en.subject);
+
+/* ---------- Modèles de contrat ---------- */
+
+const tpl = readContractTemplate({ name: "  Séance naissance ", terms: "1. Objet\nLa séance naissance décrite ci-dessus.", depositPercent: "30" });
+check("modèle : nom nettoyé, conditions, acompte en %", tpl.template && tpl.template.name === "Séance naissance" && tpl.template.depositPercent === 30, JSON.stringify(tpl));
+check("modèle sans nom, conditions trop courtes, acompte > 100 % : refusés",
+      Boolean(readContractTemplate({ name: "", terms: "x".repeat(30) }).error) && Boolean(readContractTemplate({ name: "A", terms: "court" }).error) &&
+      Boolean(readContractTemplate({ name: "A", terms: "x".repeat(30), depositPercent: 150 }).error));
+check("acompte suggéré arrondi à l'euro", suggestedDeposit(18000, 30) === 5400 && suggestedDeposit(17900, 30) === 5400 && suggestedDeposit(18000, 0) === 0 && suggestedDeposit(0, 30) === 0);
 
 const failed = checks.filter((c) => !c.ok);
 console.log(`\n${checks.length} vérifications, ${failed.length ? failed.length + " en échec" : "toutes passent"}.`);

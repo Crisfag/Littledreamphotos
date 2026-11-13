@@ -2355,3 +2355,27 @@ main section.ad-demo {
 .ad-send-mode .ad-check em { display: block; font-style: normal; font-size: .8rem; color: var(--muted); }
 .ad-send-current { margin: 0 0 0 1.6rem; }
 .ad-send-current input { font-family: var(--mono); }
+
+/* Modèles de contrat */
+.ad-ctt-list { list-style: none; margin: .4rem 0 .9rem; padding: 0; border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper); }
+.ad-ctt-item {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: .4rem 1rem;
+  padding: .65rem .9rem; border-top: 1px solid var(--line);
+}
+.ad-ctt-item:first-child { border-top: 0; }
+.ad-ctt-name { font-weight: 500; color: var(--ink); font-size: .9rem; }
+.ad-ctt-item .ad-acc-sub { margin: 0; }
+.ad-ctt-actions { display: flex; gap: .35rem; }
+.ad-ctt-starters { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem; margin: .4rem 0 .6rem; }
+.ad-ctt-starters .ad-hint { margin: 0 .2rem 0 0; }
+.ad-chip-btn {
+  font: inherit; font-size: .8rem; padding: .32rem .75rem; border-radius: 999px; cursor: pointer;
+  border: 1px dashed var(--line-2); background: var(--paper); color: var(--ink-2);
+  transition: border-color .15s var(--ease), color .15s var(--ease), background-color .15s var(--ease);
+}
+.ad-chip-btn:hover { border-color: var(--accent); border-style: solid; color: var(--accent-deep); background: var(--accent-soft); }
+.ad-chip-btn:focus-visible { outline: none; box-shadow: var(--ring); }
+.ad-ct-template { max-width: 420px; }
+@media (max-width: 560px) {
+  .ad-ctt-item { grid-template-columns: minmax(0, 1fr); }
+}

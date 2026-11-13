@@ -952,6 +952,7 @@ CREATE TABLE IF NOT EXISTS booking_offers (
   location        TEXT NOT NULL DEFAULT '',
   included        TEXT NOT NULL DEFAULT '',   -- « compris dans votre forfait », une ligne par élément
   dress_code      TEXT NOT NULL DEFAULT '',   -- conseil vestimentaire
+  contract_template_id TEXT NOT NULL DEFAULT '', -- modèle de contrat proposé (contract_templates.id), vide : conditions par défaut
   prep            TEXT NOT NULL DEFAULT '',   -- liste récapitulative envoyée avant la séance (tenues, ambiance…), une ligne par point
   image_id        TEXT NOT NULL DEFAULT '',   -- image d'illustration (R2 booking/{photographer}/{image}.webp)
   active          INTEGER NOT NULL DEFAULT 1,
@@ -1144,6 +1145,19 @@ CREATE TABLE IF NOT EXISTS contract_settings (
   terms           TEXT NOT NULL,
   updated_at      INTEGER NOT NULL
 );
+
+-- Modèles de contrat : plusieurs jeux de conditions par studio (« Séance
+-- grossesse », « Mariage »…), avec un acompte suggéré en % du prix.
+CREATE TABLE IF NOT EXISTS contract_templates (
+  id              TEXT PRIMARY KEY,           -- ctt_…
+  photographer_id TEXT NOT NULL REFERENCES photographers(id) ON DELETE CASCADE,
+  name            TEXT NOT NULL,
+  terms           TEXT NOT NULL,
+  deposit_percent INTEGER NOT NULL DEFAULT 0, -- acompte suggéré, en % du prix (0 = aucun)
+  created_at      INTEGER NOT NULL,
+  updated_at      INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_contract_templates_photographer ON contract_templates(photographer_id, name);
 
 -- =====================================================================
 -- Fiches clients (voir clients.js). Une fiche par e-mail et par
