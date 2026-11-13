@@ -8057,6 +8057,12 @@
       // quelques jours avant la séance (suivi de la séance).
       '<label class="ad-field"><span>Liste récapitulative avant la séance <em>(une ligne par point, envoyée depuis la réservation)</em></span>' +
       '<textarea name="prep" rows="5" maxlength="3000" placeholder="2 ou 3 tenues aux couleurs douces, sans logo&#10;Ambiance : lumière naturelle, plaid et coussins fournis&#10;Un doudou ou un objet qui compte pour vous&#10;Arrivez 10 minutes avant, bébé nourri et au chaud">' + esc(o.prep || "") + "</textarea></label>" +
+      // Modèle de contrat proposé à l'envoi depuis une réservation.
+      (bookingState.data && bookingState.data.contractsEnabled
+        ? '<label class="ad-field"><span>Contrat proposé <em>(envoyé depuis la réservation)</em></span><select name="contractTemplateId">' +
+          contractTemplateOptions(bookingState.data.contractTemplates, o.contractTemplateId || "", "Conditions par défaut") + "</select>" +
+          ((bookingState.data.contractTemplates || []).length ? "" : '<span class="ad-hint">Créez vos modèles (grossesse, mariage…) dans l\'onglet Devis et contrats.</span>') + "</label>"
+        : "") +
       '<label class="ad-check ad-bk-save"><input type="checkbox" name="saveTemplate"' + (save ? " checked" : "") + " />" +
       "<span><strong>Sauvegarder le réglage de cette prestation</strong>" +
       '<span class="ad-hint">Vous la retrouverez dans « Type de séance » pour la remettre en ligne sans tout reparamétrer.</span></span></label>' +
@@ -8123,7 +8129,7 @@
               offerFormHtml(draft ? {
                 title: draft.title, durationMin: draft.durationMin, priceCents: draft.priceCents, depositCents: draft.depositCents,
                 tiers: draft.tiers, location: draft.location, description: draft.description, included: draft.included,
-                dressCode: draft.dressCode, prep: draft.prep || "", imageId: draft.imageId,
+                dressCode: draft.dressCode, prep: draft.prep || "", contractTemplateId: draft.contractTemplateId || "", imageId: draft.imageId,
               } : null)
             : "")) +
       "</section>";
@@ -8659,6 +8665,7 @@
           title: f.title.value, durationMin: Number(f.durationMin.value), priceCents: priceCents, depositCents: depositCents,
           tiers: tiers, location: f.location.value, description: f.description.value,
           included: f.included.value, dressCode: f.dressCode.value, prep: f.prep.value, imageId: f.imageId.value,
+          contractTemplateId: f.contractTemplateId ? f.contractTemplateId.value : undefined,
           saveTemplate: f.saveTemplate.checked,
         };
         var editing = bookingState.editingOfferId;
@@ -9021,6 +9028,20 @@
     return steps;
   }
 
+  // Modèle de contrat proposé pour une séance : celui de sa formule.
+  function flowTemplateId(b, data) {
+    var offer = data.offers.filter(function (o) { return o.id === b.offerId; })[0];
+    var id = offer && offer.contractTemplateId;
+    return id && (data.contractTemplates || []).some(function (t) { return t.id === id; }) ? id : "";
+  }
+  // Acompte suggéré par le modèle, moins celui déjà réglé à la réservation.
+  function flowDeposit(b, data, templateId, priceCents) {
+    var t = (data.contractTemplates || []).filter(function (x) { return x.id === templateId; })[0];
+    if (!t || !t.depositPercent || !priceCents) return 0;
+    var paid = b.paidAt && b.depositCents ? b.depositCents : 0;
+    return Math.max(0, Math.round(priceCents * t.depositPercent / 100 / 100) * 100 - paid);
+  }
+
   function flowBtn(label, kind, id, ghost) {
     return '<button type="button" class="ad-btn ad-btn-small' + (ghost ? " ad-btn-ghost" : "") + '" data-flow="' + kind + '" data-flow-id="' + esc(id) + '"' + (ghost ? "" : " data-flow-main") + ">" + esc(label) + "</button>";
   }
@@ -9057,11 +9078,16 @@
       return '<form class="ad-flow-panel" data-flow-form="contract" novalidate>' +
         '<div class="ad-bk-book-head"><h4>Contrat pour ' + esc(b.clientName) + "</h4>" +
         '<p class="ad-hint">« ' + esc(b.offerTitle) + " », " + esc(bookingDay(b.startsAt)) + " à " + esc(bookingTime(b.startsAt)) +
-        ", avec vos conditions par défaut (onglet Devis et contrats). " + esc(first || "Votre client") + " le lit, le signe en ligne" +
+        ". " + esc(first || "Votre client") + " le lit, le signe en ligne" +
         " et règle l'acompte s'il y en a un.</p></div>" +
+        ((data.contractTemplates || []).length
+          ? '<label class="ad-field"><span>Modèle de contrat</span><select name="template">' +
+            contractTemplateOptions(data.contractTemplates, flowTemplateId(b, data), "Conditions par défaut") + "</select></label>"
+          : '<p class="ad-hint">Astuce : enregistrez un modèle par type de séance (grossesse, mariage…) dans l\'onglet Devis et contrats, il sera proposé ici.</p>') +
         '<div class="ad-field-row">' +
         '<label class="ad-field"><span>Prix de la séance <em>(€)</em></span><input name="price" inputmode="decimal" value="' + esc(bookingEurosInput(b.priceCents)) + '" placeholder="ex. 180" /></label>' +
-        '<label class="ad-field"><span>Acompte à la signature <em>(€, 0 = aucun)</em></span><input name="deposit" inputmode="decimal" value="" placeholder="0" /></label>' +
+        '<label class="ad-field"><span>Acompte à la signature <em>(€, 0 = aucun)</em></span><input name="deposit" inputmode="decimal" value="' +
+        esc(bookingEurosInput(flowDeposit(b, data, flowTemplateId(b, data), b.priceCents))) + '" placeholder="0" /></label>' +
         "</div>" +
         (paidDeposit ? '<p class="ad-hint">L\'acompte de ' + formatEuros(paidDeposit) + " réglé à la réservation est rappelé dans le contrat : il n'est pas redemandé.</p>" : "") +
         '<div class="ad-bk-book-actions"><button type="submit" class="ad-btn ad-btn-primary">Envoyer le contrat</button>' +
@@ -9215,8 +9241,17 @@
         var price = bookingCents(form.elements.price.value);
         var deposit = bookingCents(form.elements.deposit.value);
         if (isNaN(price) || isNaN(deposit)) { toast("Montant illisible : écrivez par exemple 180 ou 180,50.", true); return null; }
-        return { priceCents: price, depositCents: deposit };
+        return { priceCents: price, depositCents: deposit, templateId: form.elements.template ? form.elements.template.value : "" };
       };
+      // Changer de modèle (ou de prix) recalcule l'acompte suggéré.
+      var refreshDeposit = function () {
+        if (!form.elements.template) return;
+        var price = bookingCents(form.elements.price.value);
+        if (isNaN(price)) return;
+        form.elements.deposit.value = bookingEurosInput(flowDeposit(b, data, form.elements.template.value, price));
+      };
+      if (form.elements.template) form.elements.template.addEventListener("change", refreshDeposit);
+      form.elements.price.addEventListener("change", refreshDeposit);
       form.addEventListener("submit", async function (e) {
         e.preventDefault();
         var amounts = readAmounts();
@@ -9484,7 +9519,7 @@
     declined: ["Refusé", "ad-badge-expired"],
     cancelled: ["Annulé", ""],
   };
-  var contractsState = { data: null, editing: null };
+  var contractsState = { data: null, editing: null, templateEditing: null, openId: "" };
 
   function contractStatusHtml(c) {
     var s = CONTRACT_STATUS[c.status] || [c.status, ""];
@@ -9516,6 +9551,10 @@
       (editing && c.status !== "draft" ? '<p class="ad-banner ad-banner-muted">Ce devis a déjà été envoyé : après modification, renvoyez-le pour que votre client signe la nouvelle version.</p>' : "") +
       '<form id="ad-ct-form" novalidate>' +
       '<div data-cpick="ct"></div>' +
+      ((data.templates || []).length && (!editing || c.status === "draft")
+        ? '<label class="ad-field ad-ct-template"><span>Modèle de contrat</span><select name="template">' +
+          contractTemplateOptions(data.templates, "", "Conditions par défaut") + "</select></label>"
+        : "") +
       '<div class="ad-field-row">' +
       '<label class="ad-field"><span>Client</span><input name="clientName" maxlength="120" required placeholder="ex. Camille Dubois" value="' + esc(c.clientName) + '" /></label>' +
       '<label class="ad-field"><span>E-mail du client</span><input type="email" name="clientEmail" maxlength="200" required placeholder="camille@exemple.be" value="' + esc(c.clientEmail) + '" /></label>' +
@@ -9616,6 +9655,7 @@
               list.map(contractRowHtml).join("") + "</tbody></table></div>"
             : '<p class="ad-hint">Aucun devis pour l\'instant. Un devis reprend vos prestations et vos conditions ; votre client le signe depuis le lien reçu par e-mail, sans compte à créer.</p>') +
           "</section>" +
+          (data.enabled ? contractTemplatesHtml(data) : "") +
           (data.enabled
             ? '<section><details class="ad-advanced" id="ad-ct-terms-box"><summary>Conditions par défaut de vos contrats</summary>' +
               '<p class="ad-hint">Reprises dans chaque nouveau devis, où vous pouvez encore les adapter. Le modèle proposé est un point de départ, pas un conseil juridique.</p>' +
@@ -9682,6 +9722,18 @@
 
     var form = document.getElementById("ad-ct-form");
     if (form) mountClientPicker(form.querySelector("[data-cpick]"), { form: form, fields: { name: "clientName", email: "clientEmail" } });
+    if (form && form.elements.template) {
+      form.elements.template.addEventListener("change", function () {
+        var t = (data.templates || []).filter(function (x) { return x.id === form.elements.template.value; })[0];
+        form.elements.terms.value = t ? t.terms : data.terms;
+        // Acompte suggéré, sur le total des prestations.
+        if (t && t.depositPercent) {
+          var total = 0;
+          form.querySelectorAll(".ad-ct-line-amount").forEach(function (input) { var c = bookingCents(input.value); if (!isNaN(c)) total += c; });
+          if (total) form.elements.deposit.value = bookingEurosInput(Math.round(total * t.depositPercent / 100 / 100) * 100);
+        }
+      });
+    }
     if (form && form.elements.sessionDay) {
       // L'heure n'a de sens qu'avec une date.
       form.elements.sessionDay.addEventListener("input", function () {
@@ -9753,6 +9805,7 @@
       });
     });
 
+    bindContractTemplates(data);
     var termsForm = document.getElementById("ad-ct-terms-form");
     if (termsForm) {
       termsForm.addEventListener("submit", async function (e) {
@@ -9762,6 +9815,122 @@
       });
       on("ad-ct-terms-reset", function () { termsForm.elements.terms.value = data.defaultTerms; });
     }
+  }
+
+  /* ---------- Modèles de contrat (grossesse, mariage, naissance…) ---------- */
+
+  // Exemples pour démarrer : les conditions par défaut du studio, plus un
+  // article propre au type de séance. Points de départ à adapter, pas un
+  // conseil juridique.
+  var CONTRACT_STARTERS = [
+    { name: "Séance grossesse", depositPercent: 30, clause: "Séance grossesse\nLa séance est idéalement prévue entre la 28e et la 34e semaine de grossesse. Si l'état de santé de la future maman ne permet pas de la maintenir, elle est reportée sans frais à une date convenue ensemble, sur simple message." },
+    { name: "Séance naissance", depositPercent: 30, clause: "Séance naissance\nLa séance a lieu de préférence dans les 15 premiers jours de bébé : la date est fixée provisoirement, puis ajustée sans frais après la naissance. La séance suit le rythme de bébé (tétées, câlins, pauses) et sa durée peut varier. La sécurité de l'enfant passe avant toute pose." },
+    { name: "Mariage", depositPercent: 30, clause: "Mariage\nLe photographe est présent aux horaires convenus avec les mariés ; tout dépassement est facturé selon le tarif horaire annoncé. Un repas est prévu pour le photographe lorsque sa présence couvre le dîner. Le déroulé de la journée (horaires, lieux, contacts) lui est transmis au plus tard 15 jours avant le mariage. Par dérogation à l'article 3, en cas d'annulation par les mariés moins de 3 mois avant la date, l'acompte reste acquis au photographe." },
+    { name: "Mini-séance", depositPercent: 100, clause: "Mini-séance\nLes mini-séances se suivent à horaires fixes : un retard réduit la durée de la séance sans la prolonger. Le prix est réglé à la réservation. Un report n'est possible que vers une autre date de mini-séances, selon les places disponibles." },
+  ];
+
+  function starterTerms(base, clause) {
+    // Numéro suivant le dernier article des conditions de base.
+    var nums = (String(base).match(/^\s*(\d+)\./gm) || []).map(function (m) { return parseInt(m, 10); });
+    var next = nums.length ? Math.max.apply(null, nums) + 1 : 1;
+    var lines = clause.split("\n");
+    return String(base).replace(/\s+$/, "") + "\n\n" + next + ". " + lines[0] + "\n" + lines.slice(1).join("\n");
+  }
+
+  function contractTemplateFormHtml(data, t) {
+    var editing = Boolean(t && t.id);
+    t = t || { name: "", depositPercent: 0, terms: data.terms };
+    return '<form id="ad-ctt-form" class="ad-flow-panel" novalidate>' +
+      '<div class="ad-bk-book-head"><h4>' + (editing ? "Modifier « " + esc(t.name) + " »" : "Nouveau modèle de contrat") + "</h4>" +
+      '<p class="ad-hint">Choisissez-le au moment d\'envoyer un contrat, ou attachez-le à une formule de séance (onglet Réservations) : il sera proposé d\'office.</p></div>' +
+      '<div class="ad-field-row">' +
+      '<label class="ad-field"><span>Nom du modèle</span><input name="name" maxlength="80" required placeholder="ex. Séance naissance" value="' + esc(t.name) + '" /></label>' +
+      '<label class="ad-field"><span>Acompte suggéré <em>(% du prix, 0 = aucun)</em></span><input name="depositPercent" inputmode="numeric" maxlength="3" placeholder="30" value="' + esc(t.depositPercent ? String(t.depositPercent) : "") + '" /></label>' +
+      "</div>" +
+      '<label class="ad-field"><span>Conditions du contrat</span><textarea name="terms" rows="14" maxlength="20000">' + esc(t.terms) + "</textarea></label>" +
+      '<div class="ad-bk-book-actions"><button type="submit" class="ad-btn ad-btn-primary">' + (editing ? "Enregistrer le modèle" : "Créer le modèle") + "</button>" +
+      '<button type="button" class="ad-btn ad-btn-ghost" id="ad-ctt-cancel">Annuler</button></div></form>';
+  }
+
+  function contractTemplatesHtml(data) {
+    var list = data.templates || [];
+    var editing = contractsState.templateEditing;
+    var used = {};
+    list.forEach(function (t) { used[t.name.toLowerCase()] = true; });
+    var starters = CONTRACT_STARTERS.filter(function (st) { return !used[st.name.toLowerCase()]; });
+    return '<section id="ad-ctt"><div class="ad-section-header"><h3>Modèles de contrat</h3>' +
+      (editing ? "" : '<button type="button" class="ad-btn ad-btn-small" id="ad-ctt-new">+ Nouveau modèle</button>') + "</div>" +
+      '<p class="ad-hint">Un contrat prêt pour chaque type de séance : ses conditions et son acompte. Au moment d\'envoyer, il suffit de le choisir.</p>' +
+      (list.length
+        ? '<ul class="ad-ctt-list">' + list.map(function (t) {
+            return '<li class="ad-ctt-item"><span class="ad-ctt-name">' + esc(t.name) + "</span>" +
+              '<span class="ad-acc-sub">' + (t.depositPercent ? "Acompte suggéré : " + t.depositPercent + " %" : "Sans acompte") + "</span>" +
+              '<span class="ad-ctt-actions"><button type="button" class="ad-btn ad-btn-small" data-ctt-edit="' + esc(t.id) + '">Modifier</button>' +
+              '<button type="button" class="ad-btn ad-btn-small ad-btn-ghost" data-ctt-delete="' + esc(t.id) + '">Supprimer</button></span></li>';
+          }).join("") + "</ul>"
+        : "") +
+      (!editing && starters.length
+        ? '<div class="ad-ctt-starters"><span class="ad-hint">' + (list.length ? "Ajouter un exemple :" : "Partir d'un exemple, à adapter :") + "</span>" +
+          starters.map(function (st) {
+            return '<button type="button" class="ad-chip-btn" data-ctt-starter="' + esc(st.name) + '">' + esc(st.name) + "</button>";
+          }).join("") + "</div>"
+        : "") +
+      (editing ? contractTemplateFormHtml(data, editing === "new" ? null : editing) : "") +
+      "</section>";
+  }
+
+  function bindContractTemplates(data) {
+    var on = function (id, fn) { var node = document.getElementById(id); if (node) node.addEventListener("click", fn); };
+    var openForm = function (t) {
+      contractsState.templateEditing = t;
+      paintContracts(data);
+      var form = document.getElementById("ad-ctt-form");
+      if (form) { form.scrollIntoView({ block: "nearest", behavior: "smooth" }); form.elements.name.focus({ preventScroll: true }); }
+    };
+    on("ad-ctt-new", function () { openForm("new"); });
+    on("ad-ctt-cancel", function () { contractsState.templateEditing = null; paintContracts(data); });
+    el.view.querySelectorAll("[data-ctt-starter]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var st = CONTRACT_STARTERS.filter(function (x) { return x.name === btn.getAttribute("data-ctt-starter"); })[0];
+        openForm({ name: st.name, depositPercent: st.depositPercent, terms: starterTerms(data.terms, st.clause) });
+      });
+    });
+    el.view.querySelectorAll("[data-ctt-edit]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        openForm((data.templates || []).filter(function (t) { return t.id === btn.getAttribute("data-ctt-edit"); })[0]);
+      });
+    });
+    el.view.querySelectorAll("[data-ctt-delete]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var t = (data.templates || []).filter(function (x) { return x.id === btn.getAttribute("data-ctt-delete"); })[0];
+        confirmAction("Supprimer le modèle « " + t.name + " » ? Les contrats déjà envoyés gardent leur texte ; les formules qui le proposaient reprennent vos conditions par défaut.", async function () {
+          var result = await contractsCall("DELETE", "/templates/" + encodeURIComponent(t.id), null, "Modèle supprimé.");
+          if (result) paintContracts(result);
+        });
+      });
+    });
+    var form = document.getElementById("ad-ctt-form");
+    if (form) {
+      form.addEventListener("submit", async function (e) {
+        e.preventDefault();
+        var percent = String(form.elements.depositPercent.value || "").replace(/[%\s]/g, "");
+        if (percent && !/^\d{1,3}$/.test(percent)) { toast("Acompte suggéré : un nombre entre 0 et 100.", true); return; }
+        var editing = contractsState.templateEditing;
+        var id = editing && editing.id;
+        var result = await contractsCall("POST", "/templates" + (id ? "/" + encodeURIComponent(id) : ""), {
+          name: form.elements.name.value, terms: form.elements.terms.value, depositPercent: Number(percent || 0),
+        }, id ? "Modèle enregistré." : "Modèle créé : choisissez-le en envoyant un contrat, ou attachez-le à une formule.");
+        if (result) { contractsState.templateEditing = null; paintContracts(result); }
+      });
+    }
+  }
+
+  // Liste de choix d'un modèle (éditeur de devis, formule, envoi depuis une séance).
+  function contractTemplateOptions(templates, selected, defaultLabel) {
+    return '<option value="">' + esc(defaultLabel || "Conditions par défaut") + "</option>" +
+      (templates || []).map(function (t) {
+        return '<option value="' + esc(t.id) + '"' + (t.id === selected ? " selected" : "") + ">" + esc(t.name) + "</option>";
+      }).join("");
   }
 
   /* ---------- Clients : fiches, dates à retenir, relances ---------- */

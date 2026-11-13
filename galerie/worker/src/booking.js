@@ -41,7 +41,7 @@ import {
   prepItems,
 } from "./notify.js";
 import { ensureClientRecord } from "./clients.js";
-import { createContractForBooking, remindContract, CONTRACT_REMIND_EVERY } from "./contracts.js";
+import { createContractForBooking, remindContract, contractTemplatesOf, CONTRACT_REMIND_EVERY } from "./contracts.js";
 
 export const BOOKING_TIME_ZONE = "Europe/Brussels";
 // Le paiement de l'acompte dispose de 30 minutes (minimum imposé par Stripe
@@ -243,6 +243,7 @@ function offerOut(o) {
     included: o.included || "",
     dressCode: o.dress_code || "",
     prep: o.prep || "",
+    contractTemplateId: o.contract_template_id || "",
     imageId: o.image_id || "",
     active: Boolean(o.active),
   };
@@ -344,7 +345,7 @@ export async function deleteBookingFiles(env, photographerId) {
 
 /* ---------- Prestations enregistrées ---------- */
 
-const TEMPLATE_FIELDS = ["title", "description", "included", "dressCode", "prep", "durationMin", "priceCents", "depositCents", "tiers", "location"];
+const TEMPLATE_FIELDS = ["title", "description", "included", "dressCode", "prep", "contractTemplateId", "durationMin", "priceCents", "depositCents", "tiers", "location"];
 
 function templateOut(t) {
   let data = {};
@@ -365,6 +366,7 @@ async function saveTemplate(env, photographerId, offer) {
     included: offer.included,
     dressCode: offer.dressCode,
     prep: offer.prep,
+    contractTemplateId: offer.contractTemplateId,
     durationMin: offer.durationMin,
     priceCents: offer.priceCents,
     depositCents: offer.depositCents,
@@ -993,6 +995,11 @@ async function bookForClient(env, photographer, slotId, body) {
 
 /* ---------- Photographe : /api/admin/booking[/…] ---------- */
 
+async function contractTemplateOk(env, photographerId, id) {
+  if (!id) return true;
+  return Boolean(await env.DB.prepare("SELECT id FROM contract_templates WHERE id = ? AND photographer_id = ?").bind(id, photographerId).first());
+}
+
 function readOffer(body) {
   const title = cleanLine(body.title, 80);
   const durationMin = Math.round(Number(body.durationMin));
@@ -1019,6 +1026,7 @@ function readOffer(body) {
       included: cleanText(body.included, 1000),
       dressCode: cleanText(body.dressCode, 1000),
       prep: cleanText(body.prep, 3000),
+      contractTemplateId: /^ctt_[A-Za-z0-9_-]{6,20}$/.test(String(body.contractTemplateId || "")) ? String(body.contractTemplateId) : "",
       imageId,
       durationMin,
       priceCents,
@@ -1155,6 +1163,8 @@ async function bookingForAdmin(env, photographer) {
     })),
     bookings: (bookings || []).reverse().map((b) => bookingAdminOut(b, followUpOf(b))),
     contractsEnabled: hasFeature(env, photographer, "contracts"),
+    // Modèles de contrat : choix du contrat envoyé, et celui de chaque formule.
+    contractTemplates: (await contractTemplatesOf(env, photographer.id)).map((t) => ({ id: t.id, name: t.name, depositPercent: t.depositPercent })),
   };
 }
 
@@ -1186,15 +1196,16 @@ export async function handleBookingAdmin(request, env, photographer, parts) {
   if (parts[0] === "offers" && parts.length === 1 && method === "POST") {
     const { offer, error } = readOffer(body);
     if (error) return fail(400, error);
+    if (!(await contractTemplateOk(env, photographer.id, offer.contractTemplateId))) return fail(400, "Modèle de contrat introuvable");
     if (offer.imageId && !(await imageExists(env, photographer.id, offer.imageId))) return fail(400, "Image introuvable : envoyez-la à nouveau");
     const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM booking_offers WHERE photographer_id = ?").bind(photographer.id).first();
     if ((count?.n || 0) >= 30) return fail(409, "30 formules au maximum");
     const id = newId("bko");
     await env.DB.prepare(
-      `INSERT INTO booking_offers (id, photographer_id, title, description, duration_min, price_cents, deposit_cents, tiers, location, included, dress_code, prep, image_id, active, position, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO booking_offers (id, photographer_id, title, description, duration_min, price_cents, deposit_cents, tiers, location, included, dress_code, prep, contract_template_id, image_id, active, position, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).bind(id, photographer.id, offer.title, offer.description, offer.durationMin, offer.priceCents, offer.depositCents, offer.tiers, offer.location,
-      offer.included, offer.dressCode, offer.prep, offer.imageId, offer.active, count?.n || 0, ts).run();
+      offer.included, offer.dressCode, offer.prep, offer.contractTemplateId, offer.imageId, offer.active, count?.n || 0, ts).run();
     const templateError = body.saveTemplate ? await saveTemplate(env, photographer.id, offer) : null;
     return json({ ...(await bookingForAdmin(env, photographer)), createdOfferId: id, templateError }, { status: 201 });
   }
@@ -1205,15 +1216,16 @@ export async function handleBookingAdmin(request, env, photographer, parts) {
     if (method === "POST") {
       const { offer, error } = readOffer({ ...offerOut(existing), ...body });
       if (error) return fail(400, error);
+      if (!(await contractTemplateOk(env, photographer.id, offer.contractTemplateId))) return fail(400, "Modèle de contrat introuvable");
       if (offer.imageId && offer.imageId !== existing.image_id && !(await imageExists(env, photographer.id, offer.imageId))) {
         return fail(400, "Image introuvable : envoyez-la à nouveau");
       }
       await env.DB.prepare(
         `UPDATE booking_offers SET title = ?, description = ?, duration_min = ?, price_cents = ?, deposit_cents = ?, tiers = ?, location = ?,
-            included = ?, dress_code = ?, prep = ?, image_id = ?, active = ?
+            included = ?, dress_code = ?, prep = ?, contract_template_id = ?, image_id = ?, active = ?
           WHERE id = ?`
       ).bind(offer.title, offer.description, offer.durationMin, offer.priceCents, offer.depositCents, offer.tiers, offer.location,
-        offer.included, offer.dressCode, offer.prep, offer.imageId, offer.active, id).run();
+        offer.included, offer.dressCode, offer.prep, offer.contractTemplateId, offer.imageId, offer.active, id).run();
       const templateError = body.saveTemplate ? await saveTemplate(env, photographer.id, offer) : null;
       if (existing.image_id !== offer.imageId) await releaseImage(env, photographer.id, existing.image_id);
       return json({ ...(await bookingForAdmin(env, photographer)), templateError });
