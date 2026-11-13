@@ -4,13 +4,14 @@
 //
 //   node tests/booking.test.mjs
 
-import { localToEpoch, seriesTimes, formatSlot, buildIcs, readTiers, parseTiers, MAX_TIERS } from "../src/booking.js";
+import { localToEpoch, seriesTimes, formatSlot, buildIcs, readTiers, parseTiers, MAX_TIERS, privateSlotUrl, PRIVATE_TOKEN_RE } from "../src/booking.js";
 import { PLANS } from "../src/subscription.js";
 import {
   buildBookingConfirmationEmail,
   buildBookingPhotographerEmail,
   buildBookingCancelledEmail,
   buildBookingReminderEmail,
+  buildPrivateSlotInviteEmail,
 } from "../src/notify.js";
 
 const checks = [];
@@ -83,6 +84,25 @@ check("rappel de la veille : le conseil vestimentaire, sans répéter ce qui est
       notedReminder.html.includes("Conseil vestimentaire") && !notedReminder.html.includes("Compris dans votre forfait"));
 check("sans ces champs, les e-mails restent inchangés",
       !buildBookingConfirmationEmail(params).html.includes("Conseil vestimentaire") && !buildBookingConfirmationEmail(params).text.includes("Compris"));
+
+// Créneau privé : lien du mini-site, e-mail d'invitation.
+const env = { PUBLIC_SITE_ORIGIN: "https://www.holypixx.com" };
+check("lien privé : mini-site, ?creneau=…, ancre #reserver",
+      privateSlotUrl(env, {}, "little-dream", "tok_ABCDEFGHIJKLMNOP") === "https://www.holypixx.com/portfolio.html?s=little-dream&creneau=tok_ABCDEFGHIJKLMNOP#reserver",
+      privateSlotUrl(env, {}, "little-dream", "tok_ABCDEFGHIJKLMNOP"));
+check("sans mini-site, pas de lien", privateSlotUrl(env, {}, "", "tok") === "");
+check("jeton de lien : 16 à 64 caractères sûrs", PRIVATE_TOKEN_RE.test("abcdEFGH1234_-xy") && !PRIVATE_TOKEN_RE.test("court") && !PRIVATE_TOKEN_RE.test("abcdEFGH1234_-xy<script>"));
+const invite = buildPrivateSlotInviteEmail({
+  studioName: "Little Dream Photos", studioEmail: "studio@example.com", studioPhone: "", clientName: "Camille Dubois",
+  offerTitle: "Séance <famille>", when: "samedi 5 décembre 2026 à 10 h 00", durationMin: 60, location: "Studio", priceCents: 18000, depositCents: 5000,
+  url: "https://www.holypixx.com/portfolio.html?s=x&creneau=abc#reserver",
+});
+check("invitation : prénom, créneau, acompte, bouton vers le lien, titre échappé",
+      invite.subject.includes("samedi 5 décembre") && invite.html.includes("Camille, ce créneau est pour vous") && invite.html.includes("Séance &lt;famille&gt;") &&
+      invite.html.includes("50,00 €") && invite.html.includes("creneau=abc") && invite.text.includes("Réserver ce créneau : https://"), invite.subject);
+const inviteTiers = buildPrivateSlotInviteEmail({ studioName: "S", offerTitle: "T", when: "w", priceCents: 9000, depositCents: 0, hasTiers: true, url: "u" });
+check("invitation : formule à plusieurs tarifs, pas de prix unique annoncé ; sans nom, titre neutre",
+      !inviteTiers.html.includes("Prix") && inviteTiers.html.includes("Ce créneau est pour vous"));
 
 const failed = checks.filter((c) => !c.ok).length;
 console.log(`\n${checks.length - failed}/${checks.length} vérifications réussies`);

@@ -1322,6 +1322,27 @@ cd worker
 npx wrangler d1 execute galerie-protegee --remote --file=migrations/2026-11-textes-accompagnement.sql
 ```
 
+### Créneaux privés et réservation pour un client
+
+Onglet **Réservations** : la case **Créneau privé** (horaires précis) ouvre
+un créneau absent du mini-site, réservable seulement par son lien secret
+(`?creneau=…`). Sur chaque créneau libre, le bouton **lien** le rend privé et
+affiche son lien : **Copier le lien**, ou **Envoyer le lien** par e-mail à un
+client choisi dans ses fiches. Le client ne voit que ce créneau (même d'une
+formule retirée du mini-site), ses coordonnées pré-remplies, et réserve
+comme d'habitude (tarif, acompte) ; une fois réservé, le lien ne sert plus.
+**Nouveau lien** invalide l'ancien, **Rendre public** remet le créneau sur
+le mini-site. Le bouton **+** réserve directement un créneau libre au nom
+d'un client, sans acompte en ligne.
+
+La migration passe **avant** `npm run deploy` (le Worker lit les nouvelles
+colonnes de `booking_slots`) :
+
+```bash
+cd worker
+npx wrangler d1 execute galerie-protegee --remote --file=migrations/2026-11-creneaux-prives.sql
+```
+
 ### Devis et contrats signés en ligne
 
 Onglet **Devis & contrats** (formules Pro et Studio) :
@@ -2227,6 +2248,7 @@ node tests/offlinepay.test.mjs        # suppléments réglés en espèces ou par
 node tests/settlesupplement.test.mjs  # Facturation : suppléments en attente de règlement, « Réglé par virement » / « Réglé en espèces » hors galerie, autonome (admin-server.mjs lancé)
 node tests/introtexts.test.mjs        # textes d'accompagnement enregistrés : case, menu déroulant, retrait, autonome (admin-server.mjs lancé)
 node tests/clientpicker.test.mjs       # « Choisir dans mes fiches clients » (facture, devis, galerie, planning) et créneau réservé pour un client (admin-server.mjs lancé)
+node tests/privateslot.test.mjs        # créneau privé : lien secret, envoi au client, réservation par le lien, lien à usage unique (admin-server.mjs lancé)
 node tests/options.test.mjs           # options payantes : catalogue, cases à cocher dans la galerie, virement, relance, « Marquer comme reçu », autonome (admin-server.mjs lancé)
 node tests/giftcards.test.mjs         # bons cadeaux : vente sur le mini-site, page du bon, suivi et bon à la main, autonome (admin-server.mjs lancé)
 node tests/schoolpack.test.mjs        # pack « toutes les photos », ordre de la gamme, liste de prénoms collée, autonome

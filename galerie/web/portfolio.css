@@ -244,6 +244,12 @@ h3 { font-size: 1.4rem; margin-bottom: .8rem; }
 .pf-bk-result p { color: var(--text); }
 .pf-bk-result .pf-btn { margin-top: 1rem; }
 #pf-bk-when, .pf-bk-form { margin-top: 2.4rem; }
+.pf-bk-private {
+  max-width: 640px; margin: -.4rem 0 1.8rem; padding: 1rem 1.2rem;
+  background: #fff; border: 1px solid var(--line); border-left: 3px solid var(--rose-deep); border-radius: 12px;
+  color: var(--text);
+}
+.pf-bk-private-error { border-left-color: var(--danger); }
 
 /* ---------- Bons cadeaux ---------- */
 
