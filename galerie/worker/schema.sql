@@ -1023,9 +1023,14 @@ CREATE TABLE IF NOT EXISTS booking_slots (
   photographer_id TEXT NOT NULL REFERENCES photographers(id) ON DELETE CASCADE,
   offer_id        TEXT NOT NULL REFERENCES booking_offers(id) ON DELETE CASCADE,
   starts_at       INTEGER NOT NULL,           -- epoch secondes (UTC)
-  created_at      INTEGER NOT NULL
+  created_at      INTEGER NOT NULL,
+  -- Créneau privé : absent du mini-site, réservable par son lien secret.
+  private_token   TEXT NOT NULL DEFAULT '',
+  private_name    TEXT NOT NULL DEFAULT '',   -- client invité (pré-remplissage)
+  private_email   TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_booking_slots_offer ON booking_slots(offer_id, starts_at);
+CREATE INDEX IF NOT EXISTS idx_booking_slots_private ON booking_slots(private_token);
 CREATE INDEX IF NOT EXISTS idx_booking_slots_photographer ON booking_slots(photographer_id, starts_at);
 
 -- Une réservation garde une copie de la formule et de l'horaire : elle reste

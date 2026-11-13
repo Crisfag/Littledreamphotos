@@ -7949,10 +7949,13 @@
           '<label class="ad-field"><span>Toutes les <em>(min)</em></span><input type="number" name="every" min="5" max="720" step="5" placeholder="durée" /></label>'
         : '<label class="ad-field ad-bk-times"><span>Heure(s) <em>(séparées par des virgules)</em></span><input name="times" placeholder="ex. 10:00, 14:30" required /></label>') +
       '<button type="submit" class="ad-btn ad-btn-primary">Ouvrir ' + (series ? "la série" : "les créneaux") + "</button>" +
-      "</div></form>" +
+      "</div>" +
+      (series ? "" : '<label class="ad-check ad-bk-private-check"><input type="checkbox" name="private" /> <span>Créneau privé <em>— invisible sur votre mini-site, réservable seulement par le lien que vous envoyez à un client</em></span></label>') +
+      "</form>" +
       bookForClientHtml(data) +
+      privateSlotHtml(data) +
       (days.length
-        ? '<p class="ad-hint ad-bk-book-hint">Un client habitué vous a appelé ? Cliquez sur <strong>+</strong> à côté d\'un horaire libre pour le réserver à son nom.</p>' +
+        ? '<p class="ad-hint ad-bk-book-hint">Sur un horaire libre : <strong>+</strong> le réserve au nom d\'un client, le <strong>lien</strong> en fait un créneau privé à lui envoyer, que lui seul peut réserver.</p>' +
           '<div class="ad-bk-days">' + days.map(function (day) {
             // Le nom de la formule n'est utile que si plusieurs se partagent la journée.
             var mixed = byDay[day].some(function (s) { return s.offerId !== byDay[day][0].offerId; });
@@ -7964,7 +7967,11 @@
               var label = bookingTime(s.startsAt) + (mixed && o ? " · " + o.title : "");
               return b
                 ? '<li class="ad-bk-chip ad-bk-chip-booked" title="' + esc(o ? o.title : "") + '">' + esc(label) + " · " + esc(b.clientName) + "</li>"
-                : '<li class="ad-bk-chip' + (bookingState.bookFor === s.id ? " ad-bk-chip-active" : "") + '" title="' + esc(o ? o.title : "") + '">' + esc(label) +
+                : '<li class="ad-bk-chip' + (s.private ? " ad-bk-chip-private" : "") + (bookingState.bookFor === s.id || bookingState.linkFor === s.id ? " ad-bk-chip-active" : "") +
+                  '" title="' + esc((o ? o.title : "") + (s.private ? " · créneau privé" + (s.privateName || s.privateEmail ? " pour " + (s.privateName || s.privateEmail) : "") : "")) + '">' +
+                  (s.private ? '<span class="ad-bk-chip-lock"><svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span>' : "") + esc(label) +
+                  (s.private && (s.privateName || s.privateEmail) ? '<span class="ad-bk-chip-for"> · ' + esc(s.privateName || s.privateEmail) + "</span>" : "") +
+                  '<button type="button" class="ad-bk-chip-link" data-bk-slot-link="' + esc(s.id) + '" aria-label="' + (s.private ? "Lien privé du créneau de " : "Créneau privé : lien pour un client, ") + esc(label) + '" title="' + (s.private ? "Lien privé" : "Créneau privé, à envoyer à un client") + '"><svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg></button>' +
                   '<button type="button" class="ad-bk-chip-book" data-bk-slot-book="' + esc(s.id) + '" aria-label="Réserver le créneau de ' + esc(label) + ' pour un client" title="Réserver pour un client">' +
                   '<svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>' +
                   '<button type="button" data-bk-slot-delete="' + esc(s.id) + '" aria-label="Supprimer le créneau de ' + esc(label) + '">×</button></li>';
@@ -7999,6 +8006,33 @@
       '<p class="ad-hint">Pas d\'acompte en ligne : à régler avec vous, ou par une facture (onglet Facturation).</p>' +
       '<div class="ad-bk-book-actions"><button type="submit" class="ad-btn ad-btn-primary">Réserver ce créneau</button>' +
       '<button type="button" class="ad-btn" id="ad-bk-book-cancel">Annuler</button></div></form>';
+  }
+
+  // Créneau privé : son lien secret, à copier ou à envoyer à un client.
+  function privateSlotHtml(data) {
+    var slot = bookingState.linkFor && data.slots.filter(function (s) { return s.id === bookingState.linkFor && !s.bookingId && s.private; })[0];
+    if (!slot) return "";
+    var offer = data.offers.filter(function (o) { return o.id === slot.offerId; })[0] || { title: "", durationMin: 0 };
+    var published = data.portfolio && data.portfolio.published;
+    return '<form id="ad-bk-link" class="ad-bk-book" novalidate>' +
+      '<div class="ad-bk-book-head"><h4>Créneau privé</h4>' +
+      '<p class="ad-hint">' + esc(bookingDay(slot.startsAt)) + " à " + esc(bookingTime(slot.startsAt)) + " · " + esc(offer.title) +
+      (offer.durationMin ? " (" + esc(durationText(offer.durationMin)) + ")" : "") + "</p></div>" +
+      '<p class="ad-hint">Invisible sur votre mini-site : seul le client qui a le lien peut le réserver. Il choisit son tarif et règle l\'acompte comme d\'habitude.' +
+      (offer.active === false ? " La formule n\'est pas proposée sur votre mini-site, mais elle reste réservable par ce lien." : "") + "</p>" +
+      (published ? "" : '<p class="ad-banner ad-banner-muted">Votre mini-site n\'est pas publié : le lien ne fonctionnera qu\'une fois publié (onglet Portfolio).</p>') +
+      '<div class="ad-bk-link-row"><input class="ad-bk-link-url" readonly value="' + esc(slot.privateUrl) + '" aria-label="Lien privé du créneau" />' +
+      '<button type="button" class="ad-btn" id="ad-bk-link-copy">Copier le lien</button></div>' +
+      '<h5 class="ad-bk-link-sub">Envoyer le lien par e-mail</h5>' +
+      '<div data-cpick="link"></div>' +
+      '<div class="ad-field-row">' +
+      '<label class="ad-field"><span>Client <em>(facultatif)</em></span><input name="name" maxlength="100" placeholder="ex. Camille Dubois" autocomplete="off" value="' + esc(slot.privateName) + '" /></label>' +
+      '<label class="ad-field"><span>E-mail</span><input type="email" name="email" maxlength="200" placeholder="camille@exemple.be" autocomplete="off" value="' + esc(slot.privateEmail) + '" /></label>' +
+      "</div>" +
+      '<div class="ad-bk-book-actions"><button type="submit" class="ad-btn ad-btn-primary"' + (published ? "" : " disabled") + ">Envoyer le lien</button>" +
+      '<button type="button" class="ad-btn" id="ad-bk-link-close">Fermer</button>' +
+      '<span class="ad-bk-link-more"><button type="button" class="ad-link-btn" id="ad-bk-link-renew">Nouveau lien</button>' +
+      '<button type="button" class="ad-link-btn" id="ad-bk-link-public">Rendre public</button></span></div></form>';
   }
 
   function bookingRowHtml(b, actionable) {
@@ -8295,6 +8329,7 @@
         e.preventDefault();
         var f = slotForm.elements;
         var body = { offerId: f.offerId.value, date: f.date.value };
+        if (f.private && f.private.checked) body.private = true;
         if (!body.date) { toast("Choisissez une date.", true); return; }
         if (bookingState.slotMode === "series") {
           body.from = f.from.value;
@@ -8303,16 +8338,28 @@
         } else {
           body.times = String(f.times.value).split(/[,;\s]+/).map(function (t) { return t.replace(/h/i, ":").replace(/:$/, ":00"); }).filter(Boolean);
         }
+        var before = {};
+        data.slots.forEach(function (sl) { before[sl.id] = true; });
         bookingCall("POST", "/slots", body, function (res) {
           return res.created
-            ? res.created + " créneau" + (res.created > 1 ? "x ouverts" : " ouvert") + (res.skipped ? " (" + res.skipped + " déjà ouvert" + (res.skipped > 1 ? "s" : "") + ")" : "") + "."
+            ? res.created + " créneau" + (res.created > 1 ? "x" : "") + (body.private ? " privé" + (res.created > 1 ? "s" : "") : "") + (res.created > 1 ? " ouverts" : " ouvert") +
+              (res.skipped ? " (" + res.skipped + " déjà ouvert" + (res.skipped > 1 ? "s" : "") + ")" : "") + "."
             : "Ces créneaux étaient déjà ouverts.";
+        }).then(function (ok) {
+          // Un seul créneau privé ouvert : son lien s'affiche aussitôt.
+          var fresh = ok && body.private ? bookingState.data.slots.filter(function (sl) { return sl.private && !before[sl.id]; }) : [];
+          if (fresh.length !== 1) return;
+          bookingState.linkFor = fresh[0].id;
+          paintBooking(bookingState.data);
+          var panel = document.getElementById("ad-bk-link");
+          if (panel) panel.scrollIntoView({ block: "center", behavior: "smooth" });
         });
       });
     }
     el.view.querySelectorAll("[data-bk-slot-book]").forEach(function (btn) {
       btn.addEventListener("click", function () {
         bookingState.bookFor = btn.getAttribute("data-bk-slot-book");
+        bookingState.linkFor = "";
         paintBooking(data);
         var panel = document.getElementById("ad-bk-book");
         if (panel) {
@@ -8321,6 +8368,67 @@
         }
       });
     });
+    el.view.querySelectorAll("[data-bk-slot-link]").forEach(function (btn) {
+      btn.addEventListener("click", async function () {
+        var id = btn.getAttribute("data-bk-slot-link");
+        var slot = data.slots.filter(function (s) { return s.id === id; })[0];
+        bookingState.bookFor = "";
+        bookingState.linkFor = id;
+        if (slot && !slot.private) {
+          var ok = await bookingCall("POST", "/slots/" + encodeURIComponent(id) + "/private", { private: true },
+            "Créneau privé : il n'est plus visible sur votre mini-site.");
+          if (!ok) { bookingState.linkFor = ""; return; }
+        } else {
+          paintBooking(data);
+        }
+        var panel = document.getElementById("ad-bk-link");
+        if (panel) {
+          panel.scrollIntoView({ block: "center", behavior: "smooth" });
+          document.getElementById("ad-bk-link-copy").focus({ preventScroll: true });
+        }
+      });
+    });
+    var linkForm = document.getElementById("ad-bk-link");
+    if (linkForm) {
+      var linkId = bookingState.linkFor;
+      mountClientPicker(linkForm.querySelector("[data-cpick]"), { form: linkForm, fields: { name: "name", email: "email" } });
+      document.getElementById("ad-bk-link-copy").addEventListener("click", function () {
+        var input = linkForm.querySelector(".ad-bk-link-url");
+        var done = function () { toast("Lien copié : collez-le dans un SMS, un e-mail ou un message."); };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(input.value).then(done, function () { input.select(); document.execCommand("copy"); done(); });
+        } else {
+          input.select();
+          document.execCommand("copy");
+          done();
+        }
+      });
+      document.getElementById("ad-bk-link-close").addEventListener("click", function () {
+        bookingState.linkFor = "";
+        paintBooking(data);
+      });
+      document.getElementById("ad-bk-link-public").addEventListener("click", function () {
+        confirmAction("Rendre ce créneau public ? Il réapparaît sur votre mini-site, et le lien privé ne fonctionne plus.", function () {
+          bookingState.linkFor = "";
+          bookingCall("POST", "/slots/" + encodeURIComponent(linkId) + "/private", { private: false }, "Créneau de nouveau visible sur votre mini-site.");
+        });
+      });
+      document.getElementById("ad-bk-link-renew").addEventListener("click", function () {
+        confirmAction("Créer un nouveau lien ? L'ancien ne fonctionnera plus.", function () {
+          bookingCall("POST", "/slots/" + encodeURIComponent(linkId) + "/private", { private: true, renew: true }, "Nouveau lien créé.");
+        });
+      });
+      linkForm.addEventListener("submit", async function (e) {
+        e.preventDefault();
+        var f = linkForm.elements;
+        var body = { name: f.name.value.trim(), email: f.email.value.trim() };
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email)) { toast("Indiquez l'e-mail du client.", true); f.email.focus(); return; }
+        var submit = linkForm.querySelector("[type=submit]");
+        submit.disabled = true;
+        var ok = await bookingCall("POST", "/slots/" + encodeURIComponent(linkId) + "/invite", body, "Lien envoyé à " + body.email + ".");
+        if (!ok) submit.disabled = false;
+      });
+    }
     var bookForm = document.getElementById("ad-bk-book");
     if (bookForm) {
       mountClientPicker(bookForm.querySelector("[data-cpick]"), { form: bookForm, fields: { name: "name", email: "email", phone: "phone" } });

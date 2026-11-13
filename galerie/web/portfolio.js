@@ -285,7 +285,9 @@
   /* ---------- Réservation en ligne ---------- */
 
   var BOOKING_ZONE = "Europe/Brussels";
-  var booking = { offers: [], offer: null, slot: null, tier: 0 };
+  // Créneau privé : lien secret envoyé par le photographe (?creneau=…), qui
+  // n'affiche que ce créneau et pré-remplit les coordonnées du client.
+  var booking = { offers: [], offer: null, slot: null, tier: 0, privateToken: new URLSearchParams(location.search).get("creneau") || "", private: null };
 
   function euros(cents) {
     return (cents / 100).toLocaleString("fr-BE", { minimumFractionDigits: cents % 100 ? 2 : 0, maximumFractionDigits: 2 }) + " €";
@@ -473,13 +475,48 @@
     if (offers.length === 1) chooseOffer(offers[0], list.firstChild);
   }
 
+  function showPrivateNote(text, isError) {
+    var note = $("pf-bk-private");
+    if (!note) return;
+    note.textContent = text || "";
+    note.className = "pf-bk-private" + (isError ? " pf-bk-private-error" : "");
+    note.hidden = !text;
+  }
+
   function loadBooking() {
-    return fetch(bookingApi(""))
+    var token = booking.privateToken;
+    return fetch(bookingApi(token ? "?creneau=" + encodeURIComponent(token) : ""))
       .then(function (res) { return res.ok ? res.json() : { offers: [] }; })
       .then(function (json) {
         var offers = json.offers || [];
+        booking.private = json.private || null;
+        if (booking.private) {
+          var studio = (data && data.studioName) || json.studioName || "Le studio";
+          showPrivateNote(studio + " a gardé ce créneau pour vous : il n'est visible par personne d'autre. Il ne reste qu'à le confirmer.");
+          renderOffers([booking.private.offer]);
+          var only = $("pf-bk-days").querySelector(".pf-bk-time");
+          if (only) only.click();
+          var form = $("pf-bk-form");
+          if (!form.elements.name.value) form.elements.name.value = booking.private.clientName || "";
+          if (!form.elements.email.value) form.elements.email.value = booking.private.clientEmail || "";
+          $("reserver").hidden = false;
+          $("pf-nav-booking").hidden = false;
+          $("reserver").scrollIntoView();
+          return true;
+        }
+        if (json.privateError) {
+          showPrivateNote(json.privateError + (offers.length ? " Voici les autres disponibilités du studio." : ""), true);
+          booking.privateToken = "";
+          if (!offers.length) {
+            $("pf-bk-flow").hidden = true;
+            $("reserver").hidden = false;
+            $("reserver").scrollIntoView();
+            return true;
+          }
+        }
         if (!offers.length) return false;
         renderOffers(offers);
+        if (json.privateError) $("reserver").scrollIntoView();
         $("reserver").hidden = false;
         $("pf-nav-booking").hidden = false;
         // Réserver devient l'appel principal de la couverture.
@@ -540,6 +577,7 @@
     var error = $("pf-bk-error");
     var fields = {
       slotId: booking.slot && booking.slot.id,
+      privateToken: booking.private ? booking.privateToken : undefined,
       tier: booking.offer && booking.offer.tiers && booking.offer.tiers.length ? booking.tier : undefined,
       name: form.elements.name.value.trim(),
       email: form.elements.email.value.trim(),

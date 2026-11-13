@@ -1140,6 +1140,41 @@ export function buildBookingReminderEmail(params) {
   return { subject, html: emailShell({ preheader: subject, bodyHtml }), text };
 }
 
+// Créneau privé : le photographe envoie à son client le lien qui lui
+// réserve ce créneau sur le mini-site (booking.js, inviteToPrivateSlot).
+export function buildPrivateSlotInviteEmail(params) {
+  const { studioName, clientName, offerTitle, when, durationMin, location, priceCents, depositCents, hasTiers, url } = params;
+  const first = String(clientName || "").trim().split(/\s+/)[0] || "";
+  const subject = `${studioName} vous réserve un créneau : ${when}`;
+  const details = [
+    `<strong>Séance :</strong> ${escapeHtml(offerTitle)}${durationMin ? ` (${escapeHtml(durationLabel(durationMin))})` : ""}`,
+    `<strong>Quand :</strong> ${escapeHtml(when)}`,
+    location ? `<strong>Où :</strong> ${escapeHtml(location)}` : "",
+    priceCents && !hasTiers ? `<strong>Prix :</strong> ${escapeHtml(formatEuros(priceCents))}` : "",
+    depositCents ? `<strong>Acompte à la réservation :</strong> ${escapeHtml(formatEuros(depositCents))}` : "",
+  ].filter(Boolean).join("<br>");
+  const bodyHtml =
+    eyebrow(studioName || "Votre photographe") +
+    heading(first ? `${escapeHtml(first)}, ce créneau est pour vous` : "Ce créneau est pour vous") +
+    paragraph(`${escapeHtml(studioName)} a gardé ce créneau rien que pour vous. Il n'est visible par personne d'autre : confirmez-le en quelques secondes${depositCents ? ", avec le règlement de l'acompte" : ""}.`) +
+    paragraph(details) +
+    emailButton(url, "Réserver ce créneau") +
+    paragraph("Ce lien vous est personnel. Le créneau ne peut être réservé qu'une fois.", { small: true }) +
+    (studioContactLine(params) ? paragraph(studioContactLine(params), { small: true }) : "");
+  const text = [
+    `${studioName} a gardé ce créneau rien que pour vous.`,
+    "",
+    `Séance : ${offerTitle}${durationMin ? ` (${durationLabel(durationMin)})` : ""}`,
+    `Quand : ${when}`,
+    location ? `Où : ${location}` : "",
+    priceCents && !hasTiers ? `Prix : ${formatEuros(priceCents)}` : "",
+    depositCents ? `Acompte à la réservation : ${formatEuros(depositCents)}` : "",
+    "",
+    `Réserver ce créneau : ${url}`,
+  ].filter((l, i, all) => l !== "" || all[i - 1] !== "").join("\n");
+  return { subject, html: emailShell({ preheader: subject, bodyHtml }), text };
+}
+
 export function buildBookingCancelledEmail(params) {
   const { studioName, offerTitle, when, depositCents, note } = params;
   const subject = `Séance annulée : ${offerTitle}, ${when}`;
@@ -1650,6 +1685,10 @@ export async function sendBookingConfirmation(env, params) {
 
 export async function sendBookingPhotographerNotice(env, params) {
   await sendEmail(env, { to: params.to, replyTo: params.replyTo, ...buildBookingPhotographerEmail(params), ...withAttachment(params) });
+}
+
+export async function sendPrivateSlotInvite(env, params) {
+  await sendEmail(env, { to: params.to, replyTo: params.replyTo, ...buildPrivateSlotInviteEmail(params) });
 }
 
 export async function sendBookingReminder(env, params) {

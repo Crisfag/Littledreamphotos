@@ -30,6 +30,7 @@ import {
   sendBookingCancelled,
   sendBookingReminder,
   sendBookingConflict,
+  sendPrivateSlotInvite,
 } from "./notify.js";
 
 export const BOOKING_TIME_ZONE = "Europe/Brussels";
@@ -367,7 +368,7 @@ async function publicOffers(env, photographer) {
   const ts = now();
   const { results: slots } = await env.DB.prepare(
     `SELECT s.id, s.offer_id, s.starts_at FROM booking_slots s
-      WHERE s.photographer_id = ? AND s.starts_at > ? AND s.starts_at < ?
+      WHERE s.photographer_id = ? AND s.starts_at > ? AND s.starts_at < ? AND s.private_token = ''
         AND NOT EXISTS (SELECT 1 FROM bookings b WHERE b.slot_id = s.id AND b.status IN ('pending', 'confirmed'))
       ORDER BY s.starts_at ASC`
   ).bind(photographer.id, ts + MIN_NOTICE_SECONDS, ts + MAX_AHEAD_SECONDS).all();
@@ -377,6 +378,32 @@ async function publicOffers(env, photographer) {
       slots: (slots || []).filter((s) => s.offer_id === o.id).map((s) => ({ id: s.id, startsAt: s.starts_at })),
     }))
     .filter((o) => o.slots.length);
+}
+
+// Créneau privé ouvert par son lien secret (?creneau=…) : la formule (même
+// retirée du mini-site) et ce seul créneau, avec le nom et l'e-mail du
+// client invité pour pré-remplir le formulaire.
+export const PRIVATE_TOKEN_RE = /^[A-Za-z0-9_-]{16,64}$/;
+
+async function privateSlotFor(env, photographer, token) {
+  const gone = { error: "Ce lien de réservation n'est plus valable : le créneau a été retiré ou n'est plus réservé pour vous." };
+  if (!PRIVATE_TOKEN_RE.test(token)) return gone;
+  await expireHolds(env, photographer.id);
+  const row = await env.DB.prepare(
+    `SELECT s.id AS slot_id, s.starts_at, s.private_name, s.private_email, o.*,
+            (SELECT b.id FROM bookings b WHERE b.slot_id = s.id AND b.status IN ('pending', 'confirmed') LIMIT 1) AS booking_id
+       FROM booking_slots s JOIN booking_offers o ON o.id = s.offer_id
+      WHERE s.photographer_id = ? AND s.private_token = ?`
+  ).bind(photographer.id, token).first();
+  if (!row) return gone;
+  if (row.booking_id) return { error: "Ce créneau est déjà réservé. Si c'est vous, vous avez reçu la confirmation par e-mail." };
+  if (row.starts_at <= now() + MIN_NOTICE_SECONDS) return { error: "Ce créneau est trop proche pour être réservé en ligne. Contactez directement le studio." };
+  if (row.deposit_cents > 0 && !stripeReady(photographer)) return { error: "Le paiement en ligne de ce studio n'est pas disponible pour le moment. Contactez directement le studio." };
+  return {
+    offer: { ...offerOut(row), slots: [{ id: row.slot_id, startsAt: row.starts_at }] },
+    clientName: row.private_name || "",
+    clientEmail: row.private_email || "",
+  };
 }
 
 /* ---------- Public : /api/booking/:handle[/…] ---------- */
@@ -390,7 +417,14 @@ export async function handleBookingPublic(request, env, path) {
   if (!photographer || !hasFeature(env, photographer, "booking")) return fail(404, "Réservation indisponible");
 
   if (parts.length === 3 && request.method === "GET") {
-    return json({ studioName: displayName(row), offers: await publicOffers(env, photographer) });
+    const out = { studioName: displayName(row), offers: await publicOffers(env, photographer) };
+    const token = new URL(request.url).searchParams.get("creneau");
+    if (token) {
+      const priv = await privateSlotFor(env, photographer, token);
+      if (priv.error) out.privateError = priv.error;
+      else out.private = priv;
+    }
+    return json(out);
   }
   if (parts[3] === "book" && parts.length === 4 && request.method === "POST") {
     return book(request, env, row, photographer);
@@ -456,7 +490,10 @@ async function book(request, env, row, photographer) {
        FROM booking_slots s JOIN booking_offers o ON o.id = s.offer_id
       WHERE s.id = ? AND s.photographer_id = ?`
   ).bind(String(body.slotId || ""), photographer.id).first();
-  if (!slot || !slot.active) return fail(404, "Ce créneau n'existe plus");
+  // Créneau privé : seulement avec son lien (la formule peut alors être
+  // retirée du mini-site) ; sinon, la formule doit être proposée.
+  const privateOk = Boolean(slot && slot.private_token) && String(body.privateToken || "") === slot.private_token;
+  if (!slot || (slot.private_token ? !privateOk : !slot.active)) return fail(404, "Ce créneau n'existe plus");
   if (slot.starts_at <= ts + MIN_NOTICE_SECONDS) return fail(409, "Ce créneau est trop proche pour être réservé en ligne. Contactez directement le studio.");
   if (slot.deposit_cents > 0 && !stripeReady(photographer)) return fail(409, "Le paiement en ligne de ce studio n'est pas disponible pour le moment.");
 
@@ -659,6 +696,68 @@ export async function runBookingReminders(env) {
   return sent;
 }
 
+/* ---------- Photographe : créneaux privés ---------- */
+
+function privateToken() {
+  return b64url(randomBytes(18));
+}
+
+// Lien du mini-site qui n'affiche que ce créneau (adresse du studio si la
+// formule le permet, sinon holypixx.com/portfolio.html?s=…).
+export function privateSlotUrl(env, photographer, handle, token) {
+  if (!handle || !token) return "";
+  const urls = portfolioUrls(env, photographer, handle);
+  const url = new URL(urls.studio || urls.site);
+  url.searchParams.set("creneau", token);
+  url.hash = "reserver";
+  return url.toString();
+}
+
+async function freeSlotOf(env, photographer, slotId) {
+  await expireHolds(env, photographer.id);
+  const slot = await env.DB.prepare(
+    `SELECT s.*, (SELECT b.id FROM bookings b WHERE b.slot_id = s.id AND b.status IN ('pending', 'confirmed') LIMIT 1) AS booking_id
+       FROM booking_slots s WHERE s.id = ? AND s.photographer_id = ?`
+  ).bind(slotId, photographer.id).first();
+  if (!slot) return { error: fail(404, "Créneau introuvable") };
+  if (slot.booking_id) return { error: fail(409, "Ce créneau est déjà réservé") };
+  if (slot.starts_at <= now()) return { error: fail(409, "Ce créneau est déjà passé") };
+  return slot;
+}
+
+async function inviteToPrivateSlot(env, photographer, slotId, body) {
+  const name = cleanLine(body.name, 100);
+  const email = cleanLine(body.email, 200).toLowerCase();
+  if (!EMAIL_RE.test(email)) return fail(400, "Adresse e-mail du client invalide");
+  const slot = await freeSlotOf(env, photographer, slotId);
+  if (slot.error) return slot.error;
+  const portfolio = await env.DB.prepare("SELECT * FROM portfolios WHERE photographer_id = ?").bind(photographer.id).first();
+  if (!portfolio?.published || !portfolio.handle) return fail(409, "Publiez d'abord votre mini-site (onglet Portfolio) : c'est là que votre client réserve.");
+  const token = slot.private_token || privateToken();
+  await env.DB.prepare("UPDATE booking_slots SET private_token = ?, private_name = ?, private_email = ? WHERE id = ?")
+    .bind(token, name, email, slot.id).run();
+  const offer = await env.DB.prepare("SELECT * FROM booking_offers WHERE id = ?").bind(slot.offer_id).first();
+  if (body.send !== false) {
+    await sendPrivateSlotInvite(env, {
+      to: email,
+      replyTo: photographer.email,
+      clientName: name,
+      studioName: displayName(photographer),
+      studioEmail: photographer.email || "",
+      studioPhone: portfolio.phone || "",
+      offerTitle: offer?.title || "",
+      when: formatSlot(slot.starts_at),
+      durationMin: offer?.duration_min || 0,
+      location: offer?.location || "",
+      priceCents: offer?.price_cents || 0,
+      depositCents: offer?.deposit_cents || 0,
+      hasTiers: parseTiers(offer?.tiers).length > 0,
+      url: privateSlotUrl(env, photographer, portfolio.handle, token),
+    });
+  }
+  return json({ ...(await bookingForAdmin(env, photographer)), invited: email });
+}
+
 /* ---------- Photographe : réserver un créneau pour un client ---------- */
 
 async function bookForClient(env, photographer, slotId, body) {
@@ -781,7 +880,7 @@ async function bookingForAdmin(env, photographer) {
   const [{ results: offers }, { results: slots }, { results: bookings }, portfolio, { results: templates }] = await Promise.all([
     env.DB.prepare("SELECT * FROM booking_offers WHERE photographer_id = ? ORDER BY position ASC, created_at ASC").bind(photographer.id).all(),
     env.DB.prepare(
-      `SELECT s.id, s.offer_id, s.starts_at,
+      `SELECT s.id, s.offer_id, s.starts_at, s.private_token, s.private_name, s.private_email,
               (SELECT b.id FROM bookings b WHERE b.slot_id = s.id AND b.status IN ('pending', 'confirmed') LIMIT 1) AS booking_id
          FROM booking_slots s WHERE s.photographer_id = ? AND s.starts_at > ? ORDER BY s.starts_at ASC LIMIT 500`
     ).bind(photographer.id, ts - 86400).all(),
@@ -803,7 +902,13 @@ async function bookingForAdmin(env, photographer) {
     },
     offers: (offers || []).map(offerOut),
     templates: (templates || []).map(templateOut),
-    slots: (slots || []).map((s) => ({ id: s.id, offerId: s.offer_id, startsAt: s.starts_at, bookingId: s.booking_id || "" })),
+    slots: (slots || []).map((s) => ({
+      id: s.id, offerId: s.offer_id, startsAt: s.starts_at, bookingId: s.booking_id || "",
+      private: Boolean(s.private_token),
+      privateName: s.private_name || "",
+      privateEmail: s.private_email || "",
+      privateUrl: s.private_token ? privateSlotUrl(env, photographer, portfolio?.handle, s.private_token) : "",
+    })),
     bookings: (bookings || []).map(bookingAdminOut),
   };
 }
@@ -913,13 +1018,31 @@ export async function handleBookingAdmin(request, env, photographer, parts) {
     const { results: existing } = await env.DB.prepare("SELECT starts_at FROM booking_slots WHERE offer_id = ?").bind(offer.id).all();
     const taken = new Set((existing || []).map((s) => s.starts_at));
     const fresh = [...new Set(starts)].filter((at) => !taken.has(at));
+    // Créneau privé : chacun son lien secret.
+    const makePrivate = body.private === true;
     if (fresh.length) {
       await env.DB.batch(fresh.map((at) =>
-        env.DB.prepare("INSERT INTO booking_slots (id, photographer_id, offer_id, starts_at, created_at) VALUES (?, ?, ?, ?, ?)")
-          .bind(newId("bks"), photographer.id, offer.id, at, ts)
+        env.DB.prepare("INSERT INTO booking_slots (id, photographer_id, offer_id, starts_at, created_at, private_token) VALUES (?, ?, ?, ?, ?, ?)")
+          .bind(newId("bks"), photographer.id, offer.id, at, ts, makePrivate ? privateToken() : "")
       ));
     }
     return json({ ...(await bookingForAdmin(env, photographer)), created: fresh.length, skipped: starts.length - fresh.length }, { status: 201 });
+  }
+  // Rendre un créneau libre privé (lien secret) ou de nouveau public.
+  if (parts[0] === "slots" && parts[1] && parts[2] === "private" && parts.length === 3 && method === "POST") {
+    const slot = await freeSlotOf(env, photographer, decodeURIComponent(parts[1]));
+    if (slot.error) return slot.error;
+    if (body.private === false) {
+      await env.DB.prepare("UPDATE booking_slots SET private_token = '', private_name = '', private_email = '' WHERE id = ?").bind(slot.id).run();
+    } else if (!slot.private_token || body.renew === true) {
+      // Nouveau lien : l'ancien ne fonctionne plus.
+      await env.DB.prepare("UPDATE booking_slots SET private_token = ? WHERE id = ?").bind(privateToken(), slot.id).run();
+    }
+    return json(await bookingForAdmin(env, photographer));
+  }
+  // Envoyer le lien d'un créneau privé à un client (fiche ou saisie).
+  if (parts[0] === "slots" && parts[1] && parts[2] === "invite" && parts.length === 3 && method === "POST") {
+    return inviteToPrivateSlot(env, photographer, decodeURIComponent(parts[1]), body);
   }
   if (parts[0] === "slots" && parts[1] && parts.length === 2 && method === "DELETE") {
     const id = decodeURIComponent(parts[1]);
