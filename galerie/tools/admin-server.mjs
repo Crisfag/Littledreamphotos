@@ -1005,6 +1005,17 @@ async function handleApi(req, res, url) {
     }
   }
 
+  // /local/assistant — Lumi, l'assistante (questions sur Holypixx) : relais
+  // JSON vers /api/admin/assistant. La conversation reste dans le navigateur.
+  if (parts[0] === "assistant" && parts.length === 1 && ["GET", "POST"].includes(req.method)) {
+    try {
+      const body = req.method === "POST" ? JSON.parse((await readBody(req, 80000)).toString("utf8") || "{}") : undefined;
+      return json(res, 200, await client.request(req.method, "/api/admin/assistant", body));
+    } catch (err) {
+      return relayError(res, err, "Lumi n'a pas pu répondre");
+    }
+  }
+
   // /local/feedback… — suggestions envoyées au propriétaire de la plateforme
   // (les siennes, envoi, réponses lues) : relais JSON vers /api/admin/feedback….
   if (parts[0] === "feedback" && ["GET", "POST"].includes(req.method)) {
