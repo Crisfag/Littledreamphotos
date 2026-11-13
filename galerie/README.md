@@ -1343,6 +1343,31 @@ cd worker
 npx wrangler d1 execute galerie-protegee --remote --file=migrations/2026-11-creneaux-prives.sql
 ```
 
+### Suggestions des photographes
+
+Onglet **Suggestions** (Compte) : un photographe envoie une idée, une
+amélioration, une option qui manque ou un souci (type, une phrase, les
+détails), et suit ses demandes avec leur statut (Reçue, À l'étude, Prévue,
+Faite, Pas pour l'instant) et la réponse. La propriétaire (OWNER_EMAIL) est
+prévenue par e-mail ; dans l'onglet **Admin**, la section « Suggestions des
+photographes » les liste toutes (filtre par statut, pastille sur l'onglet
+pour les nouvelles), où elle change le statut et répond — la réponse part
+par e-mail et s'affiche dans l'onglet du photographe (pastille tant qu'elle
+n'est pas lue). Table `feedback`, `worker/src/feedback.js`.
+
+```bash
+cd worker
+npx wrangler d1 execute galerie-protegee --remote --file=migrations/2026-11-suggestions.sql
+```
+
+### Espace photographe sur l'écran d'accueil
+
+L'espace photographe s'installe comme une appli (`tools/admin/manifest.webmanifest`,
+icônes, `sw.js` avec une page « hors connexion », rien d'autre en cache) :
+une icône Holypixx sur l'écran d'accueil, ouverture en plein écran. Le bouton
+**Installer l'appli** (barre latérale) ouvre l'invitation d'Android, Chrome
+ou Edge ; sur iPhone et iPad, il explique les trois gestes de Safari.
+
 ### Agenda de réservation et créneaux par période
 
 Vos clients voient un **agenda mensuel** (mini-site et page de réservation) :
@@ -2290,6 +2315,7 @@ node tests/clientpicker.test.mjs       # « Choisir dans mes fiches clients » (
 node tests/privateslot.test.mjs        # créneau privé : lien secret, envoi au client, réservation par le lien, lien à usage unique (admin-server.mjs lancé)
 node tests/bookingpage.test.mjs        # page de réservation seule : ouverture, lien, QR, bouton, agenda intégré, lien privé, fermeture (admin-server.mjs lancé)
 node tests/agenda.test.mjs             # agenda : période et jours de la semaine, deux séances, agenda mensuel, chevauchement, journée retirée (admin-server.mjs lancé)
+node tests/feedback.test.mjs           # suggestions (envoi, réponse de la propriétaire, pastilles) et installation sur l'écran d'accueil (admin-server.mjs lancé)
 node tests/options.test.mjs           # options payantes : catalogue, cases à cocher dans la galerie, virement, relance, « Marquer comme reçu », autonome (admin-server.mjs lancé)
 node tests/giftcards.test.mjs         # bons cadeaux : vente sur le mini-site, page du bon, suivi et bon à la main, autonome (admin-server.mjs lancé)
 node tests/schoolpack.test.mjs        # pack « toutes les photos », ordre de la gamme, liste de prénoms collée, autonome

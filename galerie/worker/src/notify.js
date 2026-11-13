@@ -1671,6 +1671,46 @@ export async function sendFavoritesPrint(env, params) {
   await sendEmail(env, { to: params.to, ...buildFavoritesPrintEmail(params) });
 }
 
+/* ---------- Suggestions des photographes (feedback.js) ---------- */
+
+const FEEDBACK_KIND_LABELS = { idea: "Nouvelle fonction", improvement: "Amélioration", problem: "Un souci", other: "Autre" };
+const FEEDBACK_STATUS_LABELS = { new: "Reçue", considering: "À l'étude", planned: "Prévue", done: "Faite", declined: "Pas pour l'instant" };
+
+export function buildFeedbackOwnerEmail({ studioName, photographerEmail, kind, title, body, adminUrl }) {
+  const kindLabel = FEEDBACK_KIND_LABELS[kind] || "Suggestion";
+  const subject = `Suggestion — ${kindLabel} : ${title}`;
+  const bodyHtml =
+    eyebrow("Suggestion d'un photographe") +
+    heading(escapeHtml(title)) +
+    paragraph(`<strong>${escapeHtml(kindLabel)}</strong> · ${escapeHtml(studioName || "")} (${escapeHtml(photographerEmail || "")})`) +
+    (body ? `<div style="margin:0 0 14px;padding:14px 16px;background:${CREAM};border-radius:10px;font-family:${SANS};font-size:15px;line-height:1.6;color:${CHARCOAL};white-space:pre-wrap;">${escapeHtml(body)}</div>` : "") +
+    paragraph("Répondez depuis l'onglet Admin : votre réponse lui arrive par e-mail et dans son onglet Suggestions. Répondre à cet e-mail lui écrit directement.", { small: true }) +
+    (adminUrl ? emailButton(adminUrl, "Voir les suggestions") : "");
+  const text = [`${kindLabel} — ${studioName} (${photographerEmail})`, "", title, body ? `\n${body}` : "", adminUrl ? `\nVoir les suggestions : ${adminUrl}` : ""].join("\n");
+  return { subject, html: emailShell({ preheader: subject, bodyHtml }), text };
+}
+
+export function buildFeedbackReplyEmail({ name, title, status, reply, adminUrl }) {
+  const subject = `Holypixx : réponse à votre suggestion « ${title} »`;
+  const statusLabel = FEEDBACK_STATUS_LABELS[status] || "";
+  const bodyHtml =
+    eyebrow("Holypixx") +
+    heading(name ? `Merci ${escapeHtml(String(name).split(/\s+/)[0])} pour votre suggestion` : "Merci pour votre suggestion") +
+    paragraph(`Votre demande « ${escapeHtml(title)} »${statusLabel ? ` est maintenant : <strong>${escapeHtml(statusLabel)}</strong>` : ""}.`) +
+    `<div style="margin:0 0 14px;padding:14px 16px;background:${CREAM};border-radius:10px;font-family:${SANS};font-size:15px;line-height:1.6;color:${CHARCOAL};white-space:pre-wrap;">${escapeHtml(reply)}</div>` +
+    (adminUrl ? emailButton(adminUrl, "Voir mes suggestions") : "");
+  const text = [`Votre suggestion « ${title} »${statusLabel ? ` : ${statusLabel}` : ""}.`, "", reply, adminUrl ? `\nVoir mes suggestions : ${adminUrl}` : ""].join("\n");
+  return { subject, html: emailShell({ preheader: subject, bodyHtml }), text };
+}
+
+export async function sendFeedbackToOwner(env, params) {
+  await sendEmail(env, { to: params.to, replyTo: params.replyTo, ...buildFeedbackOwnerEmail(params) });
+}
+
+export async function sendFeedbackReply(env, params) {
+  await sendEmail(env, { to: params.to, replyTo: params.replyTo, ...buildFeedbackReplyEmail(params) });
+}
+
 export async function sendPortfolioContact(env, params) {
   await sendEmail(env, { to: params.to, replyTo: params.replyTo, ...buildPortfolioContactEmail(params) });
 }

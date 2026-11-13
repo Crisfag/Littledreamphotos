@@ -121,9 +121,9 @@ check("l'onglet Galeries est actif par défaut, à l'arrivée sur le tableau de 
   const last = await page.locator("#ad-tab-settings").boundingBox();
   check("menu vertical à gauche, une case avec icône par section",
         nav.x === 0 && view.x >= nav.x + nav.width && last.y > first.y && Math.abs(last.x - first.x) < 1 &&
-        // 11 sections (dont « Bons cadeaux »), 12 avec « Écoles & clubs » une fois le module ouvert.
+        // 13 sections (dont « Bons cadeaux » et « Suggestions »), 14 avec « Écoles & clubs » une fois le module ouvert.
         await page.locator("#ad-tabs .ad-tab:not([hidden]) .ad-tab-icon svg").count() === await page.locator("#ad-tabs .ad-tab:not([hidden])").count() &&
-        [12, 13].includes(await page.locator("#ad-tabs .ad-tab:not([hidden])").count()),
+        [13, 14].includes(await page.locator("#ad-tabs .ad-tab:not([hidden])").count()),
         `menu ${nav.width}px, contenu à ${view.x}px`);
 }
 
@@ -403,7 +403,7 @@ check("l'onglet Admin est visible pour le compte dont l'e-mail correspond à OWN
       "OWNER_EMAIL (wrangler.toml) doit valoir exactement " + OWNER_EMAIL + " pour ce test");
 
 await ownerPage.click("#ad-tab-owner");
-await ownerPage.waitForSelector(".ad-stats", { timeout: 10000 });
+await ownerPage.waitForFunction(() => /Photographes inscrits/.test((document.querySelector(".ad-stats") || {}).textContent || ""), null, { timeout: 15000 });
 check("l'onglet Admin ouvre bien cet écran, avec son propre lien dans l'URL",
       await ownerPage.evaluate(() => location.hash) === "#/proprietaire");
 

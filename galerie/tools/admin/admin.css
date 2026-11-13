@@ -241,7 +241,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
   .ad-tab-text { align-items: center; }
   .ad-tab-label { font-size: .78rem; }
   .ad-tab-hint { display: none; }
-  .ad-sidebar-actions { flex-direction: row; justify-content: space-between; margin-top: 0; padding-top: .6rem; }
+  .ad-sidebar-actions { flex-direction: row; flex-wrap: wrap; justify-content: space-between; gap: .2rem .6rem; margin-top: 0; padding-top: .6rem; }
   .ad-side-action { width: auto; }
   #ad-view { padding: 1.5rem 1.25rem 5rem; }
 }
@@ -2249,3 +2249,28 @@ main section.ad-demo {
 .ad-bk-day-clear { font-size: .8rem; font-weight: 400; margin-left: auto; }
 .ad-bk-chip-busy { color: var(--muted); background: var(--mist); border-style: dashed; text-decoration: line-through; text-decoration-color: rgba(98, 98, 111, .5); }
 .ad-bk-chip-busy .ad-bk-chip-for { text-decoration: none; color: var(--muted); }
+
+/* ---------- Suggestions (photographes, propriétaire) ---------- */
+.ad-fb-form { display: flex; flex-direction: column; gap: .8rem; max-width: 720px; padding: 1.1rem; border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper); }
+.ad-fb-form .ad-field { margin: 0; }
+.ad-fb-form .ad-btn { align-self: flex-start; }
+.ad-bk-pick input[type="radio"]:checked + span { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-deep); }
+.ad-fb-list { list-style: none; margin: 0; padding: 0; display: grid; gap: .7rem; max-width: 860px; }
+.ad-fb-item { padding: .9rem 1rem 1rem; border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper); }
+.ad-fb-item-new { border-color: rgba(59, 59, 246, .35); box-shadow: 0 0 0 3px var(--accent-soft); }
+.ad-fb-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .3rem .8rem; }
+.ad-fb-kind { font-size: .8rem; color: var(--muted); overflow-wrap: anywhere; }
+.ad-fb-kind a { color: inherit; }
+.ad-fb-title { margin: .35rem 0 0; font-weight: 600; color: var(--ink); overflow-wrap: anywhere; }
+.ad-fb-body { margin: .3rem 0 0; font-size: .9rem; color: var(--ink-2); white-space: pre-line; overflow-wrap: anywhere; }
+.ad-fb-reply { margin-top: .8rem; padding: .7rem .85rem; border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; background: var(--mist); font-size: .9rem; }
+.ad-fb-reply p { margin: 0; white-space: pre-line; overflow-wrap: anywhere; }
+.ad-fb-reply-head { font-size: .78rem; color: var(--muted); margin-bottom: .25rem !important; }
+.ad-fb-filters { flex-wrap: wrap; margin-bottom: .8rem; }
+.ad-fb-answer { display: grid; grid-template-columns: 200px minmax(0, 1fr) auto; gap: .6rem; align-items: end; margin-top: .8rem; padding-top: .8rem; border-top: 1px solid var(--line); }
+.ad-fb-answer .ad-field { margin: 0; }
+@media (max-width: 720px) { .ad-fb-answer { grid-template-columns: minmax(0, 1fr); } .ad-fb-answer .ad-btn { justify-self: start; } }
+
+/* ---------- Installer sur l'écran d'accueil ---------- */
+.ad-install-steps { margin: 0 0 1.2rem; padding-left: 1.3rem; display: grid; gap: .6rem; font-size: .95rem; color: var(--ink-2); line-height: 1.5; }
+.ad-install-glyph { display: inline-block; width: 1.2em; height: 1.2em; vertical-align: -.2em; fill: none; stroke: var(--accent); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }

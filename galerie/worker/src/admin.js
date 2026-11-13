@@ -38,6 +38,7 @@ import { insightsForAdmin, setSessionType, cleanSessionType, guessSessionType } 
 import { handlePortfolioAdmin, deletePortfolioFiles } from "./portfolio.js";
 import { storageRefusal, TILE_BYTES_PER_PHOTO } from "./storage.js";
 import { authenticatePhotographer } from "./authPhotographer.js";
+import { handleFeedbackAdmin } from "./feedback.js";
 import { connectStripe, refreshStripeStatus, setBillingProfile } from "./billing.js";
 import { updateStudioName, updateName, changePassword, requestEmailChange, updateDefaults, updateReminders, updateSubdomain, updateUiLanguage } from "./account.js";
 
@@ -1049,6 +1050,9 @@ export async function handleAdmin(request, env, ctx, path) {
     if (!photographer) return fail(401, "Session invalide");
     return handleGiftAdmin(request, env, photographer, parts.slice(3));
   }
+
+  // Suggestions envoyées au propriétaire de la plateforme (feedback.js).
+  if (section === "feedback") return handleFeedbackAdmin(request, env, photographerId, parts.slice(3));
 
   // Fiches clients et dates à retenir (clients.js).
   if (section === "clients") {
