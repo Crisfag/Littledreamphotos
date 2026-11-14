@@ -442,6 +442,9 @@
         <h2 id="lumi-title">Lumi</h2>
         <p>Votre guide Holypixx</p>
       </div>
+      <button type="button" class="lumi-icon-btn lumi-voice-toggle" id="lumi-voice" hidden aria-pressed="false" title="Lumi lit ses réponses à voix haute" aria-label="Lumi lit ses réponses à voix haute">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path class="lumi-wave" d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/><path class="lumi-mute" d="M16 9.5l5 5M21 9.5l-5 5"/></svg>
+      </button>
       <button type="button" class="lumi-icon-btn" id="lumi-reset" title="Nouvelle conversation" aria-label="Nouvelle conversation">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v4h4"/></svg>
       </button>
@@ -453,6 +456,10 @@
     <form class="lumi-form" id="lumi-form" novalidate>
       <label class="ad-visually-hidden" for="lumi-input">Votre question</label>
       <textarea id="lumi-input" rows="1" maxlength="2000" placeholder="Posez votre question…" autocomplete="off"></textarea>
+      <button type="button" class="lumi-mic" id="lumi-mic" hidden aria-pressed="false" aria-label="Poser la question à voix haute">
+        <svg class="lumi-mic-ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3.5" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3"/></svg>
+        <svg class="lumi-stop-ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2.5"/></svg>
+      </button>
       <button type="submit" class="lumi-send" id="lumi-send" aria-label="Envoyer">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"/></svg>
       </button>

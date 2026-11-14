@@ -11386,6 +11386,8 @@
         "</g></g></g>" +
         '<path class="lumi-happy" d="M45.5 53 q5 -6 10 0 M64.5 53 q5 -6 10 0" fill="none" stroke="#0b0f2e" stroke-width="3" stroke-linecap="round"/>' +
         '<ellipse class="lumi-cheek" cx="43" cy="61" rx="4" ry="2.4" fill="#ff7fa8" opacity=".35"/><ellipse class="lumi-cheek" cx="77" cy="61" rx="4" ry="2.4" fill="#ff7fa8" opacity=".35"/>' +
+        // Bouche, visible quand Lumi parle à voix haute.
+        '<ellipse class="lumi-mouth" cx="60" cy="63.5" rx="3.4" ry="2.4" fill="#0b0f2e"/>' +
         "</g></g>" +
         // Veste, sangle de l'appareil, appareil photo.
         '<g class="lumi-torso">' +
@@ -11643,6 +11645,11 @@
       return out.join("");
     }
 
+    function playBtn(i) {
+      return state.speech ? '<button type="button" class="lumi-play" data-lumi-play="' + i + '" aria-label="Écouter la réponse">' +
+        '<svg viewBox="0 0 24 24" aria-hidden="true"><path class="lumi-play-ic" d="M8 6v12l10-6z"/><path class="lumi-pause-ic" d="M8 6h3v12H8zM13 6h3v12h-3z"/></svg>Écouter</button>' : "";
+    }
+
     function bubble(role, html, extraClass) {
       var row = document.createElement("div");
       row.className = "lumi-msg " + (role === "user" ? "lumi-msg-me" : "lumi-msg-bot") + (extraClass ? " " + extraClass : "");
@@ -11680,8 +11687,8 @@
           '<div class="lumi-suggest">' + SUGGESTIONS.map(function (q) { return '<button type="button" data-lumi-ask="' + esc(q) + '">' + esc(q) + "</button>"; }).join("") + "</div>";
         log.appendChild(welcome);
       }
-      state.messages.forEach(function (m) {
-        bubble(m.role, m.role === "user" ? esc(m.content) : render(m.content));
+      state.messages.forEach(function (m, i) {
+        bubble(m.role, m.role === "user" ? esc(m.content) : render(m.content) + playBtn(i));
       });
       footText();
     }
@@ -11700,6 +11707,8 @@
       setTimeout(function () { input.focus({ preventScroll: true }); }, 60);
     }
     function close() {
+      stopSpeaking();
+      if (rec.recorder && rec.recorder.state === "recording") stopRecording();
       panel.hidden = true;
       launcher.setAttribute("aria-expanded", "false");
       launcher.focus({ preventScroll: true });
@@ -11716,9 +11725,12 @@
       input.style.height = Math.min(140, input.scrollHeight + 2) + "px";
     }
 
-    async function ask(question) {
+    async function ask(question, opts) {
+      opts = opts || {};
       question = String(question || "").trim();
       if (!question || state.busy) return;
+      if (typeof stopSpeaking === "function") stopSpeaking();
+      if (speakOn() || opts.voice) unlockAudio();
       state.busy = true;
       send.disabled = true;
       var welcome = log.querySelector(".lumi-welcome");
@@ -11737,8 +11749,9 @@
         state.messages.push({ role: "assistant", content: res.reply });
         state.remaining = typeof res.remaining === "number" ? res.remaining : state.remaining;
         save();
-        bubble("assistant", render(res.reply));
+        var row = bubble("assistant", render(res.reply) + playBtn(state.messages.length - 1));
         mood("is-happy", 1300);
+        if (state.speech && (speakOn() || opts.voice)) speakText(res.reply, row.querySelector(".lumi-play"));
       } catch (err) {
         typing.remove();
         // La question reste dans le champ : on peut la renvoyer telle quelle.
@@ -11755,6 +11768,173 @@
         footText();
       }
     }
+
+
+    /* ----- La voix : poser sa question à voix haute, entendre la réponse ----- */
+
+    var micBtn = document.getElementById("lumi-mic");
+    var voiceBtn = document.getElementById("lumi-voice");
+    var VOICE_PREF = "holypixx-lumi-voix";
+    var rec = { recorder: null, chunks: [], timer: null, stream: null };
+    var player = { audio: null, url: "" };
+    var canRecord = Boolean(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
+
+    function speakOn() {
+      try { return localStorage.getItem(VOICE_PREF) === "1"; } catch (err) { return false; }
+    }
+    function setSpeakOn(on) {
+      try { localStorage.setItem(VOICE_PREF, on ? "1" : "0"); } catch (err) { /* rien */ }
+      voiceBtn.setAttribute("aria-pressed", on ? "true" : "false");
+      voiceBtn.title = on ? "Lumi lit ses réponses (cliquer pour couper)" : "Lumi lit ses réponses à voix haute";
+      if (!on) stopSpeaking();
+    }
+
+    // Un court silence (WAV valide, fabriqué ici) pour débloquer le son.
+    var silentSrc = "";
+    function silentWav() {
+      if (silentSrc) return silentSrc;
+      var samples = 800, bytes = new Uint8Array(44 + samples * 2), v = new DataView(bytes.buffer);
+      var put = function (o, str) { for (var i = 0; i < str.length; i++) bytes[o + i] = str.charCodeAt(i); };
+      put(0, "RIFF"); v.setUint32(4, 36 + samples * 2, true); put(8, "WAVE"); put(12, "fmt ");
+      v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, 8000, true);
+      v.setUint32(28, 16000, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); put(36, "data"); v.setUint32(40, samples * 2, true);
+      var bin = "";
+      for (var j = 0; j < bytes.length; j++) bin += String.fromCharCode(bytes[j]);
+      silentSrc = "data:audio/wav;base64," + btoa(bin);
+      return silentSrc;
+    }
+    // iPhone : le son doit être « débloqué » pendant un geste de l'utilisateur.
+    function unlockAudio() {
+      if (!player.audio) player.audio = new Audio();
+      try {
+        player.audio.src = silentWav();
+        var p = player.audio.play();
+        if (p && p.catch) p.catch(function () {});
+      } catch (err) { /* rien */ }
+    }
+
+    function stopSpeaking() {
+      if (player.audio) { try { player.audio.pause(); } catch (err) { /* rien */ } }
+      if (window.speechSynthesis) { try { window.speechSynthesis.cancel(); } catch (err) { /* rien */ } }
+      figures().forEach(function (fig) { fig.classList.remove("is-talking"); });
+      log.querySelectorAll(".lumi-play.is-playing").forEach(function (b) { b.classList.remove("is-playing"); b.setAttribute("aria-label", "Écouter la réponse"); });
+    }
+    function talking(on, btn) {
+      figures().forEach(function (fig) { fig.classList.toggle("is-talking", on); });
+      if (btn) { btn.classList.toggle("is-playing", on); btn.setAttribute("aria-label", on ? "Arrêter la lecture" : "Écouter la réponse"); }
+    }
+
+    function plain(text) {
+      return String(text).replace(/\[\[[a-z-]+\]\]/g, "").replace(/\*\*/g, "").replace(/^\s*[-•*]\s+/gm, "").trim();
+    }
+    // Voix de secours : celle du navigateur, en français.
+    function browserSpeak(text, btn) {
+      if (!window.speechSynthesis || !window.SpeechSynthesisUtterance) { talking(false, btn); return; }
+      var u = new SpeechSynthesisUtterance(plain(text));
+      u.lang = "fr-FR";
+      var fr = (window.speechSynthesis.getVoices() || []).filter(function (v) { return /^fr/i.test(v.lang); })[0];
+      if (fr) u.voice = fr;
+      u.onend = u.onerror = function () { talking(false, btn); };
+      talking(true, btn);
+      window.speechSynthesis.speak(u);
+    }
+
+    async function speakText(text, btn) {
+      stopSpeaking();
+      if (!state.voice) { browserSpeak(text, btn); return; }
+      talking(true, btn);
+      try {
+        var res = await fetch("/local/assistant/speak", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: text }) });
+        var type = res.headers.get("content-type") || "";
+        if (!res.ok || type.indexOf("audio") !== 0) throw new Error("voix indisponible");
+        var blob = await res.blob();
+        if (player.url) URL.revokeObjectURL(player.url);
+        player.url = URL.createObjectURL(blob);
+        if (!player.audio) player.audio = new Audio();
+        player.audio.src = player.url;
+        player.audio.onended = player.audio.onerror = function () { talking(false, btn); };
+        await player.audio.play();
+      } catch (err) {
+        talking(false, btn);
+        browserSpeak(text, btn);
+      }
+    }
+
+    function micState(on) {
+      micBtn.classList.toggle("is-recording", on);
+      micBtn.setAttribute("aria-pressed", on ? "true" : "false");
+      micBtn.setAttribute("aria-label", on ? "Arrêter et envoyer" : "Poser la question à voix haute");
+      input.placeholder = on ? "Je vous écoute…" : "Posez votre question…";
+      figures().forEach(function (fig) { fig.classList.toggle("is-listening", on); });
+    }
+
+    async function startRecording() {
+      if (state.busy) return;
+      stopSpeaking();
+      unlockAudio();
+      try {
+        rec.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+      } catch (err) {
+        bubble("assistant", esc("Je n'ai pas accès au micro. Autorisez-le dans votre navigateur (icône à gauche de l'adresse), ou écrivez votre question."), "lumi-error");
+        return;
+      }
+      var types = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"];
+      var mime = types.filter(function (t) { return window.MediaRecorder.isTypeSupported && window.MediaRecorder.isTypeSupported(t); })[0] || "";
+      rec.chunks = [];
+      rec.recorder = mime ? new MediaRecorder(rec.stream, { mimeType: mime }) : new MediaRecorder(rec.stream);
+      rec.recorder.ondataavailable = function (e) { if (e.data && e.data.size) rec.chunks.push(e.data); };
+      rec.recorder.onstop = sendRecording;
+      rec.recorder.start();
+      micState(true);
+      // Une minute au plus.
+      rec.timer = setTimeout(stopRecording, 60000);
+    }
+    function stopRecording() {
+      clearTimeout(rec.timer);
+      if (rec.recorder && rec.recorder.state !== "inactive") rec.recorder.stop();
+      if (rec.stream) rec.stream.getTracks().forEach(function (t) { t.stop(); });
+      micState(false);
+    }
+    async function sendRecording() {
+      var type = (rec.recorder && rec.recorder.mimeType) || "audio/webm";
+      var blob = new Blob(rec.chunks, { type: type });
+      rec.recorder = null;
+      if (blob.size < 800) return;
+      micBtn.disabled = true;
+      var listening = bubble("user", '<span class="lumi-typing" aria-label="Transcription en cours"><i></i><i></i><i></i></span>');
+      try {
+        var res = await fetch("/local/assistant/listen", { method: "POST", headers: { "content-type": type.split(";")[0] }, body: blob });
+        var data = await res.json().catch(function () { return {}; });
+        listening.remove();
+        if (!res.ok) throw new Error(data.error || "Je n'ai pas pu écouter votre message.");
+        // La réponse à une question posée à voix haute est lue à voix haute.
+        ask(data.text, { voice: true });
+      } catch (err) {
+        listening.remove();
+        bubble("assistant", esc(err.message), "lumi-error");
+      } finally {
+        micBtn.disabled = false;
+      }
+    }
+
+    micBtn.addEventListener("click", function () {
+      if (rec.recorder && rec.recorder.state === "recording") stopRecording();
+      else startRecording();
+    });
+    voiceBtn.addEventListener("click", function () {
+      var on = !speakOn();
+      if (on) unlockAudio();
+      setSpeakOn(on);
+    });
+    log.addEventListener("click", function (e) {
+      var play = e.target.closest(".lumi-play");
+      if (!play) return;
+      if (play.classList.contains("is-playing")) { stopSpeaking(); return; }
+      unlockAudio();
+      var i = Number(play.getAttribute("data-lumi-play"));
+      var m = state.messages[i];
+      if (m) speakText(m.content, play);
+    });
 
     launcher.addEventListener("click", open);
     document.getElementById("lumi-close").addEventListener("click", close);
@@ -11796,12 +11976,19 @@
         try {
           var status = await api("GET", "/assistant");
           state.enabled = Boolean(status && status.enabled);
+          state.voice = Boolean(status && status.voice);
           state.remaining = status && typeof status.remaining === "number" ? status.remaining : null;
         } catch (err) {
           state.enabled = false;
         }
         launcher.hidden = !state.enabled;
         if (!state.enabled) return;
+        // Écouter : il faut l'écoute de Workers AI et un micro. Parler : la
+        // voix de Workers AI, sinon celle du navigateur.
+        state.speech = state.voice || Boolean(window.speechSynthesis);
+        micBtn.hidden = !(state.voice && canRecord);
+        voiceBtn.hidden = !state.speech;
+        setSpeakOn(speakOn());
         restore();
         var seen = false;
         try { seen = localStorage.getItem(TIP_SEEN) === "1"; } catch (err) { seen = true; }

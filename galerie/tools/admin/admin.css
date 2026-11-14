@@ -2715,3 +2715,49 @@ body:has(.ad-help:not([hidden])) .ad-help-btn::after, body:has(.ad-help:not([hid
   .ad-help-btn::after, .ad-help-btn::before { display: none; }
 }
 @keyframes ad-help-up { from { opacity: 0; transform: translateY(20px); } }
+
+/* ---------- Lumi : la voix ---------- */
+/* La bouche n'apparaît que quand Lumi parle ; elle s'ouvre et se ferme. */
+.lumi-mouth { opacity: 0; transform-box: fill-box; transform-origin: center; }
+.is-talking .lumi-mouth { opacity: 1; }
+.is-listening .lumi-tilt { transform: rotate(-6deg); }
+.is-listening .lumi-look { transform: translate(-1.5px, .5px); }
+@media (prefers-reduced-motion: no-preference) {
+  .is-talking .lumi-mouth { animation: lumi-talk .32s ease-in-out infinite alternate; }
+  .is-talking .lumi-all { animation: lumi-bob 1.2s ease-in-out infinite; }
+  .is-listening .lumi-tilt { animation: none; }
+}
+@keyframes lumi-talk { 0% { transform: scale(.9, .35); } 45% { transform: scale(1, 1.15); } 100% { transform: scale(.8, .6); } }
+
+.lumi-mic {
+  flex: none; position: relative; display: grid; place-items: center; width: 42px; height: 42px; border-radius: 12px; cursor: pointer;
+  border: 1px solid var(--line-2); background: var(--paper); color: var(--ink-2);
+  transition: background-color .15s var(--ease), color .15s var(--ease), border-color .15s var(--ease);
+}
+.lumi-mic:hover { border-color: var(--accent); color: var(--accent-deep); background: var(--accent-soft); }
+.lumi-mic:focus-visible { outline: none; box-shadow: var(--ring); }
+.lumi-mic:disabled { opacity: .5; cursor: default; }
+.lumi-mic svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.lumi-stop-ic { display: none; }
+.lumi-mic.is-recording { background: var(--alert); border-color: var(--alert); color: #fff; }
+.lumi-mic.is-recording .lumi-mic-ic { display: none; }
+.lumi-mic.is-recording .lumi-stop-ic { display: block; fill: currentColor; stroke: none; }
+@media (prefers-reduced-motion: no-preference) {
+  .lumi-mic.is-recording { animation: lumi-rec 1.3s ease-out infinite; }
+}
+@keyframes lumi-rec { 0% { box-shadow: 0 0 0 0 rgba(229, 72, 77, .5); } 100% { box-shadow: 0 0 0 12px rgba(229, 72, 77, 0); } }
+.lumi-voice-toggle .lumi-wave { display: none; }
+.lumi-voice-toggle[aria-pressed="true"] { color: var(--accent); background: var(--accent-soft); }
+.lumi-voice-toggle[aria-pressed="true"] .lumi-wave { display: inline; }
+.lumi-voice-toggle[aria-pressed="true"] .lumi-mute { display: none; }
+.lumi-play {
+  display: inline-flex; align-items: center; gap: .3rem; margin-top: .45rem; padding: .2rem .55rem .2rem .4rem;
+  font: inherit; font-size: .76rem; font-weight: 500; border-radius: 999px; cursor: pointer;
+  border: 0; background: rgba(59, 59, 246, .08); color: var(--accent-deep);
+}
+.lumi-play:hover { background: rgba(59, 59, 246, .14); }
+.lumi-play:focus-visible { outline: none; box-shadow: var(--ring); }
+.lumi-play svg { width: 14px; height: 14px; fill: currentColor; }
+.lumi-pause-ic { display: none; }
+.lumi-play.is-playing .lumi-play-ic { display: none; }
+.lumi-play.is-playing .lumi-pause-ic { display: inline; }

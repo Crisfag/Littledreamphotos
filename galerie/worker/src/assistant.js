@@ -1,8 +1,10 @@
 // Lumi, l'assistante de l'espace photographe : répond aux questions sur
 // Holypixx (fonctions, configuration, marche à suivre), avec Claude.
 //
-//   Photographe   GET  /api/admin/assistant   disponible ? messages restants aujourd'hui
-//                 POST /api/admin/assistant   { messages: [{ role, content }] } → { reply }
+//   Photographe   GET  /api/admin/assistant          disponible ? messages restants ? voix ?
+//                 POST /api/admin/assistant          { messages: [{ role, content }] } → { reply }
+//                 POST /api/admin/assistant/listen   audio enregistré → { text } (Whisper)
+//                 POST /api/admin/assistant/speak    { text } → audio MP3 (MeloTTS, français)
 //
 // La conversation vit dans le navigateur : chaque question renvoie les
 // derniers échanges (rien n'est enregistré ici, à part un compteur par jour).
@@ -36,6 +38,87 @@ function now() {
 
 function dayOf(ts) {
   return new Date(ts * 1000).toISOString().slice(0, 10);
+}
+
+/* ---------- La voix de Lumi (Workers AI) ---------- */
+
+// Écouter et parler : 120 fois par jour et par photographe au plus.
+export const VOICE_DAILY_LIMIT = 120;
+const MAX_AUDIO_BYTES = 3 * 1024 * 1024; // ~ 1 minute de parole
+const MAX_SPEAK_CHARS = 1200;
+export const LISTEN_MODEL = "@cf/openai/whisper-large-v3-turbo";
+export const SPEAK_MODEL = "@cf/myshell-ai/melotts";
+
+export function voiceEnabled(env) {
+  return Boolean(env.AI && typeof env.AI.run === "function");
+}
+
+// Ce que Lumi dit à voix haute : sa réponse sans la mise en forme (gras,
+// boutons d'onglet, puces), en phrases.
+export function speakableText(text) {
+  return String(text || "")
+    .replace(/\[\[[a-z-]+\]\]/g, "")
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/^\s*[-•*]\s+/gm, "")
+    .replace(/^\s*(\d+)[.)]\s+/gm, "$1. ")
+    .replace(/[«»"“”]/g, "")
+    .replace(/→/g, "")
+    .replace(/[ \t]+/g, " ")
+    .replace(/ ([.,])/g, "$1")
+    .replace(/\n{2,}/g, "\n")
+    .trim()
+    .slice(0, MAX_SPEAK_CHARS);
+}
+
+function toBase64(bytes) {
+  let binary = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+  return btoa(binary);
+}
+
+async function claimVoice(env, photographerId, day) {
+  return env.DB.prepare(
+    `INSERT INTO assistant_usage (photographer_id, day, count) VALUES (?, ?, 1)
+     ON CONFLICT(photographer_id, day) DO UPDATE SET count = count + 1 WHERE count < ?
+     RETURNING count`
+  ).bind(photographerId, `${day}#voix`, VOICE_DAILY_LIMIT).first();
+}
+
+async function listen(request, env, photographer, day) {
+  const bytes = new Uint8Array(await request.arrayBuffer());
+  if (bytes.length < 800) return fail(400, "Je n'ai rien entendu : réessayez en parlant un peu plus longtemps.");
+  if (bytes.length > MAX_AUDIO_BYTES) return fail(413, "Message trop long : une minute au plus.");
+  if (!(await claimVoice(env, photographer.id, day))) return fail(429, "La voix de Lumi se repose jusqu'à demain : écrivez-lui votre question.");
+  try {
+    const result = await env.AI.run(LISTEN_MODEL, { audio: toBase64(bytes), language: "fr", task: "transcribe", vad_filter: true });
+    const text = String(result?.text || "").trim();
+    if (!text) return fail(422, "Je n'ai pas compris : réessayez, ou écrivez votre question.");
+    return json({ text: text.slice(0, MAX_MESSAGE_CHARS) });
+  } catch (err) {
+    console.error("Assistant : transcription impossible :", err?.message || err);
+    return fail(502, "Je n'ai pas pu écouter votre message. Réessayez, ou écrivez votre question.");
+  }
+}
+
+async function speak(request, env, photographer, day) {
+  const body = await request.json().catch(() => ({}));
+  const text = speakableText(body?.text);
+  if (!text) return fail(400, "Rien à lire");
+  if (!(await claimVoice(env, photographer.id, day))) return fail(429, "La voix de Lumi se repose jusqu'à demain.");
+  try {
+    const result = await env.AI.run(SPEAK_MODEL, { prompt: text, lang: "fr" });
+    const audio = typeof result?.audio === "string" ? result.audio : "";
+    if (!audio) throw new Error("réponse sans audio");
+    const binary = atob(audio);
+    const out = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i);
+    return new Response(out, { headers: { "content-type": "audio/mpeg", "cache-control": "no-store" } });
+  } catch (err) {
+    console.error("Assistant : voix impossible :", err?.message || err);
+    // L'espace photographe lit alors la réponse avec la voix du navigateur.
+    return fail(502, "Voix indisponible");
+  }
 }
 
 export function assistantEnabled(env) {
@@ -104,13 +187,19 @@ function replyText(response) {
     .trim();
 }
 
-export async function handleAssistantAdmin(request, env, photographer) {
+export async function handleAssistantAdmin(request, env, photographer, sub = "") {
   const ts = now();
   const day = dayOf(ts);
+  if (sub === "listen" || sub === "speak") {
+    if (request.method !== "POST") return fail(405, "Méthode non autorisée");
+    if (!assistantEnabled(env) || !voiceEnabled(env)) return fail(503, "La voix de Lumi n'est pas encore disponible.");
+    return sub === "listen" ? listen(request, env, photographer, day) : speak(request, env, photographer, day);
+  }
+  if (sub) return fail(404, "Route inconnue");
   if (request.method === "GET") {
     if (!assistantEnabled(env)) return json({ enabled: false });
     const used = await usageToday(env, photographer.id, day);
-    return json({ enabled: true, remaining: Math.max(0, ASSISTANT_DAILY_LIMIT - used), limit: ASSISTANT_DAILY_LIMIT });
+    return json({ enabled: true, voice: voiceEnabled(env), remaining: Math.max(0, ASSISTANT_DAILY_LIMIT - used), limit: ASSISTANT_DAILY_LIMIT });
   }
   if (request.method !== "POST") return fail(405, "Méthode non autorisée");
   if (!assistantEnabled(env)) return fail(503, "Lumi n'est pas encore disponible.");

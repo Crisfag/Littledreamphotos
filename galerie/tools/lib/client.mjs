@@ -266,6 +266,22 @@ export class WorkerClient {
   }
 
   // Réponse brute (PDF…) d'une route authentifiée du Worker.
+  // Requête brute (audio de Lumi) : le corps et la réponse passent tels quels.
+  async rawPost(path, body, contentType) {
+    if (!this.token) await this.login();
+    const send = () => fetch(`${this.base}${path}`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${this.token}`, "content-type": contentType },
+      body,
+    });
+    let response = await send();
+    if (response.status === 401 && this.canRelogin) {
+      await this.login();
+      response = await send();
+    }
+    return response;
+  }
+
   async rawGet(path) {
     if (!this.token) await this.login();
     let response = await fetch(`${this.base}${path}`, { headers: { authorization: `Bearer ${this.token}` } });

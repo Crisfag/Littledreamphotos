@@ -1005,6 +1005,22 @@ async function handleApi(req, res, url) {
     }
   }
 
+  // /local/assistant/listen et /speak — la voix de Lumi : l'audio enregistré
+  // part au Worker (Whisper), la réponse lue revient en MP3 (MeloTTS).
+  if (parts[0] === "assistant" && parts.length === 2 && ["listen", "speak"].includes(parts[1]) && req.method === "POST") {
+    try {
+      const listening = parts[1] === "listen";
+      const body = await readBody(req, listening ? 3.5 * 1024 * 1024 : 20000);
+      const upstream = await client.rawPost(`/api/admin/assistant/${parts[1]}`, body,
+        listening ? String(req.headers["content-type"] || "application/octet-stream") : "application/json");
+      const type = upstream.headers.get("content-type") || "application/json";
+      res.writeHead(upstream.status, { "content-type": type, "cache-control": "no-store" });
+      return res.end(Buffer.from(await upstream.arrayBuffer()));
+    } catch (err) {
+      return relayError(res, err, "La voix de Lumi n'a pas pu répondre");
+    }
+  }
+
   // /local/assistant — Lumi, l'assistante (questions sur Holypixx) : relais
   // JSON vers /api/admin/assistant. La conversation reste dans le navigateur.
   if (parts[0] === "assistant" && parts.length === 1 && ["GET", "POST"].includes(req.method)) {
