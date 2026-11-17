@@ -16,6 +16,7 @@ import { saveCart } from "./campaigns.js";
 import { presentationForClient } from "./presentation.js";
 import { hasFeature } from "./subscription.js";
 import { offlineForClient, handleOfflineRequest } from "./offlinepay.js";
+import { languageOf, photographerMailLanguage, pick } from "./i18n.js";
 
 const SESSION_TTL_SECONDS = 2 * 60 * 60; // 2 h
 const MAX_FAILED_LOGINS = 10;
@@ -475,7 +476,7 @@ async function handleValidate(request, env, ctx, slug) {
         const photographer = await photographerOf(env, gallery.photographer_id);
         if (!photographer?.email) return;
         await sendSelectionValidated(env, {
-          lang: photographer.ui_language,
+          lang: photographerMailLanguage(photographer.ui_language),
           to: photographer.email,
           galleryTitle: gallery.title,
           clientName: gallery.client_name,
@@ -537,9 +538,10 @@ async function handleCheckout(request, env, slug) {
   const lineItems = [];
   if (outstanding > 0) {
     lineItems.push({
-      name: gallery.language === "en"
-        ? `${outstanding} additional photo${outstanding > 1 ? "s" : ""} — ${gallery.title}`
-        : `${outstanding} photo${outstanding > 1 ? "s" : ""} supplémentaire${outstanding > 1 ? "s" : ""} — ${gallery.title}`,
+      name: pick(languageOf(gallery.language),
+        `${outstanding} photo${outstanding > 1 ? "s" : ""} supplémentaire${outstanding > 1 ? "s" : ""} — ${gallery.title}`,
+        `${outstanding} additional photo${outstanding > 1 ? "s" : ""} — ${gallery.title}`,
+        `${outstanding} extra foto${outstanding > 1 ? "'s" : ""} — ${gallery.title}`),
       unitAmountCents: gallery.extra_photo_price_cents || 0,
       quantity: outstanding,
     });
@@ -556,7 +558,7 @@ async function handleCheckout(request, env, slug) {
       cancelUrl,
       metadata: { gallery_id: gallery.id, gallery_slug: slug, payment_id: paymentId },
       applicationFeeCents: feeCents,
-      locale: gallery.language === "en" ? "en" : undefined,
+      locale: pick(languageOf(gallery.language), undefined, "en", "nl"),
     });
   } catch (err) {
     console.error("Échec de la création de la session Stripe :", err);
@@ -672,12 +674,12 @@ async function handleEvent(request, env, ctx, slug) {
         }
         console.log(`Envoi d'une alerte de capture à ${photographer.email} (galerie ${auth.gallery.id}, raison ${detail})`);
         await sendCaptureAlert(env, {
-          lang: photographer.ui_language,
+          lang: photographerMailLanguage(photographer.ui_language),
           to: photographer.email,
           studioName: photographer.studio_name,
           galleryTitle: auth.gallery.title,
           clientName: auth.gallery.client_name,
-          photoLabel: photo ? `${photographer.ui_language === "en" ? "Photo no." : "Photo n°"} ${photo.position + 1}` : "",
+          photoLabel: photo ? `${photographerMailLanguage(photographer.ui_language) === "en" ? "Photo no." : "Photo n°"} ${photo.position + 1}` : "",
           reason: detail,
           ts: now(),
           adminUrl: env.ADMIN_URL || "",

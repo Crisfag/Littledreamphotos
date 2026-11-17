@@ -65,6 +65,7 @@ const PAGE_FILES = {
   "/galerie.html": { file: "galerie.html", type: "text/html; charset=utf-8" },
   "/gallery.css": { file: "gallery.css", type: "text/css; charset=utf-8" },
   "/gallery.js": { file: "gallery.js", type: "text/javascript; charset=utf-8" },
+  "/i18n-nl.js": { file: "i18n-nl.js", type: "text/javascript; charset=utf-8" },
   "/portfolio.css": { file: "portfolio.css", type: "text/css; charset=utf-8" },
   "/portfolio.js": { file: "portfolio.js", type: "text/javascript; charset=utf-8" },
   "/booking-flow.js": { file: "booking-flow.js", type: "text/javascript; charset=utf-8" },

@@ -52,7 +52,7 @@ L'espace photographe s'installe sur l'écran d'accueil du téléphone, de la tab
 
 # Galeries [[galeries]]
 
-- Créer : « + Nouvelle galerie » → titre, client (on peut le choisir dans ses fiches clients), e-mail du client, mot de passe (laissé vide : il est créé automatiquement), date d'expiration facultative, forfait (nombre de photos incluses) et prix d'une photo en plus, style, langue (français ou anglais), type de séance.
+- Créer : « + Nouvelle galerie » → titre, client (on peut le choisir dans ses fiches clients), e-mail du client, mot de passe (laissé vide : il est créé automatiquement), date d'expiration facultative, forfait (nombre de photos incluses) et prix d'une photo en plus, style, langue (français, anglais ou néerlandais), type de séance.
 - Le mot de passe n'est affiché qu'une seule fois, à la création (Holypixx ne le garde qu'en empreinte, jamais en clair). Perdu : « Générer un nouveau mot de passe » sur la page de la galerie (l'ancien cesse de fonctionner).
 - Envoyer la galerie au client : sur la page de la galerie, « Envoyer au client par e-mail » (lien + mot de passe dans un e-mail à son nom ; choisir de créer un nouveau mot de passe, ou de garder l'actuel en le retapant, vérifié avant l'envoi). On peut aussi copier le lien et le mot de passe.
 - Ajouter les photos : glisser-déposer sur la page de la galerie (« Ajouter des photos »). Elles sont préparées automatiquement : découpées en tuiles, filigranées, avec une empreinte invisible.
@@ -133,7 +133,7 @@ Ventes [[ventes]] : chiffre d'affaires par mois, marges, ventes par type. Statis
 
 # Langue
 
-Chaque galerie a sa langue (français ou anglais) : le client voit galerie, e-mails, boutique, paiement et factures dans cette langue. L'espace photographe a sa propre langue (Paramètres).
+Chaque galerie a sa langue (français, anglais ou néerlandais) : le client voit galerie, e-mails, boutique, paiement et factures dans cette langue. L'espace photographe a sa propre langue (Paramètres, ou le sélecteur FR · EN · NL de l'écran de connexion). En néerlandais, les onglets Clients, Réservations, Contrats, Ventes, Portfolio, Bons cadeaux et Scolaire sont encore en français : un bandeau permet de s'inscrire à la newsletter pour être prévenu·e des nouvelles traductions.
 
 # Photo scolaire (Écoles & clubs)
 

@@ -1800,12 +1800,33 @@ main section > p, .ad-share > p { max-width: 75ch; }
 /* ---------- Langue : bouton English / Français, sections pas encore traduites ---------- */
 
 .ad-lang-switch {
-  position: absolute; top: 18px; right: 18px; padding: 7px 12px; border-radius: 8px;
-  border: 1px solid var(--line, #e6e6ee); background: #fff; color: var(--ink, #0b0b10);
-  font: inherit; font-size: .85rem; font-weight: 500; cursor: pointer;
+  position: absolute; top: 18px; right: 18px; display: inline-flex; padding: 3px; gap: 2px; border-radius: 10px;
+  border: 1px solid var(--line, #e6e6ee); background: #fff;
 }
-.ad-lang-switch:hover { background: var(--mist, #f6f6f9); }
-.ad-lang-switch:focus-visible { outline: 2px solid var(--accent, #3b3bf6); outline-offset: 2px; }
+.ad-lang-switch button {
+  min-width: 40px; min-height: 32px; padding: 0 10px; border: 0; border-radius: 7px; background: transparent;
+  color: var(--muted, #62626f); font: inherit; font-size: .8rem; font-weight: 600; letter-spacing: .04em; cursor: pointer;
+}
+.ad-lang-switch button:hover { background: var(--mist, #f6f6f9); color: var(--ink, #0b0b10); }
+.ad-lang-switch button[aria-pressed="true"] { background: var(--ink, #0b0b10); color: #fff; cursor: default; }
+.ad-lang-switch button:focus-visible { outline: 2px solid var(--accent, #3b3bf6); outline-offset: 2px; }
+
+/* Néerlandais : bandeau newsletter en tête des sections encore en français. */
+.ad-nl-news {
+  margin-bottom: 20px; padding: 14px 16px; border-radius: 12px;
+  background: var(--accent-soft, #ededff); color: var(--accent-deep, #2626d4); font-size: .9rem; line-height: 1.5;
+}
+.ad-nl-news-lead { margin: 0; }
+.ad-nl-news-form { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin-top: 10px; }
+.ad-nl-news-email { flex: 1 1 220px; }
+.ad-nl-news-email input {
+  width: 100%; min-height: 40px; padding: 8px 12px; border: 1px solid var(--line-2, #d6d6e2); border-radius: 9px;
+  background: #fff; color: var(--ink, #0b0b10); font: inherit;
+}
+.ad-nl-news-consent { flex-basis: 100%; display: flex; gap: 8px; align-items: flex-start; color: var(--ink-2, #2f2f3a); font-size: .82rem; cursor: pointer; }
+.ad-nl-news-consent input { margin-top: 3px; accent-color: var(--accent, #3b3bf6); }
+.ad-nl-news-status { margin: 6px 0 0; font-size: .82rem; color: var(--ink-2, #2f2f3a); }
+.ad-nl-news-status:empty { display: none; }
 #ad-view[data-untranslated]::before {
   content: attr(data-untranslated); display: block; margin-bottom: 18px; padding: 10px 14px; border-radius: 10px;
   background: var(--accent-soft, #ededff); color: var(--accent-deep, #2626d4); font-size: .9rem;

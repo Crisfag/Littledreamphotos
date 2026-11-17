@@ -142,13 +142,23 @@
 
   var LANG = "fr";
 
+  // Néerlandais : dictionnaire indexé par le texte anglais (i18n-nl.js).
+  // Une chaîne sans traduction néerlandaise retombe sur l'anglais.
+  var NL = window.HOLYPIXX_GALLERY_NL || {};
+
   // L("Bonjour", "Hello") : le texte dans la langue de la galerie.
   function L(fr, en) {
+    if (LANG === "nl") return NL[en] || en;
     return LANG === "en" ? en : fr;
   }
 
+  // Texte anglais dans la langue en cours (hors français).
+  function T(en) {
+    return LANG === "nl" ? NL[en] || en : en;
+  }
+
   function locale() {
-    return LANG === "en" ? "en-GB" : "fr-BE";
+    return LANG === "en" ? "en-GB" : LANG === "nl" ? "nl-BE" : "fr-BE";
   }
 
   function plural(count, one, many) {
@@ -186,29 +196,29 @@
   };
 
   function serverText(message, fallbackEn) {
-    if (LANG !== "en") return message;
-    return SERVER_EN[message] || fallbackEn;
+    if (LANG === "fr") return message;
+    return T(SERVER_EN[message] || fallbackEn);
   }
 
   // Textes fixes de la page (galerie.html) : data-en, data-en-html,
   // data-en-label, data-en-title, data-en-placeholder.
   function setLanguage(lang) {
-    if (lang !== "en" || LANG === "en") return;
-    LANG = "en";
-    document.documentElement.lang = "en";
-    document.title = "Your private gallery — Holypixx";
+    if ((lang !== "en" && lang !== "nl") || LANG === lang) return;
+    LANG = lang;
+    document.documentElement.lang = lang;
+    document.title = T("Your private gallery — Holypixx");
     Array.prototype.forEach.call(document.querySelectorAll("[data-en]"), function (node) {
-      node.textContent = node.getAttribute("data-en");
+      node.textContent = T(node.getAttribute("data-en"));
     });
     Array.prototype.forEach.call(document.querySelectorAll("[data-en-html]"), function (node) {
-      node.innerHTML = node.getAttribute("data-en-html");
+      node.innerHTML = T(node.getAttribute("data-en-html"));
     });
     [["data-en-label", "aria-label"], ["data-en-title", "title"], ["data-en-placeholder", "placeholder"]].forEach(function (pair) {
       Array.prototype.forEach.call(document.querySelectorAll("[" + pair[0] + "]"), function (node) {
-        node.setAttribute(pair[1], node.getAttribute(pair[0]));
+        node.setAttribute(pair[1], T(node.getAttribute(pair[0])));
       });
     });
-    Object.keys(TAG_LABELS_EN).forEach(function (key) { TAG_LABELS[key] = TAG_LABELS_EN[key]; });
+    Object.keys(TAG_LABELS_EN).forEach(function (key) { TAG_LABELS[key] = T(TAG_LABELS_EN[key]); });
   }
 
   var el = {};
@@ -291,7 +301,7 @@
 
   function formatEuros(cents) {
     var amount = ((cents || 0) / 100).toLocaleString(locale(), { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    return LANG === "en" ? "€" + amount : amount + " €";
+    return LANG === "en" ? "€" + amount : LANG === "nl" ? "€ " + amount : amount + " €";
   }
 
   // Forfait : nombre de photos déjà payées par le client, au-delà duquel un
@@ -703,7 +713,7 @@
   /* ---------- « Valider ma sélection » ---------- */
 
   function formatDateTime(ts) {
-    return new Date(ts * 1000).toLocaleString(LANG === "en" ? "en-GB" : "fr-FR", { dateStyle: "long", timeStyle: "short" });
+    return new Date(ts * 1000).toLocaleString(LANG === "fr" ? "fr-FR" : locale(), { dateStyle: "long", timeStyle: "short" });
   }
 
   // Le bouton reste disponible après validation (le client peut changer
@@ -1348,7 +1358,7 @@
     saveCart();
     updateCartUI();
     var n = cartCount();
-    el.printStatus.textContent = L(
+    el.printStatus.textContent = LANG === "nl" ? T("Added ✓ — ") + n + " " + plural(n, T("item"), T("items")) + " in “" + T("My prints") + "”" : L(
       "Ajouté ✓ — " + n + " article" + (n > 1 ? "s" : "") + " dans « Mes tirages »",
       "Added ✓ — " + n + " " + plural(n, "item", "items") + " in “My prints”"
     );
@@ -1585,7 +1595,7 @@
     if (el.shopPromo) {
       el.shopPromo.hidden = !promo;
       if (promo) {
-        var until = new Date(promo.endsAt * 1000).toLocaleDateString(LANG === "en" ? "en-GB" : "fr-FR", { day: "numeric", month: "long" });
+        var until = new Date(promo.endsAt * 1000).toLocaleDateString(LANG === "fr" ? "fr-FR" : locale(), { day: "numeric", month: "long" });
         el.shopPromo.textContent = L(
           "−" + promo.percent + " % sur tous les tirages jusqu'au " + until,
           promo.percent + "% off all prints until " + until
@@ -1643,6 +1653,7 @@
   function formatBytes(bytes) {
     if (bytes >= 1024 * 1024 * 1024) {
       var gb = (bytes / (1024 * 1024 * 1024)).toFixed(1);
+      if (LANG === "nl") return gb.replace(".", ",") + " GB";
       return L(gb.replace(".", ",") + " Go", gb + " GB");
     }
     if (bytes >= 1024 * 1024) return Math.round(bytes / (1024 * 1024)) + L(" Mo", " MB");
@@ -1694,7 +1705,7 @@
       return;
     }
     var n = d.files.length;
-    el.deliverySummary.textContent = n + " photo" + (n > 1 ? "s" : "") + L(" en haute définition, sans filigrane · ", " in high resolution, no watermark · ") + formatBytes(d.totalBytes);
+    el.deliverySummary.textContent = n + (LANG === "fr" ? plural(n, " photo", " photos") : L(" photo", plural(n, " photo", " photos"))) + L(" en haute définition, sans filigrane · ", " in high resolution, no watermark · ") + formatBytes(d.totalBytes);
     el.deliveryZip.textContent = n > 1 ? L("Tout télécharger (", "Download all (") + formatBytes(d.totalBytes) + ")" : L("Télécharger", "Download");
     el.deliveryStatus.textContent = "";
     el.deliveryList.innerHTML = "";
@@ -1808,7 +1819,8 @@
     if (!el.musicPlayerFrame.firstChild) {
       var frame = document.createElement("iframe");
       frame.src = m.embedUrl;
-      frame.title = L("Lecteur " + (m.providerLabel || "de musique"), (m.providerLabel || "Music") + " player");
+      frame.title = LANG === "nl" ? (m.providerLabel ? m.providerLabel + "-speler" : "Muziekspeler")
+        : L("Lecteur " + (m.providerLabel || "de musique"), (m.providerLabel || "Music") + " player");
       frame.setAttribute("allow", "autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture");
       frame.setAttribute("loading", "lazy");
       frame.setAttribute("referrerpolicy", "strict-origin-when-cross-origin");
@@ -2207,7 +2219,7 @@
       var canvas = document.createElement("canvas");
       canvas.className = "gp-canvas";
       canvas.setAttribute("role", "img");
-      canvas.setAttribute("aria-label", "Photo " + (index + 1) + L(" sur ", " of ") + state.photos.length);
+      canvas.setAttribute("aria-label", L("Photo ", "Photo ") + (index + 1) + L(" sur ", " of ") + state.photos.length);
       figure.appendChild(canvas);
       gridCanvases[photo.id] = canvas;
 

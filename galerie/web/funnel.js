@@ -15,6 +15,7 @@
 
   var PAGES = {
     "/": "accueil", "/index": "accueil", "/en": "accueil-en", "/en/index": "accueil-en",
+    "/nl": "accueil-nl", "/nl/index": "accueil-nl",
     "/galerie-photo-mariage": "mariage", "/contrat-photographe": "contrat", "/proteger-ses-photos": "proteger",
     "/fideliser-clients-photographe": "fideliser", "/reservation-seance-photo": "reservation",
   };

@@ -91,7 +91,9 @@ async function listen(request, env, photographer, day) {
   if (bytes.length > MAX_AUDIO_BYTES) return fail(413, "Message trop long : une minute au plus.");
   if (!(await claimVoice(env, photographer.id, day))) return fail(429, "La voix de Lumi se repose jusqu'à demain : écrivez-lui votre question.");
   try {
-    const result = await env.AI.run(LISTEN_MODEL, { audio: toBase64(bytes), language: "fr", task: "transcribe", vad_filter: true });
+    // Langue de l'espace photographe : Whisper transcrit mieux quand il la connaît.
+    const language = ["en", "nl"].includes(photographer.ui_language) ? photographer.ui_language : "fr";
+    const result = await env.AI.run(LISTEN_MODEL, { audio: toBase64(bytes), language, task: "transcribe", vad_filter: true });
     const text = String(result?.text || "").trim();
     if (!text) return fail(422, "Je n'ai pas compris : réessayez, ou écrivez votre question.");
     return json({ text: text.slice(0, MAX_MESSAGE_CHARS) });
@@ -105,9 +107,12 @@ async function speak(request, env, photographer, day) {
   const body = await request.json().catch(() => ({}));
   const text = speakableText(body?.text);
   if (!text) return fail(400, "Rien à lire");
+  // MeloTTS ne parle pas néerlandais : l'espace photographe lit alors la
+  // réponse avec la voix du navigateur (sans entamer le quota du jour).
+  if (photographer.ui_language === "nl") return fail(502, "Voix indisponible");
   if (!(await claimVoice(env, photographer.id, day))) return fail(429, "La voix de Lumi se repose jusqu'à demain.");
   try {
-    const result = await env.AI.run(SPEAK_MODEL, { prompt: text, lang: "fr" });
+    const result = await env.AI.run(SPEAK_MODEL, { prompt: text, lang: photographer.ui_language === "en" ? "en" : "fr" });
     const audio = typeof result?.audio === "string" ? result.audio : "";
     if (!audio) throw new Error("réponse sans audio");
     const binary = atob(audio);

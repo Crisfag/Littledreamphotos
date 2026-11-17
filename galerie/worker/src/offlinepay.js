@@ -20,6 +20,7 @@ import { supplementFor } from "./admin.js";
 import { issueInvoice } from "./billing.js";
 import { expireCheckoutSession } from "./stripe.js";
 import { sendOfflinePaymentRequest, sendOfflinePaymentInstructions } from "./notify.js";
+import { languageOf, photographerMailLanguage } from "./i18n.js";
 import { galleryUrlFor } from "./reminders.js";
 import { amountDueFor, unpaidOptionsByGallery, optionsSnapshot, markOptionsPaid } from "./options.js";
 
@@ -114,9 +115,9 @@ export async function handleOfflineRequest(request, env, ctx, gallery) {
     cashAddress: options.cashAddress,
   };
   const mails = (async () => {
-    await sendOfflinePaymentRequest(env, { ...params, lang: photographer.ui_language, to: photographer.email, adminUrl: env.ADMIN_URL || "" });
+    await sendOfflinePaymentRequest(env, { ...params, lang: photographerMailLanguage(photographer.ui_language), to: photographer.email, adminUrl: env.ADMIN_URL || "" });
     if (gallery.client_email) {
-      await sendOfflinePaymentInstructions(env, { ...params, lang: gallery.language, to: gallery.client_email, galleryUrl: galleryUrlFor(env, gallery.slug) });
+      await sendOfflinePaymentInstructions(env, { ...params, lang: languageOf(gallery.language), to: gallery.client_email, galleryUrl: galleryUrlFor(env, gallery.slug) });
     }
   })().catch((err) => console.error("E-mails de paiement hors ligne :", err && err.message ? err.message : err));
   if (ctx?.waitUntil) ctx.waitUntil(mails);

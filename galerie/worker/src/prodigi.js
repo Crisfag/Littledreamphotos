@@ -34,26 +34,27 @@ export const SUGGESTED_PRODUCTS = SUGGESTED_SELECTIONS.map((sel) => {
   return { label: resolved.label, sku: resolved.sku, attributes: resolved.attributes, ref: resolved.ref, priceCents: sel.priceCents };
 });
 
-// Pays de livraison proposés au client, par zone ([français, anglais]).
+// Pays de livraison proposés au client, par zone ([français, anglais,
+// néerlandais]).
 // Europe : le forfait de port habituel du photographe. Hors d'Europe :
 // Prodigi imprime aussi sur place (États-Unis, Canada, Australie…), mais
 // ces pays ne sont proposés qu'une fois que le photographe a fixé un
 // forfait « hors Europe » (shop_shipping_world_cents) — ses frais de port
 // ne sont jamais pris au dépourvu.
 export const EUROPE_COUNTRIES = {
-  BE: ["Belgique", "Belgium"], FR: ["France", "France"], LU: ["Luxembourg", "Luxembourg"],
-  NL: ["Pays-Bas", "Netherlands"], DE: ["Allemagne", "Germany"], CH: ["Suisse", "Switzerland"],
-  AT: ["Autriche", "Austria"], IT: ["Italie", "Italy"], ES: ["Espagne", "Spain"], PT: ["Portugal", "Portugal"],
-  IE: ["Irlande", "Ireland"], GB: ["Royaume-Uni", "United Kingdom"], DK: ["Danemark", "Denmark"],
-  SE: ["Suède", "Sweden"], NO: ["Norvège", "Norway"], FI: ["Finlande", "Finland"], PL: ["Pologne", "Poland"],
-  CZ: ["Tchéquie", "Czechia"], SK: ["Slovaquie", "Slovakia"], SI: ["Slovénie", "Slovenia"],
-  HU: ["Hongrie", "Hungary"], HR: ["Croatie", "Croatia"], GR: ["Grèce", "Greece"], RO: ["Roumanie", "Romania"],
-  BG: ["Bulgarie", "Bulgaria"], EE: ["Estonie", "Estonia"], LV: ["Lettonie", "Latvia"], LT: ["Lituanie", "Lithuania"],
+  BE: ["Belgique", "Belgium", "België"], FR: ["France", "France", "Frankrijk"], LU: ["Luxembourg", "Luxembourg", "Luxemburg"],
+  NL: ["Pays-Bas", "Netherlands", "Nederland"], DE: ["Allemagne", "Germany", "Duitsland"], CH: ["Suisse", "Switzerland", "Zwitserland"],
+  AT: ["Autriche", "Austria", "Oostenrijk"], IT: ["Italie", "Italy", "Italië"], ES: ["Espagne", "Spain", "Spanje"], PT: ["Portugal", "Portugal", "Portugal"],
+  IE: ["Irlande", "Ireland", "Ierland"], GB: ["Royaume-Uni", "United Kingdom", "Verenigd Koninkrijk"], DK: ["Danemark", "Denmark", "Denemarken"],
+  SE: ["Suède", "Sweden", "Zweden"], NO: ["Norvège", "Norway", "Noorwegen"], FI: ["Finlande", "Finland", "Finland"], PL: ["Pologne", "Poland", "Polen"],
+  CZ: ["Tchéquie", "Czechia", "Tsjechië"], SK: ["Slovaquie", "Slovakia", "Slowakije"], SI: ["Slovénie", "Slovenia", "Slovenië"],
+  HU: ["Hongrie", "Hungary", "Hongarije"], HR: ["Croatie", "Croatia", "Kroatië"], GR: ["Grèce", "Greece", "Griekenland"], RO: ["Roumanie", "Romania", "Roemenië"],
+  BG: ["Bulgarie", "Bulgaria", "Bulgarije"], EE: ["Estonie", "Estonia", "Estland"], LV: ["Lettonie", "Latvia", "Letland"], LT: ["Lituanie", "Lithuania", "Litouwen"],
 };
 export const WORLD_COUNTRIES = {
-  US: ["États-Unis", "United States"], CA: ["Canada", "Canada"], AU: ["Australie", "Australia"],
-  NZ: ["Nouvelle-Zélande", "New Zealand"], JP: ["Japon", "Japan"], SG: ["Singapour", "Singapore"],
-  HK: ["Hong Kong", "Hong Kong"], KR: ["Corée du Sud", "South Korea"], AE: ["Émirats arabes unis", "United Arab Emirates"],
+  US: ["États-Unis", "United States", "Verenigde Staten"], CA: ["Canada", "Canada", "Canada"], AU: ["Australie", "Australia", "Australië"],
+  NZ: ["Nouvelle-Zélande", "New Zealand", "Nieuw-Zeeland"], JP: ["Japon", "Japan", "Japan"], SG: ["Singapour", "Singapore", "Singapore"],
+  HK: ["Hong Kong", "Hong Kong", "Hongkong"], KR: ["Corée du Sud", "South Korea", "Zuid-Korea"], AE: ["Émirats arabes unis", "United Arab Emirates", "Verenigde Arabische Emiraten"],
 };
 
 // Tous les pays connus (devis de l'admin, validation d'une adresse).
@@ -82,7 +83,7 @@ export function shippingCentsFor(photographer, countryCode) {
 
 // Pays proposés au client, dans sa langue, par ordre alphabétique.
 export function countriesForClient(photographer, lang) {
-  const index = lang === "en" ? 1 : 0;
+  const index = lang === "nl" ? 2 : lang === "en" ? 1 : 0;
   const zones = worldShippingOpen(photographer) ? { ...EUROPE_COUNTRIES, ...WORLD_COUNTRIES } : EUROPE_COUNTRIES;
   return Object.entries(zones)
     .map(([code, names]) => ({ code, name: names[index], zone: shippingZone(code) }))
@@ -366,4 +367,14 @@ export const ORDER_STATUS_LABELS_EN = {
   shipped: "Shipped",
   cancelled: "Cancelled",
   failed: "Being prepared",
+};
+
+export const ORDER_STATUS_LABELS_NL = {
+  pending_payment: "Wacht op betaling",
+  paid: "Betaald",
+  submitted: "Doorgestuurd naar het labo",
+  in_production: "In productie",
+  shipped: "Verzonden",
+  cancelled: "Geannuleerd",
+  failed: "In voorbereiding",
 };
