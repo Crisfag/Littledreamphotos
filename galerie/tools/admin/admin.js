@@ -4217,13 +4217,79 @@
     badge.setAttribute("aria-label", label);
   }
   function updateFeedbackBadge(data) {
-    var n = (data && data.unread) || 0;
-    setTabCount("ad-tab-feedback", n, L(n + " réponse" + (n > 1 ? "s" : "") + " à lire", n + " repl" + (n > 1 ? "ies" : "y") + " to read",
-        n + (n > 1 ? " antwoorden" : " antwoord") + " te lezen"));
+    var replies = (data && data.unread) || 0;
+    var news = (data && data.news && data.news.unseen) || 0;
+    var n = replies + news;
+    var label = replies && news
+      ? L(replies + " réponse" + (replies > 1 ? "s" : "") + " et " + news + " nouveauté" + (news > 1 ? "s" : ""), replies + " repl" + (replies > 1 ? "ies" : "y") + " and " + news + " new feature" + (news > 1 ? "s" : ""),
+          replies + (replies > 1 ? " antwoorden" : " antwoord") + " en " + news + " nieuwigheid" + (news > 1 ? "en" : ""))
+      : news ? L(news + " nouveauté" + (news > 1 ? "s" : "") + " à découvrir", news + " new feature" + (news > 1 ? "s" : "") + " to discover", news + " nieuwigheid" + (news > 1 ? "en" : "") + " om te ontdekken")
+      : L(replies + " réponse" + (replies > 1 ? "s" : "") + " à lire", replies + " repl" + (replies > 1 ? "ies" : "y") + " to read", replies + (replies > 1 ? " antwoorden" : " antwoord") + " te lezen");
+    setTabCount("ad-tab-feedback", n, label);
   }
   function updateOwnerFeedbackBadge(data) {
     var n = (data && data.counts && data.counts.new) || 0;
     setTabCount("ad-tab-owner", n, n + " suggestion" + (n > 1 ? "s" : "") + " à lire");
+  }
+
+  /* ---------- Nouveautés de la plateforme (en tête de l'onglet Suggestions) ---------- */
+
+  var NEWS_DAYS = 15;
+  var NEWS_MAX = 6; // repliée : les 6 dernières (et toutes celles pas encore vues)
+  var newsShowAll = false;
+  var NEWS_KINDS = {
+    feature: ["Nouveauté", "New", "Nieuw"], improvement: ["Amélioration", "Improvement", "Verbetering"],
+    shortcut: ["Raccourci", "Shortcut", "Snelkoppeling"], fix: ["Correction", "Fix", "Oplossing"],
+  };
+  function newsKind(kind) {
+    var k = NEWS_KINDS[kind] || NEWS_KINDS.feature;
+    return L(k[0], k[1], k[2]);
+  }
+  function newsText(map) {
+    return (map && (map[LANG] || map.fr)) || "";
+  }
+  function newsDay(ts) {
+    var d = new Date(ts * 1000);
+    var sameYear = d.getFullYear() === new Date().getFullYear();
+    return d.toLocaleDateString(locale(), { weekday: "long", day: "numeric", month: "long", year: sameYear ? undefined : "numeric" });
+  }
+
+  function newsSectionHtml(news) {
+    var entries = (news && news.entries) || [];
+    var seenAt = (news && news.seenAt) || 0;
+    var limit = Date.now() / 1000 - NEWS_DAYS * 86400;
+    var recent = entries.filter(function (e, i) { return e.publishedAt >= limit && (i < NEWS_MAX || e.publishedAt > seenAt); });
+    var shown = newsShowAll ? entries : recent;
+    var older = entries.length - recent.length;
+    var days = [];
+    shown.forEach(function (e) {
+      var key = new Date(e.publishedAt * 1000).toDateString();
+      var last = days[days.length - 1];
+      if (last && last.key === key) last.items.push(e);
+      else days.push({ key: key, at: e.publishedAt, items: [e] });
+    });
+    var body = days.length ? days.map(function (d) {
+      return '<div class="ad-news-day"><p class="ad-news-date">' + esc(newsDay(d.at)) + '</p><ul class="ad-news-list">' + d.items.map(function (e) {
+        var credit = e.mine ? L("Votre suggestion, réalisée : merci !", "Your suggestion, done: thank you!", "Jouw suggestie, gerealiseerd: bedankt!")
+          : e.suggestedBy ? L("Suggestion de ", "Suggested by ", "Suggestie van ") + e.suggestedBy : "";
+        return '<li class="ad-news-item ad-news-' + esc(e.kind) + (e.publishedAt > seenAt ? " is-new" : "") + '">' +
+          '<div class="ad-news-head"><span class="ad-news-kind">' + esc(newsKind(e.kind)) + "</span>" +
+          (e.publishedAt > seenAt ? '<span class="ad-badge ad-badge-due">' + L("Nouveau", "New", "Nieuw") + "</span>" : "") + "</div>" +
+          '<p class="ad-news-title">' + esc(newsText(e.title)) + "</p>" +
+          (newsText(e.body) ? '<p class="ad-news-body">' + esc(newsText(e.body)) + "</p>" : "") +
+          (credit || e.link ? '<p class="ad-news-meta">' +
+            (credit ? '<span class="ad-news-credit' + (e.mine ? " is-mine" : "") + '"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.6.5 1 1.2 1 2V16h5.2v-.2c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z"/></svg>' + esc(credit) + "</span>" : "") +
+            (e.link ? '<a class="ad-news-link" href="' + esc(e.link) + '">' + L("Essayer", "Try it", "Uitproberen") + " &rarr;</a>" : "") + "</p>" : "") +
+          "</li>";
+      }).join("") + "</ul></div>";
+    }).join("") : '<p class="ad-hint">' + L("Rien de neuf ces 15 derniers jours.", "Nothing new in the last 15 days.", "Niets nieuws de voorbije 15 dagen.") + "</p>";
+    return '<section class="ad-news" id="ad-news" aria-labelledby="ad-news-h"><div class="ad-section-header"><h3 id="ad-news-h">' + L("Nouveautés", "What's new", "Nieuw") + "</h3>" +
+      '<span class="ad-hint">' + (newsShowAll ? L("Tout l'historique", "Full history", "Volledige geschiedenis") : L("15 derniers jours", "Last 15 days", "Laatste 15 dagen")) + "</span></div>" +
+      '<p class="ad-hint ad-news-lede">' + L("Ce qui a été ajouté ou amélioré sur Holypixx, souvent grâce à vos suggestions.", "What's been added or improved on Holypixx, often thanks to your suggestions.", "Wat er op Holypixx is toegevoegd of verbeterd, vaak dankzij jullie suggesties.") + "</p>" +
+      body +
+      (!newsShowAll && older ? '<button type="button" class="ad-link-btn ad-news-more" id="ad-news-more">' +
+        L("Voir toutes les nouveautés (" + older + " de plus)", "See all updates (" + older + " more)", "Alle nieuwigheden bekijken (" + older + " meer)") + "</button>" : "") +
+      "</section>";
   }
 
   async function renderFeedback(skipHash) {
@@ -4238,8 +4304,8 @@
       return;
     }
     paintFeedback(data, data.unread > 0);
-    // Ouvrir l'onglet vaut lecture des réponses.
-    if (data.unread) api("POST", "/feedback/seen", {}).then(updateFeedbackBadge).catch(function () {});
+    // Ouvrir l'onglet vaut lecture des réponses et des nouveautés.
+    if (data.unread || (data.news && data.news.unseen)) api("POST", "/feedback/seen", {}).then(updateFeedbackBadge).catch(function () {});
   }
 
   function paintFeedback(data, highlightReplies) {
@@ -4248,6 +4314,7 @@
       '<header class="ad-detail-header"><div><h2>' + L("Suggestions", "Suggestions") + "</h2>" +
       '<p class="ad-hint">' + L("Une option qui vous manque, une idée, un souci ? Dites-le-nous : chaque demande est lue, et la réponse arrive ici et par e-mail. Holypixx grandit avec vos besoins réels.",
         "A missing option, an idea, a problem? Tell us: every request is read, and the answer comes here and by email. Holypixx grows with your real needs.") + "</p></div></header>" +
+      newsSectionHtml(data.news) +
       '<section><div class="ad-section-header"><h3>' + L("Nouvelle demande", "New request") + "</h3></div>" +
       '<form id="ad-fb-form" class="ad-fb-form" novalidate>' +
       '<div class="ad-bk-picks" role="radiogroup" aria-label="' + L("Type de demande", "Type of request") + '">' + FEEDBACK_KINDS.map(function (k, i) {
@@ -4274,6 +4341,12 @@
         : '<p class="ad-hint">' + L("Vous n'avez encore rien envoyé : la première idée est la bienvenue !", "Nothing sent yet: your first idea is welcome!") + "</p>") +
       "</section>";
 
+    var more = document.getElementById("ad-news-more");
+    if (more) more.addEventListener("click", function () {
+      newsShowAll = true;
+      var box = document.getElementById("ad-news");
+      box.outerHTML = newsSectionHtml(data.news);
+    });
     var form = document.getElementById("ad-fb-form");
     form.addEventListener("submit", async function (e) {
       e.preventDefault();
@@ -4319,7 +4392,8 @@
                 return '<option value="' + k + '"' + (k === it.status ? " selected" : "") + ">" + esc(FEEDBACK_STATUS[k][0]) + "</option>";
               }).join("") + "</select></label>" +
               '<label class="ad-field"><span>Réponse <em>' + (it.repliedAt ? "(envoyée le " + esc(shortDate(it.repliedAt)) + ")" : "(facultatif : envoyée par e-mail)") + '</em></span><textarea name="reply" rows="3" maxlength="4000">' + esc(it.reply) + "</textarea></label>" +
-              '<button type="submit" class="ad-btn ad-btn-small">Enregistrer</button></form></li>';
+              '<button type="submit" class="ad-btn ad-btn-small">Enregistrer</button>' +
+              '<button type="button" class="ad-btn ad-btn-small ad-btn-ghost" data-fb-announce="' + esc(it.id) + '">Annoncer dans les nouveautés</button></form></li>';
           }).join("") + "</ul>"
         : '<p class="ad-hint">Rien ici pour l\'instant.</p>') +
       "</section>";
@@ -4340,6 +4414,12 @@
         repaint(data);
       });
     });
+    box.querySelectorAll("[data-fb-announce]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var it = data.items.filter(function (x) { return x.id === btn.getAttribute("data-fb-announce"); })[0];
+        if (it) prefillNews({ title: { fr: it.title }, body: { fr: it.body ? it.body.slice(0, 400) : "" }, kind: it.kind === "problem" ? "fix" : it.kind === "improvement" ? "improvement" : "feature", feedbackId: it.id, credit: true });
+      });
+    });
     box.querySelectorAll(".ad-fb-answer").forEach(function (form) {
       form.addEventListener("submit", async function (e) {
         e.preventDefault();
@@ -4357,6 +4437,103 @@
     });
   }
 
+  // Nouveautés : publier, modifier, retirer (onglet Suggestions des photographes).
+  var NEWS_LINKS = [["", "Aucun"], ["#/", "Galeries"], ["#/planning", "Planning"], ["#/clients", "Clients"], ["#/relances", "Relances"], ["#/reservations", "Réservations"],
+    ["#/contrats", "Devis & contrats"], ["#/ventes", "Ventes"], ["#/statistiques", "Statistiques"], ["#/facturation", "Facturation"], ["#/boutique", "Boutique"],
+    ["#/portfolio", "Portfolio"], ["#/bons-cadeaux", "Bons cadeaux"], ["#/abonnement", "Abonnement"], ["#/parametres", "Paramètres"], ["#/suggestions", "Suggestions"]];
+  var newsEditing = "";
+
+  function ownerNewsHtml(data, feedback) {
+    if (!data) return "";
+    var today = new Date().toISOString().slice(0, 10);
+    var fbOptions = ((feedback && feedback.items) || []).map(function (it) {
+      return '<option value="' + esc(it.id) + '">' + esc(shortDate(it.createdAt) + " · " + it.photographer.name + " · " + it.title.slice(0, 60)) + "</option>";
+    }).join("");
+    var langFields = [["fr", "Français"], ["en", "English"], ["nl", "Nederlands"]].map(function (l, i) {
+      return '<details class="ad-news-lang"' + (i === 0 ? " open" : "") + "><summary>" + esc(l[1]) + (i ? " <em>(facultatif : sinon le français)</em>" : "") + "</summary>" +
+        '<label class="ad-field"><span>Titre</span><input name="title_' + l[0] + '" maxlength="120"' + (i === 0 ? " required" : "") + " /></label>" +
+        '<label class="ad-field"><span>Description</span><textarea name="body_' + l[0] + '" rows="3" maxlength="2000"></textarea></label></details>';
+    }).join("");
+    return '<section id="ad-news-owner"><div class="ad-section-header"><h3>Nouveautés de la plateforme (' + data.entries.length + ")</h3></div>" +
+      '<p class="ad-hint">Affichées en tête de l\'onglet Suggestions de chaque photographe, avec une pastille tant qu\'il ne les a pas vues. Reliez une suggestion réalisée : son auteur voit « Votre suggestion, réalisée », et les autres « Suggestion de … » si vous le cochez.</p>' +
+      '<form id="ad-news-form" class="ad-news-form" novalidate><input type="hidden" name="id" />' +
+      '<div class="ad-ml-row"><label class="ad-field"><span>Type</span><select name="kind"><option value="feature">Nouveauté</option><option value="improvement">Amélioration</option><option value="shortcut">Raccourci</option><option value="fix">Correction</option></select></label>' +
+      '<label class="ad-field"><span>Date</span><input type="date" name="date" value="' + today + '" /></label>' +
+      '<label class="ad-field"><span>Bouton « Essayer »</span><select name="link">' + NEWS_LINKS.map(function (x) { return '<option value="' + x[0] + '">' + esc(x[1]) + "</option>"; }).join("") + "</select></label></div>" +
+      langFields +
+      '<div class="ad-ml-row"><label class="ad-field ad-ml-wide"><span>Suggestion réalisée <em>(facultatif)</em></span><select name="feedbackId"><option value="">Aucune</option>' + fbOptions + "</select></label>" +
+      '<label class="ad-sc-toggle"><input type="checkbox" name="credit" checked /> Nommer son auteur</label></div>' +
+      '<div class="ad-ml-actions"><button type="submit" class="ad-btn ad-btn-primary" id="ad-news-submit">Publier</button><button type="button" class="ad-link-btn" id="ad-news-cancel" hidden>Annuler la modification</button></div></form>' +
+      (data.entries.length ? '<ul class="ad-news-owner-list">' + data.entries.map(function (e) {
+        return '<li data-news-id="' + esc(e.id) + '"><span class="ad-hint">' + esc(shortDate(e.publishedAt)) + " · " + esc(NEWS_KINDS[e.kind] ? NEWS_KINDS[e.kind][0] : e.kind) + (e.suggestedBy ? " · suggestion de " + esc(e.suggestedBy) : "") + "</span>" +
+          "<strong>" + esc(e.title.fr) + "</strong>" + (!e.title.en || !e.title.nl ? ' <span class="ad-badge">' + (!e.title.en && !e.title.nl ? "FR seulement" : !e.title.en ? "sans EN" : "sans NL") + "</span>" : "") +
+          '<span class="ad-news-owner-actions"><button type="button" class="ad-btn ad-btn-small" data-news-edit>Modifier</button><button type="button" class="ad-btn ad-btn-small ad-btn-ghost" data-news-delete>Retirer</button></span></li>';
+      }).join("") + "</ul>" : "") + "</section>";
+  }
+
+  function prefillNews(e) {
+    var form = document.getElementById("ad-news-form");
+    if (!form) return;
+    form.reset();
+    form.elements.id.value = e.id || "";
+    form.elements.kind.value = e.kind || "feature";
+    if (e.publishedAt) form.elements.date.value = new Date(e.publishedAt * 1000).toISOString().slice(0, 10);
+    form.elements.link.value = e.link || "";
+    ["fr", "en", "nl"].forEach(function (l) {
+      form.elements["title_" + l].value = (e.title && e.title[l]) || "";
+      form.elements["body_" + l].value = (e.body && e.body[l]) || "";
+    });
+    form.elements.feedbackId.value = e.feedbackId || "";
+    form.elements.credit.checked = e.credit !== false;
+    newsEditing = e.id || "";
+    document.getElementById("ad-news-submit").textContent = e.id ? "Enregistrer la modification" : "Publier";
+    document.getElementById("ad-news-cancel").hidden = !e.id;
+    form.scrollIntoView({ behavior: "smooth", block: "start" });
+    form.elements.title_fr.focus({ preventScroll: true });
+  }
+
+  function bindOwnerNews(data, feedback) {
+    var box = document.getElementById("ad-news-owner");
+    if (!box) return;
+    var form = document.getElementById("ad-news-form");
+    var repaint = function (next) {
+      data = next;
+      box.outerHTML = ownerNewsHtml(next, feedback);
+      bindOwnerNews(next, feedback);
+    };
+    form.addEventListener("submit", async function (ev) {
+      ev.preventDefault();
+      var f = form.elements;
+      var payload = {
+        kind: f.kind.value, date: f.date.value, link: f.link.value, feedbackId: f.feedbackId.value, credit: f.credit.checked,
+        title: { fr: f.title_fr.value, en: f.title_en.value, nl: f.title_nl.value },
+        body: { fr: f.body_fr.value, en: f.body_en.value, nl: f.body_nl.value },
+      };
+      if (!payload.title.fr.trim()) { toast("Donnez un titre en français.", true); f.title_fr.focus(); return; }
+      try {
+        var next = await api("POST", "/owner/changelog" + (f.id.value ? "/" + encodeURIComponent(f.id.value) : ""), payload);
+        toast(f.id.value ? "Nouveauté modifiée." : "Nouveauté publiée : elle apparaît dans l'onglet Suggestions de chaque photographe.");
+        newsEditing = "";
+        repaint(next);
+      } catch (err) { toast(err.message, true); }
+    });
+    document.getElementById("ad-news-cancel").addEventListener("click", function () { prefillNews({}); });
+    box.querySelectorAll("[data-news-edit]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var id = b.closest("[data-news-id]").getAttribute("data-news-id");
+        prefillNews(data.entries.filter(function (e) { return e.id === id; })[0]);
+      });
+    });
+    box.querySelectorAll("[data-news-delete]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var id = b.closest("[data-news-id]").getAttribute("data-news-id");
+        confirmAction("Retirer cette nouveauté de l'onglet Suggestions de tous les photographes ?", async function () {
+          try { repaint(await api("DELETE", "/owner/changelog/" + encodeURIComponent(id))); toast("Nouveauté retirée."); } catch (err) { toast(err.message, true); }
+        });
+      });
+    });
+  }
+
   async function renderOwner(skipHash) {
     if (!skipHash && location.hash !== "#/proprietaire") history.pushState(null, "", "#/proprietaire");
     setActiveTab("owner");
@@ -4365,6 +4542,8 @@
     var statsData, photographersData, waitlistData, newsletterData, funnelData, feedbackData;
     // Les suggestions se chargent en même temps que le reste.
     var feedbackPending = api("GET", "/owner/feedback").catch(function () { return null; });
+    var changelogPending = api("GET", "/owner/changelog").catch(function () { return null; });
+    var changelogData;
     try {
       statsData = await api("GET", "/owner/stats");
       photographersData = await api("GET", "/owner/photographers");
@@ -4372,6 +4551,7 @@
       newsletterData = await api("GET", "/owner/newsletter").catch(function () { return null; });
       funnelData = await api("GET", "/owner/funnel?days=" + funnelDays).catch(function () { return null; });
       feedbackData = await feedbackPending;
+      changelogData = await changelogPending;
     } catch (err) {
       toast(err.message, true);
       return renderList();
@@ -4385,6 +4565,7 @@
 
       ownerStatsHtml(statsData) +
       ownerFeedbackHtml(feedbackData) +
+      ownerNewsHtml(changelogData, feedbackData) +
       stripeConfigHtml(statsData.stripe) +
 
       funnelSectionHtml(funnelData) +
@@ -4421,6 +4602,7 @@
     wireNewsletter(newsletterData);
     wireFunnel();
     if (feedbackData) { bindOwnerFeedback(feedbackData); updateOwnerFeedbackBadge(feedbackData); }
+    if (changelogData) bindOwnerNews(changelogData, feedbackData);
     document.getElementById("ad-run-reminders").addEventListener("click", async function () {
       var btn = this;
       var out = document.getElementById("ad-run-reminders-result");

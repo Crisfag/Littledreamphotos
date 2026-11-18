@@ -12,6 +12,7 @@ import { waitlistForOwner, removeFromWaitlist } from "./waitlist.js";
 import { newsletterForOwner, removeFromNewsletter } from "./newsletter.js";
 import { funnelForOwner } from "./funnel.js";
 import { feedbackForOwner, updateFeedbackAsOwner } from "./feedback.js";
+import { handleChangelogOwner } from "./changelog.js";
 import { json, fail } from "./http.js";
 import { authenticatePhotographer } from "./authPhotographer.js";
 import { supplementFor } from "./admin.js";
@@ -241,6 +242,12 @@ export async function handleOwner(request, env, path) {
       return json(await removeFromNewsletter(env, body?.email));
     }
     return fail(404, "Route inconnue");
+  }
+  // Nouveautés de la plateforme (onglet Suggestions des photographes).
+  if (action === "changelog") {
+    const owner = await requireOwner(env, photographerId);
+    if (!owner) return fail(403, "Accès réservé");
+    return handleChangelogOwner(request, env, parts.slice(3));
   }
   // Suggestions des photographes : toutes, statut et réponse (feedback.js).
   if (action === "feedback") {
