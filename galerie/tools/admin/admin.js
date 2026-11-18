@@ -10184,7 +10184,7 @@
   /* ---------- Clients : fiches, dates à retenir, relances ---------- */
 
   // filter : all | upcoming | dates | prospects ; tag : filtre par tag (vide : aucun).
-  var clientsState = { data: null, query: "", filter: "all", tag: "", creating: false };
+  var clientsState = { data: null, query: "", filter: "all", tag: "", creating: false, detailTab: "overview", detailKey: "" };
   var CL_DATE_KINDS = [
     ["baby", "Suivi bébé (3 mois, 1 an…)", "Prénom"],
     ["birthday", "Naissance d'un enfant", "Prénom"],
@@ -10315,7 +10315,7 @@
   function clMatches(c, query) {
     if (!query) return true;
     var q = query.toLowerCase();
-    if ((c.name || "").toLowerCase().indexOf(q) !== -1 || c.email.indexOf(q) !== -1) return true;
+    if ((c.name || "").toLowerCase().indexOf(q) !== -1 || (c.email || "").indexOf(q) !== -1) return true;
     // Numéro tapé à la belge (0470…) ou à l'international (+32 470…) : on
     // compare les chiffres, sans le 0 initial ni l'indicatif.
     var digits = q.replace(/\D/g, "").replace(/^0+/, "");
@@ -10338,12 +10338,13 @@
   function clRowsHtml(list) {
     if (!list.length) return '<tr><td colspan="5" class="ad-cl-none">Aucun client ne correspond à cette recherche.</td></tr>';
     return list.map(function (c) {
-      return '<tr class="ad-cl-row" tabindex="0" data-cl-email="' + esc(c.email) + '">' +
+      return '<tr class="ad-cl-row" tabindex="0" data-cl-email="' + esc(c.key || c.email) + '">' +
         '<td><div class="ad-cl-who">' + clAvatar(c.name) + '<div><span class="ad-acc-name">' + esc(c.name) +
         (c.prospect ? ' <span class="ad-badge ad-badge-soon">Prospect</span>' : "") + "</span>" +
-        '<span class="ad-acc-sub">' + esc(c.email) + "</span>" + (c.tags && c.tags.length ? '<span class="ad-cl-tags">' + clTagsHtml(c.tags) + "</span>" : "") + "</div></div></td>" +
+        '<span class="ad-acc-sub">' + (c.email ? esc(c.email) : "Sans adresse e-mail") + "</span>" + (c.tags && c.tags.length ? '<span class="ad-cl-tags">' + clTagsHtml(c.tags) + "</span>" : "") + "</div></div></td>" +
         '<td class="ad-num">' + (c.sessions || "—") + "</td>" +
-        '<td class="ad-num">' + (c.paidCents ? formatEuros(c.paidCents) : "—") + "</td>" +
+        '<td class="ad-num">' + (c.paidCents ? formatEuros(c.paidCents) : "—") +
+        (c.dueCents ? '<span class="ad-cl-due-mini">' + esc(formatEuros(c.dueCents)) + " à régler</span>" : "") + "</td>" +
         "<td>" + esc(c.upcomingSessionAt ? "Séance " + clAgo(c.upcomingSessionAt).replace("dans", "dans") : clAgo(c.lastAt)) + "</td>" +
         "<td>" + (c.nextDate ? '<span class="ad-cl-date">' + esc(c.nextDate.next.title) + "</span> " + clWhenChip(c.nextDate.next) : '<span class="ad-hint">—</span>') + "</td></tr>";
     }).join("");
@@ -10752,32 +10753,155 @@
     paintClientDetail(data);
   }
 
+  var CL_METHODS = { card: "carte", cash: "espèces", transfer: "virement" };
+  var CL_ORDER_STATUS = {
+    pending_payment: "En attente de paiement", paid: "Payée", submitted: "Envoyée au labo", in_production: "En production",
+    shipped: "Expédiée", cancelled: "Annulée", failed: "À renvoyer au labo",
+  };
+  var CL_TABS = [["overview", "Résumé"], ["sessions", "Séances"], ["billing", "Factures"], ["paid", "Règlements"], ["history", "Historique"]];
+
+  // « 18 nov. 2026 » : date courte des tableaux de la fiche.
+  function clShort(ts) {
+    return ts ? new Date(ts * 1000).toLocaleDateString("fr-BE", { day: "numeric", month: "short", year: "numeric", timeZone: "Europe/Brussels" }) : "—";
+  }
+
+  function clSessionTypeLabel(key) {
+    var t = SESSION_TYPES.filter(function (x) { return x[0] === key; })[0];
+    return t ? t[1] : "";
+  }
+
+  // Ce qui reste à régler : suppléments non payés, règlements annoncés en
+  // espèces ou par virement, factures ouvertes.
+  function clDueHtml(due) {
+    if (!due.length) return "";
+    return '<section class="ad-cl-due"><div class="ad-section-header"><h3>À régler</h3><span class="ad-cl-due-total">' + esc(formatEuros(due.reduce(function (n, d) { return n + d.amountCents; }, 0))) + "</span></div>" +
+      '<ul class="ad-cl-lines">' + due.map(function (d) {
+        var what = d.type === "supplement" ? d.count + " photo" + (d.count > 1 ? "s" : "") + " en supplément · " + '<a href="#/g/' + encodeURIComponent(d.slug) + '">' + esc(d.title) + "</a>"
+          : d.type === "awaiting" ? esc(d.title) + ' <span class="ad-hint">· annoncé en ' + esc(CL_METHODS[d.method] || d.method) + ", à confirmer à réception</span>"
+          : '<a href="#/facturation">' + esc(d.title) + "</a>" + (d.overdue ? ' <span class="ad-badge ad-badge-expired">En retard</span>' : "");
+        return '<li><span class="ad-cl-line-main">' + what + "</span>" + '<span class="ad-cl-line-amount">' + esc(formatEuros(d.amountCents)) + "</span></li>";
+      }).join("") + "</ul></section>";
+  }
+
+  function clSessionsHtml(sessions, limit) {
+    if (!sessions.length) return '<p class="ad-hint">Aucune séance pour l\'instant : chaque galerie et chaque réservation confirmée de ce client apparaîtra ici.</p>';
+    var list = limit ? sessions.slice(0, limit) : sessions;
+    return '<ul class="ad-cl-sessions">' + list.map(function (x) {
+      var type = x.sessionType ? clSessionTypeLabel(x.sessionType) : "";
+      if (x.type === "booking") {
+        return '<li class="ad-cl-session"><span class="ad-cl-session-date">' + esc(clShort(x.at)) + "</span>" +
+          '<div class="ad-cl-session-main"><strong>' + esc(x.title || "Séance") + "</strong>" +
+          '<span class="ad-hint">Réservation' + (x.depositCents ? " · acompte " + esc(formatEuros(x.depositCents)) + " réglé" : "") + "</span></div>" +
+          (x.upcoming ? '<span class="ad-badge ad-badge-soon">À venir</span>' : '<span class="ad-badge">Faite</span>') + "</li>";
+      }
+      var state = x.dueCents ? '<span class="ad-badge ad-badge-soon">' + esc(formatEuros(x.dueCents)) + " à régler</span>"
+        : x.deliveryOpen ? '<span class="ad-badge ad-badge-validated">Livrée en HD</span>'
+        : x.selectionDoneAt ? '<span class="ad-badge ad-badge-validated">Sélection validée</span>'
+        : x.expired ? '<span class="ad-badge ad-badge-expired">Expirée</span>'
+        : '<span class="ad-badge">En ligne</span>';
+      return '<li class="ad-cl-session"><span class="ad-cl-session-date">' + esc(clShort(x.at)) + "</span>" +
+        '<div class="ad-cl-session-main"><a href="#/g/' + encodeURIComponent(x.slug) + '"><strong>' + esc(x.title) + "</strong></a>" +
+        '<span class="ad-hint">' + esc([type, x.photos + " photo" + (x.photos > 1 ? "s" : ""), x.selected ? x.selected + " coup" + (x.selected > 1 ? "s" : "") + " de cœur" : ""].filter(Boolean).join(" · ")) +
+        (x.byName ? ' · <span title="Galerie créée sans e-mail, rattachée à ce client par son nom">rattachée par le nom</span>' : "") + "</span></div>" + state + "</li>";
+    }).join("") + "</ul>" + (limit && sessions.length > limit ? '<button type="button" class="ad-link-btn" data-cl-tab="sessions">Voir les ' + sessions.length + " séances</button>" : "");
+  }
+
+  function clBillingHtml(billing) {
+    if (!billing.length) return '<p class="ad-hint">Aucune facture pour l\'instant. Les factures des suppléments et des tirages réglés dans ses galeries arrivent ici toutes seules, comme les factures que vous lui faites depuis Facturation.</p>';
+    return '<div class="ad-table-wrap"><table class="ad-table ad-cl-ledger"><thead><tr><th>Date</th><th>N°</th><th>Objet</th><th class="ad-num">Montant</th><th>Statut</th><th></th></tr></thead><tbody>' +
+      billing.map(function (f) {
+        var pdf = f.source === "gallery" ? "/local/invoices/" + encodeURIComponent(f.id) : "/local/client-invoices/" + encodeURIComponent(f.id) + "/pdf";
+        var status = f.kind === "credit" ? '<span class="ad-badge ad-badge-expired">Note de crédit</span>'
+          : f.status === "paid" ? '<span class="ad-badge ad-badge-validated">Réglée</span>'
+          : f.status === "credited" ? '<span class="ad-badge ad-badge-expired">Annulée</span>'
+          : f.status === "overdue" ? '<span class="ad-badge ad-badge-expired">En retard</span>'
+          : f.paidCents ? '<span class="ad-badge ad-badge-soon">' + esc(formatEuros(f.totalCents - f.paidCents)) + " à régler</span>"
+          : '<span class="ad-badge ad-badge-soon">À régler</span>';
+        return "<tr><td>" + esc(clShort(f.at)) + "</td><td>" + esc(f.number || "—") + "</td><td>" + esc(f.title || "") +
+          (f.source === "gallery" ? ' <span class="ad-hint">· automatique</span>' : "") + (f.byName ? ' <span class="ad-hint">· rattachée par le nom</span>' : "") + "</td>" +
+          '<td class="ad-num">' + esc(formatEuros(f.totalCents)) + "</td><td>" + status + "</td>" +
+          '<td><a class="ad-btn ad-btn-small" href="' + pdf + '" target="_blank" rel="noopener">PDF</a></td></tr>';
+      }).join("") + "</tbody></table></div>";
+  }
+
+  function clPaidHtml(paid, totals) {
+    if (!paid.length) return '<p class="ad-hint">Aucun règlement reçu de ce client pour l\'instant.</p>';
+    var parts = [];
+    if (totals.supplementsCents) parts.push("suppléments " + formatEuros(totals.supplementsCents));
+    if (totals.printsCents) parts.push("tirages " + formatEuros(totals.printsCents));
+    if (totals.depositsCents) parts.push("acomptes " + formatEuros(totals.depositsCents));
+    var label = { supplement: "Suppléments", print: "Tirages", deposit: "Acompte de réservation", contract: "Acompte du contrat", gift: "Bon cadeau", invoice: "Facture" };
+    return (parts.length ? '<p class="ad-hint">Dont ' + esc(parts.join(" · ")) + ".</p>" : "") +
+      '<div class="ad-table-wrap"><table class="ad-table ad-cl-ledger"><thead><tr><th>Date</th><th>Quoi</th><th>Détail</th><th>Moyen</th><th class="ad-num">Montant</th></tr></thead><tbody>' +
+      paid.map(function (x) {
+        var detail = x.type === "supplement" ? (x.count ? x.count + " photo" + (x.count > 1 ? "s" : "") + " · " : "") + (x.slug ? '<a href="#/g/' + encodeURIComponent(x.slug) + '">' + esc(x.title) + "</a>" : esc(x.title || ""))
+          : x.type === "print" ? (x.count ? x.count + " tirage" + (x.count > 1 ? "s" : "") + " · " : "") + (x.slug ? '<a href="#/g/' + encodeURIComponent(x.slug) + '">' + esc(x.title) + "</a>" : esc(x.title || "")) +
+            (x.orderStatus ? ' <span class="ad-hint">· ' + esc(CL_ORDER_STATUS[x.orderStatus] || x.orderStatus) + "</span>" : "") +
+            (x.trackingUrl ? ' <a class="ad-hint" href="' + esc(x.trackingUrl) + '" target="_blank" rel="noopener">suivi</a>' : "")
+          : x.type === "gift" ? esc(x.title || "") + (x.toName ? ' <span class="ad-hint">· pour ' + esc(x.toName) + "</span>" : "")
+          : esc(x.title || "") + (x.number ? ' <span class="ad-hint">n° ' + esc(x.number) + "</span>" : "");
+        return "<tr><td>" + esc(clShort(x.at)) + "</td><td>" + esc(label[x.type] || "") + "</td><td>" + detail + "</td><td>" + esc(CL_METHODS[x.method] || "—") + "</td>" +
+          '<td class="ad-num">' + esc(formatEuros(x.amountCents)) + "</td></tr>";
+      }).join("") + "</tbody></table></div>";
+  }
+
+  function clLeftHtml(data) {
+    var tab = clientsState.detailTab;
+    var count = { sessions: data.sessions.length, billing: data.billing.length, paid: data.paid.length, history: data.history.length };
+    var bar = '<div class="ad-seg ad-cl-tabs" role="tablist" aria-label="Sections de la fiche">' + CL_TABS.map(function (t) {
+      return '<button type="button" class="ad-seg-btn" role="tab" data-cl-tab="' + t[0] + '" aria-selected="' + (tab === t[0]) + '" aria-pressed="' + (tab === t[0]) + '">' +
+        esc(t[1]) + (count[t[0]] ? ' <span class="ad-cl-tab-count">' + count[t[0]] + "</span>" : "") + "</button>";
+    }).join("") + "</div>";
+    var body;
+    if (tab === "sessions") body = '<section><div class="ad-section-header"><h3>Séances</h3></div>' + clSessionsHtml(data.sessions) + "</section>";
+    else if (tab === "billing") body = clDueHtml(data.due) + '<section><div class="ad-section-header"><h3>Factures</h3></div>' + clBillingHtml(data.billing) + "</section>";
+    else if (tab === "paid") body = '<section><div class="ad-section-header"><h3>Règlements</h3><span class="ad-cl-due-total ad-cl-paid-total">' + esc(formatEuros(data.totals.paidCents)) + "</span></div>" + clPaidHtml(data.paid, data.totals) + "</section>";
+    else if (tab === "history") body = '<section><div class="ad-section-header"><h3>Historique</h3></div>' + clHistoryHtml(data.history) + "</section>";
+    else {
+      body = clDueHtml(data.due) +
+        '<section><div class="ad-section-header"><h3>Dernières séances</h3></div>' + clSessionsHtml(data.sessions, 3) + "</section>" +
+        (data.client.noEmail ? "" : '<section><div class="ad-section-header"><h3>Dates à retenir</h3></div>' + clDatesHtml(data.dates, data.client) + "</section>");
+    }
+    return bar + '<div class="ad-cl-tabbody" role="tabpanel">' + body + "</div>";
+  }
+
+  // Fiche sans e-mail : galeries ou factures créées avec un nom seul.
+  function clAttachHtml(c) {
+    return '<section class="ad-cl-attach"><div class="ad-section-header"><h3>Son adresse e-mail</h3></div>' +
+      '<p class="ad-hint">Cette fiche réunit ce qui a été créé au nom de « ' + esc(c.name) + ' » sans adresse e-mail. Ajoutez-la : ses galeries et ses factures la reçoivent, et vous retrouvez notes, tags, dates à retenir et relances.</p>' +
+      '<form id="ad-cl-attach" novalidate><label class="ad-field"><span>E-mail</span><input type="email" name="email" maxlength="200" required autocomplete="off" placeholder="client@exemple.be" /></label>' +
+      '<button type="submit" class="ad-btn ad-btn-primary">Rattacher</button></form></section>';
+  }
+
   function paintClientDetail(data) {
     var c = data.client;
+    var key = c.key || c.email;
+    if (clientsState.detailKey !== key) { clientsState.detailKey = key; clientsState.detailTab = "overview"; }
+    var t = data.totals;
     el.view.innerHTML =
       '<button type="button" class="ad-back" id="ad-cl-back">&larr; Tous les clients</button>' +
       '<header class="ad-cl-head">' + clAvatar(c.name, true) +
       '<div class="ad-cl-head-main"><h2>' + esc(c.name) + "</h2>" + (c.prospect ? '<span class="ad-badge ad-badge-soon ad-cl-prospect">Prospect</span>' : "") +
-      '<p class="ad-cl-contact"><span>' + esc(c.email) + '</span><button type="button" class="ad-link-btn" id="ad-cl-copy">Copier</button>' +
-      (c.phone ? '<span aria-hidden="true">·</span><a href="tel:' + esc(c.phone.replace(/\s/g, "")) + '">' + esc(c.phone) + "</a>" : "") + "</p></div>" +
+      (c.noEmail
+        ? '<p class="ad-cl-contact"><span class="ad-hint">Sans adresse e-mail</span></p>'
+        : '<p class="ad-cl-contact"><span>' + esc(c.email) + '</span><button type="button" class="ad-link-btn" id="ad-cl-copy">Copier</button>' +
+          (c.phone ? '<span aria-hidden="true">·</span><a href="tel:' + esc(c.phone.replace(/\s/g, "")) + '">' + esc(c.phone) + "</a>" : "") + "</p>") + "</div>" +
       '<div class="ad-cl-head-actions">' +
-      '<a class="ad-btn" href="' + esc(data.contactMailto) + '">Écrire</a>' +
+      (c.noEmail ? "" : '<a class="ad-btn" href="' + esc(data.contactMailto) + '">Écrire</a>') +
       '<button type="button" class="ad-btn" id="ad-cl-gallery">Nouvelle galerie</button>' +
       '<button type="button" class="ad-btn" id="ad-cl-invoice">Nouvelle facture</button>' +
       '<button type="button" class="ad-btn ad-btn-primary" id="ad-cl-quote">Nouveau devis</button></div></header>' +
       '<div class="ad-stats">' +
       salesStatHtml("Client depuis", c.firstAt ? new Date(c.firstAt * 1000).toLocaleDateString("fr-BE", { month: "long", year: "numeric" }) : "—", c.firstAt ? clAgo(c.firstAt) : "") +
-      salesStatHtml("Séances", String(c.sessions), c.galleries ? c.galleries + " galerie" + (c.galleries > 1 ? "s" : "") : "") +
-      salesStatHtml("Encaissé", c.paidCents ? formatEuros(c.paidCents) : "—", "Suppléments, tirages, acomptes, factures et bons") +
-      salesStatHtml("Prochaine séance", c.upcomingSessionAt ? new Date(c.upcomingSessionAt * 1000).toLocaleDateString("fr-BE", { day: "numeric", month: "short", timeZone: "Europe/Brussels" }) : "—",
-        c.upcomingSessionAt ? clAgo(c.upcomingSessionAt) : (c.lastSessionAt ? "Dernière " + clAgo(c.lastSessionAt) : "")) +
+      salesStatHtml("Séances", String(c.sessions), c.upcomingSessionAt ? "Prochaine " + clAgo(c.upcomingSessionAt) : (c.lastSessionAt ? "Dernière " + clAgo(c.lastSessionAt) : "")) +
+      salesStatHtml("Encaissé", c.paidCents ? formatEuros(c.paidCents) : "—", t.averageCents ? formatEuros(t.averageCents) + " en moyenne par séance" : "Suppléments, tirages, acomptes, factures et bons") +
+      salesStatHtml("Reste à régler", t.dueCents ? formatEuros(t.dueCents) : "—", t.dueCents ? data.due.length + " élément" + (data.due.length > 1 ? "s" : "") + " · onglet Factures" : "Tout est réglé") +
       "</div>" +
+      (t.byName ? '<p class="ad-hint ad-cl-byname">' + t.byName + " élément" + (t.byName > 1 ? "s" : "") + " créé" + (t.byName > 1 ? "s" : "") + " sans e-mail, rattaché" + (t.byName > 1 ? "s" : "") + " à ce client par son nom. Ce n'est pas lui ? Ajoutez la bonne adresse sur la galerie ou la facture.</p>" : "") +
       '<div class="ad-cl-grid">' +
+      '<div class="ad-cl-col" id="ad-cl-left">' + clLeftHtml(data) + "</div>" +
       '<div class="ad-cl-col">' +
-      '<section><div class="ad-section-header"><h3>Dates à retenir</h3></div>' + clDatesHtml(data.dates, c) + "</section>" +
-      '<section><div class="ad-section-header"><h3>Historique</h3></div>' + clHistoryHtml(data.history) + "</section>" +
-      "</div>" +
-      '<div class="ad-cl-col">' +
+      (c.noEmail ? clAttachHtml(c) :
       '<section><div class="ad-section-header"><h3>Tags</h3></div>' +
       '<div class="ad-cl-tags ad-cl-tags-edit" id="ad-cl-tags">' + (c.tags || []).map(function (t) {
         return '<span class="ad-cl-tag">' + esc(t) + '<button type="button" data-cl-untag="' + esc(t) + '" aria-label="Retirer le tag ' + esc(t) + '">×</button></span>';
@@ -10795,16 +10919,40 @@
       '<button type="submit" class="ad-btn">Enregistrer</button></form>' +
       (c.recordId ? '<details class="ad-danger-zone"><summary>Effacer mes notes sur ce client</summary><p class="ad-hint">Retire le téléphone, les notes et les dates à retenir. Ses galeries, réservations et contrats restent.</p>' +
         '<button type="button" class="ad-btn ad-btn-danger ad-btn-small" id="ad-cl-erase">Effacer</button></details>' : "") +
-      "</section></div></div>";
+      "</section>") + "</div></div>";
     bindClientDetail(data);
   }
 
   function bindClientDetail(data) {
     var c = data.client;
     var refresh = function (fresh) { paintClientDetail(fresh); };
-    document.getElementById("ad-cl-back").addEventListener("click", function () { renderClients(); });
-    document.getElementById("ad-cl-copy").addEventListener("click", function () {
+    var byId = function (id) { return document.getElementById(id); };
+    byId("ad-cl-back").addEventListener("click", function () { renderClients(); });
+    if (byId("ad-cl-copy")) byId("ad-cl-copy").addEventListener("click", function () {
       navigator.clipboard.writeText(c.email).then(function () { toast("Adresse copiée."); }).catch(function () { toast("Impossible de copier l'adresse.", true); });
+    });
+    // Onglets de la fiche (et « Voir les N séances »).
+    el.view.querySelectorAll("[data-cl-tab]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        clientsState.detailTab = btn.getAttribute("data-cl-tab");
+        paintClientDetail(data);
+        var tabs = el.view.querySelector(".ad-cl-tabs");
+        var active = tabs && tabs.querySelector('[aria-selected="true"]');
+        if (active) active.focus();
+      });
+    });
+    // Fiche sans e-mail : rattacher une adresse.
+    if (byId("ad-cl-attach")) byId("ad-cl-attach").addEventListener("submit", async function (e) {
+      e.preventDefault();
+      var email = e.currentTarget.elements.email.value.trim().toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { toast("Adresse e-mail invalide.", true); return; }
+      try {
+        var fresh = await api("POST", "/clients/attach", { key: c.key, email: email });
+        clientsState.data = null;
+        history.replaceState(null, "", clHref(email));
+        refresh(fresh);
+        toast("Adresse ajoutée : la fiche de " + fresh.client.name + " est complète.");
+      } catch (err) { toast(err.message, true); }
     });
     document.getElementById("ad-cl-quote").addEventListener("click", function () {
       contractsState.editing = "new";
@@ -10822,7 +10970,7 @@
         toast(message);
       } catch (err) { toast(err.message, true); }
     };
-    document.getElementById("ad-cl-tag-form").addEventListener("submit", function (e) {
+    if (byId("ad-cl-tag-form")) byId("ad-cl-tag-form").addEventListener("submit", function (e) {
       e.preventDefault();
       var input = e.currentTarget.elements.tag;
       var tag = input.value.trim().replace(/^#/, "");
@@ -10844,10 +10992,10 @@
     });
 
     // Notes : enregistrement automatique, une seconde après la dernière frappe.
-    var notes = document.getElementById("ad-cl-notes");
-    var saved = document.getElementById("ad-cl-saved");
+    var notes = byId("ad-cl-notes");
+    var saved = byId("ad-cl-saved");
     var timer = null;
-    var lastSaved = notes.value;
+    var lastSaved = notes ? notes.value : "";
     var saveNotes = async function () {
       clearTimeout(timer);
       if (notes.value === lastSaved) return;
@@ -10864,10 +11012,12 @@
         saved.className = "ad-cl-saved ad-cl-saved-error";
       }
     };
-    notes.addEventListener("input", function () { clearTimeout(timer); saved.textContent = ""; timer = setTimeout(saveNotes, 1000); });
-    notes.addEventListener("blur", saveNotes);
+    if (notes) {
+      notes.addEventListener("input", function () { clearTimeout(timer); saved.textContent = ""; timer = setTimeout(saveNotes, 1000); });
+      notes.addEventListener("blur", saveNotes);
+    }
 
-    document.getElementById("ad-cl-info").addEventListener("submit", async function (e) {
+    if (byId("ad-cl-info")) byId("ad-cl-info").addEventListener("submit", async function (e) {
       e.preventDefault();
       var f = e.currentTarget.elements;
       try {
@@ -10878,7 +11028,27 @@
       }
     });
 
-    var dateForm = document.getElementById("ad-cl-date-form");
+    var dateForm = byId("ad-cl-date-form");
+    if (dateForm) clBindDateForm(dateForm, c, refresh);
+    el.view.querySelectorAll("[data-cld]").forEach(function (row) {
+      clBindDateRow(row, row.getAttribute("data-cld"), refresh, "Date retirée.");
+    });
+    var erase = byId("ad-cl-erase");
+    if (erase) {
+      erase.addEventListener("click", function () {
+        confirmAction("Effacer le téléphone, les notes et les dates à retenir de " + c.name + " ?", async function () {
+          try {
+            await api("DELETE", "/clients?email=" + encodeURIComponent(c.email));
+            toast("Notes effacées.");
+            renderClientDetail(c.email, true);
+          } catch (err) { toast(err.message, true); }
+        });
+      });
+    }
+  }
+
+  // Formulaire « Dates à retenir » de la fiche.
+  function clBindDateForm(dateForm, c, refresh) {
     var sessionIso = c.lastSessionAt ? clIsoOf(c.lastSessionAt) : clToday();
     var setKind = function (kind) {
       document.getElementById("ad-cl-date-fields").innerHTML = clDateFieldsHtml(kind, sessionIso);
@@ -10917,21 +11087,6 @@
         toast(err.message, true);
       }
     });
-    el.view.querySelectorAll("[data-cld]").forEach(function (row) {
-      clBindDateRow(row, row.getAttribute("data-cld"), refresh, "Date retirée.");
-    });
-    var erase = document.getElementById("ad-cl-erase");
-    if (erase) {
-      erase.addEventListener("click", function () {
-        confirmAction("Effacer le téléphone, les notes et les dates à retenir de " + c.name + " ?", async function () {
-          try {
-            await api("DELETE", "/clients?email=" + encodeURIComponent(c.email));
-            toast("Notes effacées.");
-            renderClientDetail(c.email, true);
-          } catch (err) { toast(err.message, true); }
-        });
-      });
-    }
   }
 
   /* ---------- Planning : séances, rappels et tâches au même endroit ---------- */

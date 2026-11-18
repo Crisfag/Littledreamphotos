@@ -101,6 +101,7 @@ try {
         (await page.evaluate(() => decodeURIComponent(location.hash))) === "#/clients/camille@example.com" && (await page.textContent(".ad-cl-head h2")) === "Camille Dubois");
   const stats = nbsp(await page.locator(".ad-stats").innerText());
   check("chiffres de la fiche : séances, encaissé, prochaine séance", /50,00/.test(stats) && /dans 2[45] jours/.test(stats), stats.replace(/\s+/g, " "));
+  await page.click('[data-cl-tab="history"]');
   const history = page.locator(".ad-cl-history .ad-cl-event");
   check("historique : galerie, réservation et contrat", (await history.count()) === 3 &&
         (await page.locator(".ad-cl-event-gallery").count()) === 1 && (await page.locator(".ad-cl-event-booking").count()) === 1 && (await page.locator(".ad-cl-event-contract").count()) === 1);
@@ -118,6 +119,7 @@ try {
   const birth = new Date();
   birth.setUTCDate(birth.getUTCDate() + 10);
   birth.setUTCFullYear(birth.getUTCFullYear() - 1);
+  await page.click('[data-cl-tab="overview"]');
   await page.selectOption('#ad-cl-date-form [name="kind"]', "birthday");
   check("le libellé du champ suit le type de date", (await page.textContent("#ad-cl-label-name")) === "Prénom");
   await page.fill('#ad-cl-date-form [name="label"]', "Léa");
@@ -279,6 +281,8 @@ try {
   await page.waitForFunction(() => decodeURIComponent(location.hash) === "#/clients/nora@example.com");
   await page.waitForSelector(".ad-cl-head h2");
   check("une fiche créée à la main s'ouvre aussitôt", (await page.textContent(".ad-cl-head h2")) === "Nora Benali");
+  check("fiche vide : une phrase, pas un trou", /Aucune séance pour l'instant/.test(await page.locator(".ad-cl-col").first().innerText()));
+  await page.click('[data-cl-tab="history"]');
   check("historique vide : une phrase, pas un trou", /l'historique se remplit/.test(await page.locator(".ad-cl-col").first().innerText()));
   const duplicate = await client.request("POST", "/api/admin/clients", { create: true, name: "Nora", email: "NORA@example.com" }).catch((err) => err);
   check("pas deux fiches pour la même adresse", duplicate.status === 409);

@@ -1506,6 +1506,62 @@ main section > p, .ad-share > p { max-width: 75ch; }
 .ad-cl-col { min-width: 0; }
 @media (max-width: 1100px) { .ad-cl-grid { grid-template-columns: minmax(0, 1fr); } }
 
+/* Fiche : onglets internes (vue d'ensemble, séances, factures, règlements, historique). */
+.ad-cl-tabs { display: flex; max-width: 100%; overflow-x: auto; scrollbar-width: none; margin-bottom: 1.1rem; }
+.ad-cl-tabs::-webkit-scrollbar { display: none; }
+.ad-cl-tabs .ad-seg-btn { flex: none; white-space: nowrap; padding: .32rem .7rem; }
+.ad-cl-tabs .ad-seg-btn { display: inline-flex; align-items: center; gap: .4rem; min-height: 34px; }
+.ad-cl-tab-count { min-width: 1.35rem; padding: 0 .35rem; border-radius: 999px; background: var(--mist); color: var(--muted); font-size: .72rem; font-variant-numeric: tabular-nums; line-height: 1.35rem; text-align: center; }
+.ad-seg-btn[aria-pressed="true"] .ad-cl-tab-count { background: var(--accent-soft); color: var(--accent-deep); }
+.ad-cl-byname { margin: -.4rem 0 1.1rem; font-size: .82rem; }
+
+/* À régler : ce que le client doit encore, en tête de fiche. */
+.ad-cl-due { padding: .9rem 1rem .4rem; margin-bottom: 1.25rem; border: 1px solid var(--warn-line); border-radius: 12px; background: var(--warn-bg); }
+.ad-cl-due .ad-section-header h3 { color: var(--warn-ink); }
+.ad-cl-due-total { margin-left: auto; font-weight: 600; color: var(--warn-ink); font-variant-numeric: tabular-nums; }
+.ad-cl-paid-total { color: var(--ok-ink); }
+.ad-cl-lines { list-style: none; }
+.ad-cl-lines li { display: flex; gap: .8rem; align-items: baseline; padding: .5rem 0; border-top: 1px solid var(--warn-line); }
+.ad-cl-lines li:first-child { border-top: 0; }
+.ad-cl-line-main { flex: 1; min-width: 0; color: var(--ink); overflow-wrap: anywhere; }
+.ad-cl-line-main a { color: inherit; }
+.ad-cl-line-amount { font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--ink); }
+.ad-cl-due-mini { display: block; font-size: .74rem; font-weight: 500; color: var(--warn-ink); white-space: nowrap; }
+
+/* Séances : date, titre, détail, état. */
+.ad-cl-sessions { list-style: none; display: grid; gap: .5rem; margin-bottom: .6rem; }
+.ad-cl-session { display: grid; grid-template-columns: 6.2rem minmax(0, 1fr) auto; gap: .4rem .9rem; align-items: center; padding: .7rem .85rem; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); }
+.ad-cl-session-date { font-size: .8rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.ad-cl-session-main { display: flex; flex-direction: column; min-width: 0; line-height: 1.35; }
+.ad-cl-session-main a { color: var(--ink); text-decoration: none; }
+.ad-cl-session-main a:hover strong { color: var(--accent-deep); text-decoration: underline; }
+.ad-cl-session-main strong { font-weight: 500; color: var(--ink); overflow-wrap: anywhere; }
+.ad-cl-session-main .ad-hint { font-size: .8rem; }
+@media (max-width: 560px) {
+  .ad-cl-session { grid-template-columns: minmax(0, 1fr) auto; }
+  .ad-cl-session-date { grid-column: 1 / -1; }
+}
+.ad-cl-ledger td { vertical-align: middle; }
+.ad-cl-ledger td:nth-child(1), .ad-cl-ledger td:nth-child(2), .ad-cl-ledger td.ad-num { white-space: nowrap; }
+.ad-cl-ledger td .ad-hint { font-size: .78rem; }
+/* Téléphone : chaque ligne devient une petite carte (date et n°, objet,
+   montant et statut), sans défilement horizontal. */
+@media (max-width: 560px) {
+  .ad-cl-ledger thead { display: none; }
+  .ad-cl-ledger, .ad-cl-ledger tbody { display: block; }
+  .ad-cl-ledger tr { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: .25rem .6rem; align-items: center; padding: .7rem 0; border-bottom: 1px solid var(--line); }
+  .ad-cl-ledger tr:last-child { border-bottom: 0; }
+  .ad-cl-ledger td { display: block; padding: 0; border: 0; }
+  .ad-cl-ledger td:nth-child(1) { grid-column: 1; color: var(--muted); font-size: .8rem; }
+  .ad-cl-ledger td:nth-child(2) { grid-column: 2 / -1; justify-self: end; font-size: .8rem; color: var(--muted); }
+  .ad-cl-ledger td:nth-child(3) { grid-column: 1 / -1; color: var(--ink); white-space: normal; }
+  .ad-cl-ledger td:nth-child(4) { grid-column: 1; }
+  .ad-cl-ledger td:nth-child(5) { grid-column: 2; justify-self: end; }
+  .ad-cl-ledger td:nth-child(6) { grid-column: 3; }
+  .ad-cl-ledger td.ad-num { font-weight: 500; color: var(--ink); }
+  .ad-cl-ledger tbody tr:hover > td { background: none; }
+}
+
 /* Dates à retenir */
 .ad-cl-dates { list-style: none; display: grid; gap: .5rem; margin-bottom: 1rem; }
 .ad-cl-dateitem {
