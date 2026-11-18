@@ -90,8 +90,12 @@ try {
   await page.waitForSelector("#ad-tab-feedback .ad-tab-count", { timeout: 10000 });
   check("pastille sur Suggestions : la nouveauté du jour", (await page.textContent("#ad-tab-feedback .ad-tab-count")) === "1" &&
         /nouveauté/.test(await page.getAttribute("#ad-tab-feedback .ad-tab-count", "aria-label")));
+  check("l'onglet s'appelle « Nouveautés & suggestions »", flat(await page.textContent("#ad-tab-feedback .ad-tab-label")) === "Nouveautés & suggestions" &&
+        /Mises à jour et idées/.test(await page.textContent("#ad-tab-feedback")));
+  if (SHOTS) await page.locator(".ad-tabs").first().screenshot({ path: join(SHOTS, "nouveautes-menu.png") }).catch(() => {});
   await page.click("#ad-tab-feedback");
   await page.waitForSelector("#ad-news");
+  check("titre de la page : « Nouveautés & suggestions »", flat(await page.textContent("#ad-view h2")) === "Nouveautés & suggestions");
   const news = flat(await page.textContent("#ad-news"));
   check("en tête de l'onglet : Nouveautés des 15 derniers jours, les 6 dernières, par date", /Nouveautés/.test(news) && /15 derniers jours/.test(news) && (await page.locator(".ad-news-item").count()) === 6 && (await page.locator(".ad-news-day").count()) >= 2);
   const item = page.locator(".ad-news-item", { hasText: `Valider d'un raccourci ${tag}` });
@@ -115,8 +119,12 @@ try {
   /* ---------- Auteur : en néerlandais, « Votre suggestion » ---------- */
 
   const nl = await open(author.email, author.password, { width: 390, height: 844 });
+  check("en néerlandais : « Nieuw & suggesties »", flat(await nl.textContent("#ad-tab-feedback .ad-tab-label")) === "Nieuw & suggesties" &&
+        /Updates en ideeën/.test(await nl.textContent("#ad-tab-feedback")));
+  if (SHOTS) await nl.screenshot({ path: join(SHOTS, "nouveautes-menu-mobile.png") });
   await nl.click("#ad-tab-feedback");
   await nl.waitForSelector("#ad-news");
+  check("titre de la page en néerlandais", flat(await nl.textContent("#ad-view h2")) === "Nieuw & suggesties");
   const authorItem = nl.locator(".ad-news-item", { hasText: tag });
   check("l'auteur, en néerlandais : « Jouw suggestie, gerealiseerd », titre en français faute de version NL",
         /Jouw suggestie, gerealiseerd/.test(await authorItem.textContent()) && /Valider d'un raccourci/.test(await authorItem.textContent()) &&
