@@ -9,7 +9,7 @@ import { json, fail } from "./http.js";
 import { normalizeSubdomain } from "./studio.js";
 import { hashPassword, verifyPassword, randomBytes, b64url, hashToken } from "./auth.js";
 import { sendEmailChangeConfirmation } from "./notify.js";
-import { LANGUAGES } from "./i18n.js";
+import { UI_LANGUAGES, photographerMailLanguage } from "./i18n.js";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const EMAIL_CHANGE_TTL_SECONDS = 30 * 60; // 30 minutes
@@ -42,7 +42,7 @@ export async function updateStudioName(request, env, photographerId) {
 // Langue de l'espace photographe (et des e-mails qu'il reçoit).
 export async function updateUiLanguage(request, env, photographerId) {
   const body = await request.json().catch(() => null);
-  if (!body || !LANGUAGES.includes(body.language)) return fail(400, "Langue inconnue");
+  if (!body || !UI_LANGUAGES.includes(body.language)) return fail(400, "Langue inconnue");
   await env.DB.prepare("UPDATE photographers SET ui_language = ? WHERE id = ?").bind(body.language, photographerId).run();
   return json({ ok: true, language: body.language });
 }
@@ -138,7 +138,7 @@ export async function requestEmailChange(request, env, ctx, photographerId) {
   const confirmUrl = adminUrl ? `${adminUrl.replace(/\/$/, "")}/?confirm-email=${token}` : "";
   ctx.waitUntil(
     sendEmailChangeConfirmation(env, {
-      lang: photographer.ui_language === "en" ? "en" : "fr",
+      lang: photographerMailLanguage(photographer.ui_language),
       to: newEmail,
       studioName: photographer.studio_name,
       confirmUrl,

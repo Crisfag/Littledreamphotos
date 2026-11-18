@@ -247,7 +247,7 @@ export async function issueInvoice(env, stripeCheckoutSessionId) {
 
     const invoice = await createInvoiceForPayment(env, {
       payment, gallery, photographer,
-      ...paymentInvoiceText(payment, gallery, gallery.language === "en" ? "en" : "fr"),
+      ...paymentInvoiceText(payment, gallery, languageOf(gallery.language)),
     });
 
     // "emailed_to" atteste qu'un envoi a été tenté vers cette adresse, pas

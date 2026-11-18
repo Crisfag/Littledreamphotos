@@ -61,6 +61,12 @@ crons = ["0 8 * * *", "*/30 7-18 * * *"]
 # Base de métadonnées : galeries, photos, journal d'accès.
 # Créer avec :  npx wrangler d1 create galerie-protegee
 # puis recopier l'identifiant renvoyé ci-dessous.
+# Workers AI : la voix de Lumi (assistant.js) — Whisper pour écouter les
+# questions posées à voix haute, MeloTTS pour lire les réponses en français.
+# Facturé à l'usage sur le compte Cloudflare (quota gratuit quotidien).
+[ai]
+binding = "AI"
+
 [[d1_databases]]
 binding = "DB"
 database_name = "galerie-protegee"

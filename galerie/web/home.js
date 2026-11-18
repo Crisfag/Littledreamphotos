@@ -7,9 +7,11 @@
   "use strict";
 
   var config = window.HOME_CONFIG || {};
-  // Page anglaise (/en/) : mêmes comportements, textes en anglais.
+  // Pages anglaise (/en/) et néerlandaise (/nl/) : mêmes comportements,
+  // textes dans la langue du document.
   var EN = document.documentElement.lang === "en";
-  function T(fr, en) { return EN ? en : fr; }
+  var NL = document.documentElement.lang === "nl";
+  function T(fr, en, nl) { return NL && nl !== undefined ? nl : EN ? en : fr; }
   var still = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   /* ---------- Liens et année ---------- */
@@ -24,10 +26,12 @@
     if (referral) localStorage.setItem("holypixx-parrain", referral);
     else referral = localStorage.getItem("holypixx-parrain") || "";
   } catch (err) { /* navigation privée : seul le lien compte */ }
-  // Page anglaise : l'espace photographe s'ouvre en anglais (?lang=en).
+  // Pages anglaise et néerlandaise : l'espace photographe s'ouvre dans la
+  // langue de la page (?lang=en, ?lang=nl).
   var signupParams = [];
   if (referral) signupParams.push("parrain=" + encodeURIComponent(referral));
   if (EN) signupParams.push("lang=en");
+  if (NL) signupParams.push("lang=nl");
   var signupUrl = admin + "#/inscription" + (signupParams.length ? "?" + signupParams.join("&") : "");
   document.querySelectorAll("[data-admin]").forEach(function (a) { a.href = admin; });
   document.querySelectorAll("[data-signup]").forEach(function (a) { a.href = signupUrl; });
@@ -58,7 +62,7 @@
   function setMenu(open) {
     links.classList.toggle("open", open);
     toggle.setAttribute("aria-expanded", String(open));
-    toggle.setAttribute("aria-label", open ? T("Fermer le menu", "Close menu") : T("Ouvrir le menu", "Open menu"));
+    toggle.setAttribute("aria-label", open ? T("Fermer le menu", "Close menu", "Menu sluiten") : T("Ouvrir le menu", "Open menu", "Menu openen"));
     toggle.querySelector("use").setAttribute("href", open ? "#i-close" : "#i-menu");
   }
   toggle.addEventListener("click", function () { setMenu(!links.classList.contains("open")); });
@@ -133,15 +137,15 @@
   var sty = document.getElementById("sty");
   if (sty) {
     var STYLE_INFO = {
-      classique: [T("Classique", "Classic"), "Cormorant Garamond", "Jost"],
-      doux: [T("Doux", "Soft"), "Cormorant Garamond", "Nunito Sans"],
-      architectural: ["Architectural", "Josefin Sans", "Work Sans"],
-      moderne: [T("Moderne", "Modern"), "Manrope", "Manrope"],
-      nuit: [T("Nuit", "Night"), "Cormorant Garamond", "Jost"],
-      editorial: [T("Éditorial", "Editorial"), "Bodoni Moda", "Karla"],
-      romantique: [T("Romantique", "Romantic"), "Great Vibes", "Lora"],
-      boheme: [T("Bohème", "Boho"), "Fraunces", "Karla"],
-      galerie: [T("Galerie d'art", "Art gallery"), "Marcellus", "Work Sans"],
+      classique: [T("Classique", "Classic", "Klassiek"), "Cormorant Garamond", "Jost"],
+      doux: [T("Doux", "Soft", "Zacht"), "Cormorant Garamond", "Nunito Sans"],
+      architectural: [T("Architectural", "Architectural", "Architecturaal"), "Josefin Sans", "Work Sans"],
+      moderne: [T("Moderne", "Modern", "Modern"), "Manrope", "Manrope"],
+      nuit: [T("Nuit", "Night", "Nacht"), "Cormorant Garamond", "Jost"],
+      editorial: [T("Éditorial", "Editorial", "Editoriaal"), "Bodoni Moda", "Karla"],
+      romantique: [T("Romantique", "Romantic", "Romantisch"), "Great Vibes", "Lora"],
+      boheme: [T("Bohème", "Boho", "Boho"), "Fraunces", "Karla"],
+      galerie: [T("Galerie d'art", "Art gallery", "Kunstgalerie"), "Marcellus", "Work Sans"],
     };
     var styPage = document.getElementById("sty-page");
     var styWin = document.getElementById("sty-win");
@@ -153,11 +157,13 @@
       var info = STYLE_INFO[key];
       if (!info || styPage.getAttribute("data-style") === key) return;
       styPage.setAttribute("data-style", key);
-      styWin.setAttribute("aria-label", T("Aperçu d'une galerie client au style ", "Preview of a client gallery in the style ") + info[0]);
+      styWin.setAttribute("aria-label", T("Aperçu d'une galerie client au style ", "Preview of a client gallery in the style ", "Voorbeeld van een klantgalerij in de stijl ") + info[0]);
       styCaption.innerHTML = info[1] === info[2]
-        ? T("Titres et texte en <b>" + info[1] + "</b>&nbsp;: changez-les librement.", "Headings and text in <b>" + info[1] + "</b>: change them freely.")
+        ? T("Titres et texte en <b>" + info[1] + "</b>&nbsp;: changez-les librement.", "Headings and text in <b>" + info[1] + "</b>: change them freely.",
+            "Titels en tekst in <b>" + info[1] + "</b>: pas ze vrij aan.")
         : T("Titres en <b>" + info[1] + "</b>, texte en <b>" + info[2] + "</b>&nbsp;: changez-les librement.",
-            "Headings in <b>" + info[1] + "</b>, text in <b>" + info[2] + "</b>: change them freely.");
+            "Headings in <b>" + info[1] + "</b>, text in <b>" + info[2] + "</b>: change them freely.",
+            "Titels in <b>" + info[1] + "</b>, tekst in <b>" + info[2] + "</b>: pas ze vrij aan.");
     };
 
     styList.querySelectorAll(".sty-opt").forEach(function (btn) {
@@ -226,13 +232,13 @@
       if (b) b.setAttribute("aria-pressed", "true");
     });
     result.hidden = false;
-    captureBtn.innerHTML = '<svg class="ico"><use href="#i-camera"/></svg>' + T("Recommencer", "Start again");
+    captureBtn.innerHTML = '<svg class="ico"><use href="#i-camera"/></svg>' + T("Recommencer", "Start again", "Opnieuw");
     setTimeout(function () { photo.classList.remove("captured"); }, 1600);
   }
   captureBtn.addEventListener("click", function () {
-    if (!result.hidden && captureBtn.textContent.indexOf(T("Recommencer", "Start again")) !== -1) {
+    if (!result.hidden && captureBtn.textContent.indexOf(T("Recommencer", "Start again", "Opnieuw")) !== -1) {
       result.hidden = true;
-      captureBtn.innerHTML = '<svg class="ico"><use href="#i-camera"/></svg>' + T("Simuler une capture d'écran", "Simulate a screenshot");
+      captureBtn.innerHTML = '<svg class="ico"><use href="#i-camera"/></svg>' + T("Simuler une capture d'écran", "Simulate a screenshot", "Simuleer een screenshot");
       return;
     }
     capture();
@@ -245,7 +251,8 @@
   document.addEventListener("keyup", function (e) {
     if (e.key !== "PrintScreen") return;
     toast.textContent = T("Capture repérée. Sur une galerie Holypixx, le photographe en serait prévenu par e-mail, avec la photo affichée.",
-      "Screenshot spotted. On a Holypixx gallery, the photographer would get an email about it, naming the photo on screen.");
+      "Screenshot spotted. On a Holypixx gallery, the photographer would get an email about it, naming the photo on screen.",
+      "Screenshot opgemerkt. Op een Holypixx-galerij zou de fotograaf daar een e-mail over krijgen, met de foto die op het scherm stond.");
     toast.hidden = false;
     clearTimeout(toastTimer);
     toastTimer = setTimeout(function () { toast.hidden = true; }, 6000);
@@ -286,7 +293,8 @@
         cell.style.top = b[1] / 10 + "%";
         cell.style.width = b[2] / 10 + "%";
         cell.style.height = b[3] / 10 + "%";
-        cell.innerHTML = '<img src="assets/home/garcon.webp" alt="" loading="lazy" />';
+        // Chemin absolu : la même image depuis / et depuis /nl/.
+        cell.innerHTML = '<img src="/assets/home/garcon.webp" alt="" loading="lazy" />';
         planche.insertBefore(cell, planche.firstChild);
       });
   }
@@ -300,7 +308,11 @@
   var billing = "month";
   var founders = false;
 
-  function euros(n) { return EN ? "€" + n.toLocaleString("en-GB") : n.toLocaleString("fr-BE") + " €"; }
+  function euros(n) {
+    if (EN) return "€" + n.toLocaleString("en-GB");
+    if (NL) return "€\u00a0" + n.toLocaleString("nl-BE");
+    return n.toLocaleString("fr-BE") + " €";
+  }
 
   function renderPrices() {
     Object.keys(PRICES).forEach(function (key) {
@@ -309,20 +321,22 @@
       var alt = document.querySelector('[data-alt="' + key + '"]');
       if (!amount || !alt) return;
       if (billing === "year") {
-        amount.innerHTML = '<span class="plan-amount">' + euros(founders ? p.founderYear : p.year) + '</span><span class="plan-per">' + T("/ an", "/ year") + "</span>";
+        amount.innerHTML = '<span class="plan-amount">' + euros(founders ? p.founderYear : p.year) + '</span><span class="plan-per">' + T("/ an", "/ year", "/ jaar") + "</span>";
         alt.innerHTML = founders
-          ? "la 1<sup>re</sup> année, puis " + euros(p.year) + " par an"
-          : T("soit ", "that's ") + euros(Math.round(p.year / 12 * 100) / 100).replace(",00", "") + T(" par mois", " a month");
+          ? T("la 1<sup>re</sup> année, puis ", "the 1st year, then ", "het 1e jaar, daarna ") + euros(p.year) + T(" par an", " a year", " per jaar")
+          : T("soit ", "that's ", "dus ") + euros(Math.round(p.year / 12 * 100) / 100).replace(",00", "") + T(" par mois", " a month", " per maand");
       } else {
-        amount.innerHTML = '<span class="plan-amount">' + euros(founders ? p.founderMonth : p.month) + '</span><span class="plan-per">' + T("/ mois", "/ month") + "</span>";
+        amount.innerHTML = '<span class="plan-amount">' + euros(founders ? p.founderMonth : p.month) + '</span><span class="plan-per">' + T("/ mois", "/ month", "/ maand") + "</span>";
         alt.innerHTML = founders
-          ? "la 1<sup>re</sup> année, puis " + euros(p.month) + " par mois"
-          : T("ou ", "or ") + euros(p.year) + T(" par an", " a year");
+          ? T("la 1<sup>re</sup> année, puis ", "the 1st year, then ", "het 1e jaar, daarna ") + euros(p.month) + T(" par mois", " a month", " per maand")
+          : T("ou ", "or ", "of ") + euros(p.year) + T(" par an", " a year", " per jaar");
       }
     });
     document.querySelectorAll("[data-founder]").forEach(function (el) {
       var p = PRICES[el.getAttribute("data-founder")];
-      el.textContent = billing === "year" ? euros(p.founderYear) + " par an" : euros(p.founderMonth) + " par mois";
+      el.textContent = billing === "year"
+        ? euros(p.founderYear) + T(" par an", " a year", " per jaar")
+        : euros(p.founderMonth) + T(" par mois", " a month", " per maand");
     });
   }
 
@@ -335,8 +349,8 @@
   });
   renderPrices();
 
-  // L'offre Fondateurs n'apparaît que tant qu'il reste des places (page
-  // française : l'inscription y est ouverte).
+  // L'offre Fondateurs n'apparaît que tant qu'il reste des places (pages
+  // française et néerlandaise : l'inscription y est ouverte).
   if (config.api && window.fetch && !EN) {
     fetch(String(config.api).replace(/\/+$/, "") + "/api/public/plans")
       .then(function (r) { return r.ok ? r.json() : null; })
@@ -347,17 +361,65 @@
         if (studioLeft && studio && studio.founderYearlyCents) {
           document.querySelector("[data-studio-amount]").textContent = euros(studio.founderYearlyCents / 100);
           // Montants et nombre de places viennent de notre API (nombres).
-          document.querySelector("[data-studio-alt]").innerHTML = "la 1<sup>re</sup> année, puis " + euros(studio.yearlyCents / 100) +
-            " par an · Fondateurs : plus que " + Number(studioLeft) + " place" + (studioLeft > 1 ? "s" : "");
+          document.querySelector("[data-studio-alt]").innerHTML = T("la 1<sup>re</sup> année, puis ", "the 1st year, then ", "het 1e jaar, daarna ") +
+            euros(studio.yearlyCents / 100) + T(" par an", " a year", " per jaar") +
+            T(" · Fondateurs : plus que ", " · Founders: only ", " · Oprichters: nog maar ") + Number(studioLeft) +
+            (studioLeft > 1 ? T(" places", " places left", " plaatsen") : T(" place", " place left", " plaats"));
         }
         var left = data && data.founders ? data.founders.remaining : 0;
         if (!left) return;
         founders = true;
-        document.getElementById("founders-left").textContent = "Plus que " + left + " place" + (left > 1 ? "s" : "");
+        document.getElementById("founders-left").textContent = T("Plus que ", "Only ", "Nog maar ") + left +
+          (left > 1 ? T(" places", " places left", " plaatsen") : T(" place", " place left", " plaats"));
         document.getElementById("founders").hidden = false;
         renderPrices();
       })
       .catch(function () { /* sans réponse, l'offre n'est simplement pas affichée */ });
+  }
+
+  /* ---------- Newsletter (page néerlandaise) ---------- */
+  // Consentement explicite (case à cocher), langue « nl », origine « home-nl ».
+  // Même réponse que l'adresse soit nouvelle ou déjà inscrite.
+
+  var nnForm = document.getElementById("newsletter-form");
+  if (nnForm) {
+    var nnStatus = document.getElementById("newsletter-status");
+    var nnSubmit = document.getElementById("newsletter-submit");
+    var setNn = function (text, kind) {
+      nnStatus.textContent = text;
+      nnStatus.className = "wl-status" + (kind ? " " + kind : "");
+    };
+    nnForm.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var email = nnForm.email.value.trim();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        setNn("Vul een geldig e-mailadres in.", "err");
+        nnForm.email.focus();
+        return;
+      }
+      if (!nnForm.consent.checked) {
+        setNn("Vink het vakje aan om de nieuwsbrief te ontvangen.", "err");
+        nnForm.consent.focus();
+        return;
+      }
+      if (!config.api || !window.fetch) return setNn("Er ging iets mis. Probeer het zo meteen opnieuw.", "err");
+      nnSubmit.disabled = true;
+      setNn("Even geduld…");
+      fetch(String(config.api).replace(/\/+$/, "") + "/api/public/newsletter", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: email, lang: "nl", consent: true, source: "home-nl", website: nnForm.website.value }),
+      })
+        .then(function (r) {
+          if (!r.ok) return r.json().catch(function () { return {}; }).then(function (d) { throw new Error(d.error || ""); });
+          nnForm.reset();
+          setNn("Bedankt, je bent ingeschreven! We laten het je weten zodra er meer in het Nederlands klaarstaat.", "ok");
+        })
+        .catch(function (err) {
+          setNn((err && err.message) || "Er ging iets mis. Probeer het zo meteen opnieuw.", "err");
+        })
+        .then(function () { nnSubmit.disabled = false; });
+    });
   }
 
   /* ---------- Liste d'attente (page anglaise) ---------- */

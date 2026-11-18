@@ -9,6 +9,7 @@
 // une autorisation en soi.
 
 import { waitlistForOwner, removeFromWaitlist } from "./waitlist.js";
+import { newsletterForOwner, removeFromNewsletter } from "./newsletter.js";
 import { funnelForOwner } from "./funnel.js";
 import { feedbackForOwner, updateFeedbackAsOwner } from "./feedback.js";
 import { json, fail } from "./http.js";
@@ -227,6 +228,17 @@ export async function handleOwner(request, env, path) {
     if (parts.length === 3 && request.method === "DELETE") {
       const body = await request.json().catch(() => null);
       return json(await removeFromWaitlist(env, body?.email));
+    }
+    return fail(404, "Route inconnue");
+  }
+  // Newsletter : abonnés (langue, consentement), retrait d'une adresse.
+  if (action === "newsletter") {
+    const owner = await requireOwner(env, photographerId);
+    if (!owner) return fail(403, "Accès réservé");
+    if (parts.length === 3 && request.method === "GET") return json(await newsletterForOwner(env));
+    if (parts.length === 3 && request.method === "DELETE") {
+      const body = await request.json().catch(() => null);
+      return json(await removeFromNewsletter(env, body?.email));
     }
     return fail(404, "Route inconnue");
   }

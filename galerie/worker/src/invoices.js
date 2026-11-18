@@ -14,8 +14,15 @@ function newInvoiceId() {
   return `inv_${b64url(randomBytes(9))}`;
 }
 
-export function formatEuros(cents) {
-  return ((cents || 0) / 100).toLocaleString("fr-BE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
+// « 45,00 € » ; galerie en néerlandais : « € 45,00 » (usage belge).
+export function formatEuros(cents, lang) {
+  const amount = ((cents || 0) / 100).toLocaleString(lang === "nl" ? "nl-BE" : "fr-BE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return lang === "nl" ? `€ ${amount}` : `${amount} €`;
+}
+
+// Langue d'une facture : celle de la galerie (fr, en ou nl).
+function invoiceLanguage(lang) {
+  return lang === "en" || lang === "nl" ? lang : "fr";
 }
 
 // Le prix affiché au client (et réellement encaissé par Stripe) est TTC :
@@ -59,8 +66,9 @@ const ROSE = rgb(0.725, 0.541, 0.478);
 
 // Fonction pure (aucun accès réseau ni D1) : le contenu du PDF ne dépend que
 // de ce qu'on lui passe, ce qui la rend directement testable.
-// Libellés de la facture. Galerie en anglais : intitulés anglais, mentions
-// légales belges gardées en français et suivies de leur traduction.
+// Libellés de la facture. Galerie en anglais ou en néerlandais : intitulés
+// traduits, mentions légales belges gardées en français et suivies de leur
+// traduction.
 const INVOICE_TEXT = {
   fr: {
     number: "Facture n°", issuedBy: "Émise par", vat: "TVA", to: "Destinataire", client: "Client",
@@ -75,10 +83,18 @@ const INVOICE_TEXT = {
     paidOnline: "Paid online (card, Bancontact or Apple Pay) via Stripe.",
     paidCash: "Paid in cash.", paidTransfer: "Paid by bank transfer.", date: "en-GB",
   },
+  nl: {
+    number: "Factuur nr.", issuedBy: "Uitgereikt door", vat: "Btw", to: "Factuur aan", client: "Klant",
+    description: "Omschrijving", net: "Bedrag excl. btw", gross: "Totaal incl. btw", paid: "Totaal betaald",
+    exemptTranslation: ["(Bijzondere vrijstellingsregeling kleine ondernemingen: btw niet van toepassing, artikel 56bis van het Btw-Wetboek.)"],
+    paidOnline: "Online betaald (kaart, Bancontact of Apple Pay) via Stripe.",
+    paidCash: "Contant betaald.", paidTransfer: "Betaald via overschrijving.", date: "nl-BE",
+  },
 };
 
 export async function buildInvoicePdf(data) {
-  const t = INVOICE_TEXT[data.lang === "en" ? "en" : "fr"];
+  const lang = invoiceLanguage(data.lang);
+  const t = INVOICE_TEXT[lang];
   const doc = await PDFDocument.create();
   const page = doc.addPage([A4_WIDTH, A4_HEIGHT]);
   const font = await doc.embedFont(StandardFonts.Helvetica);
@@ -109,7 +125,7 @@ export async function buildInvoicePdf(data) {
     y -= 13;
   }
   if (data.seller.vatNumber) {
-    text(`${t.vat} : ${data.seller.vatNumber}`, left, { size: 10 });
+    text(`${t.vat}${lang === "nl" ? ":" : " :"} ${data.seller.vatNumber}`, left, { size: 10 });
     y -= 13;
   }
   y -= 20;
@@ -128,9 +144,9 @@ export async function buildInvoicePdf(data) {
   y -= 20;
 
   text(data.description, left, { size: 10 });
-  text(formatEuros(data.netCents), right - 230, { size: 10 });
+  text(formatEuros(data.netCents, lang), right - 230, { size: 10 });
   text(data.vatRate > 0 ? `${data.vatRate}%` : "—", right - 130, { size: 10 });
-  text(formatEuros(data.amountCents), right - 60, { size: 10 });
+  text(formatEuros(data.amountCents, lang), right - 60, { size: 10 });
   for (const detail of data.details || []) {
     y -= 13;
     text(detail, left + 10, { size: 9, color: MUTED });
@@ -140,7 +156,7 @@ export async function buildInvoicePdf(data) {
   y -= 24;
 
   text(t.paid, right - 170, { size: 12, bold: true });
-  text(formatEuros(data.amountCents), right - 60, { size: 12, bold: true });
+  text(formatEuros(data.amountCents, lang), right - 60, { size: 12, bold: true });
   y -= 40;
 
   if (data.vatRate === 0) {
@@ -173,7 +189,7 @@ export async function createInvoiceForPayment(env, { payment, gallery, photograp
   const issuedAt = Math.floor(Date.now() / 1000);
   const sellerName = photographer.billing_company_name || photographer.studio_name;
   const extraCount = payment.extra_count;
-  const lang = gallery.language === "en" ? "en" : "fr";
+  const lang = invoiceLanguage(gallery.language);
 
   const pdfBytes = await buildInvoicePdf({
     number,
@@ -181,9 +197,11 @@ export async function createInvoiceForPayment(env, { payment, gallery, photograp
     seller: { name: sellerName, address: photographer.billing_address, vatNumber: photographer.billing_vat_number },
     lang,
     clientName: clientName || gallery.client_name || INVOICE_TEXT[lang].client,
-    description: description || (lang === "en"
-      ? `${extraCount} additional photo${extraCount > 1 ? "s" : ""} — ${gallery.title}`
-      : `${extraCount} photo${extraCount > 1 ? "s" : ""} supplémentaire${extraCount > 1 ? "s" : ""} — ${gallery.title}`),
+    description: description || (lang === "nl"
+      ? `${extraCount} extra foto${extraCount > 1 ? "'s" : ""} — ${gallery.title}`
+      : lang === "en"
+        ? `${extraCount} additional photo${extraCount > 1 ? "s" : ""} — ${gallery.title}`
+        : `${extraCount} photo${extraCount > 1 ? "s" : ""} supplémentaire${extraCount > 1 ? "s" : ""} — ${gallery.title}`),
     details: details || [],
     amountCents: payment.amount_cents,
     netCents,

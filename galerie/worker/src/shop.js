@@ -17,14 +17,14 @@ import { originalKey, storageRefusal } from "./storage.js";
 import { createInvoiceForPayment, formatEuros } from "./invoices.js";
 import { sendPrintOrderConfirmation, sendPrintOrderPhotographer, sendPrintOrderShipped } from "./notify.js";
 import {
-  SUGGESTED_PRODUCTS, SHOP_COUNTRIES, ORDER_STATUS_LABELS, ORDER_STATUS_LABELS_EN,
+  SUGGESTED_PRODUCTS, SHOP_COUNTRIES, ORDER_STATUS_LABELS, ORDER_STATUS_LABELS_EN, ORDER_STATUS_LABELS_NL,
   shippingCentsFor, countriesForClient, worldShippingOpen,
   encryptApiKey, decryptApiKey, signFor, verifySignature,
   normalizeRecipient, buildOrderLines, buildOrderPayload, buildQuotePayload,
   prodigiRequest, costFromQuote, statusFromProdigiOrder, availabilityFromDetails,
 } from "./prodigi.js";
 import { resolveSelection, catalogueForAdmin, categoryLabelFor, findProduct, skuFor, lookFor, productLabelFor } from "./printCatalogue.js";
-import { languageOf, pick, plural } from "./i18n.js";
+import { languageOf, uiLanguageOf, photographerMailLanguage, pick, plural } from "./i18n.js";
 
 const MAX_ORIGINAL_BYTES = 60 * 1024 * 1024;
 const MAX_PRODUCTS = 40;
@@ -120,7 +120,7 @@ async function getShop(env, photographerId) {
   if (!photographer) return fail(404, "Compte introuvable");
   const apiKey = await decryptApiKey(env.AUTH_SECRET, photographer.prodigi_api_key_enc);
   const products = await listProducts(env, photographerId);
-  const lang = languageOf(photographer.ui_language);
+  const lang = uiLanguageOf(photographer.ui_language);
   return json({
     settings: {
       connected: Boolean(apiKey),
@@ -133,12 +133,13 @@ async function getShop(env, photographerId) {
       // Frais de paiement retenus sur chaque commande (voir fees.js).
       paymentFee: feeRuleForAdmin(env, photographer),
     },
-    // Espace photographe en anglais : libellés du catalogue, des formats et
-    // des pays dans sa langue (les libellés enregistrés restent inchangés).
+    // Espace photographe en anglais ou en néerlandais : libellés du
+    // catalogue, des formats et des pays dans sa langue (les libellés
+    // enregistrés restent inchangés).
     products: products.map((p) => productOut(p, lang)),
     suggested: SUGGESTED_PRODUCTS,
     catalogue: catalogueForAdmin(lang),
-    countries: lang === "en" ? Object.fromEntries(countriesForClient({ shop_shipping_world_cents: 0 }, "en").map((c) => [c.code, c.name])) : SHOP_COUNTRIES,
+    countries: lang === "fr" ? SHOP_COUNTRIES : Object.fromEntries(countriesForClient({ shop_shipping_world_cents: 0 }, lang).map((c) => [c.code, c.name])),
   });
 }
 
@@ -339,10 +340,10 @@ async function quoteSelection(request, env, photographerId) {
     const data = await prodigiRequest(env, creds, "POST", "/quotes", buildQuotePayload({ sku: resolved.sku, attributes: resolved.attributes, countryCode }));
     const cost = costFromQuote(data);
     if (!cost) throw new Error("Devis illisible");
-    return json({ available: true, label: productLabelFor({ label: resolved.label, catalog_ref: resolved.ref }, languageOf(photographer?.ui_language)), countryCode, ...cost });
+    return json({ available: true, label: productLabelFor({ label: resolved.label, catalog_ref: resolved.ref }, uiLanguageOf(photographer?.ui_language)), countryCode, ...cost });
   } catch (err) {
     if (err.prodigiStatus === 401) return fail(502, err.message);
-    return json({ available: false, label: productLabelFor({ label: resolved.label, catalog_ref: resolved.ref }, languageOf(photographer?.ui_language)), countryCode, error: err.message || "Indisponible chez le labo" });
+    return json({ available: false, label: productLabelFor({ label: resolved.label, catalog_ref: resolved.ref }, uiLanguageOf(photographer?.ui_language)), countryCode, error: err.message || "Indisponible chez le labo" });
   }
 }
 
@@ -531,9 +532,11 @@ export async function shopForClient(env, gallery) {
     createdAt: o.createdAt,
     totalCents: o.totalCents,
     status: o.status,
-    statusLabel: lang === "en"
-      ? ORDER_STATUS_LABELS_EN[o.status] || o.status
-      : (o.status === "failed" ? "En préparation" : o.statusLabel),
+    statusLabel: lang === "nl"
+      ? ORDER_STATUS_LABELS_NL[o.status] || o.status
+      : lang === "en"
+        ? ORDER_STATUS_LABELS_EN[o.status] || o.status
+        : (o.status === "failed" ? "En préparation" : o.statusLabel),
     trackingUrl: o.trackingUrl,
     count: o.lines.reduce((n, l) => n + l.copies, 0),
   }));
@@ -594,14 +597,15 @@ export async function handlePrintOrder(request, env, gallery) {
     session = await createCheckoutSession(env, state.photographer.stripe_account_id, {
       label: pick(lang,
         `${count} tirage${count > 1 ? "s" : ""} — ${gallery.title}${shippingCents ? " (port compris)" : ""}`,
-        `${count} ${plural(count, "print", "prints")} — ${gallery.title}${shippingCents ? " (shipping included)" : ""}`),
+        `${count} ${plural(count, "print", "prints")} — ${gallery.title}${shippingCents ? " (shipping included)" : ""}`,
+        `${count} ${plural(count, "afdruk", "afdrukken")} — ${gallery.title}${shippingCents ? " (verzending inbegrepen)" : ""}`),
       unitAmountCents: totalCents,
       quantity: 1,
       successUrl,
       cancelUrl,
       metadata: { gallery_id: gallery.id, payment_id: paymentId, print_order_id: orderId, kind: "print" },
       applicationFeeCents: feeCents,
-      locale: lang === "en" ? "en" : undefined,
+      locale: lang === "fr" ? undefined : lang,
     });
   } catch (err) {
     if (err.stripeNotConfigured) return fail(503, "Le paiement en ligne n'est pas encore activé");
@@ -720,10 +724,11 @@ export async function handlePrintPaymentConfirmed(env, payment, origin) {
       clientName: recipient.name,
       description: pick(lang,
         `${count} tirage${count > 1 ? "s" : ""} — ${gallery.title}`,
-        `${count} ${plural(count, "print", "prints")} — ${gallery.title}`),
+        `${count} ${plural(count, "print", "prints")} — ${gallery.title}`,
+        `${count} ${plural(count, "afdruk", "afdrukken")} — ${gallery.title}`),
       details: [
-        ...lines.map((l) => `${l.copies} × ${l.label} (${pick(lang, "photo n°", "photo no.")} ${l.photoNumber}) — ${formatEuros(l.lineCents)}`),
-        `${pick(lang, "Frais de port", "Shipping")} — ${formatEuros(order.shipping_cents)}`,
+        ...lines.map((l) => `${l.copies} × ${l.label} (${pick(lang, "photo n°", "photo no.", "foto nr.")} ${l.photoNumber}) — ${formatEuros(l.lineCents, lang)}`),
+        `${pick(lang, "Frais de port", "Shipping", "Verzending")} — ${formatEuros(order.shipping_cents, lang)}`,
       ],
     });
     await env.DB.prepare("UPDATE invoices SET emailed_to = ? WHERE id = ?").bind(order.client_email, invoice.id).run();
@@ -747,7 +752,7 @@ export async function handlePrintPaymentConfirmed(env, payment, origin) {
     });
     if (photographer?.email) {
       await sendPrintOrderPhotographer(env, {
-        lang: photographer.ui_language,
+        lang: photographerMailLanguage(photographer.ui_language),
         to: photographer.email,
         galleryTitle: gallery.title,
         recipientName: recipient.name,

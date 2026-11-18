@@ -1242,6 +1242,18 @@ CREATE TABLE IF NOT EXISTS waitlist (
   created_at INTEGER NOT NULL
 );
 
+-- Newsletter Holypixx (voir worker/src/newsletter.js) : consentement
+-- explicite (date de la case cochée), langue et origine de l'inscription.
+-- Jamais confirmée au visiteur ; export CSV et retrait depuis l'espace
+-- propriétaire.
+CREATE TABLE IF NOT EXISTS newsletter_subscribers (
+  email      TEXT PRIMARY KEY,
+  lang       TEXT NOT NULL DEFAULT 'fr',
+  source     TEXT NOT NULL DEFAULT '',
+  consent_at INTEGER NOT NULL,
+  created_at INTEGER NOT NULL
+);
+
 -- Planning du photographe (planning.js) : tâches et rendez-vous ajoutés à
 -- la main (date facultative, heure facultative, client facultatif), et
 -- tâches calculées (sélection à retoucher, galerie à créer, client à

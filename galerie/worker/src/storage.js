@@ -22,6 +22,7 @@
 import { fail } from "./http.js";
 import { planFor, isOwner } from "./subscription.js";
 import { sendStoragePurgeNotice } from "./notify.js";
+import { photographerMailLanguage } from "./i18n.js";
 
 export const TILE_BYTES_PER_PHOTO = 600 * 1000;
 export const PURGE_AFTER_EXPIRY_DAYS = 90;
@@ -190,7 +191,7 @@ export async function runStoragePurge(env, options = {}) {
       .run();
     if (!inserted?.meta?.changes) continue;
     await sendStoragePurgeNotice(env, {
-      lang: g.ui_language,
+      lang: photographerMailLanguage(g.ui_language),
       to: g.photographer_email,
       studioName: g.studio_name,
       galleryTitle: g.title,

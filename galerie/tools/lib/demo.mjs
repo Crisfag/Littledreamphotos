@@ -37,6 +37,11 @@ const TEXTS = {
     clientName: "The Martins",
     comment: "Could we have this one in black and white too?",
   },
+  nl: {
+    title: "Fotoshoot familie Martin (demo)",
+    clientName: "Familie Martin",
+    comment: "Zou deze ook in zwart-wit kunnen?",
+  },
 };
 
 export async function demoPhotoFiles(dir = DEMO_DIR) {
@@ -83,7 +88,7 @@ function demoPassword() {
  * @param {string} options.api URL du Worker (API publique de la galerie)
  * @param {string} options.forensicKey
  * @param {string} options.studioName
- * @param {"fr"|"en"} [options.language]
+ * @param {"fr"|"en"|"nl"} [options.language]
  * @param {(fn: () => Promise<any>) => Promise<any>} [options.slot] file d'attente du traitement d'image
  */
 export async function createDemoGallery(client, { api, forensicKey, studioName, language = "fr", slot = (fn) => fn() }) {

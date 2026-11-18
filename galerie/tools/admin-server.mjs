@@ -366,7 +366,7 @@ async function handleAuth(req, res, parts) {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ email, password, studioName, firstName, lastName, acceptTerms: true, referralCode: String(body.referralCode || "").slice(0, 20),
-          language: body.language === "en" ? "en" : "fr",
+          language: ["en", "nl"].includes(body.language) ? body.language : "fr",
           // Page du site et source d'arrivée (parcours d'inscription), relues par le Worker.
           signupPage: String(body.signupPage || "").slice(0, 40), signupSource: String(body.signupSource || "").slice(0, 40) }),
       });
@@ -1005,6 +1005,22 @@ async function handleApi(req, res, url) {
     }
   }
 
+  // /local/assistant/listen et /speak — la voix de Lumi : l'audio enregistré
+  // part au Worker (Whisper), la réponse lue revient en MP3 (MeloTTS).
+  if (parts[0] === "assistant" && parts.length === 2 && ["listen", "speak"].includes(parts[1]) && req.method === "POST") {
+    try {
+      const listening = parts[1] === "listen";
+      const body = await readBody(req, listening ? 3.5 * 1024 * 1024 : 20000);
+      const upstream = await client.rawPost(`/api/admin/assistant/${parts[1]}`, body,
+        listening ? String(req.headers["content-type"] || "application/octet-stream") : "application/json");
+      const type = upstream.headers.get("content-type") || "application/json";
+      res.writeHead(upstream.status, { "content-type": type, "cache-control": "no-store" });
+      return res.end(Buffer.from(await upstream.arrayBuffer()));
+    } catch (err) {
+      return relayError(res, err, "La voix de Lumi n'a pas pu répondre");
+    }
+  }
+
   // /local/assistant — Lumi, l'assistante (questions sur Holypixx) : relais
   // JSON vers /api/admin/assistant. La conversation reste dans le navigateur.
   if (parts[0] === "assistant" && parts.length === 1 && ["GET", "POST"].includes(req.method)) {
@@ -1446,6 +1462,30 @@ async function handleApi(req, res, url) {
     }
   }
 
+  // /local/owner/newsletter — abonnés à la newsletter (lecture, retrait).
+  if (parts.length === 2 && parts[0] === "owner" && parts[1] === "newsletter" && (req.method === "GET" || req.method === "DELETE")) {
+    try {
+      let payload;
+      if (req.method === "DELETE") payload = JSON.parse((await readBody(req, 10000)).toString() || "{}");
+      return json(res, 200, await client.request(req.method, "/api/owner/newsletter", payload));
+    } catch (err) {
+      return relayError(res, err, "Impossible de lire la newsletter");
+    }
+  }
+
+  // POST /local/newsletter — inscription à la newsletter depuis l'espace
+  // photographe (bandeau néerlandais des sections encore en français).
+  if (parts.length === 1 && parts[0] === "newsletter" && req.method === "POST") {
+    try {
+      const body = JSON.parse((await readBody(req, 10000)).toString() || "{}");
+      return json(res, 200, await client.request("POST", "/api/public/newsletter", {
+        email: body.email, lang: body.lang, consent: body.consent === true, source: "admin",
+      }));
+    } catch (err) {
+      return relayError(res, err, "Inscription impossible");
+    }
+  }
+
   // GET /local/music-library — bibliothèque musicale commune.
   if (parts.length === 1 && parts[0] === "music-library" && req.method === "GET") {
     try {
@@ -1530,7 +1570,7 @@ async function handleApi(req, res, url) {
             includedPhotos: body.includedPhotos, extraPhotoPrice: body.extraPhotoPrice,
             theme: body.theme ? String(body.theme) : undefined,
             sessionType: body.sessionType ? String(body.sessionType).slice(0, 20) : undefined,
-            language: body.language === "en" ? "en" : undefined,
+            language: ["en", "nl"].includes(body.language) ? body.language : undefined,
           });
           return json(res, 201, { id: created.id, slug: finalSlug, password, link: await linkFor(client, finalSlug) });
         } catch (err) {
@@ -2056,7 +2096,7 @@ async function startDemo(client, photographer) {
     const demo = await createDemoGallery(client, {
       api: config.api, forensicKey: config.forensicKey,
       studioName: (photographer && photographer.studioName) || config.brand,
-      language: photographer && photographer.uiLanguage === "en" ? "en" : "fr",
+      language: photographer && ["en", "nl"].includes(photographer.uiLanguage) ? photographer.uiLanguage : "fr",
       slot: withProcessingSlot,
     });
     if (demo) demo.done.catch((err) => console.error("Démo :", err));

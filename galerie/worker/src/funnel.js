@@ -22,6 +22,7 @@ export const FUNNEL_STEPS = ["visit", "signup_click", "signup_view"];
 export const FUNNEL_PAGES = {
   accueil: "Accueil",
   "accueil-en": "Accueil (anglais)",
+  "accueil-nl": "Accueil (néerlandais)",
   mariage: "Galerie photo de mariage",
   contrat: "Contrat de photographe",
   proteger: "Protéger ses photos",

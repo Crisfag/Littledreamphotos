@@ -11,7 +11,7 @@
 // en service de la clé ne déclenche pas une rafale de vieux rappels.
 
 import { sendClientReminder, sendPhotographerReminder } from "./notify.js";
-import { languageOf } from "./i18n.js";
+import { languageOf, photographerMailLanguage } from "./i18n.js";
 
 const DAY = 86400;
 export const CLIENT_FIRST_DAYS = 7;
@@ -82,7 +82,7 @@ export async function runReminders(env, options = {}) {
 
       if (kind === "photographer_j2") {
         await sendPhotographerReminder(env, {
-          lang: gallery.photographer_language,
+          lang: photographerMailLanguage(gallery.photographer_language),
           to: gallery.photographer_email,
           galleryTitle: gallery.title,
           clientName: gallery.client_name,

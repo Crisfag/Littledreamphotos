@@ -1800,12 +1800,33 @@ main section > p, .ad-share > p { max-width: 75ch; }
 /* ---------- Langue : bouton English / Français, sections pas encore traduites ---------- */
 
 .ad-lang-switch {
-  position: absolute; top: 18px; right: 18px; padding: 7px 12px; border-radius: 8px;
-  border: 1px solid var(--line, #e6e6ee); background: #fff; color: var(--ink, #0b0b10);
-  font: inherit; font-size: .85rem; font-weight: 500; cursor: pointer;
+  position: absolute; top: 18px; right: 18px; display: inline-flex; padding: 3px; gap: 2px; border-radius: 10px;
+  border: 1px solid var(--line, #e6e6ee); background: #fff;
 }
-.ad-lang-switch:hover { background: var(--mist, #f6f6f9); }
-.ad-lang-switch:focus-visible { outline: 2px solid var(--accent, #3b3bf6); outline-offset: 2px; }
+.ad-lang-switch button {
+  min-width: 40px; min-height: 32px; padding: 0 10px; border: 0; border-radius: 7px; background: transparent;
+  color: var(--muted, #62626f); font: inherit; font-size: .8rem; font-weight: 600; letter-spacing: .04em; cursor: pointer;
+}
+.ad-lang-switch button:hover { background: var(--mist, #f6f6f9); color: var(--ink, #0b0b10); }
+.ad-lang-switch button[aria-pressed="true"] { background: var(--ink, #0b0b10); color: #fff; cursor: default; }
+.ad-lang-switch button:focus-visible { outline: 2px solid var(--accent, #3b3bf6); outline-offset: 2px; }
+
+/* Néerlandais : bandeau newsletter en tête des sections encore en français. */
+.ad-nl-news {
+  margin-bottom: 20px; padding: 14px 16px; border-radius: 12px;
+  background: var(--accent-soft, #ededff); color: var(--accent-deep, #2626d4); font-size: .9rem; line-height: 1.5;
+}
+.ad-nl-news-lead { margin: 0; }
+.ad-nl-news-form { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin-top: 10px; }
+.ad-nl-news-email { flex: 1 1 220px; }
+.ad-nl-news-email input {
+  width: 100%; min-height: 40px; padding: 8px 12px; border: 1px solid var(--line-2, #d6d6e2); border-radius: 9px;
+  background: #fff; color: var(--ink, #0b0b10); font: inherit;
+}
+.ad-nl-news-consent { flex-basis: 100%; display: flex; gap: 8px; align-items: flex-start; color: var(--ink-2, #2f2f3a); font-size: .82rem; cursor: pointer; }
+.ad-nl-news-consent input { margin-top: 3px; accent-color: var(--accent, #3b3bf6); }
+.ad-nl-news-status { margin: 6px 0 0; font-size: .82rem; color: var(--ink-2, #2f2f3a); }
+.ad-nl-news-status:empty { display: none; }
 #ad-view[data-untranslated]::before {
   content: attr(data-untranslated); display: block; margin-bottom: 18px; padding: 10px 14px; border-radius: 10px;
   background: var(--accent-soft, #ededff); color: var(--accent-deep, #2626d4); font-size: .9rem;
@@ -2715,3 +2736,49 @@ body:has(.ad-help:not([hidden])) .ad-help-btn::after, body:has(.ad-help:not([hid
   .ad-help-btn::after, .ad-help-btn::before { display: none; }
 }
 @keyframes ad-help-up { from { opacity: 0; transform: translateY(20px); } }
+
+/* ---------- Lumi : la voix ---------- */
+/* La bouche n'apparaît que quand Lumi parle ; elle s'ouvre et se ferme. */
+.lumi-mouth { opacity: 0; transform-box: fill-box; transform-origin: center; }
+.is-talking .lumi-mouth { opacity: 1; }
+.is-listening .lumi-tilt { transform: rotate(-6deg); }
+.is-listening .lumi-look { transform: translate(-1.5px, .5px); }
+@media (prefers-reduced-motion: no-preference) {
+  .is-talking .lumi-mouth { animation: lumi-talk .32s ease-in-out infinite alternate; }
+  .is-talking .lumi-all { animation: lumi-bob 1.2s ease-in-out infinite; }
+  .is-listening .lumi-tilt { animation: none; }
+}
+@keyframes lumi-talk { 0% { transform: scale(.9, .35); } 45% { transform: scale(1, 1.15); } 100% { transform: scale(.8, .6); } }
+
+.lumi-mic {
+  flex: none; position: relative; display: grid; place-items: center; width: 42px; height: 42px; border-radius: 12px; cursor: pointer;
+  border: 1px solid var(--line-2); background: var(--paper); color: var(--ink-2);
+  transition: background-color .15s var(--ease), color .15s var(--ease), border-color .15s var(--ease);
+}
+.lumi-mic:hover { border-color: var(--accent); color: var(--accent-deep); background: var(--accent-soft); }
+.lumi-mic:focus-visible { outline: none; box-shadow: var(--ring); }
+.lumi-mic:disabled { opacity: .5; cursor: default; }
+.lumi-mic svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.lumi-stop-ic { display: none; }
+.lumi-mic.is-recording { background: var(--alert); border-color: var(--alert); color: #fff; }
+.lumi-mic.is-recording .lumi-mic-ic { display: none; }
+.lumi-mic.is-recording .lumi-stop-ic { display: block; fill: currentColor; stroke: none; }
+@media (prefers-reduced-motion: no-preference) {
+  .lumi-mic.is-recording { animation: lumi-rec 1.3s ease-out infinite; }
+}
+@keyframes lumi-rec { 0% { box-shadow: 0 0 0 0 rgba(229, 72, 77, .5); } 100% { box-shadow: 0 0 0 12px rgba(229, 72, 77, 0); } }
+.lumi-voice-toggle .lumi-wave { display: none; }
+.lumi-voice-toggle[aria-pressed="true"] { color: var(--accent); background: var(--accent-soft); }
+.lumi-voice-toggle[aria-pressed="true"] .lumi-wave { display: inline; }
+.lumi-voice-toggle[aria-pressed="true"] .lumi-mute { display: none; }
+.lumi-play {
+  display: inline-flex; align-items: center; gap: .3rem; margin-top: .45rem; padding: .2rem .55rem .2rem .4rem;
+  font: inherit; font-size: .76rem; font-weight: 500; border-radius: 999px; cursor: pointer;
+  border: 0; background: rgba(59, 59, 246, .08); color: var(--accent-deep);
+}
+.lumi-play:hover { background: rgba(59, 59, 246, .14); }
+.lumi-play:focus-visible { outline: none; box-shadow: var(--ring); }
+.lumi-play svg { width: 14px; height: 14px; fill: currentColor; }
+.lumi-pause-ic { display: none; }
+.lumi-play.is-playing .lumi-play-ic { display: none; }
+.lumi-play.is-playing .lumi-pause-ic { display: inline; }

@@ -1108,9 +1108,9 @@ export async function handleAdmin(request, env, ctx, path) {
 
   // Suggestions envoyées au propriétaire de la plateforme (feedback.js).
   if (section === "feedback") return handleFeedbackAdmin(request, env, photographerId, parts.slice(3));
-  if (section === "assistant" && parts.length === 3) {
+  if (section === "assistant" && (parts.length === 3 || (parts.length === 4 && ["listen", "speak"].includes(parts[3])))) {
     const photographer = await env.DB.prepare("SELECT * FROM photographers WHERE id = ?").bind(photographerId).first();
-    return handleAssistantAdmin(request, env, photographer);
+    return handleAssistantAdmin(request, env, photographer, parts[3] || "");
   }
 
   // Fiches clients et dates à retenir (clients.js).

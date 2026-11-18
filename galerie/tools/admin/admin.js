@@ -105,20 +105,35 @@
   var LANG = "fr";
   var LANG_KEY = "holypixx-admin-lang";
 
-  function L(fr, en) {
-    return LANG === "en" ? en : fr;
+  // Néerlandais : dictionnaire indexé par le texte anglais (i18n-nl.js).
+  // Une chaîne sans traduction néerlandaise retombe sur le français.
+  var NL = window.HOLYPIXX_NL || {};
+  var LANGS = ["fr", "en", "nl"];
+
+  // L(fr, en, nl) : nl n'est donné que pour les phrases composées avec des
+  // variables (elles ne peuvent pas être une clé du dictionnaire).
+  function L(fr, en, nl) {
+    if (LANG === "en") return en;
+    if (LANG === "nl") return nl !== undefined ? nl : NL[en] || fr;
+    return fr;
+  }
+
+  // Texte d'une table anglaise (*_EN) dans la langue en cours, hors français.
+  function T(en, fr) {
+    if (LANG === "nl") return NL[en] || fr || en;
+    return en;
   }
 
   function locale() {
-    return LANG === "en" ? "en-GB" : "fr-BE";
+    return LANG === "en" ? "en-GB" : LANG === "nl" ? "nl-BE" : "fr-BE";
   }
 
   function initialLanguage() {
-    var match = /[?&]lang=(en|fr)\b/.exec(location.search + "&" + location.hash);
+    var match = /[?&]lang=(en|fr|nl)\b/.exec(location.search + "&" + location.hash);
     if (match) return match[1];
     try {
       var saved = localStorage.getItem(LANG_KEY);
-      if (saved === "en" || saved === "fr") return saved;
+      if (LANGS.indexOf(saved) >= 0) return saved;
     } catch (err) { /* navigation privée */ }
     // Français par défaut, même si le navigateur est en anglais : l'anglais
     // se choisit (page anglaise ?lang=en, bouton « English », Paramètres),
@@ -152,23 +167,24 @@
   function swapTexts() {
     Object.keys(EVENT_LABELS).forEach(function (key) {
       if (!swapTexts.events) swapTexts.events = Object.assign({}, EVENT_LABELS);
-      EVENT_LABELS[key] = LANG === "en" ? EVENT_LABELS_EN[key] || swapTexts.events[key] : swapTexts.events[key];
+      var en = EVENT_LABELS_EN[key];
+      EVENT_LABELS[key] = LANG !== "fr" && en ? T(en, swapTexts.events[key]) : swapTexts.events[key];
     });
     BACKGROUND_PRESETS.forEach(function (p, i) {
       if (p.labelFr === undefined) p.labelFr = p.label;
-      p.label = LANG === "en" ? BACKGROUND_PRESETS_EN[i] : p.labelFr;
+      p.label = LANG !== "fr" ? T(BACKGROUND_PRESETS_EN[i], p.labelFr) : p.labelFr;
     });
     LAYOUT_OPTIONS.forEach(function (o) {
       if (o.labelFr === undefined) { o.labelFr = o.label; o.hintFr = o.hint; }
       var en = LAYOUT_OPTIONS_EN[o.value];
-      o.label = LANG === "en" && en ? en[0] : o.labelFr;
-      o.hint = LANG === "en" && en ? en[1] : o.hintFr;
+      o.label = LANG !== "fr" && en ? T(en[0], o.labelFr) : o.labelFr;
+      o.hint = LANG !== "fr" && en ? T(en[1], o.hintFr) : o.hintFr;
     });
     GALLERY_STYLES.forEach(function (st) {
       if (st.labelFr === undefined) { st.labelFr = st.label; st.idealFr = st.ideal; }
       var en = GALLERY_STYLES_EN[st.key];
-      st.label = LANG === "en" && en ? en[0] : st.labelFr;
-      st.ideal = LANG === "en" && en ? en[1] : st.idealFr;
+      st.label = LANG !== "fr" && en ? T(en[0], st.labelFr) : st.labelFr;
+      st.ideal = LANG !== "fr" && en ? T(en[1], st.idealFr) : st.idealFr;
     });
   }
 
@@ -183,22 +199,20 @@
         if (!node.hasAttribute(frKey)) {
           node.setAttribute(frKey, pair[1] === null ? node.textContent : pair[1] === "html" ? node.innerHTML : node.getAttribute(pair[1]) || "");
         }
-        var value = LANG === "en" ? node.getAttribute(pair[0]) : node.getAttribute(frKey);
+        var value = LANG === "fr" ? node.getAttribute(frKey) : T(node.getAttribute(pair[0]), node.getAttribute(frKey));
         if (pair[1] === null) node.textContent = value;
         else if (pair[1] === "html") node.innerHTML = value;
         else node.setAttribute(pair[1], value);
       });
     });
-    var switcher = document.getElementById("ad-lang-switch");
-    if (switcher) {
-      switcher.textContent = LANG === "en" ? "Français" : "English";
-      switcher.setAttribute("lang", LANG === "en" ? "fr" : "en");
-    }
+    document.querySelectorAll(".ad-lang-switch [data-lang]").forEach(function (btn) {
+      btn.setAttribute("aria-pressed", String(btn.getAttribute("data-lang") === LANG));
+    });
     document.title = L("Espace photographe — Holypixx", "Photographer dashboard — Holypixx");
   }
 
   function setLanguage(lang, remember) {
-    LANG = lang === "en" ? "en" : "fr";
+    LANG = LANGS.indexOf(lang) >= 0 ? lang : "fr";
     document.documentElement.lang = LANG;
     swapTexts();
     applyStaticLanguage();
@@ -370,12 +384,23 @@
     [/^(\d+) fichiers maximum par galerie$/, function (m) { return m[1] + " files maximum per gallery"; }],
     [/^Erreur HTTP (\d+)$/, function (m) { return "HTTP error " + m[1]; }],
   ];
+  // Mêmes messages, en néerlandais (même ordre que SERVER_EN_PATTERNS).
+  var PLAN_LABELS_FR_NL = { "Découverte": "Ontdekken", "Essentiel": "Essentieel", "Pro": "Pro", "Scolaire": "School", "Studio": "Studio", "payante": "betalende" };
+  function featureNl(fr) { return FEATURE_LABELS_EN[fr] ? T(FEATURE_LABELS_EN[fr], fr) : fr; }
+  var SERVER_NL_PATTERNS = [
+    function (m) { return featureNl(m[1]) + " zit in de formule " + (PLAN_LABELS_FR_NL[m[2]] || m[2]) + " en hoger (tabblad Abonnement)."; },
+    function (m) { return "Met je formule " + (PLAN_LABELS_FR_NL[m[1]] || m[1]) + " heb je " + m[2] + " actieve galerijen. Verwijder een galerij of laat er een verlopen, of kies een hogere formule (tabblad Abonnement)."; },
+    function (m) { return "Je opslagruimte is vol (" + m[1].replace(/ To$/, " TB").replace(/ Go$/, " GB").replace(/ Mo$/, " MB") + " met de formule " + (PLAN_LABELS_FR_NL[m[2]] || m[2]) + "). Verwijder oude galerijen of leveringen, of kies een hogere formule (tabblad Abonnement)."; },
+    function (m) { return "Maximaal " + m[1] + " formaten"; },
+    function (m) { return "Maximaal " + m[1] + " bestanden per galerij"; },
+    function (m) { return "HTTP-fout " + m[1]; },
+  ];
   function serverText(message) {
-    if (LANG !== "en" || !message) return message;
-    if (SERVER_EN[message]) return SERVER_EN[message];
+    if (LANG === "fr" || !message) return message;
+    if (SERVER_EN[message]) return T(SERVER_EN[message], message);
     for (var i = 0; i < SERVER_EN_PATTERNS.length; i++) {
       var m = SERVER_EN_PATTERNS[i][0].exec(message);
-      if (m) return SERVER_EN_PATTERNS[i][1](m);
+      if (m) return LANG === "en" ? SERVER_EN_PATTERNS[i][1](m) : SERVER_NL_PATTERNS[i](m);
     }
     return message;
   }
@@ -383,11 +408,87 @@
   // Sections pas encore traduites : un bandeau le dit, en anglais.
   var UNTRANSLATED_TABS = { clients: 1, booking: 1, giftcards: 1, contracts: 1, sales: 1, portfolio: 1, school: 1, owner: 1 };
 
+  // En néerlandais, les sections encore en français portent un bandeau
+  // d'inscription à la newsletter (POST /local/newsletter → newsletter.js).
+  // Le bandeau est remis en tête de #ad-view après chaque rendu.
+  var NL_NEWS_KEY = "holypixx-nl-news";
+  var nlNewsWanted = false;
+  var nlNewsObserver = null;
+
+  function nlNewsJoined() {
+    try { return localStorage.getItem(NL_NEWS_KEY) === "1"; } catch (err) { return false; }
+  }
+
+  function nlNewsHtml() {
+    var lead = "<strong>Dit gedeelte is nog in het Frans.</strong> ";
+    if (nlNewsJoined()) {
+      return '<p class="ad-nl-news-lead">' + lead + "Je staat op de lijst voor de nieuwsbrief: we laten je weten zodra er meer in het Nederlands klaarstaat.</p>";
+    }
+    var email = (state && state.me && state.me.email) || "";
+    return '<p class="ad-nl-news-lead">' + lead + "Wil je meer in het Nederlands? Schrijf je in op de nieuwsbrief: we laten je weten zodra er nieuwe vertalingen klaarstaan.</p>" +
+      '<form class="ad-nl-news-form" novalidate>' +
+      '<label class="ad-nl-news-email"><span class="ad-visually-hidden">E-mailadres</span>' +
+      '<input type="email" name="email" required autocomplete="email" placeholder="jij@jouwstudio.be" value="' + esc(email) + '" /></label>' +
+      '<button type="submit" class="ad-btn ad-btn-primary">Inschrijven</button>' +
+      '<label class="ad-nl-news-consent"><input type="checkbox" name="consent" /> <span>Ik wil de nieuwsbrief van Holypixx in het Nederlands ontvangen. Uitschrijven kan altijd.</span></label>' +
+      "</form>" +
+      '<p class="ad-nl-news-status" role="status" aria-live="polite"></p>';
+  }
+
+  function placeNlNews() {
+    if (!el.view) return;
+    var banner = document.getElementById("ad-nl-news");
+    if (!nlNewsWanted) { if (banner) banner.remove(); return; }
+    if (banner && el.view.firstElementChild === banner) return;
+    if (!banner) {
+      banner = document.createElement("aside");
+      banner.id = "ad-nl-news";
+      banner.className = "ad-nl-news";
+      banner.setAttribute("lang", "nl");
+      banner.setAttribute("aria-label", "Nieuwsbrief");
+      banner.innerHTML = nlNewsHtml();
+      banner.addEventListener("submit", submitNlNews);
+    }
+    el.view.insertBefore(banner, el.view.firstChild);
+  }
+
+  async function submitNlNews(event) {
+    event.preventDefault();
+    var form = event.target;
+    var status = form.parentNode.querySelector(".ad-nl-news-status");
+    var email = form.email.value.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { status.textContent = "Vul een geldig e-mailadres in."; form.email.focus(); return; }
+    if (!form.consent.checked) { status.textContent = "Vink het vakje aan om de nieuwsbrief te ontvangen."; form.consent.focus(); return; }
+    var button = form.querySelector("button");
+    button.disabled = true;
+    try {
+      await api("POST", "/newsletter", { email: email, lang: "nl", consent: true });
+      try { localStorage.setItem(NL_NEWS_KEY, "1"); } catch (err) { /* navigation privée */ }
+      var banner = document.getElementById("ad-nl-news");
+      banner.innerHTML = '<p class="ad-nl-news-lead"><strong>Bedankt, je bent ingeschreven!</strong> We laten je weten zodra er meer in het Nederlands klaarstaat.</p>';
+    } catch (err) {
+      status.textContent = err.message || "Inschrijven lukt niet. Probeer het later opnieuw.";
+      button.disabled = false;
+    }
+  }
+
+  function showDutchNewsletter(on) {
+    nlNewsWanted = !!on;
+    var banner = document.getElementById("ad-nl-news");
+    if (banner && !nlNewsWanted) banner.remove();
+    if (!nlNewsObserver && el.view && typeof MutationObserver !== "undefined") {
+      nlNewsObserver = new MutationObserver(placeNlNews);
+      nlNewsObserver.observe(el.view, { childList: true });
+    }
+    placeNlNews();
+  }
+
   setLanguage(initialLanguage(), false);
   var langSwitch = document.getElementById("ad-lang-switch");
   if (langSwitch) {
-    langSwitch.addEventListener("click", function () {
-      setLanguage(LANG === "en" ? "fr" : "en", true);
+    langSwitch.addEventListener("click", function (event) {
+      var btn = event.target.closest("[data-lang]");
+      if (btn) setLanguage(btn.getAttribute("data-lang"), true);
     });
   }
 
@@ -401,6 +502,7 @@
     if (el.view) {
       if (LANG === "en" && UNTRANSLATED_TABS[name]) el.view.setAttribute("data-untranslated", "This section is still in French — its English version is on its way.");
       else el.view.removeAttribute("data-untranslated");
+      showDutchNewsletter(LANG === "nl" && UNTRANSLATED_TABS[name]);
     }
     if (!el.tabs) return;
     el.tabs.querySelectorAll(".ad-tab").forEach(function (btn) {
@@ -506,7 +608,8 @@
       var data = await response.json();
       banner.innerHTML = L(
         "<strong>" + esc(data.studio) + "</strong> vous parraine : −" + Number(data.discountPercent) + " % sur votre mois suivant, dès votre premier paiement.",
-        "<strong>" + esc(data.studio) + "</strong> referred you: " + Number(data.discountPercent) + "% off your following month, from your first payment."
+        "<strong>" + esc(data.studio) + "</strong> referred you: " + Number(data.discountPercent) + "% off your following month, from your first payment.",
+        "<strong>" + esc(data.studio) + "</strong> heeft je doorverwezen: " + Number(data.discountPercent) + "% korting op je volgende maand, vanaf je eerste betaling."
       );
       banner.hidden = false;
     } catch (err) { /* sans bandeau, l'inscription garde le code */ }
@@ -955,8 +1058,10 @@
     var email = btn.getAttribute("data-settle-email");
     var how = method === "cash" ? L("en espèces", "in cash") : L("par virement", "by bank transfer");
     var question = L("« " + title + " » : " + what + ", " + formatEuros(amount) + " réglés " + how + " ?",
-      "“" + title + "”: " + what + ", " + formatEuros(amount) + " paid " + how + "?") + "\n\n" +
-      (email ? L("La facture sera émise et envoyée à " + email + ".", "The invoice will be issued and sent to " + email + ".")
+      "“" + title + "”: " + what + ", " + formatEuros(amount) + " paid " + how + "?",
+        "“" + title + "”: " + what + ", " + formatEuros(amount) + " betaald " + how + "?") + "\n\n" +
+      (email ? L("La facture sera émise et envoyée à " + email + ".", "The invoice will be issued and sent to " + email + ".",
+        "De factuur wordt opgemaakt en verstuurd naar " + email + ".")
         : L("La facture sera émise (aucune adresse e-mail client sur cette galerie : vous la retrouverez dans l'historique des factures).",
           "The invoice will be issued (no client email on this gallery: you'll find it in the invoice history)."));
     if (!confirm(question)) return;
@@ -968,7 +1073,9 @@
       toast(L("Supplément réglé " + how + " : " + formatEuros(result.amountCents) +
         (result.invoiceNumber ? ", facture " + result.invoiceNumber + (result.emailedTo ? " envoyée à " + result.emailedTo : " émise") : "") + ".",
         "Extras paid " + how + ": " + formatEuros(result.amountCents) +
-        (result.invoiceNumber ? ", invoice " + result.invoiceNumber + (result.emailedTo ? " sent to " + result.emailedTo : " issued") : "") + "."));
+        (result.invoiceNumber ? ", invoice " + result.invoiceNumber + (result.emailedTo ? " sent to " + result.emailedTo : " issued") : "") + ".",
+        "Extra foto's betaald " + how + ": " + formatEuros(result.amountCents) +
+        (result.invoiceNumber ? ", factuur " + result.invoiceNumber + (result.emailedTo ? " verstuurd naar " + result.emailedTo : " opgemaakt") : "") + "."));
       done();
     } catch (err) {
       toast(err.message, true);
@@ -1001,7 +1108,8 @@
         (s.clientName ? '<span class="ad-due-client">' + esc(s.clientName) + "</span>" : "") + "</td>" +
         '<td class="ad-due-amount"><strong>' + formatEuros(s.dueTotalCents) + "</strong>" +
         (s.dueExtraCount > 0 ? '<span class="ad-due-detail">' + s.dueExtraCount + (s.dueExtraCount === 1 ? " photo" : " photos") + " × " + formatEuros(s.unitPriceCents) + "</span>" : "") +
-        (s.optionsCount > 0 ? '<span class="ad-due-detail">' + L("+ " + s.optionsCount + " option" + (s.optionsCount > 1 ? "s" : ""), "+ " + s.optionsCount + " option" + (s.optionsCount > 1 ? "s" : "")) + " (" + formatEuros(s.optionsCents) + ")</span>" : "") + "</td>" +
+        (s.optionsCount > 0 ? '<span class="ad-due-detail">' + L("+ " + s.optionsCount + " option" + (s.optionsCount > 1 ? "s" : ""), "+ " + s.optionsCount + " option" + (s.optionsCount > 1 ? "s" : ""),
+        "+ " + s.optionsCount + (s.optionsCount > 1 ? " opties" : " optie")) + " (" + formatEuros(s.optionsCents) + ")</span>" : "") + "</td>" +
         '<td class="ad-due-status">' + status +
         (s.remindedAt ? '<span class="ad-due-when">' + L("Relancé le ", "Reminded on ") + esc(formatDate(s.remindedAt)) + "</span>" : "") +
         (s.clientEmail ? '<button type="button" class="ad-link-btn ad-due-remind" data-remind="' + esc(s.slug) + '" data-remind-email="' + esc(s.clientEmail) + '">' + L("Relancer maintenant", "Send a reminder now") + "</button>" : "") +
@@ -1012,7 +1120,8 @@
     });
     return (
       '<p class="ad-quota-due">' + formatEuros(data.totalCents) + L(" au total, sur " + due.length + " galerie" + (due.length > 1 ? "s" : ""),
-        " in total, across " + due.length + " galler" + (due.length > 1 ? "ies" : "y")) + "</p>" +
+        " in total, across " + due.length + " galler" + (due.length > 1 ? "ies" : "y"),
+        " in totaal, over " + due.length + (due.length > 1 ? " galerijen" : " galerij")) + "</p>" +
       '<p class="ad-hint">' + L("Suppléments et options cochées par vos clients. Un client vous a réglé par virement ou en espèces sans passer par sa galerie ? Notez-le ici : c'est marqué réglé et sa facture lui est envoyée. Sans règlement, il reçoit un rappel 3 puis 7 jours après avoir validé sa sélection (réglable dans Paramètres).",
         "Extras and options ticked by your clients. A client paid you by transfer or in cash without going through their gallery? Record it here: it's marked as paid and the invoice is sent to them. Unpaid, they get a reminder 3 and then 7 days after confirming their selection (set in Settings).") + "</p>" +
       '<div class="ad-table-wrap"><table class="ad-table ad-due-table"><thead><tr><th>' + L("Galerie", "Gallery") + "</th><th>" + L("À régler", "Due") + "</th><th>" +
@@ -1187,7 +1296,9 @@
       '<div class="ad-section-header"><h3>Factures clients</h3>' +
       (data.enabled && !ciState.editing ? '<button type="button" class="ad-btn ad-btn-primary" id="ad-ci-new">+ Nouvelle facture</button>' : "") + "</div>" +
       (!data.enabled
-        ? '<p class="ad-banner ad-banner-muted">Les factures libres, échéanciers et relances de paiement sont inclus dans la formule Pro, avec les devis et contrats.</p>'
+        ? '<p class="ad-banner ad-banner-muted">' + L("Les factures libres, échéanciers et relances de paiement sont inclus dans la formule Pro, avec les devis et contrats.",
+          "Free-form invoices, payment plans and payment reminders are included in the Pro plan, along with quotes and contracts.",
+          "Vrije facturen, betalingsschema's en betalingsherinneringen zitten in de formule Pro, samen met offertes en contracten.") + "</p>"
         : '<p class="ad-hint">Facturez une séance, un album, une cession de droits (TVA 6 %)… avec un échéancier si besoin. Votre client règle en ligne ou par virement ; les relances partent toutes seules.</p>' +
           (!data.seller.iban ? '<p class="ad-hint">Astuce : ajoutez votre IBAN dans Paramètres (coordonnées fiscales) pour qu\'il figure sur vos factures.</p>' : "") +
           '<div class="ad-stats">' +
@@ -1471,11 +1582,13 @@
       if (btn) return settleSupplementFrom(btn, function () { renderBilling(true); });
       var remind = event.target.closest("[data-remind]");
       if (!remind) return;
-      if (!confirm(L("Envoyer maintenant un rappel de paiement à " + remind.getAttribute("data-remind-email") + " ?", "Send a payment reminder to " + remind.getAttribute("data-remind-email") + " now?"))) return;
+      if (!confirm(L("Envoyer maintenant un rappel de paiement à " + remind.getAttribute("data-remind-email") + " ?", "Send a payment reminder to " + remind.getAttribute("data-remind-email") + " now?",
+        "Nu een betalingsherinnering naar " + remind.getAttribute("data-remind-email") + " sturen?"))) return;
       remind.disabled = true;
       try {
         var result = await api("POST", "/galleries/" + encodeURIComponent(remind.getAttribute("data-remind")) + "/supplement/remind");
-        toast(L("Rappel envoyé à " + result.to + ".", "Reminder sent to " + result.to + "."));
+        toast(L("Rappel envoyé à " + result.to + ".", "Reminder sent to " + result.to + ".",
+        "Herinnering verstuurd naar " + result.to + "."));
         loadDueSupplements();
       } catch (err) {
         toast(err.message, true);
@@ -1675,8 +1788,9 @@
       '<p class="ad-hint">' + L("Votre tableau de bord et les e-mails que vous recevez. La langue vue par chaque client se règle galerie par galerie.",
         "Your dashboard and the emails you receive. The language each client sees is set gallery by gallery.") + "</p>" +
       '<label class="ad-field"><span>' + L("Langue", "Language") + '</span><select id="ad-ui-language">' +
-      '<option value="fr"' + (photographer.uiLanguage !== "en" ? " selected" : "") + ">Français</option>" +
-      '<option value="en"' + (photographer.uiLanguage === "en" ? " selected" : "") + ">English</option></select></label>" +
+      '<option value="fr"' + (photographer.uiLanguage !== "en" && photographer.uiLanguage !== "nl" ? " selected" : "") + ">Français</option>" +
+      '<option value="en"' + (photographer.uiLanguage === "en" ? " selected" : "") + ">English</option>" +
+      '<option value="nl"' + (photographer.uiLanguage === "nl" ? " selected" : "") + ">Nederlands</option></select></label>" +
       "</section>" +
 
       '<section><div class="ad-section-header"><h3>Studio</h3></div>' +
@@ -1848,7 +1962,8 @@
       try {
         var result = await api("POST", "/account/delete", { password: form.password.value, confirm: "SUPPRIMER" });
         toast(L("Compte supprimé (" + result.deletedGalleries + " galerie" + (result.deletedGalleries > 1 ? "s" : "") + "). Au revoir !",
-          "Account deleted (" + result.deletedGalleries + " galler" + (result.deletedGalleries === 1 ? "y" : "ies") + "). Goodbye!"));
+          "Account deleted (" + result.deletedGalleries + " galler" + (result.deletedGalleries === 1 ? "y" : "ies") + "). Goodbye!",
+        "Account verwijderd (" + result.deletedGalleries + (result.deletedGalleries === 1 ? " galerij" : " galerijen") + "). Tot ziens!"));
         showLogin();
       } catch (err) {
         errorBox.textContent = err.message;
@@ -2024,7 +2139,8 @@
         var newEmail = form.newEmail.value.trim();
         await api("POST", "/account/email", { newEmail: newEmail, password: form.password.value });
         messageBox.textContent = L("Un lien de confirmation a été envoyé à " + newEmail + ". Ouvrez-le pour finaliser le changement — rien ne change avant ça.",
-          "A confirmation link was sent to " + newEmail + ". Open it to complete the change — nothing changes before that.");
+          "A confirmation link was sent to " + newEmail + ". Open it to complete the change — nothing changes before that.",
+        "Er is een bevestigingslink verstuurd naar " + newEmail + ". Open hem om de wijziging af te ronden — tot dan verandert er niets.");
         messageBox.hidden = false;
         form.reset();
       } catch (err) {
@@ -2083,10 +2199,11 @@
     studio: ["Studio", "Everything in Pro, plus schools, nurseries and clubs, with no commission."],
   };
   function planLabel(plan) {
-    return LANG === "en" && PLANS_EN[plan.key] ? PLANS_EN[plan.key][0] : plan.label;
+    if (LANG === "nl" && plan.key === "free") return "Ontdekken";
+    return LANG !== "fr" && PLANS_EN[plan.key] ? T(PLANS_EN[plan.key][0], plan.label) : plan.label;
   }
   function planPitch(plan) {
-    return LANG === "en" && PLANS_EN[plan.key] ? PLANS_EN[plan.key][1] : plan.pitch;
+    return LANG !== "fr" && PLANS_EN[plan.key] ? T(PLANS_EN[plan.key][1], plan.pitch) : plan.pitch;
   }
 
   // Prix affiché d'une formule (HTML) : mensuel ou annuel, et prix
@@ -2577,7 +2694,8 @@
     var bars = d.byType.map(function (t) {
       var width = Math.max(1, Math.round((t.count / max) * 100));
       return '<li class="ad-ins-bar" title="' + esc(insTypeName(t.key) + " : " + t.count) + '"><span class="ad-ins-bar-label">' + esc(insTypeName(t.key)) +
-        (t.guessed ? ' <span class="ad-ins-guess">' + L(t.guessed === t.count ? "deviné" : t.guessed + " deviné" + (t.guessed > 1 ? "s" : ""), t.guessed === t.count ? "guessed" : t.guessed + " guessed") + "</span>" : "") + "</span>" +
+        (t.guessed ? ' <span class="ad-ins-guess">' + L(t.guessed === t.count ? "deviné" : t.guessed + " deviné" + (t.guessed > 1 ? "s" : ""), t.guessed === t.count ? "guessed" : t.guessed + " guessed",
+        t.guessed === t.count ? "geraden" : t.guessed + " geraden") + "</span>" : "") + "</span>" +
         '<span class="ad-ins-track"><span class="ad-ins-fill" style="width:' + width + '%"></span></span>' +
         '<span class="ad-ins-count">' + t.count + '</span><span class="ad-ins-share">' + insPercent(t.share) + "</span></li>";
     }).join("");
@@ -2621,7 +2739,8 @@
     if (!d.sessions.length) return "";
     var guessed = d.sessions.filter(function (s) { return s.guessed; }).length;
     return '<section id="ad-ins-classify"><div class="ad-section-header"><h3>' + L("Séances à classer", "Sessions to classify") + " (" + d.toClassify + ")</h3>" +
-      (guessed ? '<button type="button" class="ad-btn ad-btn-small" id="ad-ins-confirm-all">' + L("Valider les " + guessed + " types devinés", "Confirm the " + guessed + " guessed types") + "</button>" : "") + "</div>" +
+      (guessed ? '<button type="button" class="ad-btn ad-btn-small" id="ad-ins-confirm-all">' + L("Valider les " + guessed + " types devinés", "Confirm the " + guessed + " guessed types",
+        "Bevestig de " + guessed + " geraden types") + "</button>" : "") + "</div>" +
       '<p class="ad-hint">' + L("Le type est deviné d'après le titre de la galerie ; corrigez-le si besoin, il est enregistré aussitôt.", "The type is guessed from the gallery title; correct it if needed, it is saved straight away.") + "</p>" +
       '<ul class="ad-ins-classify">' + d.sessions.map(function (s) {
         return '<li><span class="ad-ins-cl-title"><a href="#/g/' + encodeURIComponent(s.slug) + '">' + esc(s.title) + "</a>" +
@@ -2661,7 +2780,8 @@
       statTile(L("Séances", "Sessions"), String(d.total), d.byType.filter(function (t) { return t.key; }).length + " " + L("types différents", "different types")) +
       statTile(L("Photos choisies en moyenne", "Photos chosen on average"), insNumber(o.avgSelected), L("sur ", "out of ") + insNumber(o.avgPhotos) + L(" livrées", " delivered")) +
       statTile(L("Séances avec suppléments", "Sessions with extras"), insPercent(o.extrasRate), o.avgExtras ? "+" + insNumber(o.avgExtras) + L(" photos en moyenne", " photos on average") : "") +
-      statTile(L("Panier moyen", "Average basket"), o.buyers ? formatEuros(o.basketCents) : "—", o.buyers ? o.buyers + L(" séance" + (o.buyers > 1 ? "s" : "") + " qui achète" + (o.buyers > 1 ? "nt" : ""), " session" + (o.buyers > 1 ? "s" : "") + " that bought") : L("aucun achat sur la période", "no purchase in this period")) +
+      statTile(L("Panier moyen", "Average basket"), o.buyers ? formatEuros(o.basketCents) : "—", o.buyers ? o.buyers + L(" séance" + (o.buyers > 1 ? "s" : "") + " qui achète" + (o.buyers > 1 ? "nt" : ""), " session" + (o.buyers > 1 ? "s" : "") + " that bought",
+        " shoot" + (o.buyers > 1 ? "s" : "") + " met aankoop") : L("aucun achat sur la période", "no purchase in this period")) +
       statTile(L("Encaissé par séance", "Collected per session"), formatEuros(o.avgRevenueCents), formatEuros(o.revenueCents) + L(" au total", " in total")) +
       "</div>" +
       insightsHighlightsHtml(d) +
@@ -2699,7 +2819,8 @@
           for (var i = 0; i < selects.length; i++) {
             await api("POST", "/galleries/" + encodeURIComponent(selects[i].getAttribute("data-ins-type")) + "/session-type", { sessionType: selects[i].value });
           }
-          toast(L(selects.length + " séance(s) classée(s).", selects.length + " session(s) classified."));
+          toast(L(selects.length + " séance(s) classée(s).", selects.length + " session(s) classified.",
+        selects.length + " shoot(s) geclassificeerd."));
           renderInsights(true);
         } catch (err) {
           confirmAll.disabled = false;
@@ -2805,7 +2926,11 @@
     var unlimited = storage.quotaBytes === null;
     var ratio = unlimited ? 0 : Math.min(1, storage.usedBytes / storage.quotaBytes);
     var level = ratio >= 0.95 ? " ad-gauge-full" : ratio >= 0.8 ? " ad-gauge-warn" : "";
-    var gb = function (label) { return LANG === "en" ? String(label || "").replace(/ Go$/, " GB").replace(/ Mo$/, " MB").replace(/ To$/, " TB").replace(",", ".") : label; };
+    var gb = function (label) {
+      if (LANG === "fr") return label;
+      var out = String(label || "").replace(/ Go$/, " GB").replace(/ Mo$/, " MB").replace(/ To$/, " TB");
+      return LANG === "en" ? out.replace(",", ".") : out;
+    };
     return '<div class="ad-storage"><p class="ad-hint">' + L("Stockage", "Storage") + "</p>" +
       '<p class="ad-plan-usage" id="ad-storage-text">' + esc(gb(storage.usedLabel)) + (unlimited ? L(" (illimité)", " (unlimited)") : L(" sur ", " of ") + esc(gb(storage.quotaLabel))) + "</p>" +
       (unlimited ? "" : '<div class="ad-gauge' + level + '" role="meter" aria-label="' + L("Espace de stockage utilisé", "Storage used") + '" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' +
@@ -2826,7 +2951,8 @@
       (plan.features.subdomain ? "✓ " : "— ") + L("Vos galeries à votre nom", "Galleries in your name"),
       (plan.features.booking ? "✓ " : "— ") + L("Réservation en ligne avec acompte", "Online booking with deposit"),
       (plan.features.contracts ? "✓ " : "— ") + L("Devis et contrats signés en ligne", "Quotes and contracts signed online"),
-      plan.features.school && schoolOpen ? L("✓ Écoles, crèches et clubs", "✓ Schools, nurseries and clubs") + (plan.schoolFeePercent ? L(" (" + String(plan.schoolFeePercent).replace(".", ",") + " % des ventes scolaires)", " (" + plan.schoolFeePercent + "% of school sales)") : L(", sans commission", ", no commission")) : "",
+      plan.features.school && schoolOpen ? L("✓ Écoles, crèches et clubs", "✓ Schools, nurseries and clubs") + (plan.schoolFeePercent ? L(" (" + String(plan.schoolFeePercent).replace(".", ",") + " % des ventes scolaires)", " (" + plan.schoolFeePercent + "% of school sales)",
+        " (" + plan.schoolFeePercent + "% van de schoolverkopen)") : L(", sans commission", ", no commission")) : "",
     ];
     return '<ul class="ad-plan-features">' + items.filter(Boolean).map(function (t) { return "<li>" + esc(t) + "</li>"; }).join("") + "</ul>";
   }
@@ -2863,15 +2989,18 @@
     var status = "";
     var billing = data.interval === "year" ? L("Facturation annuelle. ", "Billed yearly. ") : "";
     if (data.owner) status = L("Compte propriétaire : toutes les fonctionnalités sont incluses.", "Owner account: every feature is included.");
-    else if (data.comped) status = L("Formule " + planLabel(current) + " offerte par Holypixx : toutes ses fonctionnalités, sans aucun paiement.", planLabel(current) + " plan offered by Holypixx: all its features, with no payment.");
+    else if (data.comped) status = L("Formule " + planLabel(current) + " offerte par Holypixx : toutes ses fonctionnalités, sans aucun paiement.", planLabel(current) + " plan offered by Holypixx: all its features, with no payment.",
+        planLabel(current) + " (formule aangeboden door Holypixx): alle functies, zonder betaling.");
     else if (current.key !== "free" && data.cancelAtPeriodEnd && data.renewsAt) status = L("Résiliation programmée : votre formule reste active jusqu'au ", "Cancellation scheduled: your plan stays active until ") + formatDate(data.renewsAt) + ".";
     else if (current.key !== "free" && data.status === "past_due") status = L("Le dernier prélèvement a échoué : mettez à jour votre carte depuis « Gérer mon abonnement ».", "The last payment failed: update your card from “Manage my subscription”.");
     else if (current.key !== "free" && data.status === "trialing" && data.renewsAt) status = L("Essai gratuit jusqu'au " + formatDate(data.renewsAt) + ", puis premier prélèvement automatique (résiliable avant, sans frais).",
-      "Free trial until " + formatDate(data.renewsAt) + ", then the first automatic payment (cancel before then at no cost).");
+      "Free trial until " + formatDate(data.renewsAt) + ", then the first automatic payment (cancel before then at no cost).",
+        "Gratis proefperiode tot " + formatDate(data.renewsAt) + ", daarna de eerste automatische betaling (zeg vóór die datum kosteloos op).");
     else if (current.key !== "free" && data.renewsAt) status = billing + L("Prochain renouvellement le ", "Next renewal on ") + formatDate(data.renewsAt) + ".";
     if (data.isFounder && current.key !== "free" && !data.owner) status += L(" Tarif Fondateurs la première année.", " Founders' price for the first year.");
     var usage = current.maxActiveGalleries === null
-      ? data.usage.activeGalleries + L(" galerie" + (data.usage.activeGalleries > 1 ? "s" : "") + " active" + (data.usage.activeGalleries > 1 ? "s" : ""), " active galler" + (data.usage.activeGalleries === 1 ? "y" : "ies"))
+      ? data.usage.activeGalleries + L(" galerie" + (data.usage.activeGalleries > 1 ? "s" : "") + " active" + (data.usage.activeGalleries > 1 ? "s" : ""), " active galler" + (data.usage.activeGalleries === 1 ? "y" : "ies"),
+        (data.usage.activeGalleries === 1 ? " actieve galerij" : " actieve galerijen"))
       : data.usage.activeGalleries + " / " + current.maxActiveGalleries + L(" galeries actives", " active galleries");
 
     var interval = data.interval === "year" && current.key !== "free" ? "year" : subscriptionInterval;
@@ -2893,7 +3022,8 @@
         else if (data.canManage) action = '<button type="button" class="ad-btn" data-portal>' + L("Changer de formule", "Change plan") + "</button>";
         else if (plan.key === "free") action = "";
         else action = '<button type="button" class="ad-btn ad-btn-primary" data-subscribe="' + esc(plan.key) + '"' + (data.stripeConfigured ? "" : " disabled") + ">" +
-          (data.trialAvailable ? L("Essayer " + data.trialDays + " jours gratuitement", "Try free for " + data.trialDays + " days") : L("Choisir ", "Choose ") + esc(planLabel(plan))) + "</button>" +
+          (data.trialAvailable ? L("Essayer " + data.trialDays + " jours gratuitement", "Try free for " + data.trialDays + " days",
+        "Probeer gratis gedurende " + data.trialDays + " dagen") : L("Choisir ", "Choose ") + esc(planLabel(plan))) + "</button>" +
           (data.trialAvailable ? '<p class="ad-hint ad-plan-trial">' + L("Aucun prélèvement pendant l'essai ; résiliable avant la fin, sans frais.", "No charge during the trial; cancel before it ends at no cost.") + "</p>" : "");
         var planFounder = plan.key === "studio" ? studioFounder && data.studioFounders && data.studioFounders.remaining > 0 : founder;
         return (
@@ -2922,14 +3052,18 @@
       ? '<p class="ad-banner ad-founders">' + L("🎉 <strong>Offre Fondateurs</strong> : plus que " + data.founders.remaining + " place" + (data.founders.remaining > 1 ? "s" : "") +
         ". Essentiel à " + esc(euros(data.plans[1].founderCents)) + " et Pro à " + esc(euros(data.plans[2].founderCents)) + " par mois pendant toute la première année, puis le prix normal.",
         "🎉 <strong>Founders' offer</strong>: only " + data.founders.remaining + " spot" + (data.founders.remaining > 1 ? "s" : "") +
-        " left. Essentials at " + esc(euros(data.plans[1].founderCents)) + " and Pro at " + esc(euros(data.plans[2].founderCents)) + " a month for the whole first year, then the normal price.") + "</p>"
+        " left. Essentials at " + esc(euros(data.plans[1].founderCents)) + " and Pro at " + esc(euros(data.plans[2].founderCents)) + " a month for the whole first year, then the normal price.",
+        "🎉 <strong>Oprichtersaanbod</strong>: nog maar " + data.founders.remaining + (data.founders.remaining > 1 ? " plaatsen" : " plaats") +
+        " vrij. Essentieel aan " + esc(euros(data.plans[1].founderCents)) + " en Pro aan " + esc(euros(data.plans[2].founderCents)) + " per maand gedurende het hele eerste jaar, daarna de normale prijs.") + "</p>"
       : "";
     var studioPlan = data.plans.find(function (p) { return p.key === "studio"; });
     if (studioPlan && studioFounder && data.studioFounders && data.studioFounders.remaining > 0) {
       founderBanner += '<p class="ad-banner ad-founders">' + L("🎓 <strong>Fondateurs Studio</strong> : plus que " + data.studioFounders.remaining + " place" +
         (data.studioFounders.remaining > 1 ? "s" : "") + ". " + esc(euros(studioPlan.founderYearlyCents)) + " la première année au lieu de " + esc(euros(studioPlan.yearlyCents)) + ".",
         "🎓 <strong>Studio founders</strong>: only " + data.studioFounders.remaining + " spot" + (data.studioFounders.remaining > 1 ? "s" : "") + " left. " +
-        esc(euros(studioPlan.founderYearlyCents)) + " the first year instead of " + esc(euros(studioPlan.yearlyCents)) + ".") + "</p>";
+        esc(euros(studioPlan.founderYearlyCents)) + " the first year instead of " + esc(euros(studioPlan.yearlyCents)) + ".",
+        "🎓 <strong>Studio-oprichters</strong>: nog maar " + data.studioFounders.remaining + (data.studioFounders.remaining > 1 ? " plaatsen" : " plaats") + " vrij. " +
+        esc(euros(studioPlan.founderYearlyCents)) + " het eerste jaar in plaats van " + esc(euros(studioPlan.yearlyCents)) + ".") + "</p>";
     }
 
     el.view.innerHTML =
@@ -3034,20 +3168,25 @@
     var left = card.perCard - card.stamps;
     var progress = card.stamps
       ? L("Encore " + left + " confrère" + (left > 1 ? "s" : "") + " abonné" + (left > 1 ? "s" : "") + " pour un mois offert.",
-          left + " more subscribed photographer" + (left > 1 ? "s" : "") + " for a free month.")
+          left + " more subscribed photographer" + (left > 1 ? "s" : "") + " for a free month.",
+        left + (left > 1 ? " extra fotografen met abonnement" : " extra fotograaf met abonnement") + " voor een gratis maand.")
       : L("Trois confrères abonnés, un mois offert.", "Three subscribed photographers, one free month.");
     var rewards = [];
     if (card.granted) rewards.push(L(card.granted + " mois offert" + (card.granted > 1 ? "s" : "") + (card.grantedThisYear ? " (dont " + card.grantedThisYear + " ces douze derniers mois)" : ""),
-      card.granted + " free month" + (card.granted > 1 ? "s" : "") + (card.grantedThisYear ? " (" + card.grantedThisYear + " in the last twelve months)" : "")));
+      card.granted + " free month" + (card.granted > 1 ? "s" : "") + (card.grantedThisYear ? " (" + card.grantedThisYear + " in the last twelve months)" : ""),
+        card.granted + (card.granted > 1 ? " gratis maanden" : " gratis maand") + (card.grantedThisYear ? " (" + card.grantedThisYear + " in de laatste twaalf maanden)" : "")));
     if (card.waiting) {
       rewards.push(card.waiting + L(" en attente", " pending") + (card.room === 0 && card.nextFreeAt
-        ? L(" : plafond de " + ref.maxPerYear + " mois par an atteint, crédité le ", ": yearly cap of " + ref.maxPerYear + " months reached, credited on ") + formatDate(card.nextFreeAt)
+        ? L(" : plafond de " + ref.maxPerYear + " mois par an atteint, crédité le ", ": yearly cap of " + ref.maxPerYear + " months reached, credited on ",
+        ": jaarlimiet van " + ref.maxPerYear + " maanden bereikt, gecrediteerd op ") + formatDate(card.nextFreeAt)
         : L(" : crédité dès que vous avez un abonnement payant", ": credited as soon as you have a paid subscription")));
     }
     var message = L("Je gère mes galeries clients avec Holypixx : photos protégées, sélection, tirages et réservation en ligne. " +
       "Avec mon lien, tu as −" + ref.discountPercent + " % sur ton mois suivant dès ton abonnement : ",
       "I run my client galleries with Holypixx: protected photos, proofing, prints and online booking. " +
-      "With my link, you get " + ref.discountPercent + "% off your following month once you subscribe: ") + ref.link;
+      "With my link, you get " + ref.discountPercent + "% off your following month once you subscribe: ",
+        "Ik beheer mijn klantengalerijen met Holypixx: beveiligde foto's, selectie, afdrukken en online boeken. " +
+      "Met mijn link krijg je " + ref.discountPercent + "% korting op je volgende maand zodra je een abonnement neemt: ") + ref.link;
     var filleuls = ref.filleuls.length
       ? '<ul class="ad-ref-list">' + ref.filleuls.map(function (f) {
           return "<li><span>" + esc(f.name) + '</span><span class="ad-hint">' +
@@ -3058,11 +3197,14 @@
     box.innerHTML =
       '<div class="ad-section-header"><h3>' + L("Parrainez un confrère", "Refer a fellow photographer") + "</h3></div>" +
       (ref.referredBy ? '<p class="ad-banner ad-banner-muted">' + L("Parrainé par <strong>", "Referred by <strong>") + esc(ref.referredBy.name) + "</strong>" + L(" : ", ": ") +
-        (ref.referredBy.rewarded ? L("votre −" + ref.discountPercent + " % est déduit de votre prochaine facture", "your " + ref.discountPercent + "% off is deducted from your next invoice") + (ref.referredBy.creditCents ? " (" + esc(euros(ref.referredBy.creditCents)) + ")" : "") + "."
-          : L("−" + ref.discountPercent + " % sur votre mois suivant, dès votre premier paiement.", ref.discountPercent + "% off your following month, from your first payment.")) + "</p>" : "") +
+        (ref.referredBy.rewarded ? L("votre −" + ref.discountPercent + " % est déduit de votre prochaine facture", "your " + ref.discountPercent + "% off is deducted from your next invoice",
+        "je " + ref.discountPercent + "% korting wordt afgetrokken van je volgende factuur") + (ref.referredBy.creditCents ? " (" + esc(euros(ref.referredBy.creditCents)) + ")" : "") + "."
+          : L("−" + ref.discountPercent + " % sur votre mois suivant, dès votre premier paiement.", ref.discountPercent + "% off your following month, from your first payment.",
+        ref.discountPercent + "% korting op je volgende maand, vanaf je eerste betaling.")) + "</p>" : "") +
       '<div class="ad-ref-grid">' +
       '<div class="ad-ref-card" role="img" aria-label="' + L("Carte de fidélité : " + card.stamps + " case" + (card.stamps > 1 ? "s" : "") + " sur " + card.perCard,
-        "Loyalty card: " + card.stamps + " stamp" + (card.stamps === 1 ? "" : "s") + " of " + card.perCard) + '">' +
+        "Loyalty card: " + card.stamps + " stamp" + (card.stamps === 1 ? "" : "s") + " of " + card.perCard,
+        "Spaarkaart: " + card.stamps + (card.stamps === 1 ? " stempel" : " stempels") + " van " + card.perCard) + '">' +
       '<p class="ad-ref-card-title">' + L("Votre carte de parrain", "Your referral card") + "</p>" +
       '<div class="ad-ref-stamps">' + stamps + "</div>" +
       '<p class="ad-ref-card-gift">' + L("= 1 mois offert", "= 1 free month") + "</p>" +
@@ -3073,7 +3215,9 @@
       '<p class="ad-hint">' + L("Votre confrère a −" + ref.discountPercent + " % sur son mois suivant dès son premier paiement, et vous gagnez une case. " +
         "Trois cases, un mois offert, " + ref.maxPerYear + " au plus par an. Les mois offerts sont déduits de vos prochaines factures.",
         "The photographer you refer gets " + ref.discountPercent + "% off their following month from their first payment, and you earn a stamp. " +
-        "Three stamps, one free month, at most " + ref.maxPerYear + " a year. Free months are deducted from your next invoices.") + "</p>" +
+        "Three stamps, one free month, at most " + ref.maxPerYear + " a year. Free months are deducted from your next invoices.",
+        "De fotograaf die je doorverwijst, krijgt " + ref.discountPercent + "% korting op de volgende maand vanaf de eerste betaling, en jij verdient een stempel. " +
+        "Drie stempels, één gratis maand, maximaal " + ref.maxPerYear + " per jaar. Gratis maanden worden afgetrokken van je volgende facturen.") + "</p>" +
       '<label class="ad-field"><span>' + L("Votre lien", "Your link") + '</span><div class="ad-copy-row"><input type="text" id="ad-ref-link" readonly value="' + esc(ref.link) + '" />' +
       '<button type="button" class="ad-btn" data-copy="ad-ref-link">' + L("Copier", "Copy") + "</button></div></label>" +
       '<label class="ad-field"><span>' + L("Message prêt à envoyer", "Ready-to-send message") + '</span><textarea id="ad-ref-message" rows="4" readonly>' + esc(message) + "</textarea></label>" +
@@ -3143,7 +3287,8 @@
       (n && photos.length
         ? '<div class="ad-delivery-links"><p class="ad-hint">' +
           L("Reliées à leur photo de la galerie : <strong>" + linkedCount + " / " + n + "</strong>. Une HD reliée remplace l'épreuve : la galerie montre la retouche (filigranée), et la boutique de tirages ne propose plus que ces photos-là, imprimées depuis la HD. Le lien se fait tout seul d'après le nom du fichier ou l'heure de prise de vue ; sinon, choisissez la photo dans le menu.",
-            "Linked to their gallery photo: <strong>" + linkedCount + " / " + n + "</strong>. A linked HD file replaces the proof: the gallery shows the retouched version (watermarked), and the print shop only offers those photos, printed from the HD file. Links are made automatically from the file name or capture time; otherwise, pick the photo in the menu.") + "</p>" +
+            "Linked to their gallery photo: <strong>" + linkedCount + " / " + n + "</strong>. A linked HD file replaces the proof: the gallery shows the retouched version (watermarked), and the print shop only offers those photos, printed from the HD file. Links are made automatically from the file name or capture time; otherwise, pick the photo in the menu.",
+        "Gekoppeld aan hun galerijfoto: <strong>" + linkedCount + " / " + n + "</strong>. Een gekoppeld HD-bestand vervangt de proef: de galerij toont de geretoucheerde versie (met watermerk), en de webshop voor afdrukken biedt alleen die foto's aan, afgedrukt vanaf het HD-bestand. Koppelingen gebeuren automatisch op basis van de bestandsnaam of het opnametijdstip; kies anders de foto in het menu.") + "</p>" +
           (linkedCount < n ? '<button type="button" class="ad-btn ad-btn-small" id="ad-delivery-autolink">' + L("Relier automatiquement", "Link automatically") + "</button>" : "") +
           "</div>"
         : "") +
@@ -3183,7 +3328,8 @@
       if (failed.length) toast(L("Non envoyées : ", "Not uploaded: ") + failed.join(", "), true);
       else toast(L(files.length + " photo" + (files.length > 1 ? "s" : "") + " ajoutée" + (files.length > 1 ? "s" : "") + " à la livraison" +
           (linked ? ", dont " + linked + " reliée" + (linked > 1 ? "s" : "") + " à leur épreuve (galerie et boutique)." : "."),
-        files.length + (files.length === 1 ? " photo" : " photos") + " added to the delivery" + (linked ? ", " + linked + " linked to their proof (gallery and shop)." : ".")));
+        files.length + (files.length === 1 ? " photo" : " photos") + " added to the delivery" + (linked ? ", " + linked + " linked to their proof (gallery and shop)." : "."),
+        files.length + (files.length === 1 ? " foto" : " foto's") + " toegevoegd aan de levering" + (linked ? ", " + linked + " gekoppeld aan hun proef (galerij en webshop)." : ".")));
       renderDetail(slug, true);
     });
     // Relier une HD à l'épreuve choisie (ou défaire le lien) : aperçus et
@@ -3220,7 +3366,8 @@
         }
         var left = pending.length - done;
         toast(L(done + " photo" + (done > 1 ? "s" : "") + " reliée" + (done > 1 ? "s" : "") + (left ? " ; " + left + " à relier à la main (menu sur chaque ligne)." : "."),
-          done + (done === 1 ? " photo" : " photos") + " linked" + (left ? "; " + left + " to link by hand (menu on each row)." : ".")), left > 0 && done === 0);
+          done + (done === 1 ? " photo" : " photos") + " linked" + (left ? "; " + left + " to link by hand (menu on each row)." : "."),
+        done + (done === 1 ? " foto" : " foto's") + " gekoppeld" + (left ? "; " + left + " handmatig te koppelen (menu op elke rij)." : ".")), left > 0 && done === 0);
         renderDetail(slug, true);
       });
     }
@@ -3240,7 +3387,8 @@
         var notifyBox = document.getElementById("ad-delivery-notify");
         var notify = Boolean(notifyBox && notifyBox.checked);
         confirmAction(L("Ouvrir la livraison ? Le client pourra télécharger ces photos en haute définition, sans filigrane." + (notify ? " Il sera prévenu par e-mail." : ""),
-          "Open delivery? Your client will be able to download these photos in high resolution, without watermark." + (notify ? " They'll get an email." : "")), async function () {
+          "Open delivery? Your client will be able to download these photos in high resolution, without watermark." + (notify ? " They'll get an email." : ""),
+        "Levering openen? Je klant kan deze foto's dan downloaden in hoge resolutie, zonder watermerk." + (notify ? " Je klant krijgt een e-mail." : "")), async function () {
           try {
             var result = await api("POST", "/galleries/" + encodeURIComponent(slug) + "/delivery", { open: true, notify: notify });
             toast(result.notified ? L("Livraison ouverte, client prévenu par e-mail.", "Delivery open, client emailed.") : L("Livraison ouverte.", "Delivery open."));
@@ -3281,7 +3429,7 @@
     acoustique: "Acoustic", cinematique: "Cinematic", enfance: "Childhood",
   };
   function moodLabel(t) {
-    return LANG === "en" ? MUSIC_MOODS_EN[t.mood] || t.moodLabel || t.mood : t.moodLabel || t.mood;
+    return LANG !== "fr" && MUSIC_MOODS_EN[t.mood] ? T(MUSIC_MOODS_EN[t.mood], t.moodLabel) : t.moodLabel || t.mood;
   }
 
   function formatDuration(seconds) {
@@ -3346,7 +3494,8 @@
       }
       return (
         '<li class="ad-track' + (t.id === currentId ? " ad-track-current" : "") + '" data-mood="' + esc(t.mood) + '">' +
-        '<button type="button" class="ad-track-play" data-preview="' + esc(t.id) + '" aria-pressed="false" aria-label="' + L("Écouter « " + esc(t.title) + " »", "Listen to “" + esc(t.title) + "”") + '">▶</button>' +
+        '<button type="button" class="ad-track-play" data-preview="' + esc(t.id) + '" aria-pressed="false" aria-label="' + L("Écouter « " + esc(t.title) + " »", "Listen to “" + esc(t.title) + "”",
+        "Beluister “" + esc(t.title) + "”") + '">▶</button>' +
         '<div class="ad-track-info"><strong>' + esc(t.title) + "</strong><span>" + meta + "</span>" +
         (mode === "manage" && t.credit ? '<span class="ad-track-credit">Crédit : ' + esc(t.credit) + "</span>" : "") +
         "</div>" + action + "</li>"
@@ -3376,7 +3525,8 @@
     var m = gallery.music || { source: gallery.music_name ? "file" : "none", name: gallery.music_name };
     var current;
     if (m.source === "library" && m.track) current = L("Morceau de la bibliothèque : <strong>", "Library track: <strong>") + esc(m.track.title) + "</strong>" + (m.track.artist ? " — " + esc(m.track.artist) : "");
-    else if (m.source === "link") current = L("Lecteur <strong>" + esc(m.providerLabel || "intégré") + "</strong> affiché dans la galerie", "<strong>" + esc(m.providerLabel || "Embedded") + "</strong> player shown in the gallery");
+    else if (m.source === "link") current = L("Lecteur <strong>" + esc(m.providerLabel || "intégré") + "</strong> affiché dans la galerie", "<strong>" + esc(m.providerLabel || "Embedded") + "</strong> player shown in the gallery",
+        "<strong>" + esc(m.providerLabel || "Ingesloten") + "</strong>-speler getoond in de galerij");
     else if (m.source === "file") current = L("Fichier MP3 : <strong>", "MP3 file: <strong>") + esc(m.name) + "</strong>";
     else current = '<span class="ad-hint">' + L("Aucune musique pour cette galerie.", "No music for this gallery.") + "</span>";
     var tab = m.source === "link" ? "link" : m.source === "file" ? "file" : "library";
@@ -3733,6 +3883,68 @@
       rows.join("") + "</tbody></table></div></section>";
   }
 
+  var NEWSLETTER_LANGS = { fr: "Français", en: "Anglais", nl: "Néerlandais" };
+  var NEWSLETTER_SOURCES = { admin: "Espace photographe", "home-nl": "Page d'accueil /nl/", "home-en": "Page d'accueil /en/", "home-fr": "Page d'accueil", "": "—" };
+
+  function newsletterSectionHtml(data) {
+    var head = '<section id="ad-newsletter"><div class="ad-section-header"><h3>Newsletter' + (data ? " (" + data.total + ")" : "") + "</h3>" +
+      (data && data.total ? '<button type="button" class="ad-btn ad-btn-small" id="ad-newsletter-csv">Exporter en CSV</button>' : "") + "</div>" +
+      '<p class="ad-hint">Les photographes qui ont coché « je veux recevoir la newsletter » — par exemple depuis le bandeau néerlandais des sections encore en français. ' +
+      "Langue choisie et date du consentement gardées ; retirez une adresse à la demande de la personne.</p>";
+    if (!data) return head + '<p class="ad-hint">Liste indisponible pour le moment.</p></section>';
+    if (!data.total) return head + '<p class="ad-hint">Personne pour l\'instant.</p></section>';
+    var chips = '<p class="ad-hint">' + data.byLang.map(function (i) { return esc(NEWSLETTER_LANGS[i.lang] || i.lang) + " · <b>" + i.count + "</b>"; }).join(" &nbsp; ") + "</p>";
+    var rows = data.subscribers.slice(0, 200).map(function (e) {
+      return "<tr><td>" + esc(e.email) + "</td><td>" + esc(NEWSLETTER_LANGS[e.lang] || e.lang) + "</td><td>" + esc(NEWSLETTER_SOURCES[e.source] || e.source) +
+        "</td><td>" + esc(shortDate(e.consentAt)) + '</td><td><button type="button" class="ad-btn ad-btn-small" data-newsletter-remove="' + esc(e.email) + '">Retirer</button></td></tr>';
+    });
+    return head + chips +
+      '<div class="ad-table-wrap"><table class="ad-table"><thead><tr><th>E-mail</th><th>Langue</th><th>Origine</th><th>Consentement</th><th></th></tr></thead><tbody>' +
+      rows.join("") + "</tbody></table></div>" +
+      (data.subscribers.length > 200 ? '<p class="ad-hint">Les 200 plus récentes ; l\'export CSV contient toute la liste.</p>' : "") +
+      "</section>";
+  }
+
+  // Export CSV (séparateur virgule, UTF-8 avec BOM pour Excel).
+  function newsletterCsv(subscribers) {
+    var cell = function (v) { return '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"'; };
+    var iso = function (ts) { return ts ? new Date(ts * 1000).toISOString() : ""; };
+    var lines = [["email", "langue", "origine", "consentement", "inscription"].join(",")];
+    subscribers.forEach(function (e) {
+      lines.push([cell(e.email), cell(e.lang), cell(e.source), cell(iso(e.consentAt)), cell(iso(e.createdAt))].join(","));
+    });
+    return "\ufeff" + lines.join("\r\n") + "\r\n";
+  }
+
+  function wireNewsletter(data) {
+    var csv = document.getElementById("ad-newsletter-csv");
+    if (csv && data) {
+      csv.addEventListener("click", function () {
+        var blob = new Blob([newsletterCsv(data.subscribers)], { type: "text/csv;charset=utf-8" });
+        var link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = "holypixx-newsletter-" + new Date().toISOString().slice(0, 10) + ".csv";
+        document.body.appendChild(link);
+        link.click();
+        setTimeout(function () { URL.revokeObjectURL(link.href); link.remove(); }, 1000);
+      });
+    }
+    document.querySelectorAll("[data-newsletter-remove]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var email = btn.getAttribute("data-newsletter-remove");
+        confirmAction("Retirer " + email + " de la newsletter ? (à faire sur demande de la personne)", async function () {
+          try {
+            await api("DELETE", "/owner/newsletter", { email: email });
+            toast("Adresse retirée de la newsletter.");
+            renderOwner(true);
+          } catch (err) {
+            toast(err.message, true);
+          }
+        });
+      });
+    });
+  }
+
   function wireWaitlist() {
     document.querySelectorAll("[data-waitlist-remove]").forEach(function (btn) {
       btn.addEventListener("click", function () {
@@ -3987,7 +4199,7 @@
     return '<span class="ad-badge ' + st[2] + '">' + esc(L(st[0], st[1])) + "</span>";
   }
   function shortDate(ts) {
-    return new Date(ts * 1000).toLocaleDateString(LANG === "en" ? "en-GB" : "fr-BE", { day: "numeric", month: "short", year: "numeric" });
+    return new Date(ts * 1000).toLocaleDateString(locale(), { day: "numeric", month: "short", year: "numeric" });
   }
 
   function setTabCount(tabId, count, label) {
@@ -4005,7 +4217,8 @@
   }
   function updateFeedbackBadge(data) {
     var n = (data && data.unread) || 0;
-    setTabCount("ad-tab-feedback", n, L(n + " réponse" + (n > 1 ? "s" : "") + " à lire", n + " repl" + (n > 1 ? "ies" : "y") + " to read"));
+    setTabCount("ad-tab-feedback", n, L(n + " réponse" + (n > 1 ? "s" : "") + " à lire", n + " repl" + (n > 1 ? "ies" : "y") + " to read",
+        n + (n > 1 ? " antwoorden" : " antwoord") + " te lezen"));
   }
   function updateOwnerFeedbackBadge(data) {
     var n = (data && data.counts && data.counts.new) || 0;
@@ -4148,13 +4361,14 @@
     setActiveTab("owner");
     el.view.innerHTML = '<p class="ad-loading">Chargement…</p>';
 
-    var statsData, photographersData, waitlistData, funnelData, feedbackData;
+    var statsData, photographersData, waitlistData, newsletterData, funnelData, feedbackData;
     // Les suggestions se chargent en même temps que le reste.
     var feedbackPending = api("GET", "/owner/feedback").catch(function () { return null; });
     try {
       statsData = await api("GET", "/owner/stats");
       photographersData = await api("GET", "/owner/photographers");
       waitlistData = await api("GET", "/owner/waitlist").catch(function () { return null; });
+      newsletterData = await api("GET", "/owner/newsletter").catch(function () { return null; });
       funnelData = await api("GET", "/owner/funnel?days=" + funnelDays).catch(function () { return null; });
       feedbackData = await feedbackPending;
     } catch (err) {
@@ -4185,6 +4399,7 @@
       "</section>" +
 
       waitlistSectionHtml(waitlistData) +
+      newsletterSectionHtml(newsletterData) +
 
       ownerMusicSectionHtml() +
 
@@ -4202,6 +4417,7 @@
     wireOwnerMusic();
     wireAccountsTable();
     wireWaitlist();
+    wireNewsletter(newsletterData);
     wireFunnel();
     if (feedbackData) { bindOwnerFeedback(feedbackData); updateOwnerFeedbackBadge(feedbackData); }
     document.getElementById("ad-run-reminders").addEventListener("click", async function () {
@@ -4246,11 +4462,12 @@
     shipped: "Shipped", cancelled: "Cancelled", failed: "To resubmit",
   };
   function orderStatusLabel(o) {
-    return LANG === "en" ? ORDER_STATUS_EN[o.status] || o.statusLabel : o.statusLabel;
+    return LANG !== "fr" && ORDER_STATUS_EN[o.status] ? T(ORDER_STATUS_EN[o.status], o.statusLabel) : o.statusLabel;
   }
 
   // Libellé des frais de paiement (« 2 % + 0,30 € ») à l'anglaise.
   function feeText(label) {
+    if (LANG === "nl") return label === "aucun" ? T("none", label) : String(label || "").replace(/(\d+(?:,\d+)?) %/g, "$1%").replace(/(\d+,\d+) €/g, "€ $1");
     if (LANG !== "en") return label;
     if (label === "aucun") return "none";
     return String(label || "").replace(/(\d+(?:,\d+)?) %/g, function (m, n) { return n.replace(",", ".") + "%"; })
@@ -4315,7 +4532,8 @@
       '<label class="ad-toggle"><input type="checkbox" id="ad-gallery-shop-toggle"' + (on ? " checked" : "") + " />" +
       "<span>" + L("Proposer des tirages sur cette galerie", "Offer prints on this gallery") + "</span></label>" +
       '<p class="ad-hint" id="ad-shop-printable">' + L(printable + " photo" + (printable > 1 ? "s" : "") + " sur " + photos.length + " disponible" + (printable > 1 ? "s" : "") + " en tirage. ",
-        printable + " of " + photos.length + " photo" + (photos.length === 1 ? "" : "s") + " available as prints. ") +
+        printable + " of " + photos.length + " photo" + (photos.length === 1 ? "" : "s") + " available as prints. ",
+        printable + " van " + photos.length + (photos.length === 1 ? " foto" : " foto's") + " beschikbaar als afdruk. ") +
       (on
         ? L("Les photos importées tant que la boutique est ouverte gardent un fichier d'impression en pleine définition (jamais montré au client) ; réimportez les plus anciennes pour les proposer aussi.",
           "Photos uploaded while the shop is open keep a full-resolution print file (never shown to the client); re-upload older ones to offer them too.")
@@ -4343,7 +4561,8 @@
       return html + "</div>";
     }
     if (promo) {
-      html += '<p class="ad-promo-on"><strong>' + L("−" + promo.percent + " %", promo.percent + "% off") + "</strong>" + L(" sur tous les tirages jusqu'au ", " all prints until ") + esc(formatDate(promo.endsAt)) +
+      html += '<p class="ad-promo-on"><strong>' + L("−" + promo.percent + " %", promo.percent + "% off",
+        promo.percent + "% korting") + "</strong>" + L(" sur tous les tirages jusqu'au ", " all prints until ") + esc(formatDate(promo.endsAt)) +
         (promo.sentAt ? ' · <span class="ad-hint">' + L("annoncée au client le ", "announced to the client on ") + esc(formatDate(promo.sentAt)) + "</span>" : "") + "</p>" +
         '<div class="ad-promo-actions">' +
         (!promo.sentAt && gallery.client_email ? '<button type="button" class="ad-btn ad-btn-primary" id="ad-promo-send">' + L("Annoncer au client par e-mail", "Announce it to the client by email") + "</button>" : "") +
@@ -4353,13 +4572,15 @@
       html += '<p class="ad-hint">' + L("Une remise sur tous les tirages de cette galerie, pour une durée limitée : prix barrés chez le client, remise appliquée au paiement. Jamais en dessous de votre coût labo.",
         "A discount on every print in this gallery, for a limited time: struck-through prices for the client, discount applied at payment. Never below your lab cost.") + "</p>" +
         '<div class="ad-promo-form"><label class="ad-field"><span>' + L("Remise", "Discount") + '</span><select id="ad-promo-percent">' +
-        sales.percents.map(function (p) { return '<option value="' + p + '"' + (p === 20 ? " selected" : "") + ">" + L("−" + p + " %", p + "% off") + "</option>"; }).join("") +
+        sales.percents.map(function (p) { return '<option value="' + p + '"' + (p === 20 ? " selected" : "") + ">" + L("−" + p + " %", p + "% off",
+        p + "% korting") + "</option>"; }).join("") +
         '</select></label><label class="ad-field"><span>' + L("Jusqu'au (inclus)", "Until (inclusive)") + '</span><input type="date" id="ad-promo-end" value="' + defaultEnd + '" /></label>' +
         '<button type="button" class="ad-btn ad-btn-primary" id="ad-promo-start">' + L("Lancer la promotion", "Start the promotion") + "</button></div>";
     }
     if (sales.cart) {
       html += '<p class="ad-hint">' + L("Panier en cours chez le client : <strong>" + sales.cart.items + " article" + (sales.cart.items > 1 ? "s" : ""),
-        "Client's cart in progress: <strong>" + sales.cart.items + (sales.cart.items === 1 ? " item" : " items")) +
+        "Client's cart in progress: <strong>" + sales.cart.items + (sales.cart.items === 1 ? " item" : " items"),
+        "Winkelmandje van de klant in behandeling: <strong>" + sales.cart.items + (sales.cart.items === 1 ? " artikel" : " artikels")) +
         "</strong>" + L(" (mis à jour le ", " (updated on ") + esc(formatDate(sales.cart.updatedAt)) + ")" +
         (sales.cart.remindedAt ? L(" · rappel envoyé le ", " · reminder sent on ") + esc(formatDate(sales.cart.remindedAt)) : L(" · un rappel partira par e-mail après 24 h sans commande", " · a reminder email goes out after 24 h without an order")) + ".</p>";
     }
@@ -4701,7 +4922,8 @@
       '<ul class="ad-shop-steps" id="ad-shop-steps">' +
       check(s.connected, L("Clé d'API Prodigi enregistrée", "Prodigi API key saved") + (s.connected ? " (" + esc(s.keyHint) + ", " + (s.environment === "live" ? "production" : L("mode test", "test mode")) + ")" : "")) +
       check(s.stripeReady, L("Paiement en ligne Stripe actif — ", "Stripe online payment active — ") + '<button type="button" class="ad-link-btn" id="ad-goto-billing">' + L("onglet Facturation", "Billing tab") + "</button>") +
-      check(activeCount > 0, L("Au moins un format proposé (" + activeCount + " actif" + (activeCount > 1 ? "s" : "") + ")", "At least one format offered (" + activeCount + " active)")) +
+      check(activeCount > 0, L("Au moins un format proposé (" + activeCount + " actif" + (activeCount > 1 ? "s" : "") + ")", "At least one format offered (" + activeCount + " active)",
+        "Minstens één formaat aangeboden (" + activeCount + " actief)")) +
       check(false, L("Puis, sur chaque galerie : « Proposer des tirages sur cette galerie »", "Then, on each gallery: “Offer prints on this gallery”")) +
       "</ul></section>" +
 
@@ -4718,7 +4940,8 @@
       '<form id="ad-shop-settings">' +
       '<label class="ad-field"><span>' + L("Clé d'API Prodigi", "Prodigi API key") + "</span>" +
       '<input type="password" name="apiKey" autocomplete="off" placeholder="' +
-      (s.connected ? L("Clé enregistrée (" + esc(s.keyHint) + ") — laissez vide pour la garder", "Key saved (" + esc(s.keyHint) + ") — leave empty to keep it") : L("Collez votre clé d'API Prodigi", "Paste your Prodigi API key")) + '" /></label>' +
+      (s.connected ? L("Clé enregistrée (" + esc(s.keyHint) + ") — laissez vide pour la garder", "Key saved (" + esc(s.keyHint) + ") — leave empty to keep it",
+        "Sleutel opgeslagen (" + esc(s.keyHint) + ") — laat leeg om hem te behouden") : L("Collez votre clé d'API Prodigi", "Paste your Prodigi API key")) + '" /></label>' +
       '<div class="ad-field-row">' +
       '<label class="ad-field"><span>' + L("Environnement", "Environment") + '</span><select name="environment">' +
       '<option value="sandbox"' + (s.environment !== "live" ? " selected" : "") + ">" + L("Test (sandbox) — rien n'est imprimé", "Test (sandbox) — nothing is printed") + "</option>" +
@@ -5022,7 +5245,7 @@
   var TAG_LABELS = { green: "Validée", yellow: "À retoucher", red: "À écarter" };
   var TAG_LABELS_EN = { green: "Approved", yellow: "To retouch", red: "Set aside" };
   function tagLabel(tag) {
-    return (LANG === "en" ? TAG_LABELS_EN : TAG_LABELS)[tag] || "";
+    return LANG === "fr" ? TAG_LABELS[tag] || "" : T(TAG_LABELS_EN[tag] || "", TAG_LABELS[tag]) || "";
   }
 
   function marksOf(photo) {
@@ -5044,7 +5267,7 @@
     return (
       '<p class="ad-tag-legend" id="ad-tag-legend">' +
       ["green", "yellow", "red"].map(function (tag) {
-        return '<span class="ad-tag-legend-' + tag + '">' + counts[tag] + " " + tagLabel(tag).toLowerCase() + (LANG !== "en" && counts[tag] > 1 && tag !== "yellow" && tag !== "red" ? "s" : "") + "</span>";
+        return '<span class="ad-tag-legend-' + tag + '">' + counts[tag] + " " + tagLabel(tag).toLowerCase() + (LANG === "fr" && counts[tag] > 1 && tag !== "yellow" && tag !== "red" ? "s" : "") + "</span>";
       }).join("") +
       "</p>"
     );
@@ -5121,7 +5344,8 @@
       (photo.tag && tagLabel(photo.tag)
         ? '<span class="ad-photo-tag ad-photo-tag-' + photo.tag + '" title="' + tagLabel(photo.tag) + '"></span>'
         : "") +
-      (markCount ? '<span class="ad-photo-marks" title="' + L(markCount + " repère" + (markCount > 1 ? "s" : "") + " annoté(s)", markCount + " annotated marker" + (markCount === 1 ? "" : "s")) + '">📍 ' + markCount + "</span>" : "") +
+      (markCount ? '<span class="ad-photo-marks" title="' + L(markCount + " repère" + (markCount > 1 ? "s" : "") + " annoté(s)", markCount + " annotated marker" + (markCount === 1 ? "" : "s"),
+        markCount + (markCount === 1 ? " markering met aantekening" : " markeringen met aantekening")) + '">📍 ' + markCount + "</span>" : "") +
       "</div>" +
       '<button type="button" class="ad-photo-cover' + (isCover ? " ad-photo-cover-on" : "") + '" title="' + (isCover ? L("Photo de couverture", "Cover photo") : L("Choisir comme photo de couverture", "Use as cover photo")) + '" aria-label="' + (isCover ? L("Photo de couverture", "Cover photo") : L("Choisir comme photo de couverture", "Use as cover photo")) + '" aria-pressed="' + isCover + '">★</button>' +
       '<button type="button" class="ad-photo-remove" title="' + L("Supprimer cette photo", "Delete this photo") + '" aria-label="' + L("Supprimer cette photo", "Delete this photo") + '">&times;</button>' +
@@ -5164,7 +5388,7 @@
     if (PHOTO_ID_EVENTS.has(entry.event) && photosById[detail]) {
       detail = L("Photo n° ", "Photo no. ") + (photosById[detail].position + 1);
     } else if (CAPTURE_EVENTS.has(entry.event)) {
-      detail = (LANG === "en" ? CAPTURE_REASON_LABELS_EN[detail] : CAPTURE_REASON_LABELS[detail]) || detail;
+      detail = (LANG === "fr" ? CAPTURE_REASON_LABELS[detail] : CAPTURE_REASON_LABELS_EN[detail] ? T(CAPTURE_REASON_LABELS_EN[detail], CAPTURE_REASON_LABELS[detail]) : "") || detail;
       if (entry.photo_id && photosById[entry.photo_id]) {
         detail += (detail ? " — " : "") + L("Photo n° ", "Photo no. ") + (photosById[entry.photo_id].position + 1);
       }
@@ -5194,7 +5418,7 @@
 
   function formatEuros(cents) {
     var amount = ((cents || 0) / 100).toLocaleString(locale(), { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    return LANG === "en" ? "€" + amount : amount + " €";
+    return LANG === "en" ? "€" + amount : LANG === "nl" ? "€ " + amount : amount + " €";
   }
 
   function dueWhatText(extraCount, optionsCount) {
@@ -5213,7 +5437,8 @@
       var selected = gallery.selected_count || 0;
       var included = gallery.included_photos;
       var paid = gallery.paid_extra_count || 0;
-      html += '<p class="ad-quota-count">' + selected + " / " + included + L(" photo" + (included > 1 ? "s" : "") + " incluse" + (included > 1 ? "s" : ""), (included === 1 ? " photo" : " photos") + " included") + "</p>";
+      html += '<p class="ad-quota-count">' + selected + " / " + included + L(" photo" + (included > 1 ? "s" : "") + " incluse" + (included > 1 ? "s" : ""), (included === 1 ? " photo" : " photos") + " included",
+        (included === 1 ? " foto" : " foto's") + " inbegrepen") + "</p>";
       if (due > 0) {
         html +=
           '<p class="ad-quota-due">' +
@@ -5224,7 +5449,8 @@
       if (paid > 0) {
         html +=
           '<p class="ad-quota-paid">✓ ' + paid + L(" supplément" + (paid > 1 ? "s" : "") + " déjà réglé" + (paid > 1 ? "s" : ""),
-            (paid === 1 ? " extra" : " extras") + " already paid") + "</p>";
+            (paid === 1 ? " extra" : " extras") + " already paid",
+        (paid === 1 ? " extra foto" : " extra foto's") + " al betaald") + "</p>";
       }
     }
 
@@ -5293,7 +5519,8 @@
         "<td>" + esc(formatDateTime(p.paid_at || p.created_at)) + "</td>" +
         "<td>" + (p.kind === "print" ? L("Tirages", "Prints") : paymentWhatHtml(p)) + "</td>" +
         "<td>" + formatEuros(p.amount_cents) +
-        (p.fee_cents ? '<br><span class="ad-hint">' + L("dont " + formatEuros(p.fee_cents) + " de frais de paiement", "incl. " + formatEuros(p.fee_cents) + " payment fees") + "</span>" : "") + "</td>" +
+        (p.fee_cents ? '<br><span class="ad-hint">' + L("dont " + formatEuros(p.fee_cents) + " de frais de paiement", "incl. " + formatEuros(p.fee_cents) + " payment fees",
+        "incl. " + formatEuros(p.fee_cents) + " betaalkosten") + "</span>" : "") + "</td>" +
         "<td><span class=\"ad-badge " + statusCls + "\">" + statusLabel + "</span>" + actions + "</td>" +
         "<td>" + invoiceCell + "</td>" +
         "</tr>"
@@ -5362,7 +5589,7 @@
     return '<span class="ad-tile-thumb" style="grid-template-columns:repeat(' + cols + ",1fr);grid-template-rows:repeat(" + rows + ',1fr)">' + cells + "</span>";
   }
   function fontOptionsHtml(keys, current, styleKey, part) {
-    var groups = LANG === "en" ? { serif: "Serif", sans: "Sans serif", script: "Handwritten" } : { serif: "Avec empattements", sans: "Sans empattements", script: "Manuscrites" };
+    var groups = LANG === "fr" ? { serif: "Avec empattements", sans: "Sans empattements", script: "Manuscrites" } : { serif: T("Serif"), sans: T("Sans serif"), script: T("Handwritten") };
     var themeFont = galleryStyleOf(styleKey).fonts[part];
     var html = '<option value="">' + L("Celle du style (", "The style's (") + esc(GALLERY_FONTS[themeFont][0]) + ")</option>";
     Object.keys(groups).forEach(function (g) {
@@ -5465,7 +5692,8 @@
       '<button type="button" class="ad-seg-btn" data-header-mode="video" aria-pressed="' + (mode === "video") + '">' + L("Vidéo", "Video") + "</button></div>" +
       '<div class="ad-style-cover" data-header-panel="cover"' + (mode === "cover" ? "" : " hidden") + ">" +
       (cover ? '<span class="ad-style-cover-thumb" style="aspect-ratio:' + cover.width + "/" + cover.height + '">' + tileThumbHtml(cover) + "</span>" : "") +
-      '<span class="ad-hint">' + (cover ? L("La photo n° " + (cover.position + 1) + " ouvre la galerie, en grand. ", "Photo no. " + (cover.position + 1) + " opens the gallery, large. ") : "") +
+      '<span class="ad-hint">' + (cover ? L("La photo n° " + (cover.position + 1) + " ouvre la galerie, en grand. ", "Photo no. " + (cover.position + 1) + " opens the gallery, large. ",
+        "Foto nr. " + (cover.position + 1) + " opent de galerij, groot. ") : "") +
       L("Pour en choisir une autre, cliquez sur l'étoile ★ d'une photo ci-dessous.", "To pick another one, click the ★ star on a photo below.") +
       (data.photos.length && !cover ? L(" Sans choix, la première photo sera utilisée.", " If you don't choose, the first photo is used.") : "") + "</span></div>" +
       '<div data-header-panel="video"' + (mode === "video" ? "" : " hidden") + ">" +
@@ -5477,8 +5705,9 @@
       '<div class="ad-style-header ad-language">' +
       '<span class="ad-style-header-title">' + L("Langue pour votre client", "Language for your client") + "</span>" +
       '<div class="ad-seg" role="group" aria-label="' + L("Langue pour votre client", "Language for your client") + '">' +
-      '<button type="button" class="ad-seg-btn" data-language="fr" aria-pressed="' + (p.language !== "en") + '">Français</button>' +
-      '<button type="button" class="ad-seg-btn" data-language="en" aria-pressed="' + (p.language === "en") + '">English</button></div>' +
+      '<button type="button" class="ad-seg-btn" data-language="fr" aria-pressed="' + (p.language !== "en" && p.language !== "nl") + '">Français</button>' +
+      '<button type="button" class="ad-seg-btn" data-language="en" aria-pressed="' + (p.language === "en") + '">English</button>' +
+      '<button type="button" class="ad-seg-btn" data-language="nl" aria-pressed="' + (p.language === "nl") + '">Nederlands</button></div>' +
       '<p class="ad-hint">' + L("La page de la galerie, les e-mails que reçoit votre client (relances, livraison, commandes de tirages), la boutique et ses factures. Votre texte d'accompagnement s'affiche tel que vous l'écrivez.",
         "The gallery page, the emails your client receives (reminders, delivery, print orders), the shop and its invoices. Your welcome text shows exactly as you write it.") + "</p>" +
       "</div></section>";
@@ -5526,7 +5755,8 @@
       if (!card || card.classList.contains("ad-style-card-active")) return;
       hidePreview();
       var theme = card.getAttribute("data-style");
-      if (await save({ theme: theme }, L("Style « " + galleryStyleOf(theme).label + " » appliqué.", "“" + galleryStyleOf(theme).label + "” style applied."))) renderDetail(slug, true);
+      if (await save({ theme: theme }, L("Style « " + galleryStyleOf(theme).label + " » appliqué.", "“" + galleryStyleOf(theme).label + "” style applied.",
+        "“" + galleryStyleOf(theme).label + "” toegepast."))) renderDetail(slug, true);
     });
     var syncSample = function () {
       var sample = document.getElementById("ad-style-sample");
@@ -5560,7 +5790,8 @@
       if (!chosen) return;
       form.elements.intro.value = chosen.body;
       syncIntroSample();
-      if (await save({ intro: chosen.body }, L("Texte « " + chosen.label + " » appliqué à la galerie.", "Text “" + chosen.label + "” applied to the gallery."))) {
+      if (await save({ intro: chosen.body }, L("Texte « " + chosen.label + " » appliqué à la galerie.", "Text “" + chosen.label + "” applied to the gallery.",
+        "Tekst “" + chosen.label + "” toegepast op de galerij."))) {
         p.intro = chosen.body;
         api("POST", "/intro-texts/" + encodeURIComponent(chosen.id) + "/used").catch(function () {});
       }
@@ -5569,7 +5800,8 @@
       if (e.target.id !== "ad-intro-delete") return;
       var select = document.getElementById("ad-intro-saved");
       var chosen = introTexts.filter(function (t) { return t.id === select.value; })[0];
-      if (!chosen || !confirm(L("Retirer « " + chosen.label + " » de vos textes enregistrés ? Les galeries qui l'utilisent le gardent.", "Remove “" + chosen.label + "” from your saved texts? Galleries using it keep it."))) return;
+      if (!chosen || !confirm(L("Retirer « " + chosen.label + " » de vos textes enregistrés ? Les galeries qui l'utilisent le gardent.", "Remove “" + chosen.label + "” from your saved texts? Galleries using it keep it.",
+        "“" + chosen.label + "” verwijderen uit je bewaarde teksten? Galerijen die hem gebruiken, behouden hem."))) return;
       try {
         introTexts = (await api("DELETE", "/intro-texts/" + encodeURIComponent(chosen.id))).texts;
         repaintSaved();
@@ -5591,7 +5823,10 @@
       btn.addEventListener("click", async function () {
         if (btn.getAttribute("aria-pressed") === "true") return;
         var language = btn.getAttribute("data-language");
-        if (await save({ language: language }, language === "en" ? L("Galerie en anglais pour votre client.", "Gallery in English for your client.") : L("Galerie en français pour votre client.", "Gallery in French for your client."))) {
+        var savedText = language === "en" ? L("Galerie en anglais pour votre client.", "Gallery in English for your client.")
+          : language === "nl" ? L("Galerie en néerlandais pour votre client.", "Gallery in Dutch for your client.")
+          : L("Galerie en français pour votre client.", "Gallery in French for your client.");
+        if (await save({ language: language }, savedText)) {
           document.querySelectorAll("#ad-style-section [data-language]").forEach(function (b) { b.setAttribute("aria-pressed", String(b === btn)); });
           p.language = language;
         }
@@ -5684,7 +5919,8 @@
       "<li><strong>" + L("Lisez la sélection de la famille Martin", "Read the Martins' selection") + "</strong>" +
       "<span>" + (selected
         ? L(selected + " coups de cœur pour un forfait de " + (g.included_photos || 0) + " photos : " + (g.due_extra_count || 0) + " suppléments, " + formatEuros(g.due_total_cents || 0) + ", à régler en ligne. Son commentaire et ses codes couleur sont sur les photos, plus bas.",
-            selected + " favourites for a " + (g.included_photos || 0) + "-photo package: " + (g.due_extra_count || 0) + " extras, " + formatEuros(g.due_total_cents || 0) + ", to be paid online. Their note and colour codes are on the photos below.")
+            selected + " favourites for a " + (g.included_photos || 0) + "-photo package: " + (g.due_extra_count || 0) + " extras, " + formatEuros(g.due_total_cents || 0) + ", to be paid online. Their note and colour codes are on the photos below.",
+        selected + " favorieten voor een pakket van " + (g.included_photos || 0) + " foto's: " + (g.due_extra_count || 0) + " extra foto's, " + formatEuros(g.due_total_cents || 0) + ", online te betalen. Hun notitie en kleurcodes staan bij de foto's hieronder.")
         : L("Dès que les photos sont prêtes, la famille fait sa sélection : coups de cœur, commentaire, codes couleur.", "As soon as the photos are ready, the family makes their selection: favourites, a note, colour codes.")) +
       "</span></li>" +
       "<li><strong>" + L("Changez le style", "Change the style") + "</strong>" +
@@ -5908,7 +6144,8 @@
             " : dans Lightroom, Bibliothèque › Texte › Nom de fichier › Contient, puis collez." +
             (missing ? " (" + missing + " photo" + (missing > 1 ? "s" : "") + " sans nom de fichier, envoyée" + (missing > 1 ? "s" : "") + " plus tôt.)" : ""),
             names.length + " name" + (names.length === 1 ? "" : "s") + " copied: in Lightroom, Library › Text › Filename › Contains, then paste." +
-            (missing ? " (" + missing + " photo" + (missing === 1 ? "" : "s") + " without a file name, uploaded earlier.)" : "")));
+            (missing ? " (" + missing + " photo" + (missing === 1 ? "" : "s") + " without a file name, uploaded earlier.)" : ""),
+        names.length + (names.length === 1 ? " naam" : " namen") + " gekopieerd: in Lightroom, Bibliotheek › Tekst › Bestandsnaam › Bevat, en dan plakken." + (missing ? " (" + missing + (missing === 1 ? " foto" : " foto's") + " zonder bestandsnaam, eerder geüpload.)" : "")));
         }).catch(function () {
           toast(L("Impossible de copier les noms de fichiers.", "Couldn't copy the file names."), true);
         });
@@ -5930,7 +6167,8 @@
         });
         var text =
           L("Notes du client — ", "Client notes — ") + data.gallery.title + " (" + data.gallery.slug + ")\n" +
-          L(selectedCount + " photo(s) sur " + data.photos.length + " sélectionnée(s)", selectedCount + " of " + data.photos.length + " photo(s) selected") + "\n\n" +
+          L(selectedCount + " photo(s) sur " + data.photos.length + " sélectionnée(s)", selectedCount + " of " + data.photos.length + " photo(s) selected",
+        selectedCount + " van " + data.photos.length + " foto('s) geselecteerd") + "\n\n" +
           lines.join("\n");
         navigator.clipboard.writeText(text).then(function () {
           toast(L("Notes copiées (", "Notes copied (") + noted.length + (noted.length === 1 ? " photo)." : " photos)."));
@@ -5941,7 +6179,8 @@
     }
     document.getElementById("ad-delete-gallery").addEventListener("click", function () {
       confirmAction(L("Supprimer définitivement « " + data.gallery.title + " » et ses " + data.photos.length + " photo(s) ?",
-        "Permanently delete “" + data.gallery.title + "” and its " + data.photos.length + " photo(s)?"), async function () {
+        "Permanently delete “" + data.gallery.title + "” and its " + data.photos.length + " photo(s)?",
+        "“" + data.gallery.title + "” en de " + data.photos.length + " foto('s) definitief verwijderen?"), async function () {
         try {
           await api("DELETE", "/galleries/" + encodeURIComponent(slug));
           toast(L("Galerie supprimée.", "Gallery deleted."));
@@ -6058,7 +6297,8 @@
       event.target.value = "";
       if (!file) return;
       var stateBox = document.getElementById("ad-music-state");
-      stateBox.textContent = L("Envoi de « " + file.name + " »…", "Uploading “" + file.name + "”…");
+      stateBox.textContent = L("Envoi de « " + file.name + " »…", "Uploading “" + file.name + "”…",
+        "“" + file.name + "”…");
       var form = new FormData();
       form.append("file", file, file.name);
       try {
@@ -6383,13 +6623,15 @@
     var here = queue && queue.getAttribute("data-slug") === job.slug;
     var where = here ? "" : L(" — « " + job.title + " »", " — “" + job.title + "”");
     if (failed.length === 0) {
-      toast(L(succeeded + " photo(s) envoyée(s)", succeeded + (succeeded === 1 ? " photo uploaded" : " photos uploaded")) + where + ".");
+      toast(L(succeeded + " photo(s) envoyée(s)", succeeded + (succeeded === 1 ? " photo uploaded" : " photos uploaded"),
+        succeeded + (succeeded === 1 ? " foto geüpload" : " foto's geüpload")) + where + ".");
       setTimeout(function () {
         uploads.jobs = uploads.jobs.filter(function (j) { return j !== job; });
         renderUploadPanel();
       }, 4000);
     } else {
-      toast(L(succeeded + " envoyée(s), " + failed.length + " en échec", succeeded + " uploaded, " + failed.length + " failed") + where +
+      toast(L(succeeded + " envoyée(s), " + failed.length + " en échec", succeeded + " uploaded, " + failed.length + " failed",
+        succeeded + " geüpload, " + failed.length + " mislukt") + where +
         L(" — la raison est indiquée sous chaque photo.", " — the reason is shown under each photo."), true);
     }
     attachUploadRows(job.slug);
@@ -6420,7 +6662,8 @@
         retry.type = "button";
         retry.className = "ad-btn ad-upload-retry";
         retry.textContent = L("Réessayer les " + failedCount + " photo" + (failedCount > 1 ? "s" : "") + " en échec",
-          "Retry " + failedCount + " failed photo" + (failedCount > 1 ? "s" : ""));
+          "Retry " + failedCount + " failed photo" + (failedCount > 1 ? "s" : ""),
+        "Opnieuw proberen: " + failedCount + (failedCount > 1 ? " mislukte foto's" : " mislukte foto"));
         retry.addEventListener("click", function () { retryFailedUploads(job); });
         queue.appendChild(retry);
       }
@@ -6487,7 +6730,8 @@
     panel.innerHTML =
       '<button type="button" class="ad-uploads-head" data-uploads-toggle aria-expanded="' + !uploads.collapsed + '">' +
       "<span>" + (pending
-        ? L("Envoi de " + pending + " photo" + (pending > 1 ? "s" : "") + " en cours", "Uploading " + pending + " photo" + (pending > 1 ? "s" : ""))
+        ? L("Envoi de " + pending + " photo" + (pending > 1 ? "s" : "") + " en cours", "Uploading " + pending + " photo" + (pending > 1 ? "s" : ""),
+        pending + (pending > 1 ? " foto's" : " foto") + " uploaden")
         : L("Envois terminés", "Uploads finished")) + "</span>" +
       '<span aria-hidden="true">' + (uploads.collapsed ? "▴" : "▾") + "</span></button>" +
       (uploads.collapsed ? "" : '<ul class="ad-uploads-list">' + rows + "</ul>" +
@@ -6534,7 +6778,7 @@
       includedPhotos: form.includedPhotos.value.trim() || undefined,
       extraPhotoPrice: form.extraPhotoPrice.value.trim() || undefined,
       theme: form.theme.value || undefined,
-      language: form.language.value === "en" ? "en" : undefined,
+      language: form.language.value === "en" || form.language.value === "nl" ? form.language.value : undefined,
       sessionType: form.sessionType.value || undefined,
     };
 
@@ -10703,8 +10947,15 @@
   // Titre d'une date à retenir. Le Worker le rédige en français ; en
   // anglais, on le recompose depuis ses éléments (type, prénom, âge).
   function plReminderTitle(ev) {
-    if (LANG !== "en") return ev.title;
+    if (LANG === "fr") return ev.title;
     var label = ev.label || "";
+    if (LANG === "nl") {
+      if (ev.kind === "season") return (ev.type === "season" ? "Shoots: " : "Shoot: ") + T(PL_SEASONS_EN[label] || label, label);
+      if (ev.kind === "baby" && ev.months) return label + " wordt " + ev.months + " maanden";
+      if (ev.kind === "birthday" || ev.kind === "baby") return ev.years ? label + " wordt " + ev.years : "Verjaardag van " + label;
+      if (ev.kind === "wedding") return ev.years ? ev.years + " jaar getrouwd: " + label : "Huwelijksverjaardag: " + label;
+      return label;
+    }
     if (ev.kind === "season") return (PL_SEASONS_EN[label] || label) + (ev.type === "season" ? " sessions" : " session");
     if (ev.kind === "baby" && ev.months) return label + " turns " + ev.months + " months";
     if (ev.kind === "birthday" || ev.kind === "baby") return ev.years ? label + " turns " + ev.years : label + "'s birthday";
@@ -10737,7 +10988,8 @@
   }
   function plIn(days) {
     if (days <= 0) return "";
-    return L("dans " + days + " j", "in " + days + " d");
+    return L("dans " + days + " j", "in " + days + " d",
+        "nog " + days + " d");
   }
 
   var PL_TYPES = {
@@ -10845,7 +11097,8 @@
       title = L("Sélection reçue : à retoucher", "Selection received: to retouch");
       meta.push("<strong>" + esc(t.title) + "</strong>");
       meta.push((t.selectedCount
-        ? L(t.selectedCount + " photo" + (t.selectedCount > 1 ? "s" : "") + " choisie" + (t.selectedCount > 1 ? "s" : ""), t.selectedCount + " photo" + (t.selectedCount > 1 ? "s" : "") + " chosen") +
+        ? L(t.selectedCount + " photo" + (t.selectedCount > 1 ? "s" : "") + " choisie" + (t.selectedCount > 1 ? "s" : ""), t.selectedCount + " photo" + (t.selectedCount > 1 ? "s" : "") + " chosen",
+        t.selectedCount + (t.selectedCount > 1 ? " foto's" : " foto") + " gekozen") +
           (t.clientName ? L(" par ", " by ") + clLink(t.clientName, t.clientEmail) : "")
         : L("Validée", "Confirmed") + (t.clientName ? L(" par ", " by ") + clLink(t.clientName, t.clientEmail) : "")) + L(", le ", " on ") + plShortDay(t.since));
       actions = '<button type="button" class="ad-btn ad-btn-sm" data-pl-gallery="' + esc(t.slug) + '">' + L("Ouvrir la galerie", "Open the gallery") + "</button>";
@@ -10914,7 +11167,8 @@
       tab.appendChild(badge);
     }
     badge.textContent = String(due);
-    badge.setAttribute("aria-label", L(due + " chose" + (due > 1 ? "s" : "") + " à faire", due + " thing" + (due > 1 ? "s" : "") + " to do"));
+    badge.setAttribute("aria-label", L(due + " chose" + (due > 1 ? "s" : "") + " à faire", due + " thing" + (due > 1 ? "s" : "") + " to do",
+        due + (due > 1 ? " taken" : " taak") + " te doen"));
   }
 
   function paintPlanning() {
@@ -11340,13 +11594,15 @@
       portfolio: ["portfolio", "Portfolio"], "bons-cadeaux": ["giftcards", "Bons cadeaux"], abonnement: ["subscription", "Abonnement"],
       parametres: ["settings", "Paramètres"], suggestions: ["feedback", "Suggestions"],
     };
-    var SUGGESTIONS = [
-      "Par où commencer ?",
-      "Comment envoyer une galerie à mon client ?",
-      "Comment ouvrir des créneaux de réservation ?",
-      "Mes photos sont-elles vraiment protégées ?",
-      "Comment préparer mes modèles de contrat ?",
-    ];
+    function suggestions() {
+      return [
+        L("Par où commencer ?", "Where do I start?", "Waar begin ik?"),
+        L("Comment envoyer une galerie à mon client ?", "How do I send a gallery to my client?", "Hoe stuur ik een galerij naar mijn klant?"),
+        L("Comment ouvrir des créneaux de réservation ?", "How do I open booking slots?", "Hoe open ik tijdsloten om te boeken?"),
+        L("Mes photos sont-elles vraiment protégées ?", "Are my photos really protected?", "Zijn mijn foto's echt beschermd?"),
+        L("Comment préparer mes modèles de contrat ?", "How do I set up my contract templates?", "Hoe maak ik mijn contractmodellen klaar?"),
+      ];
+    }
     var state = { enabled: false, messages: [], busy: false, remaining: null };
 
     // Une photographe en 3D douce : tête ronde en dégradé, grands yeux, béret
@@ -11386,6 +11642,8 @@
         "</g></g></g>" +
         '<path class="lumi-happy" d="M45.5 53 q5 -6 10 0 M64.5 53 q5 -6 10 0" fill="none" stroke="#0b0f2e" stroke-width="3" stroke-linecap="round"/>' +
         '<ellipse class="lumi-cheek" cx="43" cy="61" rx="4" ry="2.4" fill="#ff7fa8" opacity=".35"/><ellipse class="lumi-cheek" cx="77" cy="61" rx="4" ry="2.4" fill="#ff7fa8" opacity=".35"/>' +
+        // Bouche, visible quand Lumi parle à voix haute.
+        '<ellipse class="lumi-mouth" cx="60" cy="63.5" rx="3.4" ry="2.4" fill="#0b0f2e"/>' +
         "</g></g>" +
         // Veste, sangle de l'appareil, appareil photo.
         '<g class="lumi-torso">' +
@@ -11526,10 +11784,18 @@
 
     // Particules du décor : neige, pétales, feuilles, cœurs.
     var SKY = { noel: "snow", hiver: "snow", printemps: "petal", automne: "leaf", valentin: "heart" };
-    var WISH = {
-      noel: "Belles fêtes de fin d'année !", hiver: "Bien au chaud cet hiver ?", valentin: "Belle Saint-Valentin !",
-      paques: "Joyeuses Pâques !", printemps: "Le printemps est là !", ete: "Bel été !", automne: "Bel automne !", halloween: "Joyeux Halloween !",
-    };
+    function wish(key) {
+      return {
+        noel: L("Belles fêtes de fin d'année !", "Happy holidays!", "Fijne feestdagen!"),
+        hiver: L("Bien au chaud cet hiver ?", "Staying warm this winter?", "Lekker warm deze winter?"),
+        valentin: L("Belle Saint-Valentin !", "Happy Valentine's Day!", "Fijne Valentijn!"),
+        paques: L("Joyeuses Pâques !", "Happy Easter!", "Vrolijk Pasen!"),
+        printemps: L("Le printemps est là !", "Spring is here!", "De lente is er!"),
+        ete: L("Bel été !", "Have a lovely summer!", "Fijne zomer!"),
+        automne: L("Bel automne !", "Happy autumn!", "Fijne herfst!"),
+        halloween: L("Joyeux Halloween !", "Happy Halloween!", "Fijne Halloween!"),
+      }[key] || "";
+    }
     function skyHtml(key) {
       var kind = SKY[key];
       if (!kind) return "";
@@ -11543,7 +11809,7 @@
     // Saison du décor ; « ?lumi-saison=paques » (ou ete, noel…) pour la voir avant l'heure.
     function seasonNow() {
       var forced = (/[?&]lumi-saison=([a-z]+)/.exec(location.search) || [])[1];
-      return forced && WISH[forced] ? forced : lumiSeason(new Date());
+      return forced && wish(forced) ? forced : lumiSeason(new Date());
     }
     var season = seasonNow();
     var decorCount = 0;
@@ -11621,7 +11887,9 @@
         .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
         .replace(/\[\[([a-z-]+)\]\]/g, function (all, key) {
           var target = GOTO[key];
-          return target ? '<button type="button" class="lumi-goto" data-lumi-goto="' + key + '">' + esc(target[1]) + "</button>" : "";
+          // Libellé de l'onglet tel qu'affiché (donc dans la langue de l'espace).
+          var label = target && document.querySelector("#ad-tab-" + target[0] + " .ad-tab-label");
+          return target ? '<button type="button" class="lumi-goto" data-lumi-goto="' + key + '">' + esc(label ? label.textContent : target[1]) + "</button>" : "";
         });
     }
     function render(text) {
@@ -11643,6 +11911,11 @@
       return out.join("");
     }
 
+    function playBtn(i) {
+      return state.speech ? '<button type="button" class="lumi-play" data-lumi-play="' + i + '" aria-label="' + L("Écouter la réponse", "Play the answer", "Antwoord beluisteren") + '">' +
+        '<svg viewBox="0 0 24 24" aria-hidden="true"><path class="lumi-play-ic" d="M8 6v12l10-6z"/><path class="lumi-pause-ic" d="M8 6h3v12H8zM13 6h3v12h-3z"/></svg>Écouter</button>' : "";
+    }
+
     function bubble(role, html, extraClass) {
       var row = document.createElement("div");
       row.className = "lumi-msg " + (role === "user" ? "lumi-msg-me" : "lumi-msg-bot") + (extraClass ? " " + extraClass : "");
@@ -11658,9 +11931,10 @@
       var h = new Date().getHours();
       var name = state.me && (state.me.firstName || state.me.studioName) || "";
       return {
-        hello: (h >= 18 || h < 5 ? "Bonsoir" : "Bonjour") + (name ? " " + name : "") + ".",
-        sub: "Je suis Lumi, votre guide Holypixx. Que puis-je faire pour vous " +
-          (h >= 22 || h < 5 ? "cette nuit" : h >= 18 ? "ce soir" : "aujourd'hui") + " ?",
+        hello: (h >= 18 || h < 5 ? L("Bonsoir", "Good evening", "Goedenavond") : L("Bonjour", "Hello", "Hallo")) + (name ? " " + name : "") + ".",
+        sub: L("Je suis Lumi, votre guide Holypixx. Que puis-je faire pour vous " + (h >= 22 || h < 5 ? "cette nuit" : h >= 18 ? "ce soir" : "aujourd'hui") + " ?",
+          "I'm Lumi, your Holypixx guide. What can I do for you " + (h >= 22 || h < 5 ? "tonight" : h >= 18 ? "this evening" : "today") + "?",
+          "Ik ben Lumi, je gids bij Holypixx. Wat kan ik " + (h >= 22 || h < 5 ? "vannacht" : h >= 18 ? "vanavond" : "vandaag") + " voor je doen?"),
       };
     }
 
@@ -11675,20 +11949,22 @@
         welcome.innerHTML = '<div class="lumi-stage lumi-stage-' + season + '">' + skyHtml(season) +
           '<span class="lumi-hero" aria-hidden="true">' + newFigure() + "</span>" +
           '<span class="lumi-decor" aria-hidden="true">' + lumiDecor(season, "wd" + decorCount) + "</span></div>" +
-          '<span class="lumi-wish">' + esc(WISH[season]) + "</span>" +
+          '<span class="lumi-wish">' + esc(wish(season)) + "</span>" +
           "<h3>" + esc(g.hello) + "</h3><p>" + esc(g.sub) + "</p>" +
-          '<div class="lumi-suggest">' + SUGGESTIONS.map(function (q) { return '<button type="button" data-lumi-ask="' + esc(q) + '">' + esc(q) + "</button>"; }).join("") + "</div>";
+          '<div class="lumi-suggest">' + suggestions().map(function (q) { return '<button type="button" data-lumi-ask="' + esc(q) + '">' + esc(q) + "</button>"; }).join("") + "</div>";
         log.appendChild(welcome);
       }
-      state.messages.forEach(function (m) {
-        bubble(m.role, m.role === "user" ? esc(m.content) : render(m.content));
+      state.messages.forEach(function (m, i) {
+        bubble(m.role, m.role === "user" ? esc(m.content) : render(m.content) + playBtn(i));
       });
       footText();
     }
 
     function footText() {
-      foot.textContent = "Lumi peut se tromper : vérifiez les points importants." +
-        (state.remaining !== null && state.remaining <= 10 ? " · " + state.remaining + " question" + (state.remaining > 1 ? "s" : "") + " restante" + (state.remaining > 1 ? "s" : "") + " aujourd'hui" : "");
+      var n = state.remaining;
+      foot.textContent = L("Lumi peut se tromper : vérifiez les points importants.", "Lumi can make mistakes: double-check what matters.", "Lumi kan zich vergissen: controleer wat belangrijk is.") +
+        (n !== null && n <= 10 ? " · " + L(n + " question" + (n > 1 ? "s" : "") + " restante" + (n > 1 ? "s" : "") + " aujourd'hui",
+          n + " question" + (n > 1 ? "s" : "") + " left today", n + (n === 1 ? " vraag" : " vragen") + " over vandaag") : "");
     }
 
     function open() {
@@ -11700,6 +11976,8 @@
       setTimeout(function () { input.focus({ preventScroll: true }); }, 60);
     }
     function close() {
+      stopSpeaking();
+      if (rec.recorder && rec.recorder.state === "recording") stopRecording();
       panel.hidden = true;
       launcher.setAttribute("aria-expanded", "false");
       launcher.focus({ preventScroll: true });
@@ -11716,9 +11994,12 @@
       input.style.height = Math.min(140, input.scrollHeight + 2) + "px";
     }
 
-    async function ask(question) {
+    async function ask(question, opts) {
+      opts = opts || {};
       question = String(question || "").trim();
       if (!question || state.busy) return;
+      if (typeof stopSpeaking === "function") stopSpeaking();
+      if (speakOn() || opts.voice) unlockAudio();
       state.busy = true;
       send.disabled = true;
       var welcome = log.querySelector(".lumi-welcome");
@@ -11729,7 +12010,7 @@
       bubble("user", esc(question));
       input.value = "";
       autosize();
-      var typing = bubble("assistant", '<span class="lumi-typing" aria-label="Lumi réfléchit"><i></i><i></i><i></i></span>');
+      var typing = bubble("assistant", '<span class="lumi-typing" aria-label="' + L("Lumi réfléchit", "Lumi is thinking", "Lumi denkt na") + '"><i></i><i></i><i></i></span>');
       mood("is-thinking");
       try {
         var res = await api("POST", "/assistant", { messages: state.messages.slice(-16) });
@@ -11737,8 +12018,9 @@
         state.messages.push({ role: "assistant", content: res.reply });
         state.remaining = typeof res.remaining === "number" ? res.remaining : state.remaining;
         save();
-        bubble("assistant", render(res.reply));
+        var row = bubble("assistant", render(res.reply) + playBtn(state.messages.length - 1));
         mood("is-happy", 1300);
+        if (state.speech && (speakOn() || opts.voice)) speakText(res.reply, row.querySelector(".lumi-play"));
       } catch (err) {
         typing.remove();
         // La question reste dans le champ : on peut la renvoyer telle quelle.
@@ -11747,7 +12029,7 @@
         log.lastElementChild && log.lastElementChild.classList.contains("lumi-msg-me") && log.lastElementChild.remove();
         input.value = question;
         autosize();
-        bubble("assistant", esc(err.message || "Lumi n'a pas pu répondre."), "lumi-error");
+        bubble("assistant", esc(err.message || L("Lumi n'a pas pu répondre.", "Lumi couldn't answer.", "Lumi kon niet antwoorden.")), "lumi-error");
         mood(null);
       } finally {
         state.busy = false;
@@ -11755,6 +12037,179 @@
         footText();
       }
     }
+
+
+    /* ----- La voix : poser sa question à voix haute, entendre la réponse ----- */
+
+    var micBtn = document.getElementById("lumi-mic");
+    var voiceBtn = document.getElementById("lumi-voice");
+    var VOICE_PREF = "holypixx-lumi-voix";
+    var rec = { recorder: null, chunks: [], timer: null, stream: null };
+    var player = { audio: null, url: "" };
+    var canRecord = Boolean(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
+
+    function speakOn() {
+      try { return localStorage.getItem(VOICE_PREF) === "1"; } catch (err) { return false; }
+    }
+    function setSpeakOn(on) {
+      try { localStorage.setItem(VOICE_PREF, on ? "1" : "0"); } catch (err) { /* rien */ }
+      voiceBtn.setAttribute("aria-pressed", on ? "true" : "false");
+      voiceBtn.title = on ? L("Lumi lit ses réponses (cliquer pour couper)", "Lumi reads her answers (click to mute)", "Lumi leest haar antwoorden voor (klik om uit te zetten)")
+        : L("Lumi lit ses réponses à voix haute", "Lumi reads her answers aloud", "Lumi leest haar antwoorden voor");
+      if (!on) stopSpeaking();
+    }
+
+    // Un court silence (WAV valide, fabriqué ici) pour débloquer le son.
+    var silentSrc = "";
+    function silentWav() {
+      if (silentSrc) return silentSrc;
+      var samples = 800, bytes = new Uint8Array(44 + samples * 2), v = new DataView(bytes.buffer);
+      var put = function (o, str) { for (var i = 0; i < str.length; i++) bytes[o + i] = str.charCodeAt(i); };
+      put(0, "RIFF"); v.setUint32(4, 36 + samples * 2, true); put(8, "WAVE"); put(12, "fmt ");
+      v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, 8000, true);
+      v.setUint32(28, 16000, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); put(36, "data"); v.setUint32(40, samples * 2, true);
+      var bin = "";
+      for (var j = 0; j < bytes.length; j++) bin += String.fromCharCode(bytes[j]);
+      silentSrc = "data:audio/wav;base64," + btoa(bin);
+      return silentSrc;
+    }
+    // iPhone : le son doit être « débloqué » pendant un geste de l'utilisateur.
+    function unlockAudio() {
+      if (!player.audio) player.audio = new Audio();
+      try {
+        player.audio.src = silentWav();
+        var p = player.audio.play();
+        if (p && p.catch) p.catch(function () {});
+      } catch (err) { /* rien */ }
+    }
+
+    function stopSpeaking() {
+      if (player.audio) { try { player.audio.pause(); } catch (err) { /* rien */ } }
+      if (window.speechSynthesis) { try { window.speechSynthesis.cancel(); } catch (err) { /* rien */ } }
+      figures().forEach(function (fig) { fig.classList.remove("is-talking"); });
+      log.querySelectorAll(".lumi-play.is-playing").forEach(function (b) { b.classList.remove("is-playing"); b.setAttribute("aria-label", L("Écouter la réponse", "Play the answer", "Antwoord beluisteren")); });
+    }
+    function talking(on, btn) {
+      figures().forEach(function (fig) { fig.classList.toggle("is-talking", on); });
+      if (btn) { btn.classList.toggle("is-playing", on); btn.setAttribute("aria-label", on ? L("Arrêter la lecture", "Stop playback", "Afspelen stoppen") : L("Écouter la réponse", "Play the answer", "Antwoord beluisteren")); }
+    }
+
+    function plain(text) {
+      return String(text).replace(/\[\[[a-z-]+\]\]/g, "").replace(/\*\*/g, "").replace(/^\s*[-•*]\s+/gm, "").trim();
+    }
+    // Voix de secours : celle du navigateur, dans la langue de l'espace
+    // (seule voix possible en néerlandais).
+    function browserSpeak(text, btn) {
+      if (!window.speechSynthesis || !window.SpeechSynthesisUtterance) { talking(false, btn); return; }
+      var u = new SpeechSynthesisUtterance(plain(text));
+      u.lang = LANG === "en" ? "en-GB" : LANG === "nl" ? "nl-BE" : "fr-FR";
+      var voices = window.speechSynthesis.getVoices() || [];
+      var match = voices.filter(function (v) { return v.lang.replace("_", "-") === u.lang; })[0] ||
+        voices.filter(function (v) { return v.lang.slice(0, 2).toLowerCase() === LANG; })[0];
+      if (match) u.voice = match;
+      u.onend = u.onerror = function () { talking(false, btn); };
+      talking(true, btn);
+      window.speechSynthesis.speak(u);
+    }
+
+    async function speakText(text, btn) {
+      stopSpeaking();
+      if (!state.voice) { browserSpeak(text, btn); return; }
+      talking(true, btn);
+      try {
+        var res = await fetch("/local/assistant/speak", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: text }) });
+        var type = res.headers.get("content-type") || "";
+        if (!res.ok || type.indexOf("audio") !== 0) throw new Error("voix indisponible");
+        var blob = await res.blob();
+        if (player.url) URL.revokeObjectURL(player.url);
+        player.url = URL.createObjectURL(blob);
+        if (!player.audio) player.audio = new Audio();
+        player.audio.src = player.url;
+        player.audio.onended = player.audio.onerror = function () { talking(false, btn); };
+        await player.audio.play();
+      } catch (err) {
+        talking(false, btn);
+        browserSpeak(text, btn);
+      }
+    }
+
+    function micState(on) {
+      micBtn.classList.toggle("is-recording", on);
+      micBtn.setAttribute("aria-pressed", on ? "true" : "false");
+      micBtn.setAttribute("aria-label", on ? L("Arrêter et envoyer", "Stop and send", "Stoppen en versturen") : L("Poser la question à voix haute", "Ask your question out loud", "Stel je vraag hardop"));
+      input.placeholder = on ? L("Je vous écoute…", "I'm listening…", "Ik luister…") : L("Posez votre question…", "Ask your question…", "Stel je vraag…");
+      figures().forEach(function (fig) { fig.classList.toggle("is-listening", on); });
+    }
+
+    async function startRecording() {
+      if (state.busy) return;
+      stopSpeaking();
+      unlockAudio();
+      try {
+        rec.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+      } catch (err) {
+        bubble("assistant", esc(L("Je n'ai pas accès au micro. Autorisez-le dans votre navigateur (icône à gauche de l'adresse), ou écrivez votre question.",
+          "I can't access the microphone. Allow it in your browser (icon left of the address bar), or type your question.",
+          "Ik heb geen toegang tot de microfoon. Sta die toe in je browser (icoon links van het adres), of typ je vraag.")), "lumi-error");
+        return;
+      }
+      var types = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"];
+      var mime = types.filter(function (t) { return window.MediaRecorder.isTypeSupported && window.MediaRecorder.isTypeSupported(t); })[0] || "";
+      rec.chunks = [];
+      rec.recorder = mime ? new MediaRecorder(rec.stream, { mimeType: mime }) : new MediaRecorder(rec.stream);
+      rec.recorder.ondataavailable = function (e) { if (e.data && e.data.size) rec.chunks.push(e.data); };
+      rec.recorder.onstop = sendRecording;
+      rec.recorder.start();
+      micState(true);
+      // Une minute au plus.
+      rec.timer = setTimeout(stopRecording, 60000);
+    }
+    function stopRecording() {
+      clearTimeout(rec.timer);
+      if (rec.recorder && rec.recorder.state !== "inactive") rec.recorder.stop();
+      if (rec.stream) rec.stream.getTracks().forEach(function (t) { t.stop(); });
+      micState(false);
+    }
+    async function sendRecording() {
+      var type = (rec.recorder && rec.recorder.mimeType) || "audio/webm";
+      var blob = new Blob(rec.chunks, { type: type });
+      rec.recorder = null;
+      if (blob.size < 800) return;
+      micBtn.disabled = true;
+      var listening = bubble("user", '<span class="lumi-typing" aria-label="' + L("Transcription en cours", "Transcribing", "Bezig met uitschrijven") + '"><i></i><i></i><i></i></span>');
+      try {
+        var res = await fetch("/local/assistant/listen", { method: "POST", headers: { "content-type": type.split(";")[0] }, body: blob });
+        var data = await res.json().catch(function () { return {}; });
+        listening.remove();
+        if (!res.ok) throw new Error(serverText(data.error) || L("Je n'ai pas pu écouter votre message.", "I couldn't listen to your message.", "Ik kon je bericht niet beluisteren."));
+        // La réponse à une question posée à voix haute est lue à voix haute.
+        ask(data.text, { voice: true });
+      } catch (err) {
+        listening.remove();
+        bubble("assistant", esc(err.message), "lumi-error");
+      } finally {
+        micBtn.disabled = false;
+      }
+    }
+
+    micBtn.addEventListener("click", function () {
+      if (rec.recorder && rec.recorder.state === "recording") stopRecording();
+      else startRecording();
+    });
+    voiceBtn.addEventListener("click", function () {
+      var on = !speakOn();
+      if (on) unlockAudio();
+      setSpeakOn(on);
+    });
+    log.addEventListener("click", function (e) {
+      var play = e.target.closest(".lumi-play");
+      if (!play) return;
+      if (play.classList.contains("is-playing")) { stopSpeaking(); return; }
+      unlockAudio();
+      var i = Number(play.getAttribute("data-lumi-play"));
+      var m = state.messages[i];
+      if (m) speakText(m.content, play);
+    });
 
     launcher.addEventListener("click", open);
     document.getElementById("lumi-close").addEventListener("click", close);
@@ -11796,12 +12251,19 @@
         try {
           var status = await api("GET", "/assistant");
           state.enabled = Boolean(status && status.enabled);
+          state.voice = Boolean(status && status.voice);
           state.remaining = status && typeof status.remaining === "number" ? status.remaining : null;
         } catch (err) {
           state.enabled = false;
         }
         launcher.hidden = !state.enabled;
         if (!state.enabled) return;
+        // Écouter : il faut l'écoute de Workers AI et un micro. Parler : la
+        // voix de Workers AI, sinon celle du navigateur.
+        state.speech = state.voice || Boolean(window.speechSynthesis);
+        micBtn.hidden = !(state.voice && canRecord);
+        voiceBtn.hidden = !state.speech;
+        setSpeakOn(speakOn());
         restore();
         var seen = false;
         try { seen = localStorage.getItem(TIP_SEEN) === "1"; } catch (err) { seen = true; }
@@ -12038,7 +12500,7 @@
     if (h === "#/proprietaire") return "";
     return "galleries";
   }
-  function helpText(pair) { return LANG === "en" ? pair[1] : pair[0]; }
+  function helpText(pair) { return LANG === "fr" ? pair[0] : T(pair[1], pair[0]); }
 
   var HELP_SEEN = "holypixx-aide-vue";
   function helpSeen() {

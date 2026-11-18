@@ -391,15 +391,81 @@ const DESCRIPTION_EN = {
 const OPTION_LABEL_EN = { finish: "Finish", wrap: "Edges", color: "Frame colour" };
 const OPTION_CHOICE_EN = { lustre: "Lustre (satin)", gloss: "Gloss" };
 
+/* Libellés néerlandais (galeries clientes en néerlandais, néerlandais de
+   Belgique ; espace photographe en néerlandais) : centimètres comme en
+   français, virgule décimale. */
+const PRODUCT_NL = {
+  "photo-ctype": "Fotoafdruk op fotopapier",
+  "art-fineart": "Fine-art-afdruk (mat kunstpapier 200 g)",
+  "art-photorag": "Fine-art-afdruk op Hahnemühle Photo Rag",
+  "art-budget-poster": "Poster",
+  "canvas-stretched": "Canvas op spieraam",
+  "canvas-rolled": "Opgerold canvas (zonder spieraam)",
+  "canvas-float": "Canvas in baklijst",
+  "frame-classic-mount": "Klassiek kader met passe-partout",
+  "frame-classic": "Klassiek kader",
+  "frame-box-mount": "Diep kader met passe-partout",
+  "frame-box": "Diep kader",
+  "acrylic-panel": "Foto achter plexiglas",
+  "metal-aluminium": "Foto op aluminium",
+  "gift-board": "Stevig fotopaneel",
+  "gift-mug": "Witte keramische mok",
+  "gift-cushion": "Kussen in suède-look",
+  "card-matte": "Matte wenskaart",
+  "card-gloss": "Glanzende wenskaart",
+};
+const OPTION_NL = {
+  lustre: "zijdeglans", gloss: "hoogglans",
+  MirrorWrap: "gespiegelde randen", ImageWrap: "doorlopende foto", Black: "zwarte randen", White: "witte randen",
+  black: "zwart", white: "wit", natural: "natuurlijk hout", brown: "bruin",
+  "dark grey": "donkergrijs", "light grey": "lichtgrijs", gold: "antiek goud", silver: "antiek zilver",
+};
+const SIZE_TEXT_NL = { "11oz": "330 ml" };
+const CATEGORY_NL = {
+  photo: "Fotoafdrukken", art: "Fine-art-afdrukken & posters", canvas: "Canvas", frames: "Kaders",
+  panels: "Plexiglas & aluminium", gifts: "Objecten & cadeaus", cards: "Kaarten",
+};
+const DESCRIPTION_NL = {
+  "photo-ctype": "Traditioneel fotopapier (C-type), klassieke fotografische weergave.",
+  "art-fineart": "Gicleedruk met pigmentinkten, archiefkwaliteit.",
+  "art-photorag": "Papier van 100 % katoen, 308 g, de referentie voor fotografen: gicleedruk met pigmentinkten, museumkwaliteit.",
+  "art-budget-poster": "Voordelige poster op satijnpapier.",
+  "canvas-stretched": "Canvas gespannen op een houten spieraam van 38 mm, klaar om op te hangen.",
+  "canvas-rolled": "Kunstenaarscanvas van 400 g, opgerold geleverd, om zelf op te spannen of in te kaderen.",
+  "canvas-float": "Canvas op spieraam in een baklijst.",
+  "frame-classic-mount": "Fine-art-afdruk achter glas, witte passe-partout.",
+  "frame-classic": "Fine-art-afdruk achter glas, zonder passe-partout.",
+  "frame-box-mount": "Diep kader, witte passe-partout.",
+  "frame-box": "Diep kader, zonder passe-partout.",
+  "acrylic-panel": "Fine-art-afdruk achter glanzend plexiglas van 10 mm, onzichtbare ophanging: galerie-effect, diepe kleuren.",
+  "metal-aluminium": "Sublimatiedruk op glanzend ChromaLuxe-aluminium: heldere kleuren, licht en vochtbestendig.",
+  "gift-board": "Afdruk op een stevig paneel, om neer te zetten of op te hangen.",
+  "gift-mug": "Mok van 330 ml bedrukt via sublimatie, vaatwasser- en microgolfbestendig. De hele foto staat gecentreerd op de mok, zonder bijsnijden.",
+  "gift-cushion": "Zachte hoes met fluweeleffect, aan één kant bedrukt, effen achterkant, met vulling.",
+  "card-matte": "Gevouwen kaart op Mohawk-kunstpapier van 324 g, met je foto op de voorkant.",
+  "card-gloss": "Gevouwen kaart van 280 g met glanzende laminering, met je foto op de voorkant.",
+};
+const OPTION_LABEL_NL = { finish: "Afwerking", wrap: "Randen", color: "Kleur van het kader" };
+
+function sizeLabelNl(product, size) {
+  if (product.sizeLabels?.[size]) return product.sizeLabels[size];
+  return SIZE_TEXT_NL[size] || sizeLabel(product, size);
+}
+
 // Libellé d'un format de la boutique dans la langue de la galerie. Un
 // libellé que le photographe a réécrit lui-même est gardé tel quel.
 export function productLabelFor(row, lang) {
-  if (lang !== "en" || !row.catalog_ref) return row.label;
+  if ((lang !== "en" && lang !== "nl") || !row.catalog_ref) return row.label;
   const [productKey, size, option] = String(row.catalog_ref).split("|");
   const resolved = resolveSelection({ product: productKey, size, option: option || undefined });
   if (resolved.error || resolved.label !== row.label) return row.label;
   const { product } = findProduct(productKey);
-  const optionText = product.option ? OPTION_EN[resolved.attributes[product.option.attribute]] : "";
+  const choice = product.option ? resolved.attributes[product.option.attribute] : "";
+  if (lang === "nl") {
+    const optionText = choice ? OPTION_NL[choice] : "";
+    return `${PRODUCT_NL[product.key] || product.label} ${sizeLabelNl(product, size)}${optionText ? ` — ${optionText}` : ""}`;
+  }
+  const optionText = choice ? OPTION_EN[choice] : "";
   return `${PRODUCT_EN[product.key] || product.label} ${sizeLabelEn(product, size)}${optionText ? ` — ${optionText}` : ""}`;
 }
 
@@ -429,21 +495,22 @@ export function sizingForSku(sku) {
 // Version envoyée à l'admin pour construire les menus (libellés en cm).
 export function catalogueForAdmin(lang) {
   const en = lang === "en";
+  const nl = lang === "nl";
   const choiceEn = (value, label) => {
-    if (!en) return label;
-    const text = OPTION_CHOICE_EN[value] || OPTION_EN[value] || label;
+    if (!en && !nl) return label;
+    const text = nl ? OPTION_NL[value] || label : OPTION_CHOICE_EN[value] || OPTION_EN[value] || label;
     return text.charAt(0).toUpperCase() + text.slice(1);
   };
   return CATALOGUE.map((category) => ({
     key: category.key,
-    label: en ? CATEGORY_EN[category.key] || category.label : category.label,
+    label: nl ? CATEGORY_NL[category.key] || category.label : en ? CATEGORY_EN[category.key] || category.label : category.label,
     products: category.products.map((p) => ({
       key: p.key,
-      label: en ? PRODUCT_EN[p.key] || p.label : p.label,
-      description: en ? DESCRIPTION_EN[p.key] || "" : p.description,
-      sizes: p.sizes.map((s) => ({ key: s, label: en ? sizeLabelEn(p, s) : sizeLabel(p, s) })),
+      label: nl ? PRODUCT_NL[p.key] || p.label : en ? PRODUCT_EN[p.key] || p.label : p.label,
+      description: nl ? DESCRIPTION_NL[p.key] || "" : en ? DESCRIPTION_EN[p.key] || "" : p.description,
+      sizes: p.sizes.map((s) => ({ key: s, label: nl ? sizeLabelNl(p, s) : en ? sizeLabelEn(p, s) : sizeLabel(p, s) })),
       option: p.option ? {
-        label: en ? OPTION_LABEL_EN[p.option.attribute] || p.option.label : p.option.label,
+        label: nl ? OPTION_LABEL_NL[p.option.attribute] || p.option.label : en ? OPTION_LABEL_EN[p.option.attribute] || p.option.label : p.option.label,
         choices: Object.entries(p.option.choices).map(([value, label]) => ({ value, label: choiceEn(value, label) })),
       } : null,
     })),
@@ -455,7 +522,7 @@ export function catalogueForAdmin(lang) {
 export function categoryLabelFor(row, lang) {
   const productKey = String(row.catalog_ref || "").split("|")[0];
   const found = productKey ? findProduct(productKey) : null;
-  if (found) return lang === "en" ? CATEGORY_EN[found.category.key] || found.category.label : found.category.label;
+  if (found) return categoryText(found.category, lang);
   // Produit ajouté avant les menus, ou en mode avancé : on se fie au plus
   // long préfixe de SKU connu (GLOBAL-CAN-ROL-SC- avant GLOBAL-CAN-).
   const sku = String(row.sku || "").toUpperCase();
@@ -463,10 +530,16 @@ export function categoryLabelFor(row, lang) {
   for (const category of CATALOGUE) {
     for (const product of category.products) {
       const prefix = skuPrefix(product);
-      if (sku.startsWith(prefix) && (!best || prefix.length > best.prefix.length)) best = { prefix, label: lang === "en" ? CATEGORY_EN[category.key] || category.label : category.label };
+      if (sku.startsWith(prefix) && (!best || prefix.length > best.prefix.length)) best = { prefix, label: categoryText(category, lang) };
     }
   }
-  return best ? best.label : (lang === "en" ? "Other products" : "Autres produits");
+  return best ? best.label : (lang === "nl" ? "Andere producten" : lang === "en" ? "Other products" : "Autres produits");
+}
+
+function categoryText(category, lang) {
+  if (lang === "nl") return CATEGORY_NL[category.key] || category.label;
+  if (lang === "en") return CATEGORY_EN[category.key] || category.label;
+  return category.label;
 }
 
 // Formats proposés d'un clic (« Ajouter les formats suggérés »).

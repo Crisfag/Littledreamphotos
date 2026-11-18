@@ -13,6 +13,7 @@
 import { json, fail } from "./http.js";
 import { randomBytes, b64url } from "./auth.js";
 import { supplementFor } from "./admin.js";
+import { formatAmount } from "./i18n.js";
 
 const MAX_OPTIONS = 30;
 const MAX_QUANTITY = 99;
@@ -20,9 +21,9 @@ const MAX_QUANTITY = 99;
 const now = () => Math.floor(Date.now() / 1000);
 const newId = (prefix) => `${prefix}_${b64url(randomBytes(9))}`;
 
+// « 45,00 € » (fr), « €45.00 » (en), « € 45,00 » (nl).
 function formatEuros(cents, lang) {
-  const amount = ((cents || 0) / 100).toLocaleString(lang === "en" ? "en-GB" : "fr-BE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  return lang === "en" ? `€${amount}` : `${amount} €`;
+  return formatAmount(cents, lang);
 }
 
 function optionOut(row) {
@@ -220,15 +221,17 @@ export function optionLine(item, lang) {
 export function paymentInvoiceText(payment, gallery, lang) {
   const options = parseOptionsSnapshot(payment.options_json);
   const n = payment.extra_count || 0;
-  const extras = lang === "en"
-    ? `${n} additional photo${n > 1 ? "s" : ""}`
-    : `${n} photo${n > 1 ? "s" : ""} supplémentaire${n > 1 ? "s" : ""}`;
+  const extras = lang === "nl"
+    ? `${n} extra foto${n > 1 ? "'s" : ""}`
+    : lang === "en"
+      ? `${n} additional photo${n > 1 ? "s" : ""}`
+      : `${n} photo${n > 1 ? "s" : ""} supplémentaire${n > 1 ? "s" : ""}`;
   if (!options.length) return { description: `${extras} — ${gallery.title}`, details: [] };
   const optionsCents = options.reduce((sum, o) => sum + o.unitCents * o.quantity, 0);
   const details = [];
   if (n > 0) details.push(`${extras} — ${formatEuros(payment.amount_cents - optionsCents, lang)}`);
   for (const o of options) details.push(optionLine(o, lang));
-  const what = n > 0 ? (lang === "en" ? "Extra photos and options" : "Photos supplémentaires et options") : "Options";
+  const what = n > 0 ? (lang === "nl" ? "Extra foto's en opties" : lang === "en" ? "Extra photos and options" : "Photos supplémentaires et options") : (lang === "nl" ? "Opties" : "Options");
   return { description: `${what} — ${gallery.title}`, details };
 }
 

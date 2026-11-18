@@ -4,7 +4,7 @@
 // wrangler s'en sert pour réécrire l'hôte des requêtes vers holypixx.com,
 // ce qui casse les tests (dont ceux des sous-domaines, qui comptent sur
 // l'en-tête Host d'origine). On lance donc wrangler avec une copie de la
-// configuration sans cette route, régénérée à chaque fois et ignorée par git.
+// configuration sans cette route (ni Workers AI), régénérée à chaque fois et ignorée par git.
 //
 //   npm run dev:local                 (port 8788)
 //   npm run dev:local -- --port 8787  (arguments passés à wrangler dev)
@@ -15,7 +15,11 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const config = readFileSync(join(root, "wrangler.toml"), "utf8").replace(/^routes\s*=\s*\[[\s\S]*?^\]\s*\n/m, "");
+// Workers AI (voix de Lumi) n'existe qu'en ligne : retiré en local, Lumi
+// garde alors l'écrit seul (les tests simulent l'audio).
+const config = readFileSync(join(root, "wrangler.toml"), "utf8")
+  .replace(/^routes\s*=\s*\[[\s\S]*?^\]\s*\n/m, "")
+  .replace(/^\[ai\]\s*\nbinding\s*=\s*"AI"\s*\n/m, "");
 const localConfig = join(root, ".wrangler-local.toml");
 writeFileSync(localConfig, config);
 

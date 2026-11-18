@@ -13,6 +13,7 @@
 // abonnement.
 
 import { json, fail } from "./http.js";
+import { photographerMailLanguage } from "./i18n.js";
 import { createSubscriptionCheckout, createBillingPortalSession, ensureCoupon, retrieveCheckoutSession, searchPhotographerSubscriptions } from "./stripe.js";
 import { storageForAdmin } from "./storage.js";
 import { convertReferral, settleRewards } from "./referral.js";
@@ -380,10 +381,12 @@ export async function startSubscriptionCheckout(request, env, photographer) {
       email: photographer.email,
       customerId: photographer.stripe_customer_id || "",
       planKey: plan.key,
-      label: photographer.ui_language === "en"
+      // Espace en néerlandais : libellé anglais (voir photographerMailLanguage),
+      // page de paiement Stripe en néerlandais.
+      label: photographerMailLanguage(photographer.ui_language) === "en"
         ? `Holypixx ${PLAN_LABELS_EN[plan.key] || plan.label}${interval === "year" ? " (yearly)" : ""}`
         : `Holypixx ${plan.label}${interval === "year" ? " (annuel)" : ""}`,
-      locale: photographer.ui_language === "en" ? "en" : undefined,
+      locale: photographer.ui_language === "en" || photographer.ui_language === "nl" ? photographer.ui_language : undefined,
       unitAmountCents: interval === "year" ? plan.yearlyCents : plan.priceCents,
       interval,
       trialDays: trialAvailable(photographer) ? TRIAL_DAYS : 0,

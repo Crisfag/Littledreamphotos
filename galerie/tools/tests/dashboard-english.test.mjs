@@ -57,10 +57,10 @@ await page.goto(BASE, { waitUntil: "domcontentloaded" });
 await page.waitForSelector("#ad-login-form", { timeout: 10000 });
 check("sans choix, l'écran de connexion reste en français (même navigateur en anglais)",
       (await page.textContent("#ad-login-card")).includes("Se connecter"));
-await page.click("#ad-lang-switch");
+await page.click('#ad-lang-switch [data-lang="en"]');
 check("le bouton English traduit l'écran de connexion",
       (await page.textContent("#ad-login-card")).includes("Sign in") && await page.getAttribute("html", "lang") === "en");
-await page.click("#ad-lang-switch");
+await page.click('#ad-lang-switch [data-lang="fr"]');
 check("…et Français le remet en français", (await page.textContent("#ad-login-card")).includes("Se connecter"));
 
 /* ---------- Inscription depuis la page anglaise ---------- */
