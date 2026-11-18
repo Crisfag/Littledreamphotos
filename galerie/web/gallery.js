@@ -1529,6 +1529,7 @@
           name: form.name.value, email: form.email.value, line1: form.line1.value, line2: form.line2.value,
           postalCode: form.postalCode.value, city: form.city.value, countryCode: form.countryCode.value,
         },
+        marketingConsent: Boolean(form.marketing && form.marketing.checked),
         successUrl: returnUrl + "tirages=succes",
         cancelUrl: returnUrl + "tirages=annule",
       }),
@@ -1898,6 +1899,60 @@
   }
 
   /* ---------- Réseau ---------- */
+
+  // « Restez en contact » : accord pour recevoir les offres du studio, case
+  // jamais pré-cochée ; même libellé dans le formulaire de commande.
+  function setupOptin() {
+    var studio = state.gallery.studioName || L("votre photographe", "your photographer");
+    var consentText = L("J'accepte de recevoir les offres et nouvelles de ", "I'd like to receive offers and news from ") + studio + L(". Désinscription en un clic.", ". Unsubscribe in one click.");
+    var cartLabel = document.getElementById("gp-cart-optin-label");
+    if (cartLabel) cartLabel.textContent = consentText;
+    var box = document.getElementById("gp-optin");
+    if (!box || state.preview) return;
+    var done = false;
+    try { done = window.localStorage.getItem("gp-optin-" + state.slug) === "1"; } catch (e) { /* navigation privée */ }
+    document.getElementById("gp-optin-title").textContent = L("Restez en contact avec ", "Stay in touch with ") + studio;
+    document.getElementById("gp-optin-lede").textContent = L(
+      "Séances de saison, mini-séances, offres sur les tirages : soyez prévenu·e en premier.",
+      "Seasonal sessions, mini sessions, print offers: be the first to know.");
+    document.getElementById("gp-optin-email-label").textContent = L("Votre e-mail", "Your email");
+    document.getElementById("gp-optin-consent").textContent = consentText;
+    document.getElementById("gp-optin-submit").textContent = L("Je m'inscris", "Sign me up");
+    var status = document.getElementById("gp-optin-status");
+    var form = document.getElementById("gp-optin-form");
+    box.hidden = false;
+    if (done) {
+      form.hidden = true;
+      status.textContent = L("Vous êtes inscrit·e : merci !", "You're signed up: thank you!");
+      return;
+    }
+    if (form.dataset.bound) return;
+    form.dataset.bound = "1";
+    form.addEventListener("submit", function (event) {
+      event.preventDefault();
+      var email = form.email.value.trim();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { status.textContent = L("Indiquez une adresse e-mail valide.", "Please enter a valid email address."); form.email.focus(); return; }
+      if (!form.consent.checked) { status.textContent = L("Cochez la case pour recevoir les offres.", "Tick the box to receive offers."); form.consent.focus(); return; }
+      var btn = document.getElementById("gp-optin-submit");
+      btn.disabled = true;
+      fetch(apiUrl("/consent"), {
+        method: "POST",
+        headers: Object.assign({ "content-type": "application/json" }, authHeaders()),
+        body: JSON.stringify({ email: email, consent: true }),
+      }).then(function (response) {
+        return response.json().catch(function () { return {}; }).then(function (data) {
+          if (!response.ok) throw new Error(serverText(data.error || "", "Please try again in a moment."));
+        });
+      }).then(function () {
+        try { window.localStorage.setItem("gp-optin-" + state.slug, "1"); } catch (e) { /* navigation privée */ }
+        form.hidden = true;
+        status.textContent = L("C'est noté, merci ! Vous recevrez les prochaines offres de ", "Thank you! You'll get the next offers from ") + studio + ".";
+      }).catch(function (err) {
+        btn.disabled = false;
+        status.textContent = err.message || L("Réessayez dans un instant.", "Please try again in a moment.");
+      });
+    });
+  }
 
   function apiUrl(path) {
     return API + "/api/gallery/" + encodeURIComponent(state.slug) + path;
@@ -2592,6 +2647,7 @@
           ? L("Galerie de ", "Gallery of ") + state.gallery.clientName
           : "";
         el.grid.setAttribute("data-layout", LAYOUTS[state.gallery.layout] ? state.gallery.layout : "grille");
+        setupOptin();
         applyStyle(state.gallery.theme, state.gallery.titleFont, state.gallery.bodyFont);
         setupHero();
         if (state.gallery.expiresAt) {

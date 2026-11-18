@@ -33,6 +33,9 @@ SCHOOL_LAUNCHED = "0"
 # Adresse publique du site qui héberge web/galerie.html : sert à construire
 # le lien « Revoir ma galerie » des e-mails de relance envoyés aux clients.
 PUBLIC_SITE_ORIGIN = "https://www.holypixx.com"
+# Adresse publique de ce Worker : liens de désinscription et de suivi des
+# e-mails du studio (mailing.js), écrits aussi par les passes planifiées.
+PUBLIC_API_ORIGIN = "https://galerie-protegee.littledreamphotos-be.workers.dev"
 
 # Sous-domaine par studio (voir worker/src/studio.js) : julie.holypixx.com
 # sert la page de galerie et l'API du Worker sur une même origine. Nécessite,

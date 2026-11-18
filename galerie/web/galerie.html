@@ -167,6 +167,18 @@
       Vous n'avez encore rien sélectionné — cliquez sur le cœur d'une photo pour commencer.
     </p>
 
+    <!-- Restez en contact : accord pour recevoir les offres du studio (jamais pré-coché). -->
+    <section class="gp-optin" id="gp-optin" hidden aria-labelledby="gp-optin-title">
+      <h2 class="gp-optin-title" id="gp-optin-title"></h2>
+      <p class="gp-optin-lede" id="gp-optin-lede"></p>
+      <form class="gp-optin-form" id="gp-optin-form" novalidate>
+        <label class="gp-field gp-optin-email"><span id="gp-optin-email-label">E-mail</span><input type="email" name="email" autocomplete="email" maxlength="200" required /></label>
+        <label class="gp-check"><input type="checkbox" name="consent" /> <span id="gp-optin-consent"></span></label>
+        <button type="submit" class="gp-btn gp-btn-ghost" id="gp-optin-submit"></button>
+      </form>
+      <p class="gp-optin-status" id="gp-optin-status" role="status" aria-live="polite"></p>
+    </section>
+
     <footer class="gp-footer">
       <p data-en="Holypixx — every image on this page is protected by copyright.">Holypixx — toutes les images de cette page sont protégées par le droit d'auteur.</p>
       <p class="gp-footer-links">
@@ -269,6 +281,7 @@
           <label class="gp-field"><span data-en="City">Ville</span><input name="city" autocomplete="address-level2" required maxlength="80" /></label>
         </div>
         <label class="gp-field"><span data-en="Country">Pays</span><select name="countryCode" id="gp-cart-country" autocomplete="country"></select></label>
+        <label class="gp-check gp-cart-optin"><input type="checkbox" name="marketing" /> <span id="gp-cart-optin-label"></span></label>
         <p class="gp-error" id="gp-cart-error" hidden></p>
         <button type="submit" class="gp-btn" id="gp-cart-pay" data-en="Pay">Payer</button>
         <p class="gp-cart-note" data-en="Secure payment by Stripe. Your prints are made by our partner lab and delivered to your door; the photo is cropped to the chosen format. Prices in euros: your bank converts them if needed.">Paiement sécurisé par Stripe. Vos tirages sont fabriqués par notre laboratoire partenaire et livrés chez vous ; la photo est recadrée au format choisi.</p>

@@ -19,6 +19,7 @@ import { languageOf } from "./i18n.js";
 import { productLabelFor } from "./printCatalogue.js";
 import { galleryUrlFor } from "./reminders.js";
 import { hasFeature } from "./subscription.js";
+import { automationOffSql } from "./mailing.js";
 
 export const PROMO_PERCENTS = [10, 15, 20, 25, 30, 40, 50];
 const DAY = 24 * 60 * 60;
@@ -185,7 +186,7 @@ export async function runSalesReminders(env, shopState, options = {}) {
      JOIN galleries g ON g.id = c.gallery_id
      JOIN photographers p ON p.id = g.photographer_id
      WHERE c.reminded_at IS NULL AND c.updated_at <= ? AND g.client_email != ''
-       AND (g.expires_at IS NULL OR g.expires_at > ?) AND p.reminders_enabled = 1`
+       AND (g.expires_at IS NULL OR g.expires_at > ?) AND p.reminders_enabled = 1 AND NOT ${automationOffSql("cart")}`
   )
     .bind(now - CART_REMINDER_DELAY, now)
     .all();
@@ -231,7 +232,7 @@ export async function runSalesReminders(env, shopState, options = {}) {
                AND (ph.delivery_file_id != '' OR NOT EXISTS (SELECT 1 FROM photos d WHERE d.gallery_id = g.id AND d.delivery_file_id != ''))) AS printable_favorites
      FROM galleries g JOIN photographers p ON p.id = g.photographer_id
      WHERE g.shop_enabled = 1 AND g.client_email != '' AND g.selection_done_at IS NOT NULL AND g.selection_done_at <= ?
-       AND (g.expires_at IS NULL OR g.expires_at > ?) AND p.reminders_enabled = 1
+       AND (g.expires_at IS NULL OR g.expires_at > ?) AND p.reminders_enabled = 1 AND NOT ${automationOffSql("favorites")}
        AND NOT EXISTS (SELECT 1 FROM reminders_sent r WHERE r.gallery_id = g.id AND r.kind = 'print_favorites')
        AND NOT EXISTS (SELECT 1 FROM print_orders o WHERE o.gallery_id = g.id AND o.status != 'pending_payment')`
   )

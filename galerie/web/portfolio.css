@@ -145,6 +145,8 @@ h3 { font-size: 1.4rem; margin-bottom: .8rem; }
 .pf-field input:focus, .pf-field textarea:focus { outline: none; border-color: var(--rose); box-shadow: 0 0 0 3px rgba(196, 147, 128, .2); }
 .pf-trap { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
 .pf-privacy { font-size: .84rem; color: var(--muted); }
+.pf-check { display: flex; gap: .6rem; align-items: flex-start; font-size: .88rem; line-height: 1.45; color: var(--muted); cursor: pointer; }
+.pf-check input { flex: none; width: 18px; height: 18px; margin: .12rem 0 0; accent-color: var(--rose-deep); }
 .pf-error { color: var(--danger); font-size: .92rem; }
 .pf-form .pf-btn { justify-self: start; }
 .pf-sent { align-self: center; padding: 2rem; background: #fff; border: 1px solid var(--line); border-radius: 14px; }

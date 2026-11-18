@@ -20,6 +20,8 @@ import { randomBytes, b64url } from "./auth.js";
 import { cleanLine, cleanText, normalizePhone, displayName, portfolioUrls, bookingEntryUrl } from "./portfolio.js";
 import { hasFeature } from "./subscription.js";
 import { sendClientDateReminder, sendStudioSeasonReminder } from "./notify.js";
+import { datesDirectEnabled, sendDateToClient } from "./automations.js";
+import { languageForClient } from "./mailing.js";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export const REMINDER_LEAD_DAYS = 21;
@@ -310,7 +312,7 @@ export function isNameKey(key) {
 export async function collect(env, photographerId) {
   const [galleries, bookings, contracts, payments, records, dates, messages, gifts, invoices, photoCounts] = await Promise.all([
     env.DB.prepare(
-      `SELECT id, slug, title, client_name, client_email, session_type, selection_done_at, delivery_open, included_photos, extra_photo_price_cents, created_at, expires_at
+      `SELECT id, slug, title, client_name, client_email, session_type, selection_done_at, delivery_open, included_photos, extra_photo_price_cents, created_at, expires_at, language, shop_enabled
          FROM galleries WHERE photographer_id = ? AND kind != 'school' AND demo = 0 AND (client_email != '' OR client_name != '')`
     ).bind(photographerId).all(),
     env.DB.prepare(
@@ -386,6 +388,7 @@ export async function collect(env, photographerId) {
         key, email: isNameKey(key) ? "" : key, name: "", phone: "", notes: "", tags: [], recordId: "", createdAt: null,
         galleries: [], bookings: [], contracts: [], payments: [], dates: [], messages: [], gifts: [], invoices: [],
         paidCents: 0, dueCents: 0, firstAt: null, lastAt: null, lastSessionAt: null, upcomingSessionAt: null,
+        consent: false, consentAt: null, consentSource: "", unsubscribedAt: null, lang: "",
       });
     }
     return map.get(key);
@@ -412,7 +415,7 @@ export async function collect(env, photographerId) {
       sessionType: g.session_type || "", selectionDoneAt: g.selection_done_at || null, deliveryOpen: Boolean(g.delivery_open),
       includedPhotos: g.included_photos, extraPriceCents: g.extra_photo_price_cents || 0,
       photos: (countsOf.get(g.id) || {}).photos || 0, selected: (countsOf.get(g.id) || {}).selected || 0,
-      paidExtra: 0, dueExtra: 0, dueCents: 0,
+      paidExtra: 0, dueExtra: 0, dueCents: 0, language: g.language || "fr", shopEnabled: Boolean(g.shop_enabled),
     };
     galleryById.set(g.id, item);
     c.galleries.push(item);
@@ -520,6 +523,11 @@ export async function collect(env, photographerId) {
     c.notes = r.notes;
     c.tags = parseTags(r.tags);
     c.createdAt = r.created_at;
+    c.consent = r.marketing_consent === 1;
+    c.consentAt = r.consent_at || null;
+    c.consentSource = r.consent_source || "";
+    c.unsubscribedAt = r.unsubscribed_at || null;
+    c.lang = r.lang || "";
     seen(c, r.created_at);
   }
   for (const d of rows(dates)) {
@@ -605,6 +613,8 @@ function summaryOut(c, today) {
     nextDate: dates[0] || null,
     hasNotes: Boolean(c.notes),
     tags: c.tags,
+    consent: c.consent,
+    unsubscribed: Boolean(c.unsubscribedAt),
     prospect: isProspect(c),
     messages: c.messages.length,
   };
@@ -627,7 +637,7 @@ async function listForAdmin(env, photographer) {
       const out = dateOut(d, today);
       if (!out.next || out.next.daysUntil > Math.max(45, out.lead)) continue;
       const message = messageFor(d, out.next, c.name, studioName, bookingUrl);
-      upcoming.push({ ...out, email: c.email, name: c.name || c.email, mailto: mailtoUrl(c.email, message) });
+      upcoming.push({ ...out, email: c.email, name: c.name || c.email, mailto: mailtoUrl(c.email, message), message });
     }
   }
   // Temps forts du studio, à proposer à tous les clients.
@@ -642,12 +652,10 @@ async function listForAdmin(env, photographer) {
     .filter((c) => c.email && c.lastSessionAt && c.lastSessionAt < ts - DORMANT_SECONDS && !c.upcomingSessionAt)
     .sort((a, b) => b.lastSessionAt - a.lastSessionAt)
     .slice(0, 12)
-    .map((c) => ({
-      email: c.email,
-      name: c.name || c.email,
-      lastSessionAt: c.lastSessionAt,
-      mailto: mailtoUrl(c.email, suggestedMessage({ clientName: c.name, studioName, bookingUrl, dormant: true })),
-    }));
+    .map((c) => {
+      const message = suggestedMessage({ clientName: c.name, studioName, bookingUrl, dormant: true });
+      return { email: c.email, name: c.name || c.email, lastSessionAt: c.lastSessionAt, mailto: mailtoUrl(c.email, message), message };
+    });
   // Tous les tags utilisés, du plus fréquent au plus rare (filtres de la liste).
   const tagCounts = new Map();
   for (const c of clients) for (const t of c.tags) tagCounts.set(t, (tagCounts.get(t) || 0) + 1);
@@ -974,9 +982,9 @@ export async function runClientReminders(env) {
         title: next.title,
         date: next.date,
         daysUntil: next.daysUntil,
-        recipients: clients.length,
+        recipients: clients.filter((c) => c.email).length,
         message,
-        mailto: bccMailto(clients.map((c) => c.email), message),
+        mailto: bccMailto(clients.map((c) => c.email).filter(Boolean), message),
         adminUrl: adminBase ? `${adminBase}/#/clients` : "",
       });
       sent++;
@@ -985,6 +993,15 @@ export async function runClientReminders(env) {
     const client = await env.DB.prepare("SELECT name FROM clients WHERE photographer_id = ? AND email = ?").bind(d.photographer_id, d.client_email).first();
     const fromGallery = client?.name ? null : await env.DB.prepare("SELECT client_name FROM galleries WHERE photographer_id = ? AND client_email = ? AND client_name != '' ORDER BY created_at DESC LIMIT 1").bind(d.photographer_id, d.client_email).first();
     const clientName = client?.name || fromGallery?.client_name || d.client_email;
+    // Relance « Dates à retenir, envoyées au client » activée : Holypixx
+    // écrit directement au client, dans sa langue, au nom du studio.
+    if (await datesDirectEnabled(env, d.pid)) {
+      const full = await env.DB.prepare("SELECT * FROM photographers WHERE id = ?").bind(d.pid).first();
+      const lang = await languageForClient(env, d.pid, d.client_email, "fr");
+      await sendDateToClient(env, full, { to: d.client_email, clientName: client?.name || fromGallery?.client_name || "", next, date: d, lang });
+      sent++;
+      continue;
+    }
     const message = messageFor(d, next, clientName, studioName, bookingUrl);
     await sendClientDateReminder(env, {
       to: d.photographer_email,

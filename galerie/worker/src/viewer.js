@@ -6,7 +6,9 @@ import { isValidTag, parseMarks, normalizeMarks } from "./marks.js";
 import { verifyPassword, signToken, verifyToken, hashIp, randomBytes, b64url } from "./auth.js";
 import { sendCaptureAlert, sendSelectionValidated } from "./notify.js";
 import { supplementFor } from "./admin.js";
-import { shopForClient, handlePrintOrder, isPrintable } from "./shop.js";
+import { shopForClient, handlePrintOrder, isPrintable, shopState } from "./shop.js";
+import { startEarlyBird } from "./automations.js";
+import { recordConsent } from "./mailing.js";
 import { createCheckoutSession } from "./stripe.js";
 import { amountDueFor, optionsSnapshot, optionsForClient, handleOptionChoice } from "./options.js";
 import { paymentFeeCents } from "./fees.js";
@@ -142,9 +144,13 @@ async function handleLogin(request, env, slug) {
     exp: now() + SESSION_TTL_SECONDS,
   });
 
+  // Première ouverture par le client : l'offre de bienvenue sur les tirages
+  // démarre (si le studio l'a activée, voir automations.js).
+  const opened = await env.DB.prepare("SELECT 1 FROM access_log WHERE gallery_id = ? AND event = 'login' LIMIT 1").bind(gallery.id).first();
   await logAccess(env, { galleryId: gallery.id, viewerId, event: "login", ipHash, userAgent });
+  const fresh = opened ? gallery : await startEarlyBird(env, gallery, shopState);
 
-  return openSession(env, gallery, token, SESSION_TTL_SECONDS, false);
+  return openSession(env, fresh, token, SESSION_TTL_SECONDS, false);
 }
 
 // Aperçu : une heure, de quoi parcourir la galerie comme le client.
@@ -241,7 +247,7 @@ async function authorize(request, env, slug) {
 // Actions qui écrivent (sélection, couleurs, commentaires, validation,
 // panier, paiements, journal, liens de téléchargement) : refusées à une
 // session d'aperçu, quoi que fasse la page.
-const WRITE_ACTIONS = new Set(["select", "comment", "tag", "marks", "validate", "cart", "print-order", "event", "checkout", "offline-payment", "options", "delivery"]);
+const WRITE_ACTIONS = new Set(["select", "comment", "tag", "marks", "validate", "cart", "print-order", "event", "checkout", "offline-payment", "options", "delivery", "consent"]);
 async function isPreviewSession(request, env) {
   const header = request.headers.get("Authorization") || "";
   const payload = header.startsWith("Bearer ") ? await verifyToken(env.TOKEN_SECRET, header.slice(7)) : null;
@@ -786,6 +792,17 @@ export async function handleViewer(request, env, ctx, path) {
     const auth = await authorize(request, env, slug);
     if (auth.error) return auth.error;
     return saveCart(request, env, auth.gallery);
+  }
+  // « Recevoir les offres du studio » : case cochée dans la galerie.
+  if (action === "consent" && request.method === "POST" && parts.length === 4) {
+    const auth = await authorize(request, env, slug);
+    if (auth.error) return auth.error;
+    const body = await request.json().catch(() => ({}));
+    const lang = languageOf(auth.gallery.language);
+    if (body.consent !== true) return fail(400, pick(lang, "Cochez la case pour recevoir les offres", "Tick the box to receive offers", "Vink het vakje aan om aanbiedingen te ontvangen"));
+    const ok = await recordConsent(env, auth.gallery.photographer_id, body.email, { source: "gallery", lang });
+    if (!ok) return fail(400, pick(lang, "Une adresse e-mail valide est requise", "A valid email address is required", "Een geldig e-mailadres is vereist"));
+    return json({ ok: true });
   }
   if (action === "print-order" && request.method === "POST" && parts.length === 4) {
     const auth = await authorize(request, env, slug);

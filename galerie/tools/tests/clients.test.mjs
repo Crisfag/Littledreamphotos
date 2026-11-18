@@ -206,8 +206,15 @@ try {
   await page.click("#ad-cl-back");
   await page.waitForSelector(".ad-cl-reminds");
   const lea = page.locator(".ad-cl-reminds .ad-cl-remind", { hasText: "Léa aura 1 an" });
-  check("« Léa aura 1 an » en tête de liste, avec « Proposer une séance »",
-        (await lea.count()) === 1 && /mailto:camille@example\.com/.test(await lea.locator("a.ad-btn-primary").getAttribute("href")));
+  check("« Léa aura 1 an » en tête de liste : « Proposer une séance » (envoi direct) et le lien vers la messagerie",
+        (await lea.count()) === 1 && (await lea.locator('button[data-ml-direct="camille@example.com"]').count()) === 1 &&
+        /mailto:camille@example\.com/.test(await lea.locator('a[href^="mailto:"]').getAttribute("href")));
+  await lea.locator("button[data-ml-direct]").click();
+  await page.waitForSelector("#ad-ml-direct:not([hidden])");
+  check("« Proposer une séance » : message déjà rédigé, prêt à partir depuis Holypixx",
+        /Léa/.test(await page.inputValue('#ad-ml-direct-form [name="subject"]') + await page.inputValue('#ad-ml-direct-form [name="body"]')) &&
+        /camille@example\.com/.test(await page.textContent("#ad-ml-direct-to")));
+  await page.click('#ad-ml-direct [data-close-modal]');
   check("la pastille du menu compte les clients à relancer", (await page.textContent("#ad-tab-clients .ad-tab-count")) === "1");
   const dateCell = nbsp(await page.locator('#ad-cl-rows tr[data-cl-email="camille@example.com"]').innerText());
   check("la prochaine date figure dans la liste", /Léa aura 1 an/.test(dateCell));
@@ -225,7 +232,8 @@ try {
   await page.waitForSelector(".ad-cl-remind-season");
   const season = nbsp(await page.locator(".ad-cl-remind-season").innerText());
   check("« Séances de Noël » en tête des relances, pour tous les clients", /Séances de Noël le/.test(season) && /à proposer à vos 2 clients/.test(season), season.replace(/\s+/g, " "));
-  const bcc = decodeURIComponent(await page.locator(".ad-cl-remind-season a.ad-btn-primary").getAttribute("href"));
+  check("Noël : « En faire une campagne » proposé", (await page.locator('.ad-cl-remind-season [data-cl-campaign="noel"]').count()) === 1);
+  const bcc = decodeURIComponent(await page.locator('.ad-cl-remind-season a[href^="mailto:"]').getAttribute("href"));
   check("« Écrire à tous » : copie cachée et message prêt",
         bcc.startsWith("mailto:?bcc=") && bcc.includes("camille@example.com") && bcc.includes("leroy@example.com") && /Les séances de Noël sont ouvertes/.test(bcc));
   await page.click(".ad-cl-remind-season [data-cl-copy-emails]");
