@@ -26,6 +26,7 @@ import { cleanLine, cleanText, displayName } from "./portfolio.js";
 import { createCheckoutSession, retrieveCheckoutSession } from "./stripe.js";
 import { paymentFeeCents } from "./fees.js";
 import { sendClientInvoice, sendClientInvoiceReminder, sendClientInvoicePaidNotice, sendContractDepositReminder } from "./notify.js";
+import { automationOffSql } from "./mailing.js";
 
 export const VAT_RATES = [21, 12, 6, 0];
 export const VAT_LABELS = { 21: "21 %", 12: "12 %", 6: "6 % (cession de droits d'auteur)", 0: "0 %" };
@@ -597,7 +598,8 @@ export async function runPaymentReminders(env, at = now()) {
   const today = dayOf(at);
   let sent = 0;
   const { results } = await env.DB.prepare(
-    "SELECT * FROM client_invoices WHERE kind = 'invoice' AND status = 'issued' AND reminders = 1 AND client_email != '' LIMIT 500"
+    `SELECT * FROM client_invoices WHERE kind = 'invoice' AND status = 'issued' AND reminders = 1 AND client_email != ''
+       AND NOT ${automationOffSql("invoice_reminder", "client_invoices.photographer_id")} LIMIT 500`
   ).all();
   for (const row of results || []) {
     const schedule = parseJson(row.schedule, []);
@@ -619,7 +621,8 @@ export async function runPaymentReminders(env, at = now()) {
 
   // Contrats signés dont l'acompte attend : rappel à 3 puis 8 jours.
   const { results: contracts } = await env.DB.prepare(
-    "SELECT * FROM contracts WHERE status = 'signed' AND deposit_cents > 0 AND deposit_reminded < 2 AND signed_at < ? LIMIT 200"
+    `SELECT * FROM contracts WHERE status = 'signed' AND deposit_cents > 0 AND deposit_reminded < 2 AND signed_at < ?
+       AND NOT ${automationOffSql("deposit_reminder", "contracts.photographer_id")} LIMIT 200`
   ).bind(at - 3 * 86400).all();
   for (const c of contracts || []) {
     const stage = c.signed_at < at - 8 * 86400 ? 2 : 1;

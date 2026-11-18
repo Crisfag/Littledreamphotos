@@ -459,6 +459,7 @@
         phone: form.elements.phone.value.trim(),
         message: form.elements.message.value.trim(),
         website: form.elements.website.value,
+        marketingConsent: Boolean(form.elements.marketing && form.elements.marketing.checked),
         returnUrl: location.origin + options.basePath(),
       };
       var problem = !fields.slotId ? "Choisissez un créneau."

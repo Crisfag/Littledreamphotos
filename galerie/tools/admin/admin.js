@@ -406,7 +406,7 @@
   }
 
   // Sections pas encore traduites : un bandeau le dit, en anglais.
-  var UNTRANSLATED_TABS = { clients: 1, booking: 1, giftcards: 1, contracts: 1, sales: 1, portfolio: 1, school: 1, owner: 1 };
+  var UNTRANSLATED_TABS = { clients: 1, mailing: 1, booking: 1, giftcards: 1, contracts: 1, sales: 1, portfolio: 1, school: 1, owner: 1 };
 
   // En néerlandais, les sections encore en français portent un bandeau
   // d'inscription à la newsletter (POST /local/newsletter → newsletter.js).
@@ -525,6 +525,7 @@
       else if (tab === "booking") renderBooking();
       else if (tab === "giftcards") renderGiftCards();
       else if (tab === "clients") renderClients();
+      else if (tab === "mailing") renderMailing();
       else if (tab === "contracts") renderContracts();
       else if (tab === "portfolio") renderPortfolio();
       else if (tab === "billing") renderBilling();
@@ -10184,7 +10185,7 @@
   /* ---------- Clients : fiches, dates à retenir, relances ---------- */
 
   // filter : all | upcoming | dates | prospects ; tag : filtre par tag (vide : aucun).
-  var clientsState = { data: null, query: "", filter: "all", tag: "", creating: false };
+  var clientsState = { data: null, query: "", filter: "all", tag: "", creating: false, detailTab: "overview", detailKey: "" };
   var CL_DATE_KINDS = [
     ["baby", "Suivi bébé (3 mois, 1 an…)", "Prénom"],
     ["birthday", "Naissance d'un enfant", "Prénom"],
@@ -10290,7 +10291,8 @@
       '<div class="ad-cl-remind-main"><strong>' + esc(item.next.title) + "</strong>" +
       '<span class="ad-hint">' + clLink(item.name, item.email) + " · " + esc(clDay(item.next.date, true)) + "</span></div>" +
       clWhenChip(item.next, item.lead) +
-      '<a class="ad-btn ad-btn-small ad-btn-primary" href="' + esc(item.mailto) + '">Proposer une séance</a></li>';
+      '<div class="ad-cl-remind-actions"><button type="button" class="ad-btn ad-btn-small ad-btn-primary" data-ml-direct="' + esc(item.email) + '" data-ml-name="' + esc(item.name) + '" data-ml-msg="' + esc(JSON.stringify(item.message || {})) + '">Proposer une séance</button>' +
+      '<a class="ad-btn ad-btn-small ad-btn-ghost" href="' + esc(item.mailto) + '" title="Ouvrir le message dans votre messagerie">Ma messagerie</a></div></li>';
   }
   // Temps fort du studio arrivé dans sa période de rappel : à proposer à tous.
   var CL_SPARK = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6.3 6.3l2.5 2.5M15.2 15.2l2.5 2.5M6.3 17.7l2.5-2.5M15.2 8.8l2.5-2.5"/></svg>';
@@ -10301,21 +10303,48 @@
       '<span class="ad-hint">Temps fort du studio · à proposer à ' + (n === 1 ? "votre client" : "vos " + n + " clients") + "</span></div>" +
       clWhenChip(item.next, item.lead) +
       '<div class="ad-cl-remind-actions">' +
-      (n && n <= 60 ? '<a class="ad-btn ad-btn-small ad-btn-primary" href="' + esc(item.mailto) + '">Écrire à tous</a>' : "") +
+      (CL_SEASON_TEMPLATE[item.label] ? '<button type="button" class="ad-btn ad-btn-small ad-btn-primary" data-cl-campaign="' + esc(CL_SEASON_TEMPLATE[item.label]) + '">En faire une campagne</button>' : "") +
+      (n && n <= 60 ? '<a class="ad-btn ad-btn-small" href="' + esc(item.mailto) + '">Écrire à tous</a>' : "") +
       '<button type="button" class="ad-btn ad-btn-small" data-cl-copy-emails>Copier les ' + n + " adresse" + (n > 1 ? "s" : "") + "</button></div></li>";
   }
+  // Temps fort du studio → modèle de campagne correspondant (Relances).
+  var CL_SEASON_TEMPLATE = { noel: "noel", valentin: "valentin", meres: "fete_meres", rentree: "rentree" };
   function clDormantRowHtml(item) {
     return '<li class="ad-cl-remind">' + clAvatar(item.name) +
       '<div class="ad-cl-remind-main"><strong>' + clLink(item.name, item.email) + "</strong>" +
       '<span class="ad-hint">Dernière séance ' + esc(clAgo(item.lastSessionAt)) + "</span></div>" +
       '<span class="ad-cl-when">À recontacter</span>' +
-      '<a class="ad-btn ad-btn-small" href="' + esc(item.mailto) + '">Écrire</a></li>';
+      '<div class="ad-cl-remind-actions"><button type="button" class="ad-btn ad-btn-small ad-btn-primary" data-ml-direct="' + esc(item.email) + '" data-ml-name="' + esc(item.name) + '" data-ml-msg="' + esc(JSON.stringify(item.message || {})) + '">Envoyer</button>' +
+      '<a class="ad-btn ad-btn-small ad-btn-ghost" href="' + esc(item.mailto) + '" title="Ouvrir le message dans votre messagerie">Écrire</a></div></li>';
   }
+
+  // Boutons « Envoyer » des listes de relances : message direct, déjà rédigé.
+  document.addEventListener("click", function (event) {
+    var btn = event.target.closest("[data-ml-direct]");
+    if (btn) {
+      var msg = {};
+      try { msg = JSON.parse(btn.getAttribute("data-ml-msg") || "{}"); } catch (err) { msg = {}; }
+      openDirectMail(btn.getAttribute("data-ml-direct"), btn.getAttribute("data-ml-name"), msg);
+      return;
+    }
+    var camp = event.target.closest("[data-cl-campaign]");
+    if (camp) {
+      camp.disabled = true;
+      api("POST", "/mailing/campaigns", { template: camp.getAttribute("data-cl-campaign") }).then(async function (created) {
+        mailingState.view = "campaigns";
+        mailingState.campaigns = null;
+        await renderMailing();
+        mailingState.editing = created;
+        mailingState.lang = "fr";
+        paintMailingBody();
+      }).catch(function (err) { camp.disabled = false; toast(err.message, true); });
+    }
+  });
 
   function clMatches(c, query) {
     if (!query) return true;
     var q = query.toLowerCase();
-    if ((c.name || "").toLowerCase().indexOf(q) !== -1 || c.email.indexOf(q) !== -1) return true;
+    if ((c.name || "").toLowerCase().indexOf(q) !== -1 || (c.email || "").indexOf(q) !== -1) return true;
     // Numéro tapé à la belge (0470…) ou à l'international (+32 470…) : on
     // compare les chiffres, sans le 0 initial ni l'indicatif.
     var digits = q.replace(/\D/g, "").replace(/^0+/, "");
@@ -10338,12 +10367,13 @@
   function clRowsHtml(list) {
     if (!list.length) return '<tr><td colspan="5" class="ad-cl-none">Aucun client ne correspond à cette recherche.</td></tr>';
     return list.map(function (c) {
-      return '<tr class="ad-cl-row" tabindex="0" data-cl-email="' + esc(c.email) + '">' +
+      return '<tr class="ad-cl-row" tabindex="0" data-cl-email="' + esc(c.key || c.email) + '">' +
         '<td><div class="ad-cl-who">' + clAvatar(c.name) + '<div><span class="ad-acc-name">' + esc(c.name) +
         (c.prospect ? ' <span class="ad-badge ad-badge-soon">Prospect</span>' : "") + "</span>" +
-        '<span class="ad-acc-sub">' + esc(c.email) + "</span>" + (c.tags && c.tags.length ? '<span class="ad-cl-tags">' + clTagsHtml(c.tags) + "</span>" : "") + "</div></div></td>" +
+        '<span class="ad-acc-sub">' + (c.email ? esc(c.email) : "Sans adresse e-mail") + "</span>" + (c.tags && c.tags.length ? '<span class="ad-cl-tags">' + clTagsHtml(c.tags) + "</span>" : "") + "</div></div></td>" +
         '<td class="ad-num">' + (c.sessions || "—") + "</td>" +
-        '<td class="ad-num">' + (c.paidCents ? formatEuros(c.paidCents) : "—") + "</td>" +
+        '<td class="ad-num">' + (c.paidCents ? formatEuros(c.paidCents) : "—") +
+        (c.dueCents ? '<span class="ad-cl-due-mini">' + esc(formatEuros(c.dueCents)) + " à régler</span>" : "") + "</td>" +
         "<td>" + esc(c.upcomingSessionAt ? "Séance " + clAgo(c.upcomingSessionAt).replace("dans", "dans") : clAgo(c.lastAt)) + "</td>" +
         "<td>" + (c.nextDate ? '<span class="ad-cl-date">' + esc(c.nextDate.next.title) + "</span> " + clWhenChip(c.nextDate.next) : '<span class="ad-hint">—</span>') + "</td></tr>";
     }).join("");
@@ -10752,32 +10782,167 @@
     paintClientDetail(data);
   }
 
+  var CL_METHODS = { card: "carte", cash: "espèces", transfer: "virement" };
+  var CL_ORDER_STATUS = {
+    pending_payment: "En attente de paiement", paid: "Payée", submitted: "Envoyée au labo", in_production: "En production",
+    shipped: "Expédiée", cancelled: "Annulée", failed: "À renvoyer au labo",
+  };
+  var CL_TABS = [["overview", "Résumé"], ["sessions", "Séances"], ["billing", "Factures"], ["paid", "Règlements"], ["history", "Historique"]];
+
+  // « 18 nov. 2026 » : date courte des tableaux de la fiche.
+  function clShort(ts) {
+    return ts ? new Date(ts * 1000).toLocaleDateString("fr-BE", { day: "numeric", month: "short", year: "numeric", timeZone: "Europe/Brussels" }) : "—";
+  }
+
+  function clSessionTypeLabel(key) {
+    var t = SESSION_TYPES.filter(function (x) { return x[0] === key; })[0];
+    return t ? t[1] : "";
+  }
+
+  // Ce qui reste à régler : suppléments non payés, règlements annoncés en
+  // espèces ou par virement, factures ouvertes.
+  function clDueHtml(due) {
+    if (!due.length) return "";
+    return '<section class="ad-cl-due"><div class="ad-section-header"><h3>À régler</h3><span class="ad-cl-due-total">' + esc(formatEuros(due.reduce(function (n, d) { return n + d.amountCents; }, 0))) + "</span></div>" +
+      '<ul class="ad-cl-lines">' + due.map(function (d) {
+        var what = d.type === "supplement" ? d.count + " photo" + (d.count > 1 ? "s" : "") + " en supplément · " + '<a href="#/g/' + encodeURIComponent(d.slug) + '">' + esc(d.title) + "</a>"
+          : d.type === "awaiting" ? esc(d.title) + ' <span class="ad-hint">· annoncé en ' + esc(CL_METHODS[d.method] || d.method) + ", à confirmer à réception</span>"
+          : '<a href="#/facturation">' + esc(d.title) + "</a>" + (d.overdue ? ' <span class="ad-badge ad-badge-expired">En retard</span>' : "");
+        return '<li><span class="ad-cl-line-main">' + what + "</span>" + '<span class="ad-cl-line-amount">' + esc(formatEuros(d.amountCents)) + "</span></li>";
+      }).join("") + "</ul></section>";
+  }
+
+  function clSessionsHtml(sessions, limit) {
+    if (!sessions.length) return '<p class="ad-hint">Aucune séance pour l\'instant : chaque galerie et chaque réservation confirmée de ce client apparaîtra ici.</p>';
+    var list = limit ? sessions.slice(0, limit) : sessions;
+    return '<ul class="ad-cl-sessions">' + list.map(function (x) {
+      var type = x.sessionType ? clSessionTypeLabel(x.sessionType) : "";
+      if (x.type === "booking") {
+        return '<li class="ad-cl-session"><span class="ad-cl-session-date">' + esc(clShort(x.at)) + "</span>" +
+          '<div class="ad-cl-session-main"><strong>' + esc(x.title || "Séance") + "</strong>" +
+          '<span class="ad-hint">Réservation' + (x.depositCents ? " · acompte " + esc(formatEuros(x.depositCents)) + " réglé" : "") + "</span></div>" +
+          (x.upcoming ? '<span class="ad-badge ad-badge-soon">À venir</span>' : '<span class="ad-badge">Faite</span>') + "</li>";
+      }
+      var state = x.dueCents ? '<span class="ad-badge ad-badge-soon">' + esc(formatEuros(x.dueCents)) + " à régler</span>"
+        : x.deliveryOpen ? '<span class="ad-badge ad-badge-validated">Livrée en HD</span>'
+        : x.selectionDoneAt ? '<span class="ad-badge ad-badge-validated">Sélection validée</span>'
+        : x.expired ? '<span class="ad-badge ad-badge-expired">Expirée</span>'
+        : '<span class="ad-badge">En ligne</span>';
+      return '<li class="ad-cl-session"><span class="ad-cl-session-date">' + esc(clShort(x.at)) + "</span>" +
+        '<div class="ad-cl-session-main"><a href="#/g/' + encodeURIComponent(x.slug) + '"><strong>' + esc(x.title) + "</strong></a>" +
+        '<span class="ad-hint">' + esc([type, x.photos + " photo" + (x.photos > 1 ? "s" : ""), x.selected ? x.selected + " coup" + (x.selected > 1 ? "s" : "") + " de cœur" : ""].filter(Boolean).join(" · ")) +
+        (x.byName ? ' · <span title="Galerie créée sans e-mail, rattachée à ce client par son nom">rattachée par le nom</span>' : "") + "</span></div>" + state + "</li>";
+    }).join("") + "</ul>" + (limit && sessions.length > limit ? '<button type="button" class="ad-link-btn" data-cl-tab="sessions">Voir les ' + sessions.length + " séances</button>" : "");
+  }
+
+  function clBillingHtml(billing) {
+    if (!billing.length) return '<p class="ad-hint">Aucune facture pour l\'instant. Les factures des suppléments et des tirages réglés dans ses galeries arrivent ici toutes seules, comme les factures que vous lui faites depuis Facturation.</p>';
+    return '<div class="ad-table-wrap"><table class="ad-table ad-cl-ledger"><thead><tr><th>Date</th><th>N°</th><th>Objet</th><th class="ad-num">Montant</th><th>Statut</th><th></th></tr></thead><tbody>' +
+      billing.map(function (f) {
+        var pdf = f.source === "gallery" ? "/local/invoices/" + encodeURIComponent(f.id) : "/local/client-invoices/" + encodeURIComponent(f.id) + "/pdf";
+        var status = f.kind === "credit" ? '<span class="ad-badge ad-badge-expired">Note de crédit</span>'
+          : f.status === "paid" ? '<span class="ad-badge ad-badge-validated">Réglée</span>'
+          : f.status === "credited" ? '<span class="ad-badge ad-badge-expired">Annulée</span>'
+          : f.status === "overdue" ? '<span class="ad-badge ad-badge-expired">En retard</span>'
+          : f.paidCents ? '<span class="ad-badge ad-badge-soon">' + esc(formatEuros(f.totalCents - f.paidCents)) + " à régler</span>"
+          : '<span class="ad-badge ad-badge-soon">À régler</span>';
+        return "<tr><td>" + esc(clShort(f.at)) + "</td><td>" + esc(f.number || "—") + "</td><td>" + esc(f.title || "") +
+          (f.source === "gallery" ? ' <span class="ad-hint">· automatique</span>' : "") + (f.byName ? ' <span class="ad-hint">· rattachée par le nom</span>' : "") + "</td>" +
+          '<td class="ad-num">' + esc(formatEuros(f.totalCents)) + "</td><td>" + status + "</td>" +
+          '<td><a class="ad-btn ad-btn-small" href="' + pdf + '" target="_blank" rel="noopener">PDF</a></td></tr>';
+      }).join("") + "</tbody></table></div>";
+  }
+
+  function clPaidHtml(paid, totals) {
+    if (!paid.length) return '<p class="ad-hint">Aucun règlement reçu de ce client pour l\'instant.</p>';
+    var parts = [];
+    if (totals.supplementsCents) parts.push("suppléments " + formatEuros(totals.supplementsCents));
+    if (totals.printsCents) parts.push("tirages " + formatEuros(totals.printsCents));
+    if (totals.depositsCents) parts.push("acomptes " + formatEuros(totals.depositsCents));
+    var label = { supplement: "Suppléments", print: "Tirages", deposit: "Acompte de réservation", contract: "Acompte du contrat", gift: "Bon cadeau", invoice: "Facture" };
+    return (parts.length ? '<p class="ad-hint">Dont ' + esc(parts.join(" · ")) + ".</p>" : "") +
+      '<div class="ad-table-wrap"><table class="ad-table ad-cl-ledger"><thead><tr><th>Date</th><th>Quoi</th><th>Détail</th><th>Moyen</th><th class="ad-num">Montant</th></tr></thead><tbody>' +
+      paid.map(function (x) {
+        var detail = x.type === "supplement" ? (x.count ? x.count + " photo" + (x.count > 1 ? "s" : "") + " · " : "") + (x.slug ? '<a href="#/g/' + encodeURIComponent(x.slug) + '">' + esc(x.title) + "</a>" : esc(x.title || ""))
+          : x.type === "print" ? (x.count ? x.count + " tirage" + (x.count > 1 ? "s" : "") + " · " : "") + (x.slug ? '<a href="#/g/' + encodeURIComponent(x.slug) + '">' + esc(x.title) + "</a>" : esc(x.title || "")) +
+            (x.orderStatus ? ' <span class="ad-hint">· ' + esc(CL_ORDER_STATUS[x.orderStatus] || x.orderStatus) + "</span>" : "") +
+            (x.trackingUrl ? ' <a class="ad-hint" href="' + esc(x.trackingUrl) + '" target="_blank" rel="noopener">suivi</a>' : "")
+          : x.type === "gift" ? esc(x.title || "") + (x.toName ? ' <span class="ad-hint">· pour ' + esc(x.toName) + "</span>" : "")
+          : esc(x.title || "") + (x.number ? ' <span class="ad-hint">n° ' + esc(x.number) + "</span>" : "");
+        return "<tr><td>" + esc(clShort(x.at)) + "</td><td>" + esc(label[x.type] || "") + "</td><td>" + detail + "</td><td>" + esc(CL_METHODS[x.method] || "—") + "</td>" +
+          '<td class="ad-num">' + esc(formatEuros(x.amountCents)) + "</td></tr>";
+      }).join("") + "</tbody></table></div>";
+  }
+
+  function clLeftHtml(data) {
+    var tab = clientsState.detailTab;
+    var count = { sessions: data.sessions.length, billing: data.billing.length, paid: data.paid.length, history: data.history.length };
+    var bar = '<div class="ad-seg ad-cl-tabs" role="tablist" aria-label="Sections de la fiche">' + CL_TABS.map(function (t) {
+      return '<button type="button" class="ad-seg-btn" role="tab" data-cl-tab="' + t[0] + '" aria-selected="' + (tab === t[0]) + '" aria-pressed="' + (tab === t[0]) + '">' +
+        esc(t[1]) + (count[t[0]] ? ' <span class="ad-cl-tab-count">' + count[t[0]] + "</span>" : "") + "</button>";
+    }).join("") + "</div>";
+    var body;
+    if (tab === "sessions") body = '<section><div class="ad-section-header"><h3>Séances</h3></div>' + clSessionsHtml(data.sessions) + "</section>";
+    else if (tab === "billing") body = clDueHtml(data.due) + '<section><div class="ad-section-header"><h3>Factures</h3></div>' + clBillingHtml(data.billing) + "</section>";
+    else if (tab === "paid") body = '<section><div class="ad-section-header"><h3>Règlements</h3><span class="ad-cl-due-total ad-cl-paid-total">' + esc(formatEuros(data.totals.paidCents)) + "</span></div>" + clPaidHtml(data.paid, data.totals) + "</section>";
+    else if (tab === "history") body = '<section><div class="ad-section-header"><h3>Historique</h3></div>' + clHistoryHtml(data.history) + "</section>";
+    else {
+      body = clDueHtml(data.due) +
+        '<section><div class="ad-section-header"><h3>Dernières séances</h3></div>' + clSessionsHtml(data.sessions, 3) + "</section>" +
+        (data.client.noEmail ? "" : '<section><div class="ad-section-header"><h3>Dates à retenir</h3></div>' + clDatesHtml(data.dates, data.client) + "</section>");
+    }
+    return bar + '<div class="ad-cl-tabbody" role="tabpanel">' + body + "</div>";
+  }
+
+  // Accord pour recevoir les offres du studio (campagnes), désinscription.
+  function clConsentHtml(c) {
+    var state = c.unsubscribed ? '<span class="ad-badge ad-badge-expired">Désinscrit</span> Ne reçoit plus vos offres ni vos relances de fidélité.'
+      : c.consent ? '<span class="ad-badge ad-badge-validated">Accord</span> Reçoit vos campagnes.'
+      : '<span class="ad-badge">Pas d\'accord</span> ' + (c.sessions ? "Peut recevoir vos relances de fidélité et, si vous le choisissez, les campagnes aux clients." : "Ne reçoit pas vos campagnes.");
+    var action = c.unsubscribed ? '<button type="button" class="ad-btn ad-btn-small" data-cl-consent="resub">Réinscrire</button>'
+      : c.consent ? '<button type="button" class="ad-btn ad-btn-small" data-cl-consent="withdraw">Retirer l\'accord</button>'
+      : '<button type="button" class="ad-btn ad-btn-small" data-cl-consent="consent">Noter son accord</button>';
+    return '<section class="ad-cl-consent"><div class="ad-section-header"><h3>Offres du studio</h3></div><p class="ad-cl-consent-state">' + state + "</p>" + action + "</section>";
+  }
+
+  // Fiche sans e-mail : galeries ou factures créées avec un nom seul.
+  function clAttachHtml(c) {
+    return '<section class="ad-cl-attach"><div class="ad-section-header"><h3>Son adresse e-mail</h3></div>' +
+      '<p class="ad-hint">Cette fiche réunit ce qui a été créé au nom de « ' + esc(c.name) + ' » sans adresse e-mail. Ajoutez-la : ses galeries et ses factures la reçoivent, et vous retrouvez notes, tags, dates à retenir et relances.</p>' +
+      '<form id="ad-cl-attach" novalidate><label class="ad-field"><span>E-mail</span><input type="email" name="email" maxlength="200" required autocomplete="off" placeholder="client@exemple.be" /></label>' +
+      '<button type="submit" class="ad-btn ad-btn-primary">Rattacher</button></form></section>';
+  }
+
   function paintClientDetail(data) {
     var c = data.client;
+    var key = c.key || c.email;
+    if (clientsState.detailKey !== key) { clientsState.detailKey = key; clientsState.detailTab = "overview"; }
+    var t = data.totals;
     el.view.innerHTML =
       '<button type="button" class="ad-back" id="ad-cl-back">&larr; Tous les clients</button>' +
       '<header class="ad-cl-head">' + clAvatar(c.name, true) +
       '<div class="ad-cl-head-main"><h2>' + esc(c.name) + "</h2>" + (c.prospect ? '<span class="ad-badge ad-badge-soon ad-cl-prospect">Prospect</span>' : "") +
-      '<p class="ad-cl-contact"><span>' + esc(c.email) + '</span><button type="button" class="ad-link-btn" id="ad-cl-copy">Copier</button>' +
-      (c.phone ? '<span aria-hidden="true">·</span><a href="tel:' + esc(c.phone.replace(/\s/g, "")) + '">' + esc(c.phone) + "</a>" : "") + "</p></div>" +
+      (c.noEmail
+        ? '<p class="ad-cl-contact"><span class="ad-hint">Sans adresse e-mail</span></p>'
+        : '<p class="ad-cl-contact"><span>' + esc(c.email) + '</span><button type="button" class="ad-link-btn" id="ad-cl-copy">Copier</button>' +
+          (c.phone ? '<span aria-hidden="true">·</span><a href="tel:' + esc(c.phone.replace(/\s/g, "")) + '">' + esc(c.phone) + "</a>" : "") + "</p>") + "</div>" +
       '<div class="ad-cl-head-actions">' +
-      '<a class="ad-btn" href="' + esc(data.contactMailto) + '">Écrire</a>' +
+      (c.noEmail ? "" : '<button type="button" class="ad-btn" id="ad-cl-write">Écrire</button>') +
       '<button type="button" class="ad-btn" id="ad-cl-gallery">Nouvelle galerie</button>' +
       '<button type="button" class="ad-btn" id="ad-cl-invoice">Nouvelle facture</button>' +
       '<button type="button" class="ad-btn ad-btn-primary" id="ad-cl-quote">Nouveau devis</button></div></header>' +
       '<div class="ad-stats">' +
       salesStatHtml("Client depuis", c.firstAt ? new Date(c.firstAt * 1000).toLocaleDateString("fr-BE", { month: "long", year: "numeric" }) : "—", c.firstAt ? clAgo(c.firstAt) : "") +
-      salesStatHtml("Séances", String(c.sessions), c.galleries ? c.galleries + " galerie" + (c.galleries > 1 ? "s" : "") : "") +
-      salesStatHtml("Encaissé", c.paidCents ? formatEuros(c.paidCents) : "—", "Suppléments, tirages, acomptes, factures et bons") +
-      salesStatHtml("Prochaine séance", c.upcomingSessionAt ? new Date(c.upcomingSessionAt * 1000).toLocaleDateString("fr-BE", { day: "numeric", month: "short", timeZone: "Europe/Brussels" }) : "—",
-        c.upcomingSessionAt ? clAgo(c.upcomingSessionAt) : (c.lastSessionAt ? "Dernière " + clAgo(c.lastSessionAt) : "")) +
+      salesStatHtml("Séances", String(c.sessions), c.upcomingSessionAt ? "Prochaine " + clAgo(c.upcomingSessionAt) : (c.lastSessionAt ? "Dernière " + clAgo(c.lastSessionAt) : "")) +
+      salesStatHtml("Encaissé", c.paidCents ? formatEuros(c.paidCents) : "—", t.averageCents ? formatEuros(t.averageCents) + " en moyenne par séance" : "Suppléments, tirages, acomptes, factures et bons") +
+      salesStatHtml("Reste à régler", t.dueCents ? formatEuros(t.dueCents) : "—", t.dueCents ? data.due.length + " élément" + (data.due.length > 1 ? "s" : "") + " · onglet Factures" : "Tout est réglé") +
       "</div>" +
+      (t.byName ? '<p class="ad-hint ad-cl-byname">' + t.byName + " élément" + (t.byName > 1 ? "s" : "") + " créé" + (t.byName > 1 ? "s" : "") + " sans e-mail, rattaché" + (t.byName > 1 ? "s" : "") + " à ce client par son nom. Ce n'est pas lui ? Ajoutez la bonne adresse sur la galerie ou la facture.</p>" : "") +
       '<div class="ad-cl-grid">' +
+      '<div class="ad-cl-col" id="ad-cl-left">' + clLeftHtml(data) + "</div>" +
       '<div class="ad-cl-col">' +
-      '<section><div class="ad-section-header"><h3>Dates à retenir</h3></div>' + clDatesHtml(data.dates, c) + "</section>" +
-      '<section><div class="ad-section-header"><h3>Historique</h3></div>' + clHistoryHtml(data.history) + "</section>" +
-      "</div>" +
-      '<div class="ad-cl-col">' +
+      (c.noEmail ? clAttachHtml(c) :
+      clConsentHtml(c) +
       '<section><div class="ad-section-header"><h3>Tags</h3></div>' +
       '<div class="ad-cl-tags ad-cl-tags-edit" id="ad-cl-tags">' + (c.tags || []).map(function (t) {
         return '<span class="ad-cl-tag">' + esc(t) + '<button type="button" data-cl-untag="' + esc(t) + '" aria-label="Retirer le tag ' + esc(t) + '">×</button></span>';
@@ -10795,16 +10960,60 @@
       '<button type="submit" class="ad-btn">Enregistrer</button></form>' +
       (c.recordId ? '<details class="ad-danger-zone"><summary>Effacer mes notes sur ce client</summary><p class="ad-hint">Retire le téléphone, les notes et les dates à retenir. Ses galeries, réservations et contrats restent.</p>' +
         '<button type="button" class="ad-btn ad-btn-danger ad-btn-small" id="ad-cl-erase">Effacer</button></details>' : "") +
-      "</section></div></div>";
+      "</section>") + "</div></div>";
     bindClientDetail(data);
   }
 
   function bindClientDetail(data) {
     var c = data.client;
     var refresh = function (fresh) { paintClientDetail(fresh); };
-    document.getElementById("ad-cl-back").addEventListener("click", function () { renderClients(); });
-    document.getElementById("ad-cl-copy").addEventListener("click", function () {
+    var byId = function (id) { return document.getElementById(id); };
+    byId("ad-cl-back").addEventListener("click", function () { renderClients(); });
+    if (byId("ad-cl-copy")) byId("ad-cl-copy").addEventListener("click", function () {
       navigator.clipboard.writeText(c.email).then(function () { toast("Adresse copiée."); }).catch(function () { toast("Impossible de copier l'adresse.", true); });
+    });
+    // Onglets de la fiche (et « Voir les N séances »).
+    el.view.querySelectorAll("[data-cl-tab]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        clientsState.detailTab = btn.getAttribute("data-cl-tab");
+        paintClientDetail(data);
+        var tabs = el.view.querySelector(".ad-cl-tabs");
+        var active = tabs && tabs.querySelector('[aria-selected="true"]');
+        if (active) active.focus();
+      });
+    });
+    if (byId("ad-cl-write")) byId("ad-cl-write").addEventListener("click", function () {
+      openDirectMail(c.email, c.name, { subject: "", body: "Bonjour " + (c.name || "").split(" ")[0] + ",\n\n" });
+    });
+    el.view.querySelectorAll("[data-cl-consent]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var action = b.getAttribute("data-cl-consent");
+        var go = async function () {
+          try {
+            var payload = action === "consent" ? { consent: true } : action === "withdraw" ? { consent: false } : { unsubscribed: false };
+            payload.email = c.email;
+            await api("POST", "/mailing/contacts", payload);
+            mailingState.contacts = null;
+            refresh(await api("GET", "/clients/detail?email=" + encodeURIComponent(c.email)));
+            toast(action === "consent" ? "Accord noté." : action === "withdraw" ? "Accord retiré." : "Client réinscrit.");
+          } catch (err) { toast(err.message, true); }
+        };
+        if (action === "resub") confirmAction("Réinscrire " + c.name + " ? Faites-le seulement si cette personne vous l'a demandé.", go);
+        else go();
+      });
+    });
+    // Fiche sans e-mail : rattacher une adresse.
+    if (byId("ad-cl-attach")) byId("ad-cl-attach").addEventListener("submit", async function (e) {
+      e.preventDefault();
+      var email = e.currentTarget.elements.email.value.trim().toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { toast("Adresse e-mail invalide.", true); return; }
+      try {
+        var fresh = await api("POST", "/clients/attach", { key: c.key, email: email });
+        clientsState.data = null;
+        history.replaceState(null, "", clHref(email));
+        refresh(fresh);
+        toast("Adresse ajoutée : la fiche de " + fresh.client.name + " est complète.");
+      } catch (err) { toast(err.message, true); }
     });
     document.getElementById("ad-cl-quote").addEventListener("click", function () {
       contractsState.editing = "new";
@@ -10822,7 +11031,7 @@
         toast(message);
       } catch (err) { toast(err.message, true); }
     };
-    document.getElementById("ad-cl-tag-form").addEventListener("submit", function (e) {
+    if (byId("ad-cl-tag-form")) byId("ad-cl-tag-form").addEventListener("submit", function (e) {
       e.preventDefault();
       var input = e.currentTarget.elements.tag;
       var tag = input.value.trim().replace(/^#/, "");
@@ -10844,10 +11053,10 @@
     });
 
     // Notes : enregistrement automatique, une seconde après la dernière frappe.
-    var notes = document.getElementById("ad-cl-notes");
-    var saved = document.getElementById("ad-cl-saved");
+    var notes = byId("ad-cl-notes");
+    var saved = byId("ad-cl-saved");
     var timer = null;
-    var lastSaved = notes.value;
+    var lastSaved = notes ? notes.value : "";
     var saveNotes = async function () {
       clearTimeout(timer);
       if (notes.value === lastSaved) return;
@@ -10864,10 +11073,12 @@
         saved.className = "ad-cl-saved ad-cl-saved-error";
       }
     };
-    notes.addEventListener("input", function () { clearTimeout(timer); saved.textContent = ""; timer = setTimeout(saveNotes, 1000); });
-    notes.addEventListener("blur", saveNotes);
+    if (notes) {
+      notes.addEventListener("input", function () { clearTimeout(timer); saved.textContent = ""; timer = setTimeout(saveNotes, 1000); });
+      notes.addEventListener("blur", saveNotes);
+    }
 
-    document.getElementById("ad-cl-info").addEventListener("submit", async function (e) {
+    if (byId("ad-cl-info")) byId("ad-cl-info").addEventListener("submit", async function (e) {
       e.preventDefault();
       var f = e.currentTarget.elements;
       try {
@@ -10878,7 +11089,27 @@
       }
     });
 
-    var dateForm = document.getElementById("ad-cl-date-form");
+    var dateForm = byId("ad-cl-date-form");
+    if (dateForm) clBindDateForm(dateForm, c, refresh);
+    el.view.querySelectorAll("[data-cld]").forEach(function (row) {
+      clBindDateRow(row, row.getAttribute("data-cld"), refresh, "Date retirée.");
+    });
+    var erase = byId("ad-cl-erase");
+    if (erase) {
+      erase.addEventListener("click", function () {
+        confirmAction("Effacer le téléphone, les notes et les dates à retenir de " + c.name + " ?", async function () {
+          try {
+            await api("DELETE", "/clients?email=" + encodeURIComponent(c.email));
+            toast("Notes effacées.");
+            renderClientDetail(c.email, true);
+          } catch (err) { toast(err.message, true); }
+        });
+      });
+    }
+  }
+
+  // Formulaire « Dates à retenir » de la fiche.
+  function clBindDateForm(dateForm, c, refresh) {
     var sessionIso = c.lastSessionAt ? clIsoOf(c.lastSessionAt) : clToday();
     var setKind = function (kind) {
       document.getElementById("ad-cl-date-fields").innerHTML = clDateFieldsHtml(kind, sessionIso);
@@ -10917,21 +11148,6 @@
         toast(err.message, true);
       }
     });
-    el.view.querySelectorAll("[data-cld]").forEach(function (row) {
-      clBindDateRow(row, row.getAttribute("data-cld"), refresh, "Date retirée.");
-    });
-    var erase = document.getElementById("ad-cl-erase");
-    if (erase) {
-      erase.addEventListener("click", function () {
-        confirmAction("Effacer le téléphone, les notes et les dates à retenir de " + c.name + " ?", async function () {
-          try {
-            await api("DELETE", "/clients?email=" + encodeURIComponent(c.email));
-            toast("Notes effacées.");
-            renderClientDetail(c.email, true);
-          } catch (err) { toast(err.message, true); }
-        });
-      });
-    }
   }
 
   /* ---------- Planning : séances, rappels et tâches au même endroit ---------- */
@@ -11536,6 +11752,737 @@
     paintPlanning();
   }
 
+  /* ---------- Relances & e-mails : relances automatiques, campagnes, contacts, adresse d'envoi ---------- */
+  // Tout ce que le studio envoie à ses clients, au même endroit
+  // (worker/src/mailingAdmin.js). Les chiffres : envois, clics, et ce qui a
+  // été réservé ou acheté dans les 14 jours qui suivent un e-mail.
+
+  var mailingState = { view: "automations", overview: null, automations: null, campaigns: null, contacts: null, sender: null, open: "", editing: null, lang: "fr", contactQuery: "" };
+  var ML_VIEWS = [["automations", "Relances automatiques"], ["campaigns", "Campagnes"], ["contacts", "Contacts"], ["sender", "Adresse d'envoi"], ["journal", "Journal"]];
+  var ML_GROUPS = [["session", "Avant la séance"], ["gallery", "Galerie"], ["sales", "Ventes de tirages"], ["payment", "Paiements"], ["loyalty", "Fidélité"]];
+  var ML_LANGS = [["fr", "Français"], ["en", "English"], ["nl", "Nederlands"]];
+  var ML_VARS = [["{prenom}", "prénom du client"], ["{studio}", "votre studio"], ["{galerie}", "titre de la galerie"], ["{remise}", "remise"], ["{fin}", "fin de l'offre"], ["{occasion}", "l'occasion"]];
+  var ML_SOURCES = { gallery: "dans sa galerie", booking: "en réservant", checkout: "en commandant", photographer: "noté par vous" };
+  var ML_STATUS = { draft: ["Brouillon", ""], scheduled: ["Programmée", "ad-badge-soon"], sending: ["En cours d'envoi", "ad-badge-soon"], sent: ["Envoyée", "ad-badge-validated"] };
+
+  function mlStatsLine(st) {
+    if (!st || !(st.sent || st.queued || st.failed)) return '<span class="ad-ml-stats ad-hint">Rien envoyé ces 30 derniers jours</span>';
+    var parts = [st.sent + " envoyé" + (st.sent > 1 ? "s" : "")];
+    if (st.queued) parts.push(st.queued + " en file");
+    if (st.failed) parts.push('<span class="ad-ml-failed">' + st.failed + " non parti" + (st.failed > 1 ? "s" : "") + "</span>");
+    parts.push(st.clicked + " clic" + (st.clicked > 1 ? "s" : ""));
+    if (st.bookings) parts.push(st.bookings + " réservation" + (st.bookings > 1 ? "s" : ""));
+    if (st.cents) parts.push("<strong>" + esc(formatEuros(st.cents)) + "</strong> générés");
+    return '<span class="ad-ml-stats">' + parts.join(" · ") + "</span>";
+  }
+
+  async function renderMailing(skipHash) {
+    if (!skipHash && location.hash !== "#/relances") history.pushState(null, "", "#/relances");
+    setActiveTab("mailing");
+    el.view.innerHTML = '<p class="ad-loading">Chargement…</p>';
+    try {
+      var both = await Promise.all([api("GET", "/mailing/overview"), mlLoad(mailingState.view, true)]);
+      mailingState.overview = both[0];
+    } catch (err) {
+      el.view.innerHTML = '<div class="ad-error-panel"><h2>Relances indisponibles</h2><p>' + esc(err.message) + "</p></div>";
+      return;
+    }
+    paintMailing();
+  }
+
+  async function mlLoad(view, force) {
+    if (view === "automations" && (force || !mailingState.automations)) mailingState.automations = await api("GET", "/mailing/automations");
+    if (view === "campaigns" && (force || !mailingState.campaigns)) mailingState.campaigns = await api("GET", "/mailing/campaigns");
+    if (view === "contacts" && (force || !mailingState.contacts)) mailingState.contacts = await api("GET", "/mailing/contacts");
+    if (view === "sender" && (force || !mailingState.sender)) mailingState.sender = await api("GET", "/mailing/sender");
+    if (view === "journal") mailingState.overview = await api("GET", "/mailing/overview");
+  }
+
+  function paintMailing() {
+    var o = mailingState.overview || { totals: {} };
+    var t = o.totals || {};
+    el.view.innerHTML =
+      '<header class="ad-detail-header"><div><h2>Relances &amp; e-mails</h2>' +
+      '<p class="ad-hint">Tout ce que votre studio envoie à ses clients, au même endroit : les relances qui partent toutes seules, vos campagnes, et ce qu\'elles rapportent.</p></div></header>' +
+      '<div class="ad-stats">' +
+      salesStatHtml("E-mails envoyés", String(t.sent || 0), "30 derniers jours") +
+      salesStatHtml("Clics", String(t.clicked || 0), t.sent ? Math.round(100 * (t.clicked || 0) / t.sent) + " % des e-mails" : "") +
+      salesStatHtml("Réservations", String(t.bookings || 0), "dans les 14 jours après un e-mail") +
+      salesStatHtml("Ventes générées", t.cents ? formatEuros(t.cents) : "—", (t.sales || 0) + " achat" + ((t.sales || 0) > 1 ? "s" : "") + " (tirages, suppléments, bons…)") +
+      "</div>" +
+      '<div class="ad-seg ad-ml-views" role="tablist" aria-label="Sections">' + ML_VIEWS.map(function (v) {
+        return '<button type="button" class="ad-seg-btn" role="tab" data-ml-view="' + v[0] + '" aria-selected="' + (mailingState.view === v[0]) + '" aria-pressed="' + (mailingState.view === v[0]) + '">' + esc(v[1]) + "</button>";
+      }).join("") + "</div>" +
+      '<div id="ad-ml-body"></div>';
+    el.view.querySelectorAll("[data-ml-view]").forEach(function (b) {
+      b.addEventListener("click", async function () {
+        mailingState.view = b.getAttribute("data-ml-view");
+        mailingState.open = "";
+        mailingState.editing = null;
+        el.view.querySelectorAll("[data-ml-view]").forEach(function (x) {
+          var on = x === b;
+          x.setAttribute("aria-selected", String(on));
+          x.setAttribute("aria-pressed", String(on));
+        });
+        document.getElementById("ad-ml-body").innerHTML = '<p class="ad-loading">Chargement…</p>';
+        try { await mlLoad(mailingState.view); } catch (err) { toast(err.message, true); }
+        paintMailingBody();
+      });
+    });
+    paintMailingBody();
+  }
+
+  function paintMailingBody() {
+    var body = document.getElementById("ad-ml-body");
+    if (!body) return;
+    var v = mailingState.view;
+    if (v === "automations") body.innerHTML = mlAutomationsHtml();
+    else if (v === "campaigns") body.innerHTML = mailingState.editing ? mlCampaignEditorHtml() : mlCampaignsHtml();
+    else if (v === "contacts") body.innerHTML = mlContactsHtml();
+    else if (v === "sender") body.innerHTML = mlSenderHtml();
+    else body.innerHTML = mlJournalHtml();
+    if (v === "automations") bindAutomations();
+    else if (v === "campaigns") { if (mailingState.editing) bindCampaignEditor(); else bindCampaigns(); }
+    else if (v === "contacts") bindContacts();
+    else if (v === "sender") bindSender();
+  }
+
+  /* ---- Relances automatiques ---- */
+
+  function mlTextsEditorHtml(prefix, texts, lang, withCta, vars) {
+    var t = texts[lang] || { subject: "", body: "", cta: "" };
+    return '<div class="ad-seg ad-ml-langs" role="group" aria-label="Langue du texte">' + ML_LANGS.map(function (l) {
+      return '<button type="button" class="ad-seg-btn" data-ml-lang="' + l[0] + '" aria-pressed="' + (lang === l[0]) + '">' + esc(l[1]) + "</button>";
+    }).join("") + "</div>" +
+      '<label class="ad-field"><span>Objet</span><input name="' + prefix + 'subject" maxlength="160" value="' + esc(t.subject || "") + '" /></label>' +
+      '<label class="ad-field"><span>Message</span><textarea name="' + prefix + 'body" rows="9" maxlength="6000">' + esc(t.body || "") + "</textarea></label>" +
+      (withCta ? '<label class="ad-field"><span>Texte du bouton</span><input name="' + prefix + 'cta" maxlength="60" value="' + esc(t.cta || "") + '" /></label>' : "") +
+      '<p class="ad-hint ad-ml-vars">Variables : ' + (vars || ML_VARS).map(function (x) { return '<button type="button" class="ad-ml-var" data-ml-var="' + esc(x[0]) + '" title="' + esc(x[1]) + '">' + esc(x[0]) + "</button>"; }).join(" ") +
+      " · un paragraphe par ligne vide · <code>**gras**</code></p>";
+  }
+
+  function mlAutomationsHtml() {
+    var d = mailingState.automations;
+    if (!d) return "";
+    var groups = ML_GROUPS.map(function (g) {
+      var items = d.automations.filter(function (a) { return a.group === g[0]; });
+      if (!items.length) return "";
+      return '<section class="ad-ml-group"><div class="ad-section-header"><h3>' + esc(g[1]) + "</h3></div>" +
+        '<ul class="ad-ml-list">' + items.map(mlAutomationHtml).join("") + "</ul></section>";
+    }).join("");
+    return (!d.remindersEnabled ? '<p class="ad-banner ad-banner-muted">Les relances automatiques sont coupées dans Paramètres : la galerie qui expire, le panier oublié, les coups de cœur à imprimer et la sélection pas commencée ne partent pas.</p>' : "") +
+      '<p class="ad-hint ad-ml-intro">Chaque relance ne part qu\'une fois, au bon moment, dans la langue du client et au nom de votre studio. Celles marquées <strong>« À votre nom »</strong> sont rédigées par vous : modifiez le texte, regardez l\'aperçu, envoyez-vous un test.</p>' + groups;
+  }
+
+  function mlAutomationHtml(a) {
+    var open = mailingState.open === a.key;
+    var off = !a.available;
+    return '<li class="ad-ml-item' + (open ? " is-open" : "") + (off ? " is-locked" : "") + '" data-ml-key="' + a.key + '">' +
+      '<div class="ad-ml-item-head">' +
+      '<label class="ad-switch"><input type="checkbox" data-ml-toggle="' + a.key + '"' + (a.enabled && !off ? " checked" : "") + (off ? " disabled" : "") + ' />' +
+      '<span class="ad-switch-track" aria-hidden="true"></span><span class="ad-visually-hidden">Activer « ' + esc(a.title) + " »</span></label>" +
+      '<div class="ad-ml-item-main"><strong>' + esc(a.title) + "</strong>" +
+      (a.kind === "custom" ? ' <span class="ad-badge ad-ml-own">À votre nom</span>' : "") +
+      (off ? ' <span class="ad-badge">Formule Pro</span>' : "") +
+      '<span class="ad-hint">' + esc(a.desc) + (a.delay ? " · " + esc(a.delayDays + " " + a.delay.unit) : "") + "</span>" +
+      mlStatsLine(a.stats) + "</div>" +
+      (a.kind === "custom" && !off ? '<button type="button" class="ad-btn ad-btn-small" data-ml-edit="' + a.key + '" aria-expanded="' + open + '">' + (open ? "Fermer" : "Personnaliser") + "</button>" : "") +
+      "</div>" +
+      (open ? mlAutomationEditorHtml(a) : "") + "</li>";
+  }
+
+  function mlAutomationEditorHtml(a) {
+    var lang = mailingState.lang;
+    var valueField = "";
+    if (a.value && a.value.kind === "percent") {
+      valueField = '<label class="ad-field"><span>' + esc(a.value.label) + '</span><select name="value">' + [10, 15, 20, 25, 30, 40, 50].map(function (p) {
+        return '<option value="' + p + '"' + (String(p) === String(a.valueSet) ? " selected" : "") + ">−" + p + " %</option>";
+      }).join("") + "</select></label>";
+    } else if (a.value && a.value.kind === "url") {
+      valueField = '<label class="ad-field ad-ml-wide"><span>' + esc(a.value.label) + '</span><input type="url" name="value" maxlength="500" placeholder="https://g.page/r/…" value="' + esc(a.valueSet || "") + '" /></label>';
+    }
+    var delayField = a.delay ? '<label class="ad-field"><span>Délai (' + esc(a.delay.unit) + ')</span><input type="number" name="delay" min="' + a.delay.min + '" max="' + a.delay.max + '" value="' + esc(a.delayDays) + '" /></label>' : "";
+    return '<form class="ad-ml-editor" data-ml-form="' + a.key + '" novalidate>' +
+      (delayField || valueField ? '<div class="ad-ml-row">' + delayField + valueField + "</div>" : "") +
+      '<div class="ad-ml-editor-grid"><div class="ad-ml-editor-fields">' + mlTextsEditorHtml("", a.texts, lang, true) + "</div>" +
+      '<div class="ad-ml-preview"><p class="ad-ml-preview-label">Aperçu</p><iframe title="Aperçu de l\'e-mail" class="ad-ml-frame" data-ml-frame sandbox="allow-same-origin"></iframe></div></div>' +
+      '<div class="ad-ml-actions"><button type="submit" class="ad-btn ad-btn-primary">Enregistrer</button>' +
+      '<button type="button" class="ad-btn" data-ml-test>M\'envoyer un test</button>' +
+      '<button type="button" class="ad-link-btn" data-ml-reset>Revenir au texte proposé</button></div></form>';
+  }
+
+  // Textes du formulaire, toutes langues (la langue affichée est lue du
+  // formulaire, les autres viennent de l'état).
+  function mlReadTexts(form, texts, prefix) {
+    prefix = prefix || "";
+    var lang = mailingState.lang;
+    var out = JSON.parse(JSON.stringify(texts || {}));
+    out[lang] = {
+      subject: form.elements[prefix + "subject"].value,
+      body: form.elements[prefix + "body"].value,
+      cta: form.elements[prefix + "cta"] ? form.elements[prefix + "cta"].value : "",
+    };
+    return out;
+  }
+
+  function mlInsertVar(form, token) {
+    var field = form.querySelector("textarea:focus, input:focus") || form.querySelector("textarea");
+    if (!field) return;
+    var start = field.selectionStart || field.value.length;
+    field.value = field.value.slice(0, start) + token + field.value.slice(field.selectionEnd || start);
+    field.focus();
+    field.selectionStart = field.selectionEnd = start + token.length;
+    field.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+
+  function bindAutomations() {
+    var body = document.getElementById("ad-ml-body");
+    body.querySelectorAll("[data-ml-toggle]").forEach(function (box) {
+      box.addEventListener("change", async function () {
+        var key = box.getAttribute("data-ml-toggle");
+        try {
+          mailingState.automations = await api("POST", "/mailing/automations/" + key, { enabled: box.checked });
+          toast(box.checked ? "Relance activée." : "Relance coupée.");
+          paintMailingBody();
+        } catch (err) {
+          box.checked = !box.checked;
+          toast(err.message, true);
+          if (key === "review") { mailingState.open = "review"; paintMailingBody(); }
+        }
+      });
+    });
+    body.querySelectorAll("[data-ml-edit]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var key = b.getAttribute("data-ml-edit");
+        mailingState.open = mailingState.open === key ? "" : key;
+        paintMailingBody();
+      });
+    });
+    var form = body.querySelector("[data-ml-form]");
+    if (!form) return;
+    var key = form.getAttribute("data-ml-form");
+    var a = mailingState.automations.automations.filter(function (x) { return x.key === key; })[0];
+    var texts = JSON.parse(JSON.stringify(a.texts));
+    var frame = form.querySelector("[data-ml-frame]");
+    var timer = null;
+    var preview = function () {
+      clearTimeout(timer);
+      timer = setTimeout(async function () {
+        texts = mlReadTexts(form, texts);
+        try {
+          var p = await api("POST", "/mailing/automations/" + key + "/preview", { lang: mailingState.lang, texts: texts });
+          frame.srcdoc = p.html;
+        } catch (err) { /* l'aperçu attendra */ }
+      }, 350);
+    };
+    preview();
+    form.addEventListener("input", preview);
+    form.querySelectorAll("[data-ml-lang]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        texts = mlReadTexts(form, texts);
+        a.texts = texts;
+        mailingState.lang = b.getAttribute("data-ml-lang");
+        var li = form.closest(".ad-ml-item");
+        li.outerHTML = mlAutomationHtml(a);
+        bindAutomations();
+      });
+    });
+    form.querySelectorAll("[data-ml-var]").forEach(function (b) {
+      b.addEventListener("mousedown", function (e) { e.preventDefault(); });
+      b.addEventListener("click", function () { mlInsertVar(form, b.getAttribute("data-ml-var")); });
+    });
+    form.addEventListener("submit", async function (e) {
+      e.preventDefault();
+      texts = mlReadTexts(form, texts);
+      var payload = { texts: texts };
+      if (form.elements.delay) payload.delayDays = Number(form.elements.delay.value);
+      if (form.elements.value) payload.value = form.elements.value.value;
+      try {
+        mailingState.automations = await api("POST", "/mailing/automations/" + key, payload);
+        toast("Relance enregistrée.");
+        paintMailingBody();
+      } catch (err) { toast(err.message, true); }
+    });
+    form.querySelector("[data-ml-test]").addEventListener("click", async function () {
+      texts = mlReadTexts(form, texts);
+      try {
+        var r = await api("POST", "/mailing/automations/" + key + "/test", { lang: mailingState.lang, texts: texts });
+        toast("Test envoyé à " + r.to + ".");
+      } catch (err) { toast(err.message, true); }
+    });
+    form.querySelector("[data-ml-reset]").addEventListener("click", function () {
+      confirmAction("Revenir au texte proposé par Holypixx, dans les trois langues ?", async function () {
+        try {
+          mailingState.automations = await api("POST", "/mailing/automations/" + key, { texts: {} });
+          toast("Texte proposé rétabli.");
+          paintMailingBody();
+        } catch (err) { toast(err.message, true); }
+      });
+    });
+  }
+
+  /* ---- Campagnes ---- */
+
+  function mlCampaignsHtml() {
+    var d = mailingState.campaigns;
+    if (!d) return "";
+    var lockNote = d.enabled ? "" : '<p class="ad-banner ad-banner-muted">Les campagnes sont incluses dans la formule Pro : préparez-les dès maintenant, l\'envoi s\'ouvre avec la formule. <a href="#/abonnement">Voir les formules</a></p>';
+    var c = d.contacts;
+    var list = d.campaigns.length ? '<ul class="ad-ml-campaigns">' + d.campaigns.map(function (k) {
+      var st = ML_STATUS[k.status] || [k.status, ""];
+      var when = k.status === "sent" ? "Envoyée le " + formatDate(k.sentAt || k.startedAt) + " à " + k.recipients + " client" + (k.recipients > 1 ? "s" : "")
+        : k.status === "scheduled" ? "Départ le " + new Date(k.scheduledAt * 1000).toLocaleString("fr-BE", { dateStyle: "long", timeStyle: "short" })
+        : k.status === "sending" ? "En cours : " + k.recipients + " destinataire" + (k.recipients > 1 ? "s" : "")
+        : "Modifiée le " + formatDate(k.updatedAt);
+      return '<li class="ad-ml-campaign"><div class="ad-ml-campaign-main"><strong>' + esc(k.name || "Sans titre") + '</strong> <span class="ad-badge ' + st[1] + '">' + esc(st[0]) + "</span>" +
+        '<span class="ad-hint">' + esc(when) + "</span>" + (k.status === "sent" || k.status === "sending" ? mlStatsLine(k.stats) : "") + "</div>" +
+        '<button type="button" class="ad-btn ad-btn-small" data-ml-open="' + esc(k.id) + '">' + (k.status === "draft" || k.status === "scheduled" ? "Modifier" : "Voir") + "</button></li>";
+    }).join("") + "</ul>" : '<p class="ad-hint">Aucune campagne pour l\'instant. Choisissez un modèle ci-dessous : le texte est déjà écrit, en trois langues.</p>';
+    return lockNote +
+      '<p class="ad-hint ad-ml-intro"><strong>' + c.consent + "</strong> client" + (c.consent > 1 ? "s ont" : " a") + " accepté vos offres · " + c.customers + " client" + (c.customers > 1 ? "s" : "") +
+      " avec une séance ou un achat · " + c.unsubscribed + " désinscrit" + (c.unsubscribed > 1 ? "s" : "") + ". Les campagnes ne partent jamais à un client désinscrit.</p>" +
+      '<section><div class="ad-section-header"><h3>Vos campagnes</h3></div>' + list + "</section>" +
+      '<section><div class="ad-section-header"><h3>Nouvelle campagne</h3></div><div class="ad-ml-templates">' +
+      d.templates.map(function (t) {
+        return '<button type="button" class="ad-ml-template" data-ml-template="' + t.key + '"><strong>' + esc(t.name.fr) + "</strong>" +
+          '<span class="ad-hint">' + esc(t.texts.fr.subject.replace(/\{remise\}/, "−20 %").replace(/\{fin\}/, "…")) + "</span>" +
+          (t.printPromo ? '<span class="ad-badge ad-badge-soon">Remise tirages</span>' : "") + "</button>";
+      }).join("") +
+      '<button type="button" class="ad-ml-template ad-ml-template-blank" data-ml-template=""><strong>Message libre</strong><span class="ad-hint">Une page blanche, à votre façon.</span></button>' +
+      "</div></section>";
+  }
+
+  function bindCampaigns() {
+    var body = document.getElementById("ad-ml-body");
+    body.querySelectorAll("[data-ml-template]").forEach(function (b) {
+      b.addEventListener("click", async function () {
+        var key = b.getAttribute("data-ml-template");
+        try {
+          var created = await api("POST", "/mailing/campaigns", key ? { template: key } : { name: "Nouvelle campagne", texts: { fr: { subject: "", body: "Bonjour {prenom},\n\n\n\n{studio}", cta: "" } }, cta: "none" });
+          mailingState.campaigns = null;
+          await mlLoad("campaigns");
+          mailingState.editing = created;
+          mailingState.lang = "fr";
+          paintMailingBody();
+        } catch (err) { toast(err.message, true); }
+      });
+    });
+    body.querySelectorAll("[data-ml-open]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var id = b.getAttribute("data-ml-open");
+        mailingState.editing = mailingState.campaigns.campaigns.filter(function (k) { return k.id === id; })[0];
+        mailingState.lang = "fr";
+        paintMailingBody();
+      });
+    });
+  }
+
+  function mlChips(name, options, selected, label) {
+    if (!options.length) return "";
+    return '<fieldset class="ad-ml-chips"><legend>' + esc(label) + "</legend>" + options.map(function (o) {
+      return '<label class="ad-ml-chip"><input type="checkbox" name="' + name + '" value="' + esc(o.key) + '"' + (selected.indexOf(o.key) !== -1 ? " checked" : "") + " /><span>" + esc(o.label || o.key) + ' <em>' + o.count + "</em></span></label>";
+    }).join("") + "</fieldset>";
+  }
+
+  function mlCampaignEditorHtml() {
+    var k = mailingState.editing;
+    var d = mailingState.campaigns;
+    var locked = !(k.status === "draft" || k.status === "scheduled");
+    var seg = k.segment || {};
+    var lang = mailingState.lang;
+    var typeOptions = d.options.sessionTypes.map(function (o) { return { key: o.key, label: clSessionTypeLabel(o.key) || o.key, count: o.count }; });
+    var langOptions = d.options.langs.map(function (o) { return { key: o.key, label: { fr: "Français", en: "English", nl: "Nederlands" }[o.key] || o.key, count: o.count }; });
+    var months = function (name, value, label, empty) {
+      return '<label class="ad-field"><span>' + esc(label) + '</span><select name="' + name + '"><option value="">' + esc(empty) + "</option>" +
+        [3, 6, 9, 12, 18, 24].map(function (m) { return '<option value="' + m + '"' + (Number(value) === m ? " selected" : "") + ">" + m + " mois</option>"; }).join("") + "</select></label>";
+    };
+    var st = ML_STATUS[k.status] || [k.status, ""];
+    return '<button type="button" class="ad-back" id="ad-ml-back">&larr; Toutes les campagnes</button>' +
+      '<form id="ad-ml-campaign" class="ad-ml-campaign-form" novalidate>' +
+      '<div class="ad-ml-campaign-title"><label class="ad-field ad-ml-wide"><span>Nom de la campagne <em>(pour vous)</em></span><input name="name" maxlength="80" value="' + esc(k.name) + '"' + (locked ? " disabled" : "") + " /></label>" +
+      ' <span class="ad-badge ' + st[1] + '">' + esc(st[0]) + "</span></div>" +
+      (locked ? '<p class="ad-banner ad-banner-muted">Envoyée' + (k.recipients ? " à " + k.recipients + " client" + (k.recipients > 1 ? "s" : "") : "") + ". " + mlStatsLine(k.stats) + "</p>" : "") +
+      '<div class="ad-ml-campaign-grid"><div>' +
+      '<section><div class="ad-section-header"><h3>Destinataires</h3><span class="ad-ml-count" id="ad-ml-count" aria-live="polite"></span></div>' +
+      '<fieldset class="ad-ml-audience"' + (locked ? " disabled" : "") + '><legend class="ad-visually-hidden">Qui reçoit</legend>' +
+      '<label class="ad-ml-radio"><input type="radio" name="audience" value="consent"' + (seg.audience !== "customers" ? " checked" : "") + " /><span><strong>Les clients qui ont accepté vos offres</strong><span class=\"ad-hint\">Case cochée dans leur galerie, en réservant ou en commandant, ou accord noté par vous.</span></span></label>" +
+      '<label class="ad-ml-radio"><input type="radio" name="audience" value="customers"' + (seg.audience === "customers" ? " checked" : "") + " /><span><strong>Aussi vos clients avec une séance ou un achat</strong><span class=\"ad-hint\">Permis pour proposer des services analogues, tant qu'ils ne se sont pas désinscrits (lien dans chaque e-mail).</span></span></label>" +
+      mlChips("sessionTypes", typeOptions, seg.sessionTypes || [], "Type de séance") +
+      mlChips("tags", d.options.tags.map(function (o) { return { key: o.key, label: o.key, count: o.count }; }), seg.tags || [], "Tags") +
+      mlChips("langs", langOptions, seg.langs || [], "Langue") +
+      '<div class="ad-ml-row">' + months("inactiveMonths", seg.inactiveMonths, "Sans séance depuis", "Peu importe") + months("activeMonths", seg.activeMonths, "Séance dans les derniers", "Peu importe") +
+      '<label class="ad-field"><span>Ayant dépensé au moins (€)</span><input type="number" name="minSpent" min="0" step="10" value="' + (seg.minSpentCents ? Math.round(seg.minSpentCents / 100) : "") + '" placeholder="0" /></label></div>' +
+      '<p class="ad-hint" id="ad-ml-sample"></p></fieldset></section>' +
+      '<section><div class="ad-section-header"><h3>Message</h3></div><fieldset class="ad-ml-message"' + (locked ? " disabled" : "") + '><legend class="ad-visually-hidden">Message</legend>' +
+      mlTextsEditorHtml("t_", k.texts || {}, lang, true, ML_VARS.filter(function (x) { return x[0] !== "{occasion}"; })) +
+      '<p class="ad-hint">Une langue laissée vide reçoit le texte en français. Chaque client reçoit la version de sa langue.</p>' +
+      '<div class="ad-ml-row"><label class="ad-field"><span>Bouton</span><select name="cta">' +
+      [["booking", "Réserver une séance (votre page de réservation)"], ["gallery", "Ouvrir sa dernière galerie"], ["url", "Un lien de votre choix"], ["none", "Pas de bouton"]].map(function (o) {
+        return '<option value="' + o[0] + '"' + (k.cta === o[0] ? " selected" : "") + ">" + esc(o[1]) + "</option>";
+      }).join("") + "</select></label>" +
+      '<label class="ad-field ad-ml-wide" id="ad-ml-ctaurl"' + (k.cta === "url" ? "" : " hidden") + '><span>Lien du bouton</span><input type="url" name="ctaUrl" maxlength="500" placeholder="https://" value="' + esc(k.ctaUrl || "") + '" /></label></div>' +
+      '<div class="ad-ml-row"><label class="ad-field"><span>Remise sur les tirages</span><select name="printPromo"><option value="0">Aucune</option>' +
+      d.promoPercents.map(function (p) { return '<option value="' + p + '"' + (k.printPromo === p ? " selected" : "") + ">−" + p + " % sur ses galeries ouvertes</option>"; }).join("") + "</select></label>" +
+      '<label class="ad-field"><span>Pendant</span><select name="promoDays">' + [3, 5, 7, 10, 14, 21, 30].map(function (n) {
+        return '<option value="' + n + '"' + (k.promoDays === n ? " selected" : "") + ">" + n + " jours</option>";
+      }).join("") + "</select></label></div>" +
+      "</fieldset></section></div>" +
+      '<div class="ad-ml-preview ad-ml-preview-sticky"><p class="ad-ml-preview-label">Aperçu</p><iframe title="Aperçu de l\'e-mail" class="ad-ml-frame" data-ml-frame sandbox="allow-same-origin"></iframe></div></div>' +
+      (locked ? "" :
+        '<div class="ad-ml-sendbar"><button type="submit" class="ad-btn">Enregistrer le brouillon</button>' +
+        '<button type="button" class="ad-btn" data-ml-test>M\'envoyer un test</button>' +
+        '<span class="ad-ml-sendbar-sep"></span>' +
+        '<label class="ad-field ad-ml-when"><span>Programmer</span><input type="datetime-local" name="at" value="' + (k.scheduledAt ? mlLocalInput(k.scheduledAt) : "") + '" /></label>' +
+        '<button type="button" class="ad-btn" data-ml-schedule>' + (k.status === "scheduled" ? "Reprogrammer" : "Programmer") + "</button>" +
+        (k.status === "scheduled" ? '<button type="button" class="ad-link-btn" data-ml-unschedule>Annuler la programmation</button>' : "") +
+        '<button type="button" class="ad-btn ad-btn-primary" data-ml-send' + (d.enabled ? "" : " disabled") + ">Envoyer maintenant</button></div>" +
+        '<p class="ad-ml-delete"><button type="button" class="ad-link-btn" data-ml-delete>Supprimer ce brouillon</button></p>') +
+      "</form>";
+  }
+
+  function mlLocalInput(ts) {
+    var d = new Date(ts * 1000);
+    var pad = function (n) { return String(n).padStart(2, "0"); };
+    return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) + "T" + pad(d.getHours()) + ":" + pad(d.getMinutes());
+  }
+
+  function mlReadCampaign(form, k) {
+    var checked = function (name) { return Array.prototype.map.call(form.querySelectorAll('input[name="' + name + '"]:checked'), function (x) { return x.value; }); };
+    var audience = form.querySelector('input[name="audience"]:checked');
+    return {
+      name: form.elements.name.value,
+      texts: mlReadTexts(form, k.texts, "t_"),
+      cta: form.elements.cta.value,
+      ctaUrl: form.elements.ctaUrl.value,
+      printPromo: Number(form.elements.printPromo.value),
+      promoDays: Number(form.elements.promoDays.value),
+      segment: {
+        audience: audience ? audience.value : "consent",
+        sessionTypes: checked("sessionTypes"), tags: checked("tags"), langs: checked("langs"),
+        inactiveMonths: Number(form.elements.inactiveMonths.value || 0), activeMonths: Number(form.elements.activeMonths.value || 0),
+        minSpentCents: Math.round(Number(form.elements.minSpent.value || 0) * 100),
+      },
+    };
+  }
+
+  function bindCampaignEditor() {
+    var form = document.getElementById("ad-ml-campaign");
+    var k = mailingState.editing;
+    var locked = !(k.status === "draft" || k.status === "scheduled");
+    document.getElementById("ad-ml-back").addEventListener("click", async function () {
+      mailingState.editing = null;
+      mailingState.campaigns = null;
+      try { await mlLoad("campaigns"); } catch (err) { toast(err.message, true); }
+      paintMailingBody();
+    });
+    var frame = form.querySelector("[data-ml-frame]");
+    var countEl = document.getElementById("ad-ml-count");
+    var sampleEl = document.getElementById("ad-ml-sample");
+    var saveTimer = null;
+    var countTimer = null;
+    // Enregistré en continu (le brouillon suit la saisie), puis aperçu.
+    var sync = function (withCount) {
+      if (locked) return;
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(async function () {
+        var payload = mlReadCampaign(form, k);
+        k.texts = payload.texts;
+        try {
+          var saved = await api("POST", "/mailing/campaigns/" + encodeURIComponent(k.id), payload);
+          mailingState.editing = Object.assign(k, saved);
+          var p = await api("POST", "/mailing/campaigns/" + encodeURIComponent(k.id) + "/preview", { lang: mailingState.lang });
+          frame.srcdoc = p.html;
+        } catch (err) { /* le message d'erreur apparaît à l'envoi */ }
+      }, 450);
+      if (withCount) {
+        clearTimeout(countTimer);
+        countTimer = setTimeout(audience, 250);
+      }
+    };
+    var audience = async function () {
+      try {
+        var r = await api("POST", "/mailing/campaigns/audience", { segment: mlReadCampaign(form, k).segment });
+        countEl.textContent = r.count + " destinataire" + (r.count > 1 ? "s" : "");
+        countEl.dataset.count = String(r.count);
+        var why = [];
+        if (r.excluded.noConsent) why.push(r.excluded.noConsent + " sans accord");
+        if (r.excluded.unsubscribed) why.push(r.excluded.unsubscribed + " désinscrit" + (r.excluded.unsubscribed > 1 ? "s" : ""));
+        if (r.excluded.filtered) why.push(r.excluded.filtered + " hors filtres");
+        sampleEl.textContent = (r.sample.length ? r.sample.join(", ") + (r.count > r.sample.length ? "…" : "") : "Personne ne correspond pour l'instant.") + (why.length ? " · Non inclus : " + why.join(", ") + "." : "");
+      } catch (err) { countEl.textContent = ""; }
+    };
+    (async function () {
+      try {
+        var p = await api("POST", "/mailing/campaigns/" + encodeURIComponent(k.id) + "/preview", { lang: mailingState.lang });
+        frame.srcdoc = p.html;
+      } catch (err) { /* rien */ }
+    })();
+    if (!locked) audience();
+    else countEl.textContent = k.recipients + " destinataire" + (k.recipients > 1 ? "s" : "");
+    form.addEventListener("input", function (e) { sync(Boolean(e.target.closest(".ad-ml-audience"))); });
+    form.addEventListener("change", function (e) {
+      if (e.target.name === "cta") document.getElementById("ad-ml-ctaurl").hidden = e.target.value !== "url";
+      sync(Boolean(e.target.closest(".ad-ml-audience")));
+    });
+    form.querySelectorAll("[data-ml-lang]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        if (!locked) k.texts = mlReadTexts(form, k.texts, "t_");
+        mailingState.lang = b.getAttribute("data-ml-lang");
+        paintMailingBody();
+      });
+    });
+    form.querySelectorAll("[data-ml-var]").forEach(function (b) {
+      b.addEventListener("mousedown", function (e) { e.preventDefault(); });
+      b.addEventListener("click", function () { mlInsertVar(form, b.getAttribute("data-ml-var")); });
+    });
+    if (locked) return;
+    var save = async function () {
+      clearTimeout(saveTimer);
+      var saved = await api("POST", "/mailing/campaigns/" + encodeURIComponent(k.id), mlReadCampaign(form, k));
+      mailingState.editing = saved;
+      return saved;
+    };
+    form.addEventListener("submit", async function (e) {
+      e.preventDefault();
+      try { await save(); toast("Brouillon enregistré."); } catch (err) { toast(err.message, true); }
+    });
+    form.querySelector("[data-ml-test]").addEventListener("click", async function () {
+      try {
+        await save();
+        var r = await api("POST", "/mailing/campaigns/" + encodeURIComponent(k.id) + "/test", { lang: mailingState.lang });
+        toast("Test envoyé à " + r.to + ".");
+      } catch (err) { toast(err.message, true); }
+    });
+    form.querySelector("[data-ml-schedule]").addEventListener("click", async function () {
+      var value = form.elements.at.value;
+      if (!value) { toast("Choisissez la date et l'heure d'envoi.", true); form.elements.at.focus(); return; }
+      var at = Math.floor(new Date(value).getTime() / 1000);
+      if (!(at > Date.now() / 1000 + 120)) { toast("Choisissez un moment dans le futur.", true); return; }
+      try {
+        await save();
+        mailingState.editing = await api("POST", "/mailing/campaigns/" + encodeURIComponent(k.id) + "/send", { at: at });
+        toast("Campagne programmée.");
+        paintMailingBody();
+      } catch (err) { toast(err.message, true); }
+    });
+    var unschedule = form.querySelector("[data-ml-unschedule]");
+    if (unschedule) unschedule.addEventListener("click", async function () {
+      try {
+        mailingState.editing = await api("POST", "/mailing/campaigns/" + encodeURIComponent(k.id) + "/cancel", {});
+        toast("Programmation annulée : la campagne est revenue en brouillon.");
+        paintMailingBody();
+      } catch (err) { toast(err.message, true); }
+    });
+    var sendBtn = form.querySelector("[data-ml-send]");
+    sendBtn.addEventListener("click", function () {
+      var n = Number(countEl.dataset.count || 0);
+      if (!n) { toast("Personne ne correspond à ce ciblage.", true); return; }
+      confirmAction("Envoyer « " + (form.elements.name.value || "cette campagne") + " » maintenant à " + n + " client" + (n > 1 ? "s" : "") + " ?", async function () {
+        try {
+          await save();
+          mailingState.editing = await api("POST", "/mailing/campaigns/" + encodeURIComponent(k.id) + "/send", {});
+          mailingState.overview = await api("GET", "/mailing/overview");
+          toast("C'est parti : la campagne s'envoie.");
+          paintMailingBody();
+        } catch (err) { toast(err.message, true); }
+      });
+    });
+    form.querySelector("[data-ml-delete]").addEventListener("click", function () {
+      confirmAction("Supprimer ce brouillon ?", async function () {
+        try {
+          mailingState.campaigns = await api("DELETE", "/mailing/campaigns/" + encodeURIComponent(k.id));
+          mailingState.editing = null;
+          toast("Brouillon supprimé.");
+          paintMailingBody();
+        } catch (err) { toast(err.message, true); }
+      });
+    });
+  }
+
+  /* ---- Contacts ---- */
+
+  function mlContactsHtml() {
+    var d = mailingState.contacts;
+    if (!d) return "";
+    var q = mailingState.contactQuery.toLowerCase();
+    var list = d.contacts.filter(function (c) { return !q || c.name.toLowerCase().indexOf(q) !== -1 || c.email.indexOf(q) !== -1; });
+    return '<div class="ad-stats">' +
+      salesStatHtml("Ont accepté vos offres", String(d.counts.consent), "reçoivent vos campagnes") +
+      salesStatHtml("Clients", String(d.counts.customers), "séance ou achat") +
+      salesStatHtml("Désinscrits", String(d.counts.unsubscribed), "ne reçoivent plus vos offres") + "</div>" +
+      '<p class="ad-hint ad-ml-intro">Vos clients donnent leur accord en cochant « recevoir les offres du studio » (jamais pré-cochée) dans leur galerie, en réservant ou en commandant des tirages. Un accord donné de vive voix ou sur papier ? Notez-le ici. Chaque e-mail contient un lien de désinscription, qui s\'applique tout de suite.</p>' +
+      '<input type="search" class="ad-ml-search" id="ad-ml-csearch" placeholder="Rechercher un client" value="' + esc(mailingState.contactQuery) + '" aria-label="Rechercher un client" />' +
+      '<div class="ad-table-wrap"><table class="ad-table ad-cl-ledger"><thead><tr><th>Client</th><th>Offres du studio</th><th>Langue</th><th></th></tr></thead><tbody>' +
+      (list.length ? list.slice(0, 300).map(function (c) {
+        var state = c.unsubscribed ? '<span class="ad-badge ad-badge-expired">Désinscrit</span> <span class="ad-hint">' + esc(formatDate(c.unsubscribedAt)) + "</span>"
+          : c.consent ? '<span class="ad-badge ad-badge-validated">Accord</span> <span class="ad-hint">' + esc(formatDate(c.consentAt)) + (ML_SOURCES[c.consentSource] ? ", " + esc(ML_SOURCES[c.consentSource]) : "") + "</span>"
+          : '<span class="ad-hint">' + (c.customer ? "Client, pas d'accord explicite" : "Pas d'accord") + "</span>";
+        var action = c.unsubscribed ? '<button type="button" class="ad-btn ad-btn-small" data-ml-c="resub" data-email="' + esc(c.email) + '">Réinscrire</button>'
+          : c.consent ? '<button type="button" class="ad-btn ad-btn-small" data-ml-c="withdraw" data-email="' + esc(c.email) + '">Retirer l\'accord</button>'
+          : '<button type="button" class="ad-btn ad-btn-small" data-ml-c="consent" data-email="' + esc(c.email) + '">Noter son accord</button>';
+        return '<tr><td><a href="' + clHref(c.email) + '">' + esc(c.name) + '</a><span class="ad-hint ad-ml-mail">' + esc(c.email) + "</span></td><td>" + state + "</td>" +
+          '<td><select class="ad-ml-lang" data-email="' + esc(c.email) + '" aria-label="Langue de ' + esc(c.name) + '"><option value="">Auto</option>' +
+          ML_LANGS.map(function (l) { return '<option value="' + l[0] + '"' + (c.lang === l[0] ? " selected" : "") + ">" + l[0].toUpperCase() + "</option>"; }).join("") + "</select></td>" +
+          "<td>" + action + "</td></tr>";
+      }).join("") : '<tr><td colspan="4" class="ad-hint">Aucun client ne correspond.</td></tr>') + "</tbody></table></div>";
+  }
+
+  function bindContacts() {
+    var body = document.getElementById("ad-ml-body");
+    var search = document.getElementById("ad-ml-csearch");
+    search.addEventListener("input", function () {
+      mailingState.contactQuery = search.value;
+      var pos = search.selectionStart;
+      paintMailingBody();
+      var again = document.getElementById("ad-ml-csearch");
+      again.focus();
+      again.selectionStart = again.selectionEnd = pos;
+    });
+    body.querySelectorAll("[data-ml-c]").forEach(function (b) {
+      b.addEventListener("click", async function () {
+        var action = b.getAttribute("data-ml-c");
+        var email = b.getAttribute("data-email");
+        var payload = action === "consent" ? { consent: true } : action === "withdraw" ? { consent: false } : { unsubscribed: false };
+        var go = async function () {
+          try {
+            payload.email = email;
+            mailingState.contacts = await api("POST", "/mailing/contacts", payload);
+            toast(action === "consent" ? "Accord noté." : action === "withdraw" ? "Accord retiré." : "Client réinscrit.");
+            paintMailingBody();
+          } catch (err) { toast(err.message, true); }
+        };
+        if (action === "resub") confirmAction("Réinscrire " + email + " ? Faites-le seulement si cette personne vous l'a demandé.", go);
+        else go();
+      });
+    });
+    body.querySelectorAll(".ad-ml-lang").forEach(function (s) {
+      s.addEventListener("change", async function () {
+        try {
+          mailingState.contacts = await api("POST", "/mailing/contacts", { email: s.getAttribute("data-email"), lang: s.value });
+          toast("Langue enregistrée.");
+        } catch (err) { toast(err.message, true); }
+      });
+    });
+  }
+
+  /* ---- Adresse d'envoi ---- */
+
+  function mlSenderHtml() {
+    var d = mailingState.sender;
+    if (!d) return "";
+    var dom = d.domain;
+    var intro = '<p class="ad-hint ad-ml-intro">Vos relances et campagnes partent aujourd\'hui de <strong>' + esc(d.from) + "</strong>, et les réponses de vos clients arrivent dans votre boîte. " +
+      "Avec votre propre nom de domaine, elles partent de votre adresse : plus personnel, et mieux reçu par Gmail ou Outlook.</p>";
+    if (!d.available) return intro + '<p class="ad-banner ad-banner-muted">L\'adresse à votre nom est incluse dans la formule Pro. <a href="#/abonnement">Voir les formules</a></p>';
+    var form = '<form id="ad-ml-sender" class="ad-ml-row ad-ml-sender-form" novalidate>' +
+      '<label class="ad-field"><span>Début de l\'adresse</span><input name="localPart" maxlength="40" value="' + esc(dom ? dom.localPart : "bonjour") + '" /></label>' +
+      '<span class="ad-ml-at" aria-hidden="true">@</span>' +
+      '<label class="ad-field ad-ml-wide"><span>Votre nom de domaine</span><input name="domain" maxlength="120" placeholder="studio-lumiere.be" value="' + esc(dom ? dom.domain : "") + '" /></label>' +
+      '<button type="submit" class="ad-btn ad-btn-primary">' + (dom ? "Mettre à jour" : "Ajouter") + "</button></form>";
+    if (!dom) return intro + "<section><div class=\"ad-section-header\"><h3>Votre adresse d'envoi</h3></div>" + form + "</section>";
+    var badge = dom.status === "verified" ? '<span class="ad-badge ad-badge-validated">Vérifiée</span>' : dom.status === "failed" ? '<span class="ad-badge ad-badge-expired">Échec de la vérification</span>' : '<span class="ad-badge ad-badge-soon">En attente des DNS</span>';
+    return intro +
+      '<section><div class="ad-section-header"><h3>' + esc(dom.address) + "</h3>" + badge + "</div>" + form +
+      (dom.status === "verified" ? '<p class="ad-hint">Tout est en place : vos e-mails partent de <strong>' + esc(dom.address) + "</strong>.</p>" :
+        '<ol class="ad-ml-steps"><li>Ouvrez la gestion DNS de votre nom de domaine (chez OVH, Combell, one.com, GoDaddy, Wix…).</li>' +
+        "<li>Ajoutez les enregistrements ci-dessous, tels quels.</li><li>Revenez cliquer sur « Vérifier » : la propagation prend de quelques minutes à quelques heures.</li></ol>") +
+      '<div class="ad-table-wrap"><table class="ad-table ad-ml-dns"><thead><tr><th>Type</th><th>Nom</th><th>Valeur</th><th>Priorité</th><th></th></tr></thead><tbody>' +
+      dom.records.map(function (r) {
+        return "<tr><td>" + esc(r.type) + '</td><td><code>' + esc(r.name) + '</code></td><td class="ad-ml-dns-value"><code>' + esc(r.value) + "</code></td><td>" + esc(r.priority === null ? "" : r.priority) + "</td>" +
+          '<td><button type="button" class="ad-btn ad-btn-small" data-copy="' + esc(r.value) + '">Copier</button></td></tr>';
+      }).join("") + "</tbody></table></div>" +
+      '<div class="ad-ml-actions">' + (dom.status === "verified" ? "" : '<button type="button" class="ad-btn ad-btn-primary" id="ad-ml-verify">Vérifier</button>') +
+      '<button type="button" class="ad-link-btn" id="ad-ml-sender-remove">Revenir à l\'adresse Holypixx</button></div></section>';
+  }
+
+  function bindSender() {
+    var form = document.getElementById("ad-ml-sender");
+    if (form) form.addEventListener("submit", async function (e) {
+      e.preventDefault();
+      try {
+        mailingState.sender = await api("POST", "/mailing/sender", { domain: form.elements.domain.value, localPart: form.elements.localPart.value });
+        toast("Adresse enregistrée : ajoutez maintenant les enregistrements DNS.");
+        paintMailingBody();
+      } catch (err) { toast(err.message, true); }
+    });
+    var verify = document.getElementById("ad-ml-verify");
+    if (verify) verify.addEventListener("click", async function () {
+      verify.disabled = true;
+      try {
+        mailingState.sender = await api("POST", "/mailing/sender/verify", {});
+        toast(mailingState.sender.domain && mailingState.sender.domain.status === "verified" ? "Domaine vérifié : vos e-mails partent à votre nom." : "Pas encore : les DNS peuvent prendre quelques heures.");
+        paintMailingBody();
+      } catch (err) { verify.disabled = false; toast(err.message, true); }
+    });
+    var remove = document.getElementById("ad-ml-sender-remove");
+    if (remove) remove.addEventListener("click", function () {
+      confirmAction("Revenir à l'adresse d'envoi Holypixx ?", async function () {
+        try {
+          mailingState.sender = await api("DELETE", "/mailing/sender");
+          toast("Vos e-mails partent de nouveau de l'adresse Holypixx.");
+          paintMailingBody();
+        } catch (err) { toast(err.message, true); }
+      });
+    });
+  }
+
+  /* ---- Journal ---- */
+
+  var ML_KIND_LABELS = {
+    "auto:selection_nudge": "Sélection pas commencée", "auto:early_bird": "Offre de bienvenue", "auto:review": "Demande d'avis", "auto:anniversary": "Un an déjà",
+    "auto:dormant": "Client à revoir", "auto:dates": "Date à retenir", direct: "Message direct", campaign: "Campagne",
+  };
+
+  function mlJournalHtml() {
+    var r = (mailingState.overview && mailingState.overview.recent) || [];
+    if (!r.length) return '<p class="ad-hint">Rien envoyé pour l\'instant : les relances et campagnes apparaîtront ici, avec les clics.</p>';
+    return '<div class="ad-table-wrap"><table class="ad-table ad-cl-ledger"><thead><tr><th>Date</th><th>Client</th><th>Objet</th><th>Type</th><th>Suivi</th></tr></thead><tbody>' +
+      r.map(function (x) {
+        return "<tr><td>" + esc(clShort(x.sentAt)) + '</td><td><a href="' + clHref(x.email) + '">' + esc(x.email) + "</a></td><td>" + esc(x.subject) + "</td>" +
+          "<td>" + esc(x.kind === "campaign" ? "Campagne · " + x.campaign : ML_KIND_LABELS[x.kind] || x.kind) + "</td>" +
+          "<td>" + (x.status === "failed" ? '<span class="ad-badge ad-badge-expired">Non parti</span>' : x.status === "skipped" ? '<span class="ad-badge">Désinscrit</span>' : x.clicked ? '<span class="ad-badge ad-badge-validated">Cliqué</span>' : '<span class="ad-hint">Envoyé</span>') + "</td></tr>";
+      }).join("") + "</tbody></table></div>";
+  }
+
+  // Message direct à un client (fiche client, dates à retenir, client à
+  // revoir) : envoyé par Holypixx au nom du studio, au lieu de la messagerie.
+  function openDirectMail(email, name, message) {
+    var modal = document.getElementById("ad-ml-direct");
+    if (!modal) {
+      modal = document.createElement("div");
+      modal.className = "ad-modal-backdrop";
+      modal.id = "ad-ml-direct";
+      modal.hidden = true;
+      modal.innerHTML = '<div class="ad-modal ad-ml-direct" role="dialog" aria-modal="true" aria-labelledby="ad-ml-direct-title"><h2 id="ad-ml-direct-title">Écrire</h2>' +
+        '<form id="ad-ml-direct-form" novalidate><p class="ad-hint" id="ad-ml-direct-to"></p>' +
+        '<label class="ad-field"><span>Objet</span><input name="subject" maxlength="160" required /></label>' +
+        '<label class="ad-field"><span>Message</span><textarea name="body" rows="10" maxlength="6000" required></textarea></label>' +
+        '<p class="ad-hint">Envoyé au nom de votre studio, avec un lien de désinscription ; sa réponse arrive dans votre boîte e-mail.</p>' +
+        '<div class="ad-modal-actions"><button type="button" class="ad-btn" data-close-modal>Annuler</button><button type="submit" class="ad-btn ad-btn-primary">Envoyer</button></div></form></div>';
+      document.body.appendChild(modal);
+      document.getElementById("ad-ml-direct-form").addEventListener("submit", async function (e) {
+        e.preventDefault();
+        var f = e.currentTarget;
+        var btn = f.querySelector("button[type=submit]");
+        btn.disabled = true;
+        try {
+          await api("POST", "/mailing/send", { email: f.dataset.email, subject: f.elements.subject.value, body: f.elements.body.value });
+          modal.hidden = true;
+          toast("Message envoyé à " + f.dataset.name + ".");
+        } catch (err) { toast(err.message, true); }
+        btn.disabled = false;
+      });
+    }
+    var form = document.getElementById("ad-ml-direct-form");
+    form.dataset.email = email;
+    form.dataset.name = name || email;
+    document.getElementById("ad-ml-direct-to").textContent = "À " + (name ? name + " · " : "") + email;
+    form.elements.subject.value = (message && message.subject) || "";
+    form.elements.body.value = (message && message.body) || "Bonjour " + (name ? name.split(" ")[0] : "") + ",\n\n";
+    modal.hidden = false;
+    setTimeout(function () { (form.elements.subject.value ? form.elements.body : form.elements.subject).focus(); }, 30);
+  }
+
   /* ---------- Démarrage et navigation ---------- */
 
   function routeFromHash() {
@@ -11548,6 +12495,7 @@
     else if (location.hash === "#/reservations") renderBooking(true);
     else if (location.hash === "#/bons-cadeaux") renderGiftCards(true);
     else if (location.hash === "#/clients") renderClients(true);
+    else if (location.hash === "#/relances") renderMailing(true);
     else if (/^#\/clients\/.+/.test(location.hash)) renderClientDetail(decodeURIComponent(location.hash.slice(10)), true);
     else if (location.hash === "#/contrats") renderContracts(true);
     else if (location.hash === "#/portfolio") renderPortfolio(true);
@@ -12291,6 +13239,20 @@
   // volet « Comment ça marche » (étapes, bon à savoir) et un raccourci pour
   // poser la question à Lumi. [français, anglais].
   var PAGE_HELP = {
+    mailing: {
+      title: ["Relances & e-mails", "Emails"],
+      summary: ["Les e-mails que votre studio envoie à ses clients : relances automatiques, campagnes, et ce qu'ils rapportent.", "The emails your studio sends its clients: automatic reminders, campaigns, and what they bring in."],
+      steps: [
+        ["Relances automatiques : activez celles qui vous ressemblent ; « Personnaliser » pour réécrire le texte (français, anglais, néerlandais), voir l'aperçu et vous envoyer un test.", "Automatic reminders: switch on the ones that suit you; “Customise” to rewrite the text (French, English, Dutch), preview it and send yourself a test."],
+        ["Campagnes : partez d'un modèle (Noël, mini-séances, vente flash tirages…), choisissez qui la reçoit, puis envoyez tout de suite ou programmez.", "Campaigns: start from a template (Christmas, mini sessions, print flash sale…), choose who gets it, then send now or schedule it."],
+        ["Contacts : qui a accepté vos offres, qui s'est désinscrit ; notez un accord donné de vive voix.", "Contacts: who accepted your offers, who unsubscribed; record consent given in person."],
+        ["Adresse d'envoi (Pro) : vos e-mails partent de votre propre adresse, une fois votre nom de domaine vérifié.", "Sending address (Pro): your emails go out from your own address once your domain is verified."],
+      ],
+      tips: [
+        ["Les chiffres comptent les réservations et achats faits dans les 14 jours qui suivent un e-mail.", "The figures count bookings and purchases made within 14 days of an email."],
+        ["Les campagnes ne partent jamais à un client désinscrit ; chaque e-mail contient un lien de désinscription.", "Campaigns never go to an unsubscribed client; every email has an unsubscribe link."],
+      ],
+    },
     galleries: {
       title: ["Galeries", "Galleries"],
       summary: ["Vos galeries clients protégées : créez-en une, ajoutez les photos, envoyez le lien.", "Your protected client galleries: create one, add photos, send the link."],
@@ -12489,7 +13451,7 @@
     if (/^#\/g\//.test(h)) return "gallery";
     if (/^#\/clients\/.+/.test(h)) return "client";
     var map = {
-      "#/planning": "planning", "#/clients": "clients", "#/reservations": "booking", "#/contrats": "contracts", "#/ventes": "sales",
+      "#/planning": "planning", "#/clients": "clients", "#/relances": "mailing", "#/reservations": "booking", "#/contrats": "contracts", "#/ventes": "sales",
       "#/statistiques": "insights", "#/boutique": "shop", "#/portfolio": "portfolio", "#/bons-cadeaux": "giftcards",
       "#/parametres": "settings", "#/suggestions": "feedback", "#/detect": "detect",
     };

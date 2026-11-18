@@ -8,7 +8,8 @@
 // dates sans client : le rappel invite à les proposer à tous les clients.
 //
 //   /api/admin/clients                 liste, dates à venir, clients à recontacter
-//   /api/admin/clients/detail?email=   fiche complète
+//   /api/admin/clients/detail?email=   fiche complète (email, ou clé « ~nom » d'une fiche sans e-mail)
+//   /api/admin/clients/attach (POST)   donner une adresse à une fiche sans e-mail
 //   /api/admin/clients        (POST)   créer ou compléter une fiche
 //   /api/admin/clients/dates  (POST)   ajouter une date à retenir
 //   /api/admin/clients/dates/:id       modifier (POST) ou retirer (DELETE)
@@ -19,6 +20,8 @@ import { randomBytes, b64url } from "./auth.js";
 import { cleanLine, cleanText, normalizePhone, displayName, portfolioUrls, bookingEntryUrl } from "./portfolio.js";
 import { hasFeature } from "./subscription.js";
 import { sendClientDateReminder, sendStudioSeasonReminder } from "./notify.js";
+import { datesDirectEnabled, sendDateToClient } from "./automations.js";
+import { languageForClient } from "./mailing.js";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export const REMINDER_LEAD_DAYS = 21;
@@ -288,11 +291,29 @@ export async function bookingPageUrl(env, photographer) {
   return bookingEntryUrl(env, photographer, portfolio);
 }
 
-// Tout ce que Holypixx sait des clients d'un photographe, regroupé par e-mail.
+// Nom comparable : minuscules, sans accents ni ponctuation, mots triés
+// (« Martin Sophie » = « Sophie Martin »). Sert à rattacher par le nom ce
+// qui n'a pas d'adresse e-mail (galerie créée sans e-mail, facture…).
+export function nameKey(value) {
+  const words = String(value || "")
+    .normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().split(" ").filter(Boolean);
+  return words.length ? words.sort().join(" ") : "";
+}
+
+// Clé d'une fiche sans e-mail : « ~ » suivi du nom comparable.
+export function isNameKey(key) {
+  return String(key || "").startsWith("~");
+}
+
+// Tout ce que Holypixx sait des clients d'un photographe, regroupé par
+// e-mail. Ce qui n'a pas d'e-mail rejoint le client du même nom s'il n'y en
+// a qu'un ; sinon, une fiche « sans e-mail » à ce nom.
 export async function collect(env, photographerId) {
-  const [galleries, bookings, contracts, payments, records, dates, messages, gifts, invoices] = await Promise.all([
+  const [galleries, bookings, contracts, payments, records, dates, messages, gifts, invoices, photoCounts] = await Promise.all([
     env.DB.prepare(
-      "SELECT id, slug, title, client_name, client_email, created_at, expires_at FROM galleries WHERE photographer_id = ? AND kind != 'school' AND client_email != ''"
+      `SELECT id, slug, title, client_name, client_email, session_type, selection_done_at, delivery_open, included_photos, extra_photo_price_cents, created_at, expires_at, language, shop_enabled
+         FROM galleries WHERE photographer_id = ? AND kind != 'school' AND demo = 0 AND (client_email != '' OR client_name != '')`
     ).bind(photographerId).all(),
     env.DB.prepare(
       "SELECT id, client_name, client_email, client_phone, offer_title, starts_at, status, deposit_cents, paid_at, created_at FROM bookings WHERE photographer_id = ? AND status IN ('confirmed', 'cancelled', 'conflict')"
@@ -300,10 +321,18 @@ export async function collect(env, photographerId) {
     env.DB.prepare(
       "SELECT id, number, title, client_name, client_email, status, total_cents, deposit_cents, signed_at, paid_at, created_at FROM contracts WHERE photographer_id = ? AND status != 'draft'"
     ).bind(photographerId).all(),
+    // Suppléments et tirages : réglés, ou en attente d'un règlement en
+    // espèces ou par virement. La facture émise et la commande de tirages
+    // (avec l'adresse de l'acheteur, parfois un proche) suivent.
     env.DB.prepare(
-      `SELECT p.id, p.kind, p.amount_cents, p.paid_at, g.client_email, g.title, g.slug
-         FROM payments p JOIN galleries g ON g.id = p.gallery_id
-        WHERE g.photographer_id = ? AND p.status = 'paid' AND g.client_email != ''`
+      `SELECT p.id, p.gallery_id, p.kind, p.method, p.status, p.extra_count, p.amount_cents, p.created_at, p.paid_at,
+              i.id AS invoice_id, i.number AS invoice_number, i.issued_at AS invoice_at,
+              o.client_email AS buyer_email, o.status AS order_status, o.items AS order_items, o.tracking_url
+         FROM payments p
+         JOIN galleries g ON g.id = p.gallery_id
+         LEFT JOIN invoices i ON i.payment_id = p.id
+         LEFT JOIN print_orders o ON o.payment_id = p.id
+        WHERE g.photographer_id = ? AND p.status IN ('paid', 'awaiting')`
     ).bind(photographerId).all(),
     env.DB.prepare("SELECT * FROM clients WHERE photographer_id = ?").bind(photographerId).all(),
     env.DB.prepare("SELECT * FROM client_dates WHERE photographer_id = ? ORDER BY date ASC").bind(photographerId).all(),
@@ -313,18 +342,53 @@ export async function collect(env, photographerId) {
       "SELECT id, code, status, source, amount_cents, offer_title, from_name, to_name, buyer_email, recipient_email, paid_at, created_at FROM gift_cards WHERE photographer_id = ? AND status != 'pending'"
     ).bind(photographerId).all(),
     env.DB.prepare(
-      "SELECT id, kind, number, status, source, client_name, client_email, title, total_cents, schedule, issued_at, created_at FROM client_invoices WHERE photographer_id = ? AND issued_at IS NOT NULL AND client_email != ''"
+      "SELECT id, kind, number, status, source, client_name, client_email, title, total_cents, schedule, issued_at, created_at FROM client_invoices WHERE photographer_id = ? AND issued_at IS NOT NULL AND (client_email != '' OR client_name != '')"
+    ).bind(photographerId).all(),
+    // Photos et coups de cœur de chaque galerie (suppléments dus).
+    env.DB.prepare(
+      `SELECT p.gallery_id, COUNT(*) AS photos, SUM(p.selected) AS selected
+         FROM photos p JOIN galleries g ON g.id = p.gallery_id
+        WHERE g.photographer_id = ? AND g.kind != 'school' AND g.demo = 0 GROUP BY p.gallery_id`
     ).bind(photographerId).all(),
   ]);
+  const rows = (r) => r.results || [];
+
+  // Noms connus avec une adresse : nom comparable → adresses.
+  const named = new Map();
+  const learn = (email, name) => {
+    const e = normEmail(email);
+    const n = nameKey(name);
+    if (!EMAIL_RE.test(e) || !n) return;
+    if (!named.has(n)) named.set(n, new Set());
+    named.get(n).add(e);
+  };
+  rows(galleries).forEach((g) => learn(g.client_email, g.client_name));
+  rows(bookings).forEach((b) => learn(b.client_email, b.client_name));
+  rows(contracts).forEach((k) => learn(k.client_email, k.client_name));
+  rows(invoices).forEach((f) => learn(f.client_email, f.client_name));
+  rows(records).forEach((r) => learn(r.email, r.name));
+  rows(messages).forEach((m) => learn(m.email, m.name));
+
+  // Fiche d'un élément : son e-mail ; à défaut, le seul client de ce nom ;
+  // à défaut, une fiche sans e-mail à ce nom. byName : rattaché par le nom.
+  const resolve = (email, name) => {
+    const e = normEmail(email);
+    if (EMAIL_RE.test(e)) return { key: e, byName: false };
+    const n = nameKey(name);
+    if (!n) return null;
+    const known = named.get(n);
+    if (known && known.size === 1) return { key: [...known][0], byName: true };
+    return { key: "~" + n, byName: false };
+  };
 
   const map = new Map();
-  const get = (email) => {
-    const key = normEmail(email);
+  const get = (key) => {
     if (!map.has(key)) {
       map.set(key, {
-        email: key, name: "", phone: "", notes: "", tags: [], recordId: "", createdAt: null,
+        key, email: isNameKey(key) ? "" : key, name: "", phone: "", notes: "", tags: [], recordId: "", createdAt: null,
         galleries: [], bookings: [], contracts: [], payments: [], dates: [], messages: [], gifts: [], invoices: [],
-        paidCents: 0, firstAt: null, lastAt: null, lastSessionAt: null, upcomingSessionAt: null,
+        paidCents: 0, dueCents: 0, firstAt: null, lastAt: null, lastSessionAt: null, upcomingSessionAt: null,
+        consent: false, consentAt: null, consentSource: "", unsubscribedAt: null, lang: "",
       });
     }
     return map.get(key);
@@ -336,15 +400,30 @@ export async function collect(env, photographerId) {
   };
   const ts = now();
 
-  for (const g of galleries.results || []) {
-    const c = get(g.client_email);
+  // Galeries : une séance chacune ; leurs paiements suivent leur fiche.
+  const galleryKey = new Map();
+  const galleryById = new Map();
+  const countsOf = new Map(rows(photoCounts).map((r) => [r.gallery_id, { photos: r.photos || 0, selected: r.selected || 0 }]));
+  for (const g of rows(galleries)) {
+    const r = resolve(g.client_email, g.client_name);
+    if (!r) continue;
+    galleryKey.set(g.id, r.key);
+    const c = get(r.key);
     if (g.client_name) c.name = c.name || g.client_name;
-    c.galleries.push({ slug: g.slug, title: g.title, createdAt: g.created_at, expiresAt: g.expires_at });
+    const item = {
+      id: g.id, slug: g.slug, title: g.title, createdAt: g.created_at, expiresAt: g.expires_at, byName: r.byName,
+      sessionType: g.session_type || "", selectionDoneAt: g.selection_done_at || null, deliveryOpen: Boolean(g.delivery_open),
+      includedPhotos: g.included_photos, extraPriceCents: g.extra_photo_price_cents || 0,
+      photos: (countsOf.get(g.id) || {}).photos || 0, selected: (countsOf.get(g.id) || {}).selected || 0,
+      paidExtra: 0, dueExtra: 0, dueCents: 0, language: g.language || "fr", shopEnabled: Boolean(g.shop_enabled),
+    };
+    galleryById.set(g.id, item);
+    c.galleries.push(item);
     seen(c, g.created_at);
     c.lastSessionAt = Math.max(c.lastSessionAt || 0, g.created_at);
   }
-  for (const b of bookings.results || []) {
-    const c = get(b.client_email);
+  for (const b of rows(bookings)) {
+    const c = get(normEmail(b.client_email));
     if (b.client_name) c.name = c.name || b.client_name;
     if (b.client_phone) c.phone = c.phone || b.client_phone;
     c.bookings.push({ id: b.id, title: b.offer_title, startsAt: b.starts_at, status: b.status, depositCents: b.deposit_cents, paidAt: b.paid_at });
@@ -355,66 +434,104 @@ export async function collect(env, photographerId) {
       else c.lastSessionAt = Math.max(c.lastSessionAt || 0, b.starts_at);
     }
   }
-  for (const k of contracts.results || []) {
-    const c = get(k.client_email);
+  for (const k of rows(contracts)) {
+    const c = get(normEmail(k.client_email));
     if (k.client_name) c.name = c.name || k.client_name;
-    c.contracts.push({ id: k.id, number: k.number, title: k.title, status: k.status, totalCents: k.total_cents, depositCents: k.deposit_cents, signedAt: k.signed_at, createdAt: k.created_at });
+    c.contracts.push({ id: k.id, number: k.number, title: k.title, status: k.status, totalCents: k.total_cents, depositCents: k.deposit_cents, signedAt: k.signed_at, paidAt: k.paid_at, createdAt: k.created_at });
     seen(c, k.created_at);
     if (k.status === "paid") c.paidCents += k.deposit_cents;
   }
-  for (const p of payments.results || []) {
-    const c = get(p.client_email);
-    c.paidCents += p.amount_cents;
-    c.payments.push({ id: p.id, kind: p.kind, amountCents: p.amount_cents, paidAt: p.paid_at, gallery: p.title, slug: p.slug });
-    seen(c, p.paid_at);
+  for (const p of rows(payments)) {
+    const gKey = galleryKey.get(p.gallery_id);
+    // Des tirages commandés par un proche (autre adresse) vont sur sa fiche.
+    const buyer = p.kind === "print" ? normEmail(p.buyer_email) : "";
+    const key = EMAIL_RE.test(buyer) ? buyer : gKey;
+    if (!key) continue;
+    const c = get(key);
+    const g = galleryById.get(p.gallery_id);
+    let items = 0;
+    if (p.order_items) {
+      try { items = (JSON.parse(p.order_items) || []).reduce((n, x) => n + (Number(x.copies) || 1), 0); } catch { items = 0; }
+    }
+    c.payments.push({
+      id: p.id, kind: p.kind, method: p.method || "card", status: p.status, extraCount: p.extra_count, amountCents: p.amount_cents,
+      paidAt: p.paid_at, createdAt: p.created_at, gallery: g ? g.title : "", slug: g ? g.slug : "", galleryId: p.gallery_id,
+      invoiceId: p.invoice_id || "", invoiceNumber: p.invoice_number || "", invoiceAt: p.invoice_at || null,
+      orderStatus: p.order_status || "", items, trackingUrl: p.tracking_url || "", forOther: key !== gKey,
+    });
+    if (p.status === "paid") c.paidCents += p.amount_cents;
+    else c.dueCents += p.amount_cents;
+    seen(c, p.paid_at || p.created_at);
   }
-  for (const m of messages.results || []) {
-    const c = get(m.email);
+  // Suppléments encore dus : sélection validée au-delà du forfait, moins ce
+  // qui est réglé (ou annoncé en espèces ou par virement).
+  for (const p of rows(payments)) {
+    const g = galleryById.get(p.gallery_id);
+    if (g && p.kind === "supplement" && p.status === "paid") g.paidExtra += p.extra_count || 0;
+    if (g && p.kind === "supplement" && p.status === "awaiting") g.awaiting = true;
+  }
+  for (const g of galleryById.values()) {
+    if (g.includedPhotos === null || g.includedPhotos === undefined || !g.selectionDoneAt || g.awaiting) continue;
+    const extra = Math.max(0, g.selected - g.includedPhotos);
+    g.dueExtra = Math.max(0, extra - Math.min(extra, g.paidExtra));
+    g.dueCents = g.dueExtra * g.extraPriceCents;
+    if (g.dueCents) get(galleryKey.get(g.id)).dueCents += g.dueCents;
+  }
+  for (const m of rows(messages)) {
+    const c = get(normEmail(m.email));
     if (m.name) c.name = c.name || m.name;
     if (m.phone) c.phone = c.phone || m.phone;
     c.messages.push({ id: m.id, at: m.created_at, message: m.message, eventDate: m.event_date });
     seen(c, m.created_at);
   }
-  for (const g of gifts.results || []) {
+  for (const g of rows(gifts)) {
     // L'acheteur paie ; le bénéficiaire, s'il a une adresse, devient un contact.
     if (g.buyer_email) {
-      const c = get(g.buyer_email);
+      const c = get(normEmail(g.buyer_email));
       if (g.from_name) c.name = c.name || g.from_name;
-      c.gifts.push({ id: g.id, role: "buyer", code: g.code, status: g.status, amountCents: g.amount_cents, title: g.offer_title, toName: g.to_name, at: g.paid_at || g.created_at });
+      c.gifts.push({ id: g.id, role: "buyer", code: g.code, status: g.status, amountCents: g.amount_cents, title: g.offer_title, toName: g.to_name, at: g.paid_at || g.created_at, source: g.source });
       if (g.status !== "cancelled" && g.source === "online") c.paidCents += g.amount_cents;
       seen(c, g.paid_at || g.created_at);
     }
     if (g.recipient_email) {
-      const c = get(g.recipient_email);
+      const c = get(normEmail(g.recipient_email));
       if (g.to_name) c.name = c.name || g.to_name;
       c.gifts.push({ id: g.id, role: "recipient", code: g.code, status: g.status, amountCents: g.amount_cents, title: g.offer_title, fromName: g.from_name, at: g.paid_at || g.created_at });
       seen(c, g.paid_at || g.created_at);
     }
   }
-  for (const f of invoices.results || []) {
-    const c = get(f.client_email);
+  for (const f of rows(invoices)) {
+    const r = resolve(f.client_email, f.client_name);
+    if (!r) continue;
+    const c = get(r.key);
     if (f.client_name) c.name = c.name || f.client_name;
     let schedule = [];
     try { schedule = JSON.parse(f.schedule || "[]") || []; } catch { schedule = []; }
     const paid = schedule.filter((x) => x.paidAt).reduce((n, x) => n + x.amountCents, 0);
-    c.invoices.push({ id: f.id, kind: f.kind, number: f.number, status: f.status, title: f.title, totalCents: f.total_cents, paidCents: paid, at: f.issued_at });
+    c.invoices.push({ id: f.id, kind: f.kind, number: f.number, status: f.status, source: f.source, title: f.title, totalCents: f.total_cents, paidCents: paid, at: f.issued_at, byName: r.byName });
     // Les factures préparées depuis une réservation, un contrat ou un bon
     // cadeau reprennent des montants déjà comptés : seules les libres s'ajoutent.
     if (f.kind === "invoice" && f.source === "manual") c.paidCents += paid;
+    if (f.kind === "invoice" && ["issued", "partial", "overdue", "sent"].includes(f.status)) c.dueCents += Math.max(0, f.total_cents - paid);
     seen(c, f.issued_at);
   }
-  for (const r of records.results || []) {
-    const c = get(r.email);
+  for (const r of rows(records)) {
+    const c = get(normEmail(r.email));
     c.recordId = r.id;
     if (r.name) c.name = r.name;
     if (r.phone) c.phone = r.phone;
     c.notes = r.notes;
     c.tags = parseTags(r.tags);
     c.createdAt = r.created_at;
+    c.consent = r.marketing_consent === 1;
+    c.consentAt = r.consent_at || null;
+    c.consentSource = r.consent_source || "";
+    c.unsubscribedAt = r.unsubscribed_at || null;
+    c.lang = r.lang || "";
     seen(c, r.created_at);
   }
-  for (const d of dates.results || []) {
-    get(d.client_email).dates.push(d);
+  for (const d of rows(dates)) {
+    get(normEmail(d.client_email)).dates.push(d);
   }
   // Les dates sans client sont les temps forts du studio.
   const studio = map.has("") ? map.get("").dates : [];
@@ -481,12 +598,14 @@ function summaryOut(c, today) {
   const dates = c.dates.map((d) => dateOut(d, today)).filter((d) => d.next);
   dates.sort((a, b) => a.next.daysUntil - b.next.daysUntil);
   return {
+    key: c.key,
     email: c.email,
     name: c.name || c.email,
     phone: c.phone,
     sessions: c.galleries.length + c.bookings.filter((b) => b.status === "confirmed").length,
     galleries: c.galleries.length,
     paidCents: c.paidCents,
+    dueCents: c.dueCents,
     firstAt: c.firstAt,
     lastAt: c.lastAt,
     lastSessionAt: c.lastSessionAt,
@@ -494,6 +613,8 @@ function summaryOut(c, today) {
     nextDate: dates[0] || null,
     hasNotes: Boolean(c.notes),
     tags: c.tags,
+    consent: c.consent,
+    unsubscribed: Boolean(c.unsubscribedAt),
     prospect: isProspect(c),
     messages: c.messages.length,
   };
@@ -516,11 +637,11 @@ async function listForAdmin(env, photographer) {
       const out = dateOut(d, today);
       if (!out.next || out.next.daysUntil > Math.max(45, out.lead)) continue;
       const message = messageFor(d, out.next, c.name, studioName, bookingUrl);
-      upcoming.push({ ...out, email: c.email, name: c.name || c.email, mailto: mailtoUrl(c.email, message) });
+      upcoming.push({ ...out, email: c.email, name: c.name || c.email, mailto: mailtoUrl(c.email, message), message });
     }
   }
   // Temps forts du studio, à proposer à tous les clients.
-  const emails = all.map((c) => c.email);
+  const emails = all.map((c) => c.email).filter(Boolean);
   const seasons = all.studio.map((d) => {
     const out = dateOut(d, today);
     const message = out.next ? messageFor(d, out.next, "", studioName, bookingUrl) : null;
@@ -528,15 +649,13 @@ async function listForAdmin(env, photographer) {
   }).sort((a, b) => (a.next?.daysUntil ?? 999) - (b.next?.daysUntil ?? 999));
   upcoming.sort((a, b) => a.next.daysUntil - b.next.daysUntil);
   const dormant = all
-    .filter((c) => c.lastSessionAt && c.lastSessionAt < ts - DORMANT_SECONDS && !c.upcomingSessionAt)
+    .filter((c) => c.email && c.lastSessionAt && c.lastSessionAt < ts - DORMANT_SECONDS && !c.upcomingSessionAt)
     .sort((a, b) => b.lastSessionAt - a.lastSessionAt)
     .slice(0, 12)
-    .map((c) => ({
-      email: c.email,
-      name: c.name || c.email,
-      lastSessionAt: c.lastSessionAt,
-      mailto: mailtoUrl(c.email, suggestedMessage({ clientName: c.name, studioName, bookingUrl, dormant: true })),
-    }));
+    .map((c) => {
+      const message = suggestedMessage({ clientName: c.name, studioName, bookingUrl, dormant: true });
+      return { email: c.email, name: c.name || c.email, lastSessionAt: c.lastSessionAt, mailto: mailtoUrl(c.email, message), message };
+    });
   // Tous les tags utilisés, du plus fréquent au plus rare (filtres de la liste).
   const tagCounts = new Map();
   for (const c of clients) for (const t of c.tags) tagCounts.set(t, (tagCounts.get(t) || 0) + 1);
@@ -544,10 +663,12 @@ async function listForAdmin(env, photographer) {
   return { clients, upcoming, dormant, seasons, emails, bookingUrl, tags, prospects: clients.filter((c) => c.prospect).length };
 }
 
+// Détail d'une fiche, par e-mail ou par clé « ~nom » (fiche sans e-mail).
 async function detailForAdmin(env, photographer, email) {
-  const key = normEmail(email);
+  const raw = String(email || "").trim();
+  const key = isNameKey(raw) ? raw : normEmail(raw);
   const all = await collect(env, photographer.id);
-  const c = all.find((x) => x.email === key);
+  const c = all.find((x) => x.key === key);
   if (!c) return null;
   const today = todayIn();
   const bookingUrl = await bookingPageUrl(env, photographer);
@@ -563,19 +684,93 @@ async function detailForAdmin(env, photographer, email) {
     ...c.galleries.map((g) => ({ type: "gallery", at: g.createdAt, title: g.title, slug: g.slug })),
     ...c.bookings.map((b) => ({ type: "booking", at: b.startsAt, title: b.title, status: b.status, amountCents: b.paidAt ? b.depositCents : 0 })),
     ...c.contracts.map((k) => ({ type: "contract", at: k.signedAt || k.createdAt, title: k.title, number: k.number, status: k.status, amountCents: k.totalCents })),
-    ...c.payments.map((p) => ({ type: "payment", at: p.paidAt, title: p.gallery, kind: p.kind, amountCents: p.amountCents, slug: p.slug })),
+    ...c.payments.map((p) => ({ type: "payment", at: p.paidAt || p.createdAt, title: p.gallery, kind: p.kind, amountCents: p.amountCents, slug: p.slug, status: p.status })),
     ...c.messages.map((m) => ({ type: "message", at: m.at, title: m.message.slice(0, 200), eventDate: m.eventDate })),
     ...c.gifts.map((g) => ({ type: "gift", at: g.at, role: g.role, title: g.title, code: g.code, status: g.status, amountCents: g.amountCents, toName: g.toName || "", fromName: g.fromName || "" })),
     ...c.invoices.map((f) => ({ type: "invoice", at: f.at, kind: f.kind, number: f.number, title: f.title, status: f.status, amountCents: f.totalCents, paidCents: f.paidCents })),
   ].filter((h) => h.at).sort((a, b) => b.at - a.at);
 
   return {
-    client: { ...summaryOut(c, today), notes: c.notes, recordId: c.recordId },
+    client: { ...summaryOut(c, today), notes: c.notes, recordId: c.recordId, noEmail: !c.email },
+    ...accountOf(c),
     dates,
     history,
-    contactMailto: mailtoUrl(c.email, { subject: "", body: "" }).replace(/\?subject=&body=$/, ""),
-    dormantMailto: mailtoUrl(c.email, suggestedMessage({ clientName: c.name, studioName, bookingUrl, dormant: true })),
+    contactMailto: c.email ? mailtoUrl(c.email, { subject: "", body: "" }).replace(/\?subject=&body=$/, "") : "",
+    dormantMailto: c.email ? mailtoUrl(c.email, suggestedMessage({ clientName: c.name, studioName, bookingUrl, dormant: true })) : "",
     bookingUrl,
+  };
+}
+
+// Le compte du client, rangé : ses séances, ses factures (celles émises
+// automatiquement pour les suppléments et tirages, et les factures libres),
+// tout ce qu'il a réglé, et ce qui reste à régler.
+function accountOf(c) {
+  const ts = now();
+  // Séances : réservations confirmées et galeries, de la plus récente à la plus ancienne.
+  const sessions = [];
+  const due = [];
+  for (const g of c.galleries) {
+    if (g.dueCents > 0) due.push({ type: "supplement", title: g.title, slug: g.slug, count: g.dueExtra, amountCents: g.dueCents, at: g.selectionDoneAt });
+    sessions.push({
+      type: "gallery", at: g.createdAt, title: g.title, slug: g.slug, sessionType: g.sessionType, byName: g.byName,
+      photos: g.photos, selected: g.selected, selectionDoneAt: g.selectionDoneAt, deliveryOpen: g.deliveryOpen,
+      expired: Boolean(g.expiresAt && g.expiresAt < ts), dueCents: g.dueCents,
+    });
+  }
+  for (const b of c.bookings) {
+    if (b.status !== "confirmed") continue;
+    sessions.push({ type: "booking", at: b.startsAt, title: b.title, upcoming: b.startsAt > ts, depositCents: b.paidAt ? b.depositCents : 0 });
+  }
+  sessions.sort((a, b) => b.at - a.at);
+
+  // Factures : automatiques (suppléments, tirages) et libres, avec leur PDF.
+  const billing = [
+    ...c.payments.filter((p) => p.invoiceId).map((p) => ({
+      source: "gallery", id: p.invoiceId, number: p.invoiceNumber, at: p.invoiceAt || p.paidAt, kind: "invoice",
+      title: (p.kind === "print" ? "Tirages" : "Suppléments") + (p.gallery ? " · " + p.gallery : ""), totalCents: p.amountCents, paidCents: p.amountCents, status: "paid",
+    })),
+    ...c.invoices.map((f) => ({
+      source: "client", id: f.id, number: f.number, at: f.at, kind: f.kind, title: f.title, totalCents: f.totalCents, paidCents: f.paidCents, status: f.status, byName: f.byName,
+    })),
+  ].sort((a, b) => (b.at || 0) - (a.at || 0));
+  for (const f of c.invoices) {
+    if (f.kind === "invoice" && ["issued", "partial", "overdue", "sent"].includes(f.status) && f.totalCents > f.paidCents) {
+      due.push({ type: "invoice", title: (f.number ? "Facture " + f.number : "Facture") + (f.title ? " · " + f.title : ""), id: f.id, amountCents: f.totalCents - f.paidCents, at: f.at, overdue: f.status === "overdue" });
+    }
+  }
+  for (const p of c.payments) {
+    if (p.status === "awaiting") due.push({ type: "awaiting", title: (p.kind === "print" ? "Tirages" : "Suppléments") + (p.gallery ? " · " + p.gallery : ""), slug: p.slug, method: p.method, amountCents: p.amountCents, at: p.createdAt });
+  }
+  due.sort((a, b) => (a.at || 0) - (b.at || 0));
+
+  // Règlements : tout l'argent reçu de ce client.
+  const paid = [
+    ...c.payments.filter((p) => p.status === "paid").map((p) => ({
+      type: p.kind === "print" ? "print" : "supplement", at: p.paidAt, title: p.gallery, slug: p.slug, method: p.method, amountCents: p.amountCents,
+      count: p.kind === "print" ? p.items : p.extraCount, orderStatus: p.orderStatus, trackingUrl: p.trackingUrl, invoiceNumber: p.invoiceNumber,
+    })),
+    ...c.bookings.filter((b) => b.status === "confirmed" && b.paidAt && b.depositCents).map((b) => ({ type: "deposit", at: b.paidAt, title: b.title, method: "card", amountCents: b.depositCents })),
+    ...c.contracts.filter((k) => k.status === "paid" && k.depositCents).map((k) => ({ type: "contract", at: k.paidAt || k.signedAt, title: k.title, number: k.number, method: "card", amountCents: k.depositCents })),
+    ...c.gifts.filter((g) => g.role === "buyer" && g.status !== "cancelled" && g.source === "online").map((g) => ({ type: "gift", at: g.at, title: g.title, method: "card", amountCents: g.amountCents, toName: g.toName })),
+    ...c.invoices.filter((f) => f.kind === "invoice" && f.source === "manual" && f.paidCents > 0).map((f) => ({ type: "invoice", at: f.at, title: f.title, number: f.number, amountCents: f.paidCents })),
+  ].filter((x) => x.at).sort((a, b) => b.at - a.at);
+
+  const sum = (list, type) => list.filter((x) => !type || x.type === type).reduce((n, x) => n + (x.amountCents || 0), 0);
+  const sessionCount = sessions.length;
+  return {
+    sessions,
+    billing,
+    paid,
+    due,
+    totals: {
+      paidCents: c.paidCents,
+      dueCents: sum(due),
+      supplementsCents: sum(paid, "supplement"),
+      printsCents: sum(paid, "print"),
+      depositsCents: sum(paid, "deposit") + sum(paid, "contract"),
+      averageCents: sessionCount ? Math.round(c.paidCents / sessionCount) : 0,
+      byName: c.galleries.filter((g) => g.byName).length + c.invoices.filter((f) => f.byName).length,
+    },
   };
 }
 
@@ -657,6 +852,32 @@ export async function handleClientsAdmin(request, env, photographer, parts, url)
     }
     await upsertRecord(env, photographer.id, email, fields);
     return json(await detailForAdmin(env, photographer, email), { status: body.create ? 201 : 200 });
+  }
+
+  // Fiche sans e-mail (galeries, factures créées avec un nom seul) : on lui
+  // donne une adresse. Tout ce qui porte ce nom sans e-mail la reçoit, et
+  // rejoint la fiche de ce client (créée au besoin).
+  if (parts[0] === "attach" && parts.length === 1 && method === "POST") {
+    const key = String(body.key || "");
+    const email = normEmail(body.email);
+    if (!isNameKey(key)) return fail(400, "Fiche inconnue");
+    if (!EMAIL_RE.test(email)) return fail(400, "Adresse e-mail invalide");
+    const target = key.slice(1);
+    const [gal, inv] = await Promise.all([
+      env.DB.prepare("SELECT id, client_name FROM galleries WHERE photographer_id = ? AND client_email = '' AND client_name != ''").bind(photographer.id).all(),
+      env.DB.prepare("SELECT id, client_name FROM client_invoices WHERE photographer_id = ? AND client_email = '' AND client_name != ''").bind(photographer.id).all(),
+    ]);
+    const galleryIds = (gal.results || []).filter((r) => nameKey(r.client_name) === target).map((r) => r.id);
+    const invoiceIds = (inv.results || []).filter((r) => nameKey(r.client_name) === target).map((r) => r.id);
+    if (!galleryIds.length && !invoiceIds.length) return fail(404, "Client introuvable");
+    const name = cleanLine((gal.results || []).concat(inv.results || []).find((r) => nameKey(r.client_name) === target)?.client_name, 120);
+    const updates = [
+      ...galleryIds.map((id) => env.DB.prepare("UPDATE galleries SET client_email = ? WHERE id = ? AND photographer_id = ?").bind(email, id, photographer.id)),
+      ...invoiceIds.map((id) => env.DB.prepare("UPDATE client_invoices SET client_email = ? WHERE id = ? AND photographer_id = ?").bind(email, id, photographer.id)),
+    ];
+    await env.DB.batch(updates);
+    await ensureClientRecord(env, photographer.id, { email, name, phone: "" });
+    return json(await detailForAdmin(env, photographer, email));
   }
 
   // Dates à retenir.
@@ -761,9 +982,9 @@ export async function runClientReminders(env) {
         title: next.title,
         date: next.date,
         daysUntil: next.daysUntil,
-        recipients: clients.length,
+        recipients: clients.filter((c) => c.email).length,
         message,
-        mailto: bccMailto(clients.map((c) => c.email), message),
+        mailto: bccMailto(clients.map((c) => c.email).filter(Boolean), message),
         adminUrl: adminBase ? `${adminBase}/#/clients` : "",
       });
       sent++;
@@ -772,6 +993,15 @@ export async function runClientReminders(env) {
     const client = await env.DB.prepare("SELECT name FROM clients WHERE photographer_id = ? AND email = ?").bind(d.photographer_id, d.client_email).first();
     const fromGallery = client?.name ? null : await env.DB.prepare("SELECT client_name FROM galleries WHERE photographer_id = ? AND client_email = ? AND client_name != '' ORDER BY created_at DESC LIMIT 1").bind(d.photographer_id, d.client_email).first();
     const clientName = client?.name || fromGallery?.client_name || d.client_email;
+    // Relance « Dates à retenir, envoyées au client » activée : Holypixx
+    // écrit directement au client, dans sa langue, au nom du studio.
+    if (await datesDirectEnabled(env, d.pid)) {
+      const full = await env.DB.prepare("SELECT * FROM photographers WHERE id = ?").bind(d.pid).first();
+      const lang = await languageForClient(env, d.pid, d.client_email, "fr");
+      await sendDateToClient(env, full, { to: d.client_email, clientName: client?.name || fromGallery?.client_name || "", next, date: d, lang });
+      sent++;
+      continue;
+    }
     const message = messageFor(d, next, clientName, studioName, bookingUrl);
     await sendClientDateReminder(env, {
       to: d.photographer_email,

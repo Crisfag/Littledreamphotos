@@ -24,6 +24,7 @@ import { THEMES, themeOf, readPresentation, linkOfEmbed } from "./presentation.j
 import { LANGUAGES, languageOf } from "./i18n.js";
 import { handleContractsAdmin } from "./contracts.js";
 import { handleClientsAdmin } from "./clients.js";
+import { handleMailingAdmin } from "./mailingAdmin.js";
 import { handlePlanningAdmin } from "./planning.js";
 import { setPromo, sendPromoToClient, promoForAdmin } from "./campaigns.js";
 import { galleryUrlFor } from "./reminders.js";
@@ -1114,6 +1115,12 @@ export async function handleAdmin(request, env, ctx, path) {
   }
 
   // Fiches clients et dates à retenir (clients.js).
+  // Relances automatiques, campagnes, contacts, adresse d'envoi (mailingAdmin.js).
+  if (section === "mailing") {
+    const photographer = await env.DB.prepare("SELECT * FROM photographers WHERE id = ?").bind(photographerId).first();
+    if (!photographer) return fail(401, "Session invalide");
+    return handleMailingAdmin(request, env, ctx, photographer, parts.slice(3).map(decodeURIComponent));
+  }
   if (section === "clients") {
     const photographer = await env.DB.prepare("SELECT * FROM photographers WHERE id = ?").bind(photographerId).first();
     if (!photographer) return fail(401, "Session invalide");

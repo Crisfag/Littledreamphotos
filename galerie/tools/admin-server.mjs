@@ -1068,6 +1068,18 @@ async function handleApi(req, res, url) {
     }
   }
 
+  // /local/mailing[/…] — relances, campagnes, contacts, adresse d'envoi :
+  // relais JSON vers /api/admin/mailing…
+  if (parts[0] === "mailing" && ["GET", "POST", "DELETE"].includes(req.method)) {
+    const path = "/api/admin/mailing" + (parts.length > 1 ? "/" + parts.slice(1).map(encodeURIComponent).join("/") : "") + url.search;
+    try {
+      const body = req.method === "POST" ? JSON.parse((await readBody(req, 200000)).toString("utf8") || "{}") : undefined;
+      return json(res, 200, await client.request(req.method, path, body));
+    } catch (err) {
+      return relayError(res, err, "Les relances n'ont pas pu répondre");
+    }
+  }
+
   // /local/planning[/…] — planning du photographe (séances, rappels, tâches).
   if (parts[0] === "planning" && ["GET", "POST", "DELETE"].includes(req.method)) {
     const path = "/api/admin/planning" + (parts.length > 1 ? "/" + parts.slice(1).map(encodeURIComponent).join("/") : "");

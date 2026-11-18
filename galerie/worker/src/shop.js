@@ -25,6 +25,7 @@ import {
 } from "./prodigi.js";
 import { resolveSelection, catalogueForAdmin, categoryLabelFor, findProduct, skuFor, lookFor, productLabelFor } from "./printCatalogue.js";
 import { languageOf, uiLanguageOf, photographerMailLanguage, pick, plural } from "./i18n.js";
+import { recordConsent } from "./mailing.js";
 
 const MAX_ORIGINAL_BYTES = 60 * 1024 * 1024;
 const MAX_PRODUCTS = 40;
@@ -585,6 +586,10 @@ export async function handlePrintOrder(request, env, gallery) {
     productsById: new Map(state.products.map((p) => [p.id, { ...p, label: productLabelFor(p, lang) }])),
   });
   if (built.error) return fail(400, built.error);
+  // Case « recevoir les offres du studio » cochée au moment de commander.
+  if (body.marketingConsent === true) {
+    await recordConsent(env, gallery.photographer_id, recipient.email, { source: "checkout", name: recipient.name, lang }).catch(() => {});
+  }
 
   const totalCents = built.itemsCents + shippingCents;
   const feeCents = paymentFeeCents(env, state.photographer, totalCents);

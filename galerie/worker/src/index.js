@@ -33,6 +33,9 @@ import { plansForPublic } from "./subscription.js";
 import { publicReferral, runReferralRewards } from "./referral.js";
 import { joinWaitlist } from "./waitlist.js";
 import { joinNewsletter } from "./newsletter.js";
+import { handleMailPublic } from "./mailing.js";
+import { runAutomations } from "./automations.js";
+import { runBroadcasts } from "./broadcasts.js";
 import { recordFunnelEvent } from "./funnel.js";
 import { shopState } from "./shop.js";
 import { studioSubdomainOf, handleStudioHost } from "./studio.js";
@@ -115,6 +118,9 @@ export default {
       } else if (path === "/api/public/newsletter" && request.method === "POST") {
         // Newsletter Holypixx (bandeau néerlandais de l'espace photographe, page /nl/).
         response = await joinNewsletter(request, env);
+      } else if (path.startsWith("/api/m/")) {
+        // E-mails du studio : désinscription, clics suivis (mailing.js).
+        return await handleMailPublic(request, env, path);
       } else if (path === "/api/public/funnel" && request.method === "POST") {
         // Parcours d'inscription : compteur anonyme (site, écran d'inscription).
         response = await recordFunnelEvent(request, env);
@@ -184,8 +190,25 @@ export default {
           console.error("Rappels des familles : échec :", err && err.stack ? err.stack : err);
         })
       );
+      // Campagnes e-mail : programmées arrivées à l'heure, files en cours.
+      ctx.waitUntil(
+        runBroadcasts(env).catch((err) => {
+          console.error("Campagnes : échec de la passe :", err && err.stack ? err.stack : err);
+        })
+      );
       return;
     }
+    // Relances du studio : sélection pas commencée, avis, un an déjà, client à revoir.
+    ctx.waitUntil(
+      runAutomations(env).catch((err) => {
+        console.error("Relances du studio : échec de la passe :", err && err.stack ? err.stack : err);
+      })
+    );
+    ctx.waitUntil(
+      runBroadcasts(env).catch((err) => {
+        console.error("Campagnes : échec de la passe :", err && err.stack ? err.stack : err);
+      })
+    );
     ctx.waitUntil(
       runReminders(env).catch((err) => {
         console.error("Relances : échec de la passe planifiée :", err && err.stack ? err.stack : err);

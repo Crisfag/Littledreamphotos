@@ -12,6 +12,7 @@
 
 import { sendClientReminder, sendPhotographerReminder } from "./notify.js";
 import { languageOf, photographerMailLanguage } from "./i18n.js";
+import { automationOffSql } from "./mailing.js";
 
 const DAY = 86400;
 export const CLIENT_FIRST_DAYS = 7;
@@ -52,6 +53,7 @@ export async function runReminders(env, options = {}) {
   const { results: galleries } = await env.DB.prepare(
     `SELECT g.id, g.slug, g.title, g.client_name, g.client_email, g.expires_at, g.language,
             p.email AS photographer_email, p.studio_name, p.ui_language AS photographer_language,
+            ${automationOffSql("expiry")} AS expiry_off,
             (SELECT COUNT(*) FROM photos ph WHERE ph.gallery_id = g.id AND ph.selected = 1) AS selected_count
      FROM galleries g JOIN photographers p ON p.id = g.photographer_id
      WHERE g.expires_at IS NOT NULL AND g.expires_at > ? AND g.expires_at <= ?
@@ -80,6 +82,7 @@ export async function runReminders(env, options = {}) {
         .run();
       if (!inserted.meta || inserted.meta.changes === 0) continue;
 
+      if (kind !== "photographer_j2" && gallery.expiry_off) continue;
       if (kind === "photographer_j2") {
         await sendPhotographerReminder(env, {
           lang: photographerMailLanguage(gallery.photographer_language),

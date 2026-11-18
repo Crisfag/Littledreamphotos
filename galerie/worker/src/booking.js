@@ -21,6 +21,7 @@
 import { json, fail } from "./http.js";
 import { randomBytes, b64url, hashIp } from "./auth.js";
 import { hasFeature, featureRefusal } from "./subscription.js";
+import { automationOffSql, recordConsent } from "./mailing.js";
 import {
   bookingPortfolioByHandle, bookingPageUrls, bookingEntryUrl, suggestHandle, normalizeHandle, normalizeWebsite,
   cleanLine, cleanText, normalizePhone, displayName, portfolioUrls,
@@ -607,6 +608,8 @@ async function book(request, env, row, photographer) {
       priceCents, slot.deposit_cents, feeCents, photos, tierLabel, slot.included || "", slot.dress_code || "", name, email, phone.phone, message,
       withDeposit ? "pending" : "confirmed", withDeposit ? ts + HOLD_SECONDS : null, ipHash, ts
     ).run();
+    // Case « recevoir les offres du studio » cochée en réservant.
+    if (body.marketingConsent === true) await recordConsent(env, photographer.id, email, { source: "booking", name }).catch(() => {});
   } catch (err) {
     // Index unique : quelqu'un d'autre vient de prendre ce créneau.
     if (/UNIQUE/i.test(String(err && err.message))) return fail(409, "Ce créneau vient d'être réservé. Choisissez-en un autre.");
@@ -762,7 +765,8 @@ async function notifyConfirmed(env, portfolio, photographer, booking) {
 export async function runBookingReminders(env) {
   const ts = now();
   const { results } = await env.DB.prepare(
-    `SELECT * FROM bookings WHERE status = 'confirmed' AND reminded_at IS NULL AND starts_at > ? AND starts_at < ? LIMIT 50`
+    `SELECT * FROM bookings WHERE status = 'confirmed' AND reminded_at IS NULL AND starts_at > ? AND starts_at < ?
+       AND NOT ${automationOffSql("booking_reminder", "bookings.photographer_id")} LIMIT 50`
   ).bind(ts + 20 * 3600, ts + 48 * 3600).all();
   let sent = 0;
   for (const booking of results || []) {
