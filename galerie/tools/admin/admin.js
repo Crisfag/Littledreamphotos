@@ -4311,7 +4311,7 @@
   function paintFeedback(data, highlightReplies) {
     var items = data.items || [];
     el.view.innerHTML =
-      '<header class="ad-detail-header"><div><h2>' + L("Suggestions", "Suggestions") + "</h2>" +
+      '<header class="ad-detail-header"><div><h2>' + L("Nouveautés & suggestions", "News & suggestions", "Nieuw & suggesties") + "</h2>" +
       '<p class="ad-hint">' + L("Une option qui vous manque, une idée, un souci ? Dites-le-nous : chaque demande est lue, et la réponse arrive ici et par e-mail. Holypixx grandit avec vos besoins réels.",
         "A missing option, an idea, a problem? Tell us: every request is read, and the answer comes here and by email. Holypixx grows with your real needs.") + "</p></div></header>" +
       newsSectionHtml(data.news) +
@@ -4376,7 +4376,7 @@
     var shown = filter === "all" ? items : items.filter(function (it) { return it.status === filter; });
     var chips = [["all", "Toutes", items.length]].concat(Object.keys(FEEDBACK_STATUS).map(function (k) { return [k, FEEDBACK_STATUS[k][0], counts[k] || 0]; }));
     return '<section id="ad-fb-owner"><div class="ad-section-header"><h3>Suggestions des photographes (' + items.length + ")</h3></div>" +
-      '<p class="ad-hint">Leurs idées et demandes, en direct. Changez le statut et répondez : la réponse leur arrive par e-mail et dans leur onglet Suggestions.</p>' +
+      '<p class="ad-hint">Leurs idées et demandes, en direct. Changez le statut et répondez : la réponse leur arrive par e-mail et dans leur onglet Nouveautés &amp; suggestions.</p>' +
       '<div class="ad-seg ad-fb-filters" role="group" aria-label="Filtrer les suggestions">' + chips.map(function (c) {
         return '<button type="button" class="ad-seg-btn" data-fb-filter="' + c[0] + '" aria-pressed="' + (filter === c[0]) + '">' + esc(c[1]) + " (" + c[2] + ")</button>";
       }).join("") + "</div>" +
@@ -4440,7 +4440,7 @@
   // Nouveautés : publier, modifier, retirer (onglet Suggestions des photographes).
   var NEWS_LINKS = [["", "Aucun"], ["#/", "Galeries"], ["#/planning", "Planning"], ["#/clients", "Clients"], ["#/relances", "Relances"], ["#/reservations", "Réservations"],
     ["#/contrats", "Devis & contrats"], ["#/ventes", "Ventes"], ["#/statistiques", "Statistiques"], ["#/facturation", "Facturation"], ["#/boutique", "Boutique"],
-    ["#/portfolio", "Portfolio"], ["#/bons-cadeaux", "Bons cadeaux"], ["#/abonnement", "Abonnement"], ["#/parametres", "Paramètres"], ["#/suggestions", "Suggestions"]];
+    ["#/portfolio", "Portfolio"], ["#/bons-cadeaux", "Bons cadeaux"], ["#/abonnement", "Abonnement"], ["#/parametres", "Paramètres"], ["#/suggestions", "Nouveautés & suggestions"]];
   var newsEditing = "";
 
   function ownerNewsHtml(data, feedback) {
@@ -4455,7 +4455,7 @@
         '<label class="ad-field"><span>Description</span><textarea name="body_' + l[0] + '" rows="3" maxlength="2000"></textarea></label></details>';
     }).join("");
     return '<section id="ad-news-owner"><div class="ad-section-header"><h3>Nouveautés de la plateforme (' + data.entries.length + ")</h3></div>" +
-      '<p class="ad-hint">Affichées en tête de l\'onglet Suggestions de chaque photographe, avec une pastille tant qu\'il ne les a pas vues. Reliez une suggestion réalisée : son auteur voit « Votre suggestion, réalisée », et les autres « Suggestion de … » si vous le cochez.</p>' +
+      '<p class="ad-hint">Affichées en tête de l\'onglet Nouveautés &amp; suggestions de chaque photographe, avec une pastille tant qu\'il ne les a pas vues. Reliez une suggestion réalisée : son auteur voit « Votre suggestion, réalisée », et les autres « Suggestion de … » si vous le cochez.</p>' +
       '<form id="ad-news-form" class="ad-news-form" novalidate><input type="hidden" name="id" />' +
       '<div class="ad-ml-row"><label class="ad-field"><span>Type</span><select name="kind"><option value="feature">Nouveauté</option><option value="improvement">Amélioration</option><option value="shortcut">Raccourci</option><option value="fix">Correction</option></select></label>' +
       '<label class="ad-field"><span>Date</span><input type="date" name="date" value="' + today + '" /></label>' +
@@ -4512,7 +4512,7 @@
       if (!payload.title.fr.trim()) { toast("Donnez un titre en français.", true); f.title_fr.focus(); return; }
       try {
         var next = await api("POST", "/owner/changelog" + (f.id.value ? "/" + encodeURIComponent(f.id.value) : ""), payload);
-        toast(f.id.value ? "Nouveauté modifiée." : "Nouveauté publiée : elle apparaît dans l'onglet Suggestions de chaque photographe.");
+        toast(f.id.value ? "Nouveauté modifiée." : "Nouveauté publiée : elle apparaît dans l'onglet Nouveautés & suggestions de chaque photographe.");
         newsEditing = "";
         repaint(next);
       } catch (err) { toast(err.message, true); }
@@ -4527,7 +4527,7 @@
     box.querySelectorAll("[data-news-delete]").forEach(function (b) {
       b.addEventListener("click", function () {
         var id = b.closest("[data-news-id]").getAttribute("data-news-id");
-        confirmAction("Retirer cette nouveauté de l'onglet Suggestions de tous les photographes ?", async function () {
+        confirmAction("Retirer cette nouveauté de l'onglet Nouveautés & suggestions de tous les photographes ?", async function () {
           try { repaint(await api("DELETE", "/owner/changelog/" + encodeURIComponent(id))); toast("Nouveauté retirée."); } catch (err) { toast(err.message, true); }
         });
       });
@@ -12722,7 +12722,7 @@
       reservations: ["booking", "Réservations"], contrats: ["contracts", "Devis et contrats"], ventes: ["sales", "Ventes"],
       statistiques: ["insights", "Statistiques"], facturation: ["billing", "Facturation"], boutique: ["shop", "Boutique"],
       portfolio: ["portfolio", "Portfolio"], "bons-cadeaux": ["giftcards", "Bons cadeaux"], abonnement: ["subscription", "Abonnement"],
-      parametres: ["settings", "Paramètres"], suggestions: ["feedback", "Suggestions"],
+      parametres: ["settings", "Paramètres"], suggestions: ["feedback", "Nouveautés & suggestions"],
     };
     function suggestions() {
       return [
@@ -13599,13 +13599,13 @@
       tips: [["« Mes données » : exportez tout, ou supprimez votre compte.", "“My data”: export everything, or delete your account."]],
     },
     feedback: {
-      title: ["Suggestions", "Suggestions"],
-      summary: ["Une idée, une fonction qui manque, un souci : dites-le directement à l'équipe Holypixx.", "An idea, a missing feature, an issue: tell the Holypixx team directly."],
+      title: ["Nouveautés & suggestions", "News & suggestions"],
+      summary: ["En haut, ce qui vient d'être ajouté sur Holypixx ; en dessous, une idée, une fonction qui manque, un souci : dites-le directement à l'équipe.", "At the top, what's just been added to Holypixx; below, an idea, a missing feature, an issue: tell the team directly."],
       steps: [
         ["Choisissez le type (idée, amélioration, souci), donnez un titre et quelques détails.", "Choose the type (idea, improvement, issue), add a title and a few details."],
         ["Suivez le statut de chaque demande (à l'étude, prévue, faite) et lisez la réponse ici.", "Follow each request's status (considering, planned, done) and read the reply here."],
       ],
-      tips: [["Une pastille sur l'onglet signale une nouvelle réponse.", "A badge on the tab flags a new reply."]],
+      tips: [["Une pastille sur l'onglet signale une nouvelle réponse ou une nouveauté pas encore vue.", "A badge on the tab flags a new reply or an update you haven't seen yet."], ["« Essayer » sur une nouveauté ouvre directement l'écran concerné.", "“Try it” on an update opens the screen it’s about."]],
     },
     detect: {
       title: ["Vérifier une photo", "Check a photo"],

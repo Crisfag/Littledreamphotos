@@ -81,7 +81,7 @@ try {
     ["contracts", "contracts", "Devis et contrats"], ["sales", "sales", "Ventes"], ["insights", "insights", "Statistiques"],
     ["billing", "billing", "Facturation"], ["shop", "shop", "Boutique de tirages"], ["portfolio", "portfolio", "Portfolio"],
     ["giftcards", "giftcards", "Bons cadeaux"], ["subscription", "subscription", "Abonnement"], ["settings", "settings", "Paramètres"],
-    ["feedback", "feedback", "Suggestions"],
+    ["feedback", "feedback", "Nouveautés & suggestions"],
   ];
   const missing = [];
   for (const [tab, key, title] of TABS) {

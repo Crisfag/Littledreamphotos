@@ -218,7 +218,7 @@ export async function handleAssistantAdmin(request, env, photographer, sub = "")
      ON CONFLICT(photographer_id, day) DO UPDATE SET count = count + 1 WHERE count < ?
      RETURNING count`
   ).bind(photographer.id, day, ASSISTANT_DAILY_LIMIT).first();
-  if (!claim) return fail(429, `Vous avez posé ${ASSISTANT_DAILY_LIMIT} questions aujourd'hui : Lumi se repose jusqu'à demain. Une urgence ? Écrivez-nous dans l'onglet Suggestions.`);
+  if (!claim) return fail(429, `Vous avez posé ${ASSISTANT_DAILY_LIMIT} questions aujourd'hui : Lumi se repose jusqu'à demain. Une urgence ? Écrivez-nous dans l'onglet Nouveautés & suggestions.`);
 
   const model = env.ASSISTANT_MODEL || DEFAULT_ASSISTANT_MODEL;
   const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY, maxRetries: 1, timeout: 45000 });
@@ -252,7 +252,7 @@ export async function handleAssistantAdmin(request, env, photographer, sub = "")
 
   let reply = replyText(response);
   if (response.stop_reason === "refusal" || !reply) {
-    reply = "Je ne peux pas vous aider sur ce point. Pour toute question sur Holypixx, je suis là ; sinon, écrivez à l'équipe dans l'onglet Suggestions [[suggestions]].";
+    reply = "Je ne peux pas vous aider sur ce point. Pour toute question sur Holypixx, je suis là ; sinon, écrivez à l'équipe dans l'onglet Nouveautés & suggestions [[suggestions]].";
   } else if (response.stop_reason === "max_tokens") {
     reply += "…";
   }
