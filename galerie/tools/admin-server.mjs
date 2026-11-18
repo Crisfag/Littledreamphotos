@@ -1056,6 +1056,17 @@ async function handleApi(req, res, url) {
     }
   }
 
+  // /local/owner/changelog… — nouveautés de la plateforme (propriétaire).
+  if (parts[0] === "owner" && parts[1] === "changelog" && parts.length <= 3 && ["GET", "POST", "DELETE"].includes(req.method)) {
+    const path = "/api/owner/changelog" + (parts[2] ? "/" + encodeURIComponent(parts[2]) : "");
+    try {
+      const body = req.method === "POST" ? JSON.parse((await readBody(req, 40000)).toString("utf8") || "{}") : undefined;
+      return json(res, 200, await client.request(req.method, path, body));
+    } catch (err) {
+      return relayError(res, err, "Les nouveautés n'ont pas pu répondre");
+    }
+  }
+
   // /local/clients… — fiches clients et dates à relancer : relais JSON vers
   // /api/admin/clients…, en gardant la requête (?email=…).
   if (parts[0] === "clients" && ["GET", "POST", "DELETE"].includes(req.method)) {

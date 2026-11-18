@@ -104,6 +104,8 @@ CREATE TABLE IF NOT EXISTS photographers (
   -- comptes créés avant la mesure ou sans passer par le site.
   signup_page          TEXT NOT NULL DEFAULT '',
   signup_source        TEXT NOT NULL DEFAULT '',
+  -- Dernière visite des nouveautés de la plateforme (changelog.js).
+  changelog_seen_at    INTEGER,
   created_at     INTEGER NOT NULL
 );
 
@@ -1489,3 +1491,23 @@ CREATE TABLE IF NOT EXISTS sender_domains (
   verified_at      INTEGER,
   created_at       INTEGER NOT NULL
 );
+
+-- Nouveautés de la plateforme (onglet Suggestions, voir changelog.js) :
+-- publiées par le propriétaire, une suggestion réalisée peut y être créditée.
+CREATE TABLE IF NOT EXISTS changelog (
+  id           TEXT PRIMARY KEY,               -- chg_…
+  published_at INTEGER NOT NULL,
+  kind         TEXT NOT NULL DEFAULT 'feature', -- feature | improvement | shortcut | fix
+  title_fr     TEXT NOT NULL,
+  body_fr      TEXT NOT NULL DEFAULT '',
+  title_en     TEXT NOT NULL DEFAULT '',
+  body_en      TEXT NOT NULL DEFAULT '',
+  title_nl     TEXT NOT NULL DEFAULT '',
+  body_nl      TEXT NOT NULL DEFAULT '',
+  link         TEXT NOT NULL DEFAULT '',        -- écran à essayer (#/relances…)
+  feedback_id  TEXT NOT NULL DEFAULT '',        -- suggestion réalisée
+  credit       INTEGER NOT NULL DEFAULT 1,      -- nommer son auteur
+  created_at   INTEGER NOT NULL,
+  updated_at   INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_changelog_published ON changelog(published_at);

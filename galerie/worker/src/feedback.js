@@ -6,7 +6,7 @@
 // l'onglet tant qu'il ne l'a pas lue).
 //
 //   /api/admin/feedback            GET liste (les siennes) · POST envoyer
-//   /api/admin/feedback/seen       POST réponses lues
+//   /api/admin/feedback/seen       POST réponses et nouveautés vues
 //   /api/owner/feedback            GET toutes (propriétaire)
 //   /api/owner/feedback/:id        POST { status?, reply? } (propriétaire)
 
@@ -14,6 +14,7 @@ import { json, fail } from "./http.js";
 import { randomBytes, b64url } from "./auth.js";
 import { cleanLine, cleanText, displayName } from "./portfolio.js";
 import { sendFeedbackToOwner, sendFeedbackReply } from "./notify.js";
+import { newsFor, markNewsSeen } from "./changelog.js";
 
 export const FEEDBACK_KINDS = ["idea", "improvement", "problem", "other"];
 export const FEEDBACK_STATUSES = ["new", "considering", "planned", "done", "declined"];
@@ -52,7 +53,10 @@ async function listOwn(env, photographerId) {
     "SELECT * FROM feedback WHERE photographer_id = ? ORDER BY created_at DESC LIMIT 200"
   ).bind(photographerId).all();
   const items = (results || []).map(itemOut);
-  return { items, unread: items.filter((i) => i.replyUnread).length };
+  // Nouveautés de la plateforme, en tête de l'onglet (changelog.js).
+  const photographer = await env.DB.prepare("SELECT id, created_at, changelog_seen_at FROM photographers WHERE id = ?").bind(photographerId).first();
+  const news = photographer ? await newsFor(env, photographer) : { entries: [], unseen: 0, seenAt: 0 };
+  return { items, unread: items.filter((i) => i.replyUnread).length, news };
 }
 
 export async function handleFeedbackAdmin(request, env, photographerId, parts) {
@@ -60,6 +64,7 @@ export async function handleFeedbackAdmin(request, env, photographerId, parts) {
   if (!parts.length && method === "GET") return json(await listOwn(env, photographerId));
   if (parts[0] === "seen" && parts.length === 1 && method === "POST") {
     await env.DB.prepare("UPDATE feedback SET reply_seen = 1 WHERE photographer_id = ? AND reply_seen = 0").bind(photographerId).run();
+    await markNewsSeen(env, photographerId);
     return json(await listOwn(env, photographerId));
   }
   if (!parts.length && method === "POST") {
