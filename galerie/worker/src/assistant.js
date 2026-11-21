@@ -154,7 +154,7 @@ async function accountContext(env, photographer) {
   const id = photographer.id;
   const count = async (sql) => (await env.DB.prepare(sql).bind(id).first())?.n || 0;
   const [galleries, photos, offers, slots, templates, clients, portfolio, booking] = await Promise.all([
-    count("SELECT COUNT(*) AS n FROM galleries WHERE photographer_id = ? AND kind != 'school' AND demo = 0"),
+    count("SELECT COUNT(*) AS n FROM galleries WHERE photographer_id = ? AND kind = 'client' AND demo = 0"),
     count("SELECT COUNT(*) AS n FROM photos p JOIN galleries g ON g.id = p.gallery_id WHERE g.photographer_id = ?"),
     count("SELECT COUNT(*) AS n FROM booking_offers WHERE photographer_id = ?"),
     count(`SELECT COUNT(*) AS n FROM booking_slots WHERE photographer_id = ? AND starts_at > ${now()}`),

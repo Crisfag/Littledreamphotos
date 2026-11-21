@@ -25,6 +25,7 @@ import { fileURLToPath } from "node:url";
 import sharp from "sharp";
 import { processPhoto, DEFAULTS } from "./lib/pipeline.mjs";
 import { takenAtFromExif } from "./lib/exif.mjs";
+import { headerMap, readPressMeta } from "./lib/pressmeta.mjs";
 import { matchDeliveredFile } from "./lib/hdmatch.mjs";
 import { renderCoupon, renderPacketSheet, composeA4, formatDeadline, COUPON_MM, LAB_MM } from "./lib/coupons.mjs";
 import { PdfImageWriter, A4_LANDSCAPE_PT } from "./lib/pdf.mjs";
@@ -1091,6 +1092,32 @@ async function handleApi(req, res, url) {
     }
   }
 
+  // /local/press[/…] — salle de presse (événements, destinataires, licences).
+  if (parts[0] === "press" && parts[parts.length - 1] === "journal.csv" && req.method === "GET") {
+    const path = "/api/admin/press/" + parts.slice(1).map(encodeURIComponent).join("/");
+    try {
+      const response = await client.rawGet(path);
+      if (!response.ok) return json(res, response.status, { error: "Journal indisponible" });
+      res.writeHead(200, {
+        "content-type": response.headers.get("content-type") || "text/csv; charset=utf-8",
+        "content-disposition": response.headers.get("content-disposition") || 'attachment; filename="journal.csv"',
+        "cache-control": "no-store",
+      });
+      return res.end(Buffer.from(await response.arrayBuffer()));
+    } catch (err) {
+      return relayError(res, err, "Journal indisponible");
+    }
+  }
+  if (parts[0] === "press" && ["GET", "POST", "DELETE"].includes(req.method)) {
+    const path = "/api/admin/press" + (parts.length > 1 ? "/" + parts.slice(1).map(encodeURIComponent).join("/") : "") + url.search;
+    try {
+      const body = req.method === "POST" ? JSON.parse((await readBody(req, 200000)).toString("utf8") || "{}") : undefined;
+      return json(res, 200, await client.request(req.method, path, body));
+    } catch (err) {
+      return relayError(res, err, "La salle de presse n'a pas pu répondre");
+    }
+  }
+
   // /local/planning[/…] — planning du photographe (séances, rappels, tâches).
   if (parts[0] === "planning" && ["GET", "POST", "DELETE"].includes(req.method)) {
     const path = "/api/admin/planning" + (parts.length > 1 ? "/" + parts.slice(1).map(encodeURIComponent).join("/") : "");
@@ -2012,6 +2039,17 @@ async function handleApi(req, res, url) {
       if (galleryInfo.gallery.shop_enabled) {
         const printMaster = await withProcessingSlot(() => makePrintMaster(input));
         await client.putOriginal(photo.id, printMaster);
+      }
+      // Salle de presse : l'original HD est gardé tel quel (crédit, licence et
+      // refus de l'IA y sont écrits au téléchargement, pour chaque
+      // destinataire), avec les légendes déjà saisies dans le fichier et la
+      // carte de son en-tête (voir lib/pressmeta.mjs et worker/src/press.js).
+      if (galleryInfo.gallery.kind === "press") {
+        const base = `/api/admin/press/${encodeURIComponent(slug)}/photos/${encodeURIComponent(photo.id)}`;
+        const name = String(file.name || `${photo.id}.jpg`).slice(0, 200);
+        await client.request("PUT", `${base}/hd?name=${encodeURIComponent(name)}`, input, true);
+        const layout = headerMap(input);
+        await client.request("POST", `${base}/meta`, { ...readPressMeta(input), layout, fullCrc: layout ? undefined : zlib.crc32(input) >>> 0 });
       }
 
       return json(res, 201, { photo, blocks: stats.blocks, name: file.name || "" });

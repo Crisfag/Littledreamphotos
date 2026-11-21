@@ -72,7 +72,7 @@ export async function runUnpaidReminders(env, options = {}) {
   const now = options.now || nowSeconds();
   const { results: galleries } = await env.DB.prepare(
     `SELECT g.* FROM galleries g JOIN photographers p ON p.id = g.photographer_id
-     WHERE p.unpaid_reminders_enabled = 1 AND g.demo = 0 AND g.kind != 'school'
+     WHERE p.unpaid_reminders_enabled = 1 AND g.demo = 0 AND g.kind = 'client'
        AND g.client_email != '' AND g.selection_done_at IS NOT NULL
        AND g.selection_done_at <= ? AND g.selection_done_at > ?
        AND (g.expires_at IS NULL OR g.expires_at > ?)`

@@ -257,7 +257,7 @@ export async function salesForAdmin(env, photographerId, nowSeconds = Math.floor
     env.DB.prepare("SELECT id, cost_cents FROM print_products WHERE photographer_id = ?").bind(photographerId).all(),
     // Les galeries de classe vendent par l'espace famille, pas par paiement
     // de galerie : elles n'entrent pas dans la conversion des galeries.
-    env.DB.prepare("SELECT id, slug, title, created_at FROM galleries WHERE photographer_id = ? AND kind != 'school'").bind(photographerId).all(),
+    env.DB.prepare("SELECT id, slug, title, created_at FROM galleries WHERE photographer_id = ? AND kind = 'client'").bind(photographerId).all(),
     env.DB.prepare(
       `SELECT o.id, o.amount_cents, o.fee_cents, o.paid_at, y.id AS year_id, y.label AS year_label, s.id AS school_id, s.name AS school_name
          FROM school_orders o JOIN school_years y ON y.id = o.year_id JOIN schools s ON s.id = y.school_id

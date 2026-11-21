@@ -9,6 +9,7 @@
 // Variables :
 //   ALLOWED_ORIGINS → origines autorisées, séparées par des virgules
 
+import { handlePressPublic } from "./press.js";
 import { handleFamily, purgeFamilies } from "./family.js";
 import { handleLabFile, handleLabPreview } from "./schoollab.js";
 import { runSchoolReminders, SCHOOL_REMINDERS_CRON } from "./schoolreminders.js";
@@ -103,6 +104,9 @@ export default {
         response = await handleOwner(request, env, path);
       } else if (path.startsWith("/api/gallery/")) {
         response = await handleViewer(request, env, ctx, path);
+      } else if (path.startsWith("/api/press/")) {
+        // Salle de presse : liens personnels des destinataires, accréditations.
+        response = await handlePressPublic(request, env, ctx, path);
       } else if (path.startsWith("/api/family/")) {
         // Espace famille du module scolaire (ecole.html) : code + e-mail.
         response = await handleFamily(request, env, path);
