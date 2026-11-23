@@ -2,7 +2,7 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1" xmlns:xhtml="http://www.w3.org/1999/xhtml">
   <url>
     <loc>https://www.holypixx.com/</loc>
-    <lastmod>2026-10-15</lastmod>
+    <lastmod>2026-11-23</lastmod>
     <xhtml:link rel="alternate" hreflang="fr" href="https://www.holypixx.com/" />
     <xhtml:link rel="alternate" hreflang="en" href="https://www.holypixx.com/en/" />
     <xhtml:link rel="alternate" hreflang="nl" href="https://www.holypixx.com/nl/" />
@@ -13,7 +13,7 @@
   </url>
   <url>
     <loc>https://www.holypixx.com/en/</loc>
-    <lastmod>2026-10-15</lastmod>
+    <lastmod>2026-11-23</lastmod>
     <xhtml:link rel="alternate" hreflang="en" href="https://www.holypixx.com/en/" />
     <xhtml:link rel="alternate" hreflang="fr" href="https://www.holypixx.com/" />
     <xhtml:link rel="alternate" hreflang="nl" href="https://www.holypixx.com/nl/" />
@@ -24,7 +24,7 @@
   </url>
   <url>
     <loc>https://www.holypixx.com/nl/</loc>
-    <lastmod>2026-11-17</lastmod>
+    <lastmod>2026-11-23</lastmod>
     <xhtml:link rel="alternate" hreflang="nl" href="https://www.holypixx.com/nl/" />
     <xhtml:link rel="alternate" hreflang="fr" href="https://www.holypixx.com/" />
     <xhtml:link rel="alternate" hreflang="en" href="https://www.holypixx.com/en/" />
@@ -47,11 +47,18 @@
   </url>
   <url>
     <loc>https://www.holypixx.com/fideliser-clients-photographe</loc>
-    <lastmod>2026-10-12</lastmod>
+    <lastmod>2026-11-23</lastmod>
   </url>
   <url>
     <loc>https://www.holypixx.com/galerie-photo-mariage</loc>
     <lastmod>2026-10-14</lastmod>
+  </url>
+  <url>
+    <loc>https://www.holypixx.com/salle-de-presse-photographe</loc>
+    <lastmod>2026-11-23</lastmod>
+    <image:image>
+      <image:loc>https://www.holypixx.com/assets/presse/public.webp</image:loc>
+    </image:image>
   </url>
   <url>
     <loc>https://www.holypixx.com/conditions</loc>
