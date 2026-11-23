@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Galeries photo clients protégées pour photographes | Holypixx</title>
-  <meta name="description" content="Galeries clients impossibles à télécharger, tirages, agenda de réservation sur votre site, contrats signés et relances : le logiciel tout-en-un des photographes. Gratuit pour commencer." />
+  <meta name="description" content="Galeries clients protégées, tirages, réservation, contrats, relances automatiques et salle de presse : le logiciel des photographes. Gratuit pour commencer." />
   <link rel="canonical" href="https://www.holypixx.com/" />
   <link rel="alternate" hreflang="fr" href="https://www.holypixx.com/" />
   <link rel="alternate" hreflang="en" href="https://www.holypixx.com/en/" />
@@ -66,8 +66,8 @@
         "logo": { "@type": "ImageObject", "url": "https://www.holypixx.com/icon-512.png", "width": 512, "height": 512 },
         "image": "https://www.holypixx.com/assets/og-holypixx.jpg",
         "description": "Plateforme de galeries clients protégées pour photographes professionnels.",
-        "areaServed": ["BE", "FR", "LU"],
-        "knowsLanguage": "fr"
+        "areaServed": ["BE", "FR", "LU", "NL"],
+        "knowsLanguage": ["fr", "en", "nl"]
       },
       {
         "@type": "WebSite",
@@ -96,7 +96,7 @@
         "applicationSubCategory": "Galeries photo clients",
         "operatingSystem": "Web",
         "inLanguage": "fr",
-        "description": "Galeries clients protégées pour photographes : photos impossibles à télécharger pendant la sélection, empreinte invisible traçable, alerte de capture d'écran, neuf styles de galerie personnalisables, sélection et annotations du client, relances automatiques, suppléments payés en ligne, boutique de tirages, livraison HD, portfolio et adresse à votre nom.",
+        "description": "Galeries clients protégées pour photographes : photos impossibles à télécharger pendant la sélection, empreinte invisible traçable, alerte de capture d'écran, neuf styles de galerie personnalisables, sélection et annotations du client, relances e-mail automatiques et campagnes, suppléments payés en ligne, boutique de tirages, livraison HD, salle de presse pour les événements (validation, embargo, licences, crédit inscrit dans les fichiers), portfolio et adresse à votre nom. En français, anglais et néerlandais.",
         "image": "https://www.holypixx.com/assets/og-holypixx.jpg",
         "publisher": { "@id": "https://www.holypixx.com/#organization" },
         "featureList": [
@@ -107,7 +107,8 @@
           "En-tête de galerie : photo de couverture ou film YouTube et Vimeo, pour les mariages",
           "Quatre mises en page : grille, mosaïque, éditoriale et récit",
           "Sélection, coups de cœur, codes couleur et repères annotés",
-          "Relances automatiques avant expiration",
+          "Relances e-mail automatiques : veille de séance, sélection oubliée, galerie qui expire, panier, impayés, demande d'avis, « un an déjà »",
+          "Campagnes e-mail prêtes (Noël, fête des mères, mini-séances, vente flash), envoyées depuis l'adresse du studio, avec les réservations et ventes qu'elles rapportent",
           "Forfait et suppléments payés en ligne, factures PDF",
           "Boutique de tirages livrés par le laboratoire",
           "Réservation de séances en ligne avec acompte",
@@ -115,7 +116,10 @@
           "Devis et contrats signés en ligne",
           "Campagnes de vente et tableau de bord des ventes",
           "Livraison des fichiers HD",
-          "Fiches clients et relances : étapes de bébé, anniversaires, séances de saison",
+          "Fiche client complète : séances, factures, règlements, historique ; étapes de bébé, anniversaires, séances de saison",
+          "Salle de presse pour concerts, festivals et événements : liens par destinataire (commanditaire, artiste, médias, sponsors), validation photo par photo, embargo, licences acceptées en ligne, crédit et licence écrits dans les fichiers IPTC/XMP, refus de l'entraînement d'IA, accréditations, journal des téléchargements",
+          "Lumi, assistante qui répond aux questions sur Holypixx, à l'écrit et à voix haute",
+          "Espace photographe, galeries et e-mails en français, anglais et néerlandais",
           "Portfolio et adresse à votre nom",
           "Bientôt : photo scolaire (établissements, fiches parents avec QR code, espace famille, commande groupée et envoi au laboratoire)"
         ],
@@ -123,7 +127,7 @@
           { "@type": "Offer", "name": "Découverte", "price": "0", "priceCurrency": "EUR", "description": "Gratuit, 3 galeries actives, 5 Go." },
           { "@type": "Offer", "name": "Essentiel", "price": "15", "priceCurrency": "EUR", "description": "25 galeries actives, 200 Go, boutique de tirages, suppléments payés en ligne et factures. Ou 150 € par an.",
             "priceSpecification": { "@type": "UnitPriceSpecification", "price": "15", "priceCurrency": "EUR", "unitText": "mois", "billingDuration": "P1M" } },
-          { "@type": "Offer", "name": "Pro", "price": "29", "priceCurrency": "EUR", "description": "Galeries illimitées, 1 To, réservation en ligne avec acompte, devis et contrats signés, campagnes de vente, adresse à votre nom. Ou 290 € par an.",
+          { "@type": "Offer", "name": "Pro", "price": "29", "priceCurrency": "EUR", "description": "Galeries illimitées, 1 To, réservation en ligne avec acompte, devis et contrats signés, campagnes e-mail depuis votre adresse, salle de presse pour vos événements, adresse à votre nom. Ou 290 € par an.",
             "priceSpecification": { "@type": "UnitPriceSpecification", "price": "29", "priceCurrency": "EUR", "unitText": "mois", "billingDuration": "P1M" } }
         ]
       }
@@ -152,11 +156,13 @@
       { "@type": "Question", "name": "Un contrat signé en ligne est-il valable ?",
         "acceptedAnswer": { "@type": "Answer", "text": "C'est une signature électronique simple au sens du règlement européen eIDAS : elle ne peut pas être écartée au seul motif qu'elle est électronique. Holypixx conserve sa preuve : le nom saisi, la date, l'empreinte du document signé. Les conditions proposées sont un modèle à adapter, pas un conseil juridique." } },
       { "@type": "Question", "name": "Holypixx m'aide-t-il à faire revenir mes clients ?",
-        "acceptedAnswer": { "@type": "Answer", "text": "Oui. Chaque client a sa fiche : historique, montants encaissés, notes. Holypixx vous prévient au bon moment, avec un message prêt à envoyer : le premier anniversaire d'un bébé photographié à 6 mois, un anniversaire de mariage, vos séances de Noël à proposer à tous vos clients, ou un client sans séance depuis un an." } },
+        "acceptedAnswer": { "@type": "Answer", "text": "Oui. Chaque client a sa fiche : séances, factures, règlements, notes. Holypixx écrit lui-même à votre client au bon moment, avec vos mots et à votre nom : rappel la veille de la séance, sélection oubliée, galerie qui expire, « un an déjà », premier anniversaire d'un bébé, demande d'avis. Vous lancez aussi des campagnes prêtes (Noël, fête des mères, mini-séances) et voyez les réservations et ventes qu'elles rapportent. Chaque e-mail contient un lien de désinscription." } },
+      { "@type": "Question", "name": "Je photographie des concerts et des événements : comment partager avec les médias ?",
+        "acceptedAnswer": { "@type": "Answer", "text": "Avec la salle de presse (formule Pro). Vous déposez vos photos ; le commanditaire ou le management de l'artiste les valide une par une ; médias, sponsors et partenaires reçoivent chacun un lien personnel, sans compte, et voient les photos à l'heure de l'embargo. Avant de télécharger, chacun accepte sa licence (éditorial, communication ou publicité) : le texte exact est gardé comme preuve. Crédit, légende, licence et refus de l'entraînement d'IA sont écrits dans chaque fichier téléchargé." } },
       { "@type": "Question", "name": "Comment fonctionne la boutique de tirages ?",
         "acceptedAnswer": { "@type": "Answer", "text": "Vous choisissez vos formats et fixez votre marge. Le client commande depuis sa galerie et paie en ligne sur votre compte Stripe ; le laboratoire Prodigi imprime et livre directement chez lui, avec suivi, partout en Europe et, si vous fixez un port hors d'Europe, aux États-Unis, au Canada, en Australie et en Asie." } },
-      { "@type": "Question", "name": "Mes clients sont anglophones : c'est possible ?",
-        "acceptedAnswer": { "@type": "Answer", "text": "Oui. Chaque galerie a sa langue : en anglais, votre client voit sa galerie, ses e-mails, la boutique, la page de paiement et ses factures en anglais. Vous, vous gardez votre espace en français." } },
+      { "@type": "Question", "name": "Mes clients sont anglophones ou néerlandophones : c'est possible ?",
+        "acceptedAnswer": { "@type": "Answer", "text": "Oui. Chaque galerie a sa langue : français, anglais ou néerlandais. Votre client voit sa galerie, ses e-mails, la boutique, la page de paiement et ses factures dans sa langue. Votre espace photographe existe aussi en anglais et en néerlandais ; quelques écrans de gestion sont encore en français." } },
       { "@type": "Question", "name": "Prenez-vous une commission sur mes ventes ?",
         "acceptedAnswer": { "@type": "Answer", "text": "Pas sur vos séances : sur chaque paiement en ligne (suppléments, tirages), seuls les frais de paiement sont retenus, 2 % + 0,30 €. Pour la photo scolaire, à son ouverture : 5 % des ventes scolaires frais bancaires compris, sauf avec la formule Studio." } },
       { "@type": "Question", "name": "Puis-je avoir une adresse à mon nom ?",
@@ -168,7 +174,9 @@
       { "@type": "Question", "name": "Existe-t-il une application ?",
         "acceptedAnswer": { "@type": "Answer", "text": "Votre espace photographe s'installe sur l'écran d'accueil de votre téléphone, de votre tablette ou de votre ordinateur, comme une appli : une icône, une ouverture en plein écran, sans passer par un store. Le bouton « Installer l'appli » vous guide." } },
       { "@type": "Question", "name": "Une fonction me manque : à qui le dire ?",
-        "acceptedAnswer": { "@type": "Answer", "text": "À nous, directement depuis l'onglet Suggestions de votre espace. Chaque demande est lue par la fondatrice, photographe elle aussi ; vous suivez son statut (à l'étude, prévue, faite) et sa réponse." } },
+        "acceptedAnswer": { "@type": "Answer", "text": "À nous, directement depuis l'onglet Nouveautés & suggestions de votre espace. Chaque demande est lue par la fondatrice, photographe elle aussi ; vous suivez son statut et sa réponse. Chaque nouveauté y est annoncée, avec le nom du photographe qui l'a suggérée." } },
+      { "@type": "Question", "name": "Y a-t-il de l'aide dans l'outil ?",
+        "acceptedAnswer": { "@type": "Answer", "text": "Oui. Chaque page a son petit « i » qui en explique le fonctionnement, et Lumi, votre guide, répond à vos questions à toute heure, à l'écrit ou à voix haute, avec un bouton pour ouvrir le bon écran." } },
       { "@type": "Question", "name": "Où sont hébergées les photos ?",
         "acceptedAnswer": { "@type": "Answer", "text": "Sur l'infrastructure Cloudflare (stockage R2 et base D1). Les mots de passe ne sont jamais stockés en clair et chaque compte est strictement cloisonné." } }
     ]
@@ -226,6 +234,7 @@
         <a href="#selection">Sélection</a>
         <a href="#styles">Styles</a>
         <a href="#vente">Vente</a>
+        <a href="#presse">Presse</a>
         <a href="#scolaire">Scolaire</a>
         <a href="#tarifs">Tarifs</a>
         <a href="#faq">Questions</a>
@@ -719,16 +728,16 @@
       <div class="wrap">
         <div class="chapter-head">
           <h2>Vos clients reviennent. Vous n'avez plus à y penser.</h2>
-          <p class="chapter-lede">Chaque galerie, réservation et contrat enrichit la fiche de votre client. Quand vient le moment d'une nouvelle séance, Holypixx vous prévient, avec le message déjà écrit.</p>
+          <p class="chapter-lede">Chaque galerie, réservation, facture et contrat enrichit la fiche de votre client. Et quand vient le bon moment, Holypixx lui écrit lui-même, avec vos mots et à votre nom.</p>
         </div>
 
         <div class="duo duo-rev">
           <ul class="rows">
-            <li><svg class="ico"><use href="#i-user"/></svg><div><h3>Une fiche par client, toute seule</h3><p>Galeries, réservations, contrats et paiements se rangent sous l'adresse e-mail du client, avec son téléphone et vos notes.</p></div></li>
-            <li><svg class="ico"><use href="#i-heart"/></svg><div><h3>Les dates qui comptent</h3><p>Étapes de bébé (3, 6, 9&nbsp;mois, 1&nbsp;an), anniversaire de mariage, séance de saison&nbsp;: chaque date a son rappel, au délai que vous choisissez.</p></div></li>
-            <li><svg class="ico"><use href="#i-mail"/></svg><div><h3>Le message est déjà écrit</h3><p>«&nbsp;Proposer une séance&nbsp;» ouvre votre messagerie avec un texte prêt, lien de réservation compris. Les clients sans séance depuis bientôt un an remontent aussi.</p></div></li>
+            <li><svg class="ico"><use href="#i-user"/></svg><div><h3>Une fiche par client, toute seule</h3><p>Séances, factures, règlements et ce qui reste à payer se rangent sous le client, même facturé par son seul nom, avec son téléphone et vos notes.</p></div></li>
+            <li><svg class="ico"><use href="#i-heart"/></svg><div><h3>Les dates qui comptent</h3><p>Étapes de bébé (3, 6, 9&nbsp;mois, 1&nbsp;an), anniversaire de mariage, «&nbsp;un an déjà&nbsp;» après une séance&nbsp;: l'e-mail part au client, au délai que vous choisissez.</p></div></li>
+            <li><svg class="ico"><use href="#i-mail"/></svg><div><h3>Les relances partent toutes seules</h3><p>Rappel la veille de la séance, sélection oubliée, galerie qui expire, panier abandonné, acompte en attente, demande d'avis&nbsp;: chacune s'allume d'un clic, en français, anglais ou néerlandais.</p></div></li>
             <li><svg class="ico"><use href="#i-check"/></svg><div><h3>Un habitué, choisi en un clic</h3><p>Facture, devis, nouvelle galerie ou séance&nbsp;: «&nbsp;Choisir dans mes fiches clients&nbsp;», et son nom et son e-mail se remplissent seuls, son adresse aussi sur une facture.</p></div></li>
-            <li><svg class="ico"><use href="#i-calendar"/></svg><div><h3>Vos temps forts</h3><p>Noël, fête des mères, rentrée&nbsp;: six semaines avant, Holypixx vous rappelle qui prévenir et prépare un envoi groupé en copie cachée.</p></div></li>
+            <li><svg class="ico"><use href="#i-calendar"/></svg><div><h3>Des campagnes prêtes, et ce qu'elles rapportent</h3><p>Noël, fête des mères, mini-séances, vente flash de tirages&nbsp;: choisissez le modèle, qui le reçoit et l'heure d'envoi. Vous voyez les réservations et les ventes qui suivent. Désinscription en un clic, consentement enregistré.</p></div></li>
           </ul>
 
           <div class="cl-stage">
@@ -761,11 +770,11 @@
             </figure>
             <div class="prep-note cl-note cl-note-1">
               <span class="note-ico"><svg class="ico"><use href="#i-bell"/></svg></span>
-              <span><strong>Léa aura 1 an le 14 décembre</strong><em>Proposer une séance · message prêt</em></span>
+              <span><strong>Léa aura 1 an le 14 décembre</strong><em>E-mail envoyé à ses parents, à votre nom</em></span>
             </div>
             <div class="prep-note cl-note cl-note-2">
               <span class="note-ico"><svg class="ico"><use href="#i-calendar"/></svg></span>
-              <span><strong>Mini-séances de Noël</strong><em>Dans six semaines · 18 clients à prévenir</em></span>
+              <span><strong>Campagne « Séances de Noël »</strong><em>86 clients · 7 réservations · 630&nbsp;€</em></span>
             </div>
           </div>
         </div>
@@ -774,12 +783,64 @@
       </div>
     </section>
 
+    <!-- ============ Salle de presse ============ -->
+    <section class="chapter night" id="presse">
+      <div class="wrap">
+        <div class="chapter-head">
+          <h2>Concerts, festivals, événements&nbsp;:<br />votre salle de presse.</h2>
+          <p class="chapter-lede">Le commanditaire valide, les médias téléchargent à l'heure de l'embargo, chacun avec sa licence. Et votre crédit voyage avec chaque fichier. <span class="tagline">Formule Pro</span></p>
+        </div>
+
+        <div class="duo press-duo">
+          <div class="press-stage">
+            <figure class="window press-room" aria-label="La salle de presse d'un festival, vue par un média : photos validées, crédit obligatoire, téléchargement">
+              <div class="window-bar" aria-hidden="true">
+                <span class="window-dots"><i></i><i></i><i></i></span>
+                <span class="window-url">Salle de presse<span class="window-path">&nbsp;/ Les Nuits du Parc</span></span>
+              </div>
+              <div class="press-body">
+                <p class="press-chips"><span class="press-chip is-accent">Accès média</span><span class="press-chip">Le Quotidien</span></p>
+                <p class="press-title">Les Nuits du Parc 2026</p>
+                <p class="press-meta">14 novembre · Parc de la Boverie, Liège</p>
+                <p class="press-credit"><span>Crédit obligatoire</span><b>© Studio Lumière / Les Nuits du Parc</b></p>
+                <div class="press-grid">
+                  <span class="press-shot"><img src="assets/presse/chanteuse.webp" width="1000" height="1250" alt="Une chanteuse en robe rouge au micro, sur scène" loading="lazy" /></span>
+                  <span class="press-shot"><img src="assets/presse/festival.webp" width="1400" height="934" alt="Un groupe sur scène devant la foule d'un festival" loading="lazy" /></span>
+                  <span class="press-shot"><img src="assets/presse/projecteur.webp" width="1000" height="1250" alt="Une chanteuse sous un projecteur" loading="lazy" /></span>
+                </div>
+                <span class="press-btn"><svg class="ico ico-xs" aria-hidden="true"><use href="#i-download"/></svg>Tout télécharger (ZIP) · 24 photos</span>
+              </div>
+            </figure>
+            <div class="prep-note press-note press-note-1">
+              <span class="note-ico ok"><svg class="ico"><use href="#i-check"/></svg></span>
+              <span><strong>Validées par le management</strong><em>24 photos sur 31 · embargo 22&nbsp;h</em></span>
+            </div>
+            <div class="prep-note press-note press-note-2">
+              <span class="note-ico"><svg class="ico"><use href="#i-sign"/></svg></span>
+              <span><strong>Licence signée · Le Quotidien</strong><em>Usage éditorial · crédit inscrit dans les fichiers</em></span>
+            </div>
+          </div>
+
+          <ul class="rows">
+            <li><svg class="ico"><use href="#i-users"/></svg><div><h3>Un lien par destinataire</h3><p>Commanditaire, artiste ou management, médias, sponsors&nbsp;: chacun son lien personnel, sans compte ni mot de passe. Un sponsor ne voit que ses photos.</p></div></li>
+            <li><svg class="ico"><use href="#i-check"/></svg><div><h3>Validé avant diffusion</h3><p>L'organisateur ou le management valide photo par photo. Les médias ne voient que les photos validées.</p></div></li>
+            <li><svg class="ico"><use href="#i-clock"/></svg><div><h3>Embargo à la minute</h3><p>Les médias reçoivent leur lien tout de suite&nbsp;; les photos s'affichent à l'heure dite, avec un compte à rebours.</p></div></li>
+            <li><svg class="ico"><use href="#i-sign"/></svg><div><h3>Une licence signée, gardée comme preuve</h3><p>Usage éditorial, communication ou publicité&nbsp;: chacun accepte la sienne avant de télécharger. Texte exact, date et empreinte sont conservés.</p></div></li>
+            <li><svg class="ico"><use href="#i-tag"/></svg><div><h3>Votre crédit dans chaque fichier</h3><p>Crédit, légende, licence, nom du média et refus de l'entraînement d'IA sont écrits dans les métadonnées IPTC du JPEG téléchargé.</p></div></li>
+            <li><svg class="ico"><use href="#i-mail"/></svg><div><h3>Accréditations et journal</h3><p>Les journalistes demandent l'accès en ligne, vous acceptez d'un clic. Chaque téléchargement est noté, exportable en CSV.</p></div></li>
+          </ul>
+        </div>
+
+        <a class="chapter-cta" href="/salle-de-presse-photographe">Le guide de la salle de presse<svg class="ico"><use href="#i-arrow"/></svg></a>
+      </div>
+    </section>
+
     <!-- ============ Appli et suggestions ============ -->
     <section class="chapter" id="appli">
       <div class="wrap">
         <div class="chapter-head">
           <h2>Dans votre poche.<br />Et construit avec vous.</h2>
-          <p class="chapter-lede">Votre espace s'installe comme une appli, sans passer par un store. Et quand une option vous manque, vous l'écrivez&nbsp;: Holypixx grandit avec les demandes des photographes qui l'utilisent.</p>
+          <p class="chapter-lede">Votre espace s'installe comme une appli, sans passer par un store, en français, anglais ou néerlandais. Une question&nbsp;? Lumi, votre guide, répond à toute heure. Une option vous manque&nbsp;? Vous l'écrivez&nbsp;: Holypixx grandit avec les demandes des photographes qui l'utilisent.</p>
         </div>
 
         <div class="pocket">
@@ -808,11 +869,11 @@
               <p class="ideas-head">Vos demandes</p>
               <span class="ideas-row"><span><b>Un agenda mensuel pour mes clients</b><em>Nouvelle fonction</em></span><span class="ideas-status done">Faite</span></span>
               <span class="ideas-row"><span><b>Réserver sans mini-site</b><em>Nouvelle fonction</em></span><span class="ideas-status done">Faite</span></span>
-              <span class="ideas-reply">Réponse&nbsp;: c'est en ligne, dans l'onglet Réservations.</span>
+              <span class="ideas-reply">Nouveauté&nbsp;: «&nbsp;Votre suggestion, réalisée&nbsp;: merci&nbsp;!&nbsp;»</span>
               <span class="ideas-row"><span><b>Votre prochaine idée</b><em>Amélioration</em></span><span class="ideas-status">Reçue</span></span>
             </div>
             <h3>Une idée&nbsp;? Elle arrive à la fondatrice</h3>
-            <p>L'onglet Suggestions envoie votre demande à Christine, photographe et fondatrice d'Holypixx. Vous suivez son statut et sa réponse au même endroit.</p>
+            <p>L'onglet Nouveautés &amp; suggestions envoie votre demande à Christine, photographe et fondatrice d'Holypixx. Vous suivez sa réponse, et chaque nouveauté y est annoncée, avec le nom de qui l'a suggérée.</p>
           </article>
         </div>
       </div>
@@ -893,7 +954,7 @@
               <li>3 galeries actives, 5 Go</li>
               <li>Protection complète : tuiles, filigrane, empreinte, alertes</li>
               <li>Neuf styles de galerie, polices, film en tête</li>
-              <li>Sélection, annotations, relances</li>
+              <li>Sélection, annotations, relances e-mail automatiques</li>
               <li>Livraison des photos HD</li>
               <li>Fiches clients et rappels des dates</li>
               <li>Portfolio en ligne</li>
@@ -929,7 +990,8 @@
               <li>Réservation en ligne avec acompte, prestations illustrées</li>
               <li>Agenda sur votre site ou page de réservation, QR code, créneaux privés</li>
               <li>Devis et contrats signés en ligne</li>
-              <li>Campagnes de vente : promotions, relances des paniers</li>
+              <li>Campagnes e-mail depuis l'adresse de votre studio, ventes mesurées</li>
+              <li>Salle de presse&nbsp;: événements, médias, licences, embargo</li>
               <li>Adresse à votre nom : <span class="nowrap">votre-studio.holypixx.com</span></li>
               <li>Portfolio sur votre adresse</li>
               <li>Bientôt : écoles, crèches et clubs, 5&nbsp;% des ventes scolaires</li>
@@ -990,15 +1052,17 @@
           <details><summary>J'ai déjà mon site : mes clients peuvent-ils réserver dessus ?</summary><p>Oui. Holypixx vous donne une page de réservation à votre nom, sans mini-site à créer&nbsp;: partagez son lien ou son QR code, collez un bouton sur votre site, ou intégrez directement l'agenda dans une page (WordPress, Wix, Squarespace…). Vous pouvez aussi garder la réservation sur votre portfolio Holypixx, ou les deux.</p></details>
           <details><summary>Un client me paie par virement ou en espèces : comment je m'y retrouve ?</summary><p>Tous les suppléments et options en attente sont réunis dans un tableau&nbsp;: cochez «&nbsp;réglé par virement&nbsp;» ou «&nbsp;en espèces&nbsp;», la facture lui est envoyée. Sans règlement, votre client reçoit un rappel 3 puis 7&nbsp;jours après avoir validé sa sélection, avec toutes les façons de payer&nbsp;; vous pouvez couper ces rappels dans vos paramètres.</p></details>
           <details><summary>Un contrat signé en ligne est-il valable ?</summary><p>C'est une signature électronique simple au sens du règlement européen eIDAS&nbsp;: elle ne peut pas être écartée au seul motif qu'elle est électronique. Holypixx conserve sa preuve&nbsp;: le nom saisi, la date, l'empreinte du document signé. Les conditions proposées sont un modèle à adapter, pas un conseil juridique.</p></details>
-          <details><summary>Holypixx m'aide-t-il à faire revenir mes clients ?</summary><p>Oui. Chaque client a sa fiche&nbsp;: historique, montants encaissés, notes. Holypixx vous prévient au bon moment, avec un message prêt à envoyer&nbsp;: le premier anniversaire d'un bébé photographié à 6&nbsp;mois, un anniversaire de mariage, vos séances de Noël à proposer à tous vos clients, ou un client sans séance depuis un an. Notre guide pour <a class="inline-link" href="/fideliser-clients-photographe">fidéliser ses clients</a> vous donne un calendrier gratuit et les messages à envoyer.</p></details>
+          <details><summary>Holypixx m'aide-t-il à faire revenir mes clients ?</summary><p>Oui. Chaque client a sa fiche&nbsp;: séances, factures, règlements, notes. Holypixx écrit lui-même à votre client au bon moment, avec vos mots et à votre nom&nbsp;: rappel la veille de la séance, sélection oubliée, galerie qui expire, «&nbsp;un an déjà&nbsp;», premier anniversaire d'un bébé, demande d'avis. Vous lancez aussi des campagnes prêtes (Noël, fête des mères, mini-séances) et voyez les réservations et ventes qu'elles rapportent. Chaque e-mail contient un lien de désinscription. Notre guide pour <a class="inline-link" href="/fideliser-clients-photographe">fidéliser ses clients</a> vous donne un calendrier gratuit et les messages à envoyer.</p></details>
+          <details><summary>Je photographie des concerts et des événements : comment partager avec les médias ?</summary><p>Avec la salle de presse (formule Pro). Vous déposez vos photos&nbsp;; le commanditaire ou le management de l'artiste les valide une par une&nbsp;; médias, sponsors et partenaires reçoivent chacun un lien personnel, sans compte, et voient les photos à l'heure de l'embargo. Avant de télécharger, chacun accepte sa licence (éditorial, communication ou publicité)&nbsp;: le texte exact est gardé comme preuve. Crédit, légende, licence et refus de l'entraînement d'IA sont écrits dans chaque fichier téléchargé. Tout est détaillé dans notre guide de la <a class="inline-link" href="/salle-de-presse-photographe">salle de presse pour photographes</a>.</p></details>
           <details><summary>Comment fonctionne la boutique de tirages ?</summary><p>Vous choisissez vos formats et fixez votre marge. Le client commande depuis sa galerie et paie en ligne sur votre compte Stripe ; le laboratoire Prodigi imprime et livre directement chez lui, avec suivi, partout en Europe et, si vous fixez un port hors d'Europe, aux États-Unis, au Canada, en Australie et en Asie.</p></details>
-          <details><summary>Mes clients sont anglophones : c'est possible ?</summary><p>Oui. Chaque galerie a sa langue&nbsp;: en anglais, votre client voit sa galerie, ses e-mails, la boutique, la page de paiement et ses factures en anglais. Vous, vous gardez votre espace en français.</p></details>
+          <details><summary>Mes clients sont anglophones ou néerlandophones : c'est possible ?</summary><p>Oui. Chaque galerie a sa langue&nbsp;: français, anglais ou néerlandais. Votre client voit sa galerie, ses e-mails, la boutique, la page de paiement et ses factures dans sa langue. Votre espace photographe existe aussi en anglais et en néerlandais&nbsp;; quelques écrans de gestion sont encore en français.</p></details>
           <details><summary>Prenez-vous une commission sur mes ventes ?</summary><p>Pas sur vos séances : sur chaque paiement en ligne (suppléments, tirages), seuls les frais de paiement sont retenus, 2&nbsp;% + 0,30&nbsp;€, ce que coûtent la carte bancaire et le virement vers votre compte. Pour la photo scolaire, à son ouverture : 5&nbsp;% des ventes scolaires frais bancaires compris, sauf avec la formule Studio.</p></details>
           <details><summary>Puis-je avoir une adresse à mon nom ?</summary><p>Oui, avec la formule Pro : vos galeries et votre portfolio s'ouvrent sur <span class="nowrap">votre-studio.holypixx.com</span>, avec le nom de votre studio.</p></details>
           <details><summary>Et la photo scolaire ?</summary><p>Un module complet arrive très bientôt : établissements et classes, fiches parents avec QR code, espace famille, pochettes avec aperçu de la photo de l'enfant, commande groupée et envoi au laboratoire. Prévu : avec Essentiel, Pro ou la formule Scolaire (sans abonnement), 5&nbsp;% des ventes scolaires ; avec Studio (490&nbsp;€ par an), sans commission.</p></details>
           <details><summary>Y a-t-il un programme de parrainage ?</summary><p>Oui. Dans l'onglet Abonnement, vous trouvez votre lien de parrainage. Le confrère qui s'inscrit avec ce lien a −50&nbsp;% sur son mois suivant dès son premier paiement. Vous, vous gagnez une case sur votre carte de parrain&nbsp;: trois confrères abonnés, un mois offert, deux mois offerts au plus par an.</p></details>
           <details><summary>Existe-t-il une application ?</summary><p>Votre espace photographe s'installe sur l'écran d'accueil de votre téléphone, de votre tablette ou de votre ordinateur, comme une appli&nbsp;: une icône, une ouverture en plein écran, sans passer par un store. Le bouton «&nbsp;Installer l'appli&nbsp;» vous guide.</p></details>
-          <details><summary>Une fonction me manque : à qui le dire ?</summary><p>À nous, directement depuis l'onglet Suggestions de votre espace. Chaque demande est lue par la fondatrice, photographe elle aussi&nbsp;; vous suivez son statut (à l'étude, prévue, faite) et sa réponse.</p></details>
+          <details><summary>Une fonction me manque : à qui le dire ?</summary><p>À nous, directement depuis l'onglet Nouveautés &amp; suggestions de votre espace. Chaque demande est lue par la fondatrice, photographe elle aussi&nbsp;; vous suivez son statut et sa réponse. Chaque nouveauté y est annoncée, avec le nom du photographe qui l'a suggérée.</p></details>
+          <details><summary>Y a-t-il de l'aide dans l'outil ?</summary><p>Oui. Chaque page a son petit «&nbsp;i&nbsp;» qui en explique le fonctionnement, et Lumi, votre guide, répond à vos questions à toute heure, à l'écrit ou à voix haute, avec un bouton pour ouvrir le bon écran.</p></details>
           <details><summary>Où sont hébergées les photos ?</summary><p>Sur l'infrastructure Cloudflare (stockage R2 et base D1). Les mots de passe ne sont jamais stockés en clair et chaque compte est strictement cloisonné.</p></details>
         </div>
       </div>
@@ -1027,6 +1091,7 @@
         <a href="#styles">Styles</a>
         <a href="#vente">Vente</a>
         <a href="#clients">Clients</a>
+        <a href="#presse">Salle de presse</a>
         <a href="#appli">Appli</a>
         <a href="#tarifs">Tarifs</a>
         <a href="#faq">Questions</a>
@@ -1036,6 +1101,7 @@
         <a href="/reservation-seance-photo">Mini-séances</a>
         <a href="/fideliser-clients-photographe">Fidéliser ses clients</a>
         <a href="/galerie-photo-mariage">Galerie de mariage</a>
+        <a href="/salle-de-presse-photographe">Salle de presse photo</a>
         <a href="/en/" hreflang="en" lang="en">English</a>
         <a href="/nl/" hreflang="nl" lang="nl">Nederlands</a>
         <a href="/conditions">Conditions</a>

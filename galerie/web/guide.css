@@ -318,3 +318,9 @@
   .m-win .sty-page { height: 440px; }
 }
 
+
+/* Bandeau photo sous l'ouverture (guide « Salle de presse »). */
+.g-banner { margin-top: clamp(32px, 5vw, 56px); }
+.g-banner img { display: block; width: 100%; height: clamp(220px, 34vw, 460px); object-fit: cover; object-position: 50% 40%; border-radius: var(--radius); }
+.r-post-text.p-credit { font-size: 1.05rem; font-weight: 600; color: var(--ink); }
+.g-sign .press-room { align-self: center; }
