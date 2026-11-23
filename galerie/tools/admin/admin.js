@@ -4441,7 +4441,7 @@
   // Nouveautés : publier, modifier, retirer (onglet Suggestions des photographes).
   var NEWS_LINKS = [["", "Aucun"], ["#/", "Galeries"], ["#/planning", "Planning"], ["#/clients", "Clients"], ["#/relances", "Relances"], ["#/reservations", "Réservations"],
     ["#/contrats", "Devis & contrats"], ["#/ventes", "Ventes"], ["#/statistiques", "Statistiques"], ["#/facturation", "Facturation"], ["#/boutique", "Boutique"],
-    ["#/portfolio", "Portfolio"], ["#/bons-cadeaux", "Bons cadeaux"], ["#/abonnement", "Abonnement"], ["#/parametres", "Paramètres"], ["#/suggestions", "Nouveautés & suggestions"]];
+    ["#/portfolio", "Portfolio"], ["#/bons-cadeaux", "Bons cadeaux"], ["#/abonnement", "Abonnement"], ["#/parametres", "Paramètres"], ["#/presse", "Salle de presse"], ["#/suggestions", "Nouveautés & suggestions"]];
   var newsEditing = "";
 
   function ownerNewsHtml(data, feedback) {
