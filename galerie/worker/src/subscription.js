@@ -29,7 +29,7 @@ export const PLANS = {
     priceCents: 0,
     maxActiveGalleries: 3,
     storageBytes: 5e9,
-    features: { shop: false, extras: false, campaigns: false, subdomain: false, school: false, booking: false, contracts: false },
+    features: { shop: false, extras: false, campaigns: false, subdomain: false, school: false, booking: false, contracts: false, press: false },
     pitch: "Pour essayer : 3 galeries actives, protection complète, sélection, livraison HD.",
   },
   essentiel: {
@@ -46,7 +46,7 @@ export const PLANS = {
     storageBytes: 200e9,
     // Vendre : boutique de tirages et suppléments payés en ligne. Campagnes,
     // réservation et contrats sont réservés à Pro.
-    features: { shop: true, extras: true, campaigns: false, subdomain: false, school: true, booking: false, contracts: false },
+    features: { shop: true, extras: true, campaigns: false, subdomain: false, school: true, booking: false, contracts: false, press: false },
     pitch: "25 galeries actives, la boutique de tirages et les suppléments payés en ligne.",
   },
   pro: {
@@ -59,7 +59,7 @@ export const PLANS = {
     schoolFeePercent: 5,
     maxActiveGalleries: null,
     storageBytes: 1000e9,
-    features: { shop: true, extras: true, campaigns: true, subdomain: true, school: true, booking: true, contracts: true },
+    features: { shop: true, extras: true, campaigns: true, subdomain: true, school: true, booking: true, contracts: true, press: true },
     pitch: "Galeries illimitées, réservation et contrats en ligne, campagnes de vente, et vos galeries à votre nom (votre-studio.holypixx.com).",
   },
   // Photo de groupe (écoles, crèches, clubs) : voir school.js. Ces deux
@@ -78,7 +78,7 @@ export const PLANS = {
     schoolFeePercent: 5,
     maxActiveGalleries: 3,
     storageBytes: 500e9,
-    features: { shop: false, extras: false, campaigns: false, subdomain: false, school: true, booking: false, contracts: false },
+    features: { shop: false, extras: false, campaigns: false, subdomain: false, school: true, booking: false, contracts: false, press: false },
     pitch: "Pour les photographes qui ne font que du scolaire : on ne paie que sur ce qu'on vend.",
   },
   // Studio : tout Pro, plus le scolaire sans commission (seulement les frais
@@ -98,7 +98,7 @@ export const PLANS = {
     schoolPlan: true,
     maxActiveGalleries: null,
     storageBytes: 2000e9,
-    features: { shop: true, extras: true, campaigns: true, subdomain: true, school: true, booking: true, contracts: true },
+    features: { shop: true, extras: true, campaigns: true, subdomain: true, school: true, booking: true, contracts: true, press: true },
     pitch: "Tout Pro, plus les écoles, crèches et clubs, sans commission.",
   },
 };
@@ -139,6 +139,7 @@ export const FEATURE_LABELS = {
   school: "Le module écoles, crèches et clubs",
   booking: "La réservation en ligne",
   contracts: "Les devis et contrats signés en ligne",
+  press: "La salle de presse",
 };
 // Accord : « La boutique… est incluse », « Le module… est inclus »,
 // « Les campagnes… sont incluses ».
@@ -211,7 +212,7 @@ export function featureRefusal(feature) {
 
 export async function activeGalleryCount(env, photographerId) {
   const row = await env.DB.prepare(
-    "SELECT COUNT(*) AS n FROM galleries WHERE photographer_id = ? AND kind != 'school' AND demo = 0 AND (expires_at IS NULL OR expires_at > ?)"
+    "SELECT COUNT(*) AS n FROM galleries WHERE photographer_id = ? AND kind = 'client' AND demo = 0 AND (expires_at IS NULL OR expires_at > ?)"
   )
     .bind(photographerId, now())
     .first();

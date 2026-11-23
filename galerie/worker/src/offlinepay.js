@@ -188,7 +188,7 @@ export async function listDueSupplements(env, photographerId) {
             (SELECT MAX(created_at) FROM payments WHERE payments.gallery_id = g.id AND payments.status = 'pending' AND payments.kind = 'supplement') AS card_started_at,
             (SELECT MAX(sent_at) FROM reminders_sent WHERE reminders_sent.gallery_id = g.id AND reminders_sent.kind LIKE 'unpaid_%') AS reminded_at
      FROM galleries g
-     WHERE g.photographer_id = ? AND g.demo = 0 AND g.kind != 'school'
+     WHERE g.photographer_id = ? AND g.demo = 0 AND g.kind = 'client'
      ORDER BY g.created_at DESC`
   ).bind(photographerId).all();
   const optionsDue = await unpaidOptionsByGallery(env, photographerId);

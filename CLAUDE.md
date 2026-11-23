@@ -21,7 +21,9 @@ par les photographes est livrée, fournir dans le compte rendu final un bloc
 
 - Répondre en français.
 - Ne fusionner (PR vers `main`) qu'après « fusionne » dans la conversation.
-- Déploiement, depuis `galerie/worker` : `git pull`, puis les migrations nouvelles
+- Déploiement : le site (Cloudflare Pages `holypixx-web`) et l'espace photographe (Render)
+  se redéploient seuls à chaque fusion sur `main`. Seul le worker se déploie à la main,
+  depuis `galerie/worker` : `git pull`, puis les migrations nouvelles
   (`npx wrangler d1 execute galerie-protegee --remote --file=migrations/…`), puis
-  `npm run deploy` ; ensuite Pages et Render. Une commande par bloc de code.
+  `npm run deploy`. Une commande par bloc de code.
 - Tout texte visible par les photographes existe en FR, EN et NL.

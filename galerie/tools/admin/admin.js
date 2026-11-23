@@ -527,6 +527,7 @@
       else if (tab === "clients") renderClients();
       else if (tab === "mailing") renderMailing();
       else if (tab === "contracts") renderContracts();
+      else if (tab === "press") renderPress();
       else if (tab === "portfolio") renderPortfolio();
       else if (tab === "billing") renderBilling();
       else if (tab === "shop") renderShop();
@@ -6778,6 +6779,11 @@
           if (heading) heading.textContent = "Photos (" + photosSection.querySelectorAll(".ad-photo").length + ")";
         }
         setTimeout(function () { item.row.remove(); }, 2500);
+        // Salle de presse affichée : la grille se met à jour (une fois par salve).
+        if (pressState.slug === slug && pressState.tab === "photos") {
+          clearTimeout(pressState.uploadTimer);
+          pressState.uploadTimer = setTimeout(pressRefresh, 1200);
+        }
         return item;
       })
       .catch(function (err) {
@@ -12667,6 +12673,713 @@
 
   /* ---------- Démarrage et navigation ---------- */
 
+  /* ---------- Salle de presse ----------
+   * Les photos d'un événement (concert, festival, conférence, reportage)
+   * partagées avec le commanditaire, l'artiste, les médias et les sponsors :
+   * chacun son lien, sa licence, et le crédit du studio inscrit dans chaque
+   * fichier (voir worker/src/press.js). */
+
+  var pressState = { data: null, detail: null, slug: "", tab: "photos", filter: "all", selected: {}, openPhoto: "", creating: false, editingTpl: "" };
+
+  function PRESS_ROLES() { return [
+    ["client", L("Commanditaire", "Client", "Opdrachtgever"), L("valide les photos, licence communication", "approves photos, communications licence", "keurt foto's goed, communicatielicentie")],
+    ["validator", L("Artiste ou management", "Artist or management", "Artiest of management"), L("valide les photos avant diffusion", "approves photos before release", "keurt foto's goed vóór verspreiding")],
+    ["press", L("Média", "Media", "Media"), L("photos validées, usage éditorial", "approved photos, editorial use", "goedgekeurde foto's, redactioneel gebruik")],
+    ["sponsor", L("Sponsor", "Sponsor", "Sponsor"), L("seulement ses photos (étiquette)", "only its photos (tag)", "alleen eigen foto's (label)")],
+    ["partner", L("Partenaire", "Partner", "Partner"), L("photos validées, licence au choix", "approved photos, licence of your choice", "goedgekeurde foto's, licentie naar keuze")],
+  ]; }
+  function pressRoleLabel(role) {
+    var r = PRESS_ROLES().filter(function (x) { return x[0] === role; })[0];
+    return r ? r[1] : role;
+  }
+  function PRESS_PEOPLE() { return [
+    ["unknown", L("À préciser", "To be checked", "Na te gaan")],
+    ["none", L("Personne de reconnaissable", "No recognisable person", "Geen herkenbare persoon")],
+    ["release", L("Autorisation signée", "Signed release", "Ondertekende toestemming")],
+    ["editorial", L("Usage éditorial seulement", "Editorial use only", "Alleen redactioneel gebruik")],
+    ["minor", L("Mineur (autorisation parentale)", "Minor (parental consent)", "Minderjarige (ouderlijke toestemming)")],
+  ]; }
+  function PRESS_USAGES() { return [
+    ["print", L("Presse écrite", "Print press", "Geschreven pers")], ["web", L("Web et médias en ligne", "Web and online media", "Web en online media")],
+    ["social", L("Réseaux sociaux", "Social media", "Sociale media")], ["tv", L("Télévision et vidéo", "TV and video", "Televisie en video")],
+    ["newsletter", L("Newsletters", "Newsletters", "Nieuwsbrieven")], ["internal", L("Communication interne", "Internal communications", "Interne communicatie")],
+    ["advertising", L("Publicité", "Advertising", "Reclame")], ["social_ads", L("Publicités sur les réseaux", "Social media ads", "Advertenties op sociale media")],
+    ["ooh", L("Affichage", "Billboards", "Affichage")],
+  ]; }
+  function PRESS_TERRITORIES() { return [
+    ["world", L("Monde entier", "Worldwide", "Wereldwijd")], ["europe", L("Union européenne", "European Union", "Europese Unie")],
+    ["benelux", L("Benelux", "Benelux", "Benelux")], ["belgium", L("Belgique", "Belgium", "België")],
+    ["france", L("France", "France", "Frankrijk")], ["netherlands", L("Pays-Bas", "Netherlands", "Nederland")],
+  ]; }
+  function PRESS_KINDS() { return { editorial: L("Usage éditorial", "Editorial use", "Redactioneel gebruik"), communication: L("Communication", "Communications", "Communicatie"), advertising: L("Publicité", "Advertising", "Reclame") }; }
+  function PRESS_STATES() { return {
+    draft: L("Préparation", "Preparing", "Voorbereiding"), review: L("En validation", "In review", "In goedkeuring"),
+    live: L("Publiée", "Published", "Gepubliceerd"), closed: L("Fermée", "Closed", "Gesloten"),
+  }; }
+  function PRESS_STATUS() { return { pending: L("À valider", "To approve", "Goed te keuren"), approved: L("Validée", "Approved", "Goedgekeurd"), rejected: L("Refusée", "Rejected", "Afgekeurd") }; }
+
+  function pressDate(ts, withTime) {
+    if (!ts) return "";
+    var o = { day: "numeric", month: "short", year: "numeric" };
+    if (withTime) { o.hour = "2-digit"; o.minute = "2-digit"; }
+    return new Date(ts * 1000).toLocaleString(locale(), o);
+  }
+  function pressLocalInput(ts) {
+    if (!ts) return "";
+    var d = new Date(ts * 1000);
+    var p = function (n) { return String(n).padStart(2, "0"); };
+    return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()) + "T" + p(d.getHours()) + ":" + p(d.getMinutes());
+  }
+  function pressThumb(id, extraClass) {
+    return '<span class="ad-pr-thumb ' + (extraClass || "") + '">' + [0, 1].map(function (row) {
+      return [0, 1].map(function (col) { return '<img loading="lazy" alt="" src="/local/tiles/' + esc(id) + "/0/" + col + "/" + row + '" />'; }).join("");
+    }).join("") + "</span>";
+  }
+  function pressChip(state) {
+    return '<span class="ad-pr-state ad-pr-state-' + esc(state) + '">' + esc(PRESS_STATES()[state] || state) + "</span>";
+  }
+  function copyText(text, done) {
+    (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).then(function () {
+      toast(done || L("Lien copié.", "Link copied.", "Link gekopieerd."));
+    }).catch(function () { window.prompt(L("Copiez ce lien :", "Copy this link:", "Kopieer deze link:"), text); });
+  }
+
+  async function renderPress(skipHash) {
+    if (!skipHash && location.hash !== "#/presse") history.pushState(null, "", "#/presse");
+    setActiveTab("press");
+    pressState.slug = "";
+    if (!pressState.data) el.view.innerHTML = '<p class="ad-loading">' + L("Chargement…", "Loading…", "Laden…") + "</p>";
+    var data;
+    try {
+      data = await api("GET", "/press");
+    } catch (err) {
+      el.view.innerHTML = '<div class="ad-error-panel"><h2>' + L("Salle de presse indisponible", "Press room unavailable", "Perskamer niet beschikbaar") + "</h2><p>" + esc(err.message) + "</p></div>";
+      return;
+    }
+    if (location.hash !== "#/presse") return;
+    pressState.data = data;
+    paintPressList(data);
+  }
+
+  function pressStepsHtml() {
+    var steps = [
+      [L("Déposez", "Upload", "Upload"), L("Vos JPEG gardent leur HD et leurs légendes IPTC.", "Your JPEGs keep their full resolution and IPTC captions.", "Je JPEG's behouden hun volle resolutie en IPTC-bijschriften.")],
+      [L("Faites valider", "Get approval", "Laat goedkeuren"), L("Le commanditaire ou l'artiste valide photo par photo.", "The client or artist approves photo by photo.", "De opdrachtgever of artiest keurt foto per foto goed.")],
+      [L("Publiez", "Publish", "Publiceer"), L("Médias et sponsors reçoivent leur lien, à l'heure de l'embargo.", "Media and sponsors get their link, at embargo time.", "Media en sponsors krijgen hun link, op het uur van het embargo.")],
+      [L("Gardez la preuve", "Keep the proof", "Bewaar het bewijs"), L("Licence signée, crédit dans chaque fichier, journal des téléchargements.", "Signed licence, credit in every file, download log.", "Ondertekende licentie, vermelding in elk bestand, downloadlogboek.")],
+    ];
+    return '<ol class="ad-pr-steps">' + steps.map(function (s, i) {
+      return "<li><span class=\"ad-pr-step-n\">" + (i + 1) + "</span><b>" + esc(s[0]) + "</b><span>" + esc(s[1]) + "</span></li>";
+    }).join("") + "</ol>";
+  }
+
+  function pressEventFormHtml(ev, isNew) {
+    ev = ev || {};
+    var langs = [["fr", "Français"], ["en", "English"], ["nl", "Nederlands"]];
+    return '<form class="ad-pr-form" id="' + (isNew ? "ad-pr-create" : "ad-pr-settings") + '">' +
+      '<div class="ad-pr-grid">' +
+      '<label class="ad-field ad-pr-wide"><span>' + L("Nom de l'événement", "Event name", "Naam van het evenement") + '</span><input name="title" required maxlength="120" value="' + esc(ev.title || "") + '" placeholder="' + esc(L("ex. Festival des Lumières 2026, concert de clôture", "e.g. Festival of Lights 2026, closing concert", "bv. Lichtfestival 2026, slotconcert")) + '" /></label>' +
+      '<label class="ad-field"><span>' + L("Date", "Date", "Datum") + '</span><input type="date" name="eventDate" value="' + esc(ev.eventDate || "") + '" /></label>' +
+      '<label class="ad-field"><span>' + L("Lieu", "Venue", "Locatie") + '</span><input name="venue" maxlength="160" value="' + esc(ev.venue || "") + '" /></label>' +
+      '<label class="ad-field"><span>' + L("Ville", "City", "Stad") + '</span><input name="city" maxlength="120" value="' + esc(ev.city || "") + '" /></label>' +
+      '<label class="ad-field"><span>' + L("Organisateur ou commanditaire", "Organiser or client", "Organisator of opdrachtgever") + '</span><input name="organiser" maxlength="160" value="' + esc(ev.organiser || "") + '" /></label>' +
+      '<label class="ad-field ad-pr-wide"><span>' + L("Crédit imposé", "Mandatory credit", "Verplichte vermelding") + ' <small>' + L("écrit dans chaque fichier livré", "written into every delivered file", "in elk geleverd bestand geschreven") + '</small></span><input name="creditLine" maxlength="160" value="' + esc(ev.creditLine || "") + '" placeholder="' + esc(L("Votre studio / Organisateur", "Your studio / Organiser", "Jouw studio / Organisator")) + '" /></label>' +
+      '<label class="ad-field"><span>' + L("Embargo (médias et sponsors)", "Embargo (media and sponsors)", "Embargo (media en sponsors)") + '</span><input type="datetime-local" name="embargo" value="' + esc(pressLocalInput(ev.embargoAt)) + '" /></label>' +
+      '<label class="ad-field"><span>' + L("Langue de la salle de presse", "Press room language", "Taal van de perskamer") + '</span><select name="language">' + langs.map(function (l) { return '<option value="' + l[0] + '"' + ((ev.language || LANG) === l[0] ? " selected" : "") + ">" + l[1] + "</option>"; }).join("") + "</select></label>" +
+      (isNew ? "" : '<label class="ad-field ad-pr-wide"><span>' + L("Présentation (page d'accréditation)", "Description (accreditation page)", "Beschrijving (accreditatiepagina)") + '</span><textarea name="description" rows="3" maxlength="2000">' + esc(ev.description || "") + "</textarea></label>") +
+      "</div>" +
+      '<div class="ad-pr-checks">' +
+      '<label class="ad-check"><input type="checkbox" name="approvalRequired"' + (ev.approvalRequired === false ? "" : " checked") + " /> " + L("Validation photo par photo avant diffusion", "Photo-by-photo approval before release", "Foto per foto goedkeuren vóór verspreiding") + "</label>" +
+      '<label class="ad-check"><input type="checkbox" name="accreditationOpen"' + (ev.accreditationOpen ? " checked" : "") + " /> " + L("Les médias peuvent demander une accréditation en ligne", "Media can request accreditation online", "Media kunnen online een accreditatie aanvragen") + "</label>" +
+      '<label class="ad-check"><input type="checkbox" name="aiReservation"' + (ev.aiReservation === false ? "" : " checked") + " /> " + L("Refuser l'entraînement d'IA (écrit dans les fichiers)", "Opt out of AI training (written into the files)", "Weiger AI-training (in de bestanden geschreven)") + "</label>" +
+      "</div>" +
+      '<div class="ad-sc-actions"><button type="submit" class="ad-btn ad-btn-primary">' + (isNew ? L("Créer la salle de presse", "Create the press room", "Perskamer aanmaken") : L("Enregistrer", "Save", "Opslaan")) + "</button>" +
+      (isNew ? '<button type="button" class="ad-btn" id="ad-pr-cancel">' + L("Annuler", "Cancel", "Annuleren") + "</button>" : "") + "</div></form>";
+  }
+
+  function pressFormBody(form) {
+    var f = form.elements;
+    var embargo = f.embargo && f.embargo.value ? Math.floor(new Date(f.embargo.value).getTime() / 1000) : null;
+    var body = {
+      title: f.title.value.trim(), eventDate: f.eventDate.value, venue: f.venue.value, city: f.city.value, organiser: f.organiser.value,
+      creditLine: f.creditLine.value, embargoAt: embargo, language: f.language.value,
+      approvalRequired: f.approvalRequired.checked, accreditationOpen: f.accreditationOpen.checked, aiReservation: f.aiReservation.checked,
+    };
+    if (f.description) body.description = f.description.value;
+    return body;
+  }
+
+  function paintPressList(data) {
+    var events = data.events || [];
+    el.view.innerHTML =
+      '<header class="ad-detail-header"><div><h2>' + L("Salle de presse", "Press room", "Perskamer") + "</h2>" +
+      '<p class="ad-hint">' + L("Concert, festival, conférence, reportage : partagez les photos avec le commanditaire, l'artiste, les médias et les sponsors. Chacun son accès, sa licence, et votre crédit inscrit dans chaque fichier.",
+        "Concert, festival, conference, assignment: share the photos with the client, the artist, the media and sponsors. Each gets their own access and licence, with your credit written into every file.",
+        "Concert, festival, conferentie, reportage: deel de foto's met de opdrachtgever, de artiest, de media en sponsors. Elk met een eigen toegang en licentie, en jouw vermelding in elk bestand.") + "</p></div>" +
+      (data.enabled && !pressState.creating ? '<button type="button" class="ad-btn ad-btn-primary" id="ad-pr-new">' + L("+ Nouvel événement", "+ New event", "+ Nieuw evenement") + "</button>" : "") +
+      "</header>" +
+      (!data.enabled ? '<p class="ad-banner ad-banner-muted">' + L("La salle de presse est incluse dans la formule Pro.", "The press room is included in the Pro plan.", "De perskamer is inbegrepen in het Pro-abonnement.") + ' <button type="button" class="ad-link-btn" id="ad-pr-plans">' + L("Voir les formules", "See plans", "Bekijk de abonnementen") + "</button></p>" : "") +
+      (pressState.creating ? '<section class="ad-pr-card"><h3>' + L("Nouvel événement", "New event", "Nieuw evenement") + "</h3>" + pressEventFormHtml({}, true) + "</section>" : "") +
+      (events.length
+        ? '<section><div class="ad-section-header"><h3>' + L("Vos événements", "Your events", "Jouw evenementen") + "</h3></div><div class=\"ad-pr-events\">" + events.map(function (e) {
+            return '<a class="ad-pr-event" href="#/presse/' + encodeURIComponent(e.slug) + '" data-pr-open="' + esc(e.slug) + '">' +
+              (e.coverId ? pressThumb(e.coverId, "ad-pr-cover") : '<span class="ad-pr-thumb ad-pr-cover ad-pr-empty"></span>') +
+              '<span class="ad-pr-event-body"><span class="ad-pr-event-top">' + pressChip(e.state) + (e.requestCount ? '<span class="ad-pr-badge">' + L(e.requestCount + " demande(s)", e.requestCount + " request(s)", e.requestCount + " aanvra(a)g(en)") + "</span>" : "") + "</span>" +
+              "<b>" + esc(e.title) + "</b><em>" + esc([e.eventDate ? new Date(e.eventDate + "T12:00:00").toLocaleDateString(locale(), { day: "numeric", month: "long", year: "numeric" }) : "", e.venue, e.city].filter(Boolean).join(" · ")) + "</em>" +
+              '<span class="ad-pr-event-stats"><span>' + L(e.photoCount + " photos", e.photoCount + " photos", e.photoCount + " foto's") + "</span><span>" +
+              L(e.approvedCount + " validées", e.approvedCount + " approved", e.approvedCount + " goedgekeurd") + "</span><span>" +
+              L(e.recipientCount + " destinataires", e.recipientCount + " recipients", e.recipientCount + " ontvangers") + "</span><span>" +
+              L(e.downloadCount + " téléchargements", e.downloadCount + " downloads", e.downloadCount + " downloads") + "</span></span></span></a>";
+          }).join("") + "</div></section>"
+        : (!pressState.creating ? '<section class="ad-pr-intro">' + pressStepsHtml() + "</section>" : ""));
+    var plans = document.getElementById("ad-pr-plans");
+    if (plans) plans.addEventListener("click", function () { renderSubscription(); });
+    var nb = document.getElementById("ad-pr-new");
+    if (nb) nb.addEventListener("click", function () { pressState.creating = true; paintPressList(data); document.querySelector("#ad-pr-create [name=title]").focus(); });
+    var cancel = document.getElementById("ad-pr-cancel");
+    if (cancel) cancel.addEventListener("click", function () { pressState.creating = false; paintPressList(data); });
+    var form = document.getElementById("ad-pr-create");
+    if (form) form.addEventListener("submit", async function (e) {
+      e.preventDefault();
+      var btn = form.querySelector("[type=submit]");
+      btn.disabled = true;
+      try {
+        var created = await api("POST", "/press", pressFormBody(form));
+        pressState.creating = false;
+        toast(L("Salle de presse créée : ajoutez vos photos.", "Press room created: add your photos.", "Perskamer aangemaakt: voeg je foto's toe."));
+        renderPressEvent(created.slug);
+      } catch (err) {
+        toast(err.message, true);
+        btn.disabled = false;
+      }
+    });
+    el.view.querySelectorAll("[data-pr-open]").forEach(function (a) {
+      a.addEventListener("click", function (e) { e.preventDefault(); renderPressEvent(a.getAttribute("data-pr-open")); });
+    });
+  }
+
+  async function renderPressEvent(slug, skipHash) {
+    var hash = "#/presse/" + encodeURIComponent(slug);
+    if (!skipHash && location.hash !== hash) history.pushState(null, "", hash);
+    setActiveTab("press");
+    if (pressState.slug !== slug) {
+      pressState.slug = slug;
+      pressState.tab = "photos";
+      pressState.filter = "all";
+      pressState.selected = {};
+      pressState.openPhoto = "";
+      pressState.detail = null;
+      el.view.innerHTML = '<p class="ad-loading">' + L("Chargement…", "Loading…", "Laden…") + "</p>";
+    }
+    var detail;
+    try {
+      detail = await api("GET", "/press/" + encodeURIComponent(slug));
+    } catch (err) {
+      el.view.innerHTML = '<div class="ad-error-panel"><h2>' + L("Salle de presse introuvable", "Press room not found", "Perskamer niet gevonden") + "</h2><p>" + esc(err.message) + "</p></div>";
+      return;
+    }
+    if (location.hash !== hash) return;
+    uploads.titles[slug] = detail.event.title;
+    pressState.detail = detail;
+    paintPressEvent(detail);
+  }
+
+  function pressRefresh() {
+    if (pressState.slug) renderPressEvent(pressState.slug, true);
+  }
+
+  function pressStageActions(ev) {
+    var b = function (action, text, primary) {
+      return '<button type="button" class="ad-btn' + (primary ? " ad-btn-primary" : "") + '" data-pr-stage="' + action + '">' + text + "</button>";
+    };
+    if (ev.state === "draft") return b("review", L("Envoyer pour validation", "Send for approval", "Verzenden ter goedkeuring"), ev.approvalRequired) + b("publish", L("Publier pour les médias", "Publish to the media", "Publiceren voor de media"), !ev.approvalRequired);
+    if (ev.state === "review") return b("publish", L("Publier pour les médias", "Publish to the media", "Publiceren voor de media"), true);
+    if (ev.state === "live") return b("close", L("Fermer la salle", "Close the room", "Perskamer sluiten"));
+    return b("reopen", L("Rouvrir", "Reopen", "Heropenen"), true);
+  }
+
+  function pressProgressHtml(d) {
+    var ev = d.event;
+    var total = d.photos.length;
+    var approved = d.photos.filter(function (p) { return p.status === "approved"; }).length;
+    var now = Date.now() / 1000;
+    var embargo = ev.embargoAt && ev.embargoAt > now;
+    var steps = [
+      { done: total > 0, title: L("Photos", "Photos", "Foto's"), sub: L(total + " déposée(s)", total + " uploaded", total + " geüpload") },
+      { done: ev.approvalRequired ? total > 0 && approved === total - d.photos.filter(function (p) { return p.status === "rejected"; }).length && approved > 0 : true, title: L("Validation", "Approval", "Goedkeuring"),
+        sub: ev.approvalRequired ? L(approved + " / " + total + " validée(s)", approved + " / " + total + " approved", approved + " / " + total + " goedgekeurd") : L("non demandée", "not required", "niet vereist") },
+      { done: Boolean(ev.publishedAt), title: L("Diffusion", "Release", "Verspreiding"),
+        sub: ev.publishedAt ? (embargo ? L("embargo : " + pressDate(ev.embargoAt, true), "embargo: " + pressDate(ev.embargoAt, true), "embargo: " + pressDate(ev.embargoAt, true)) : L("en ligne", "live", "online")) : (ev.embargoAt ? L("embargo : " + pressDate(ev.embargoAt, true), "embargo: " + pressDate(ev.embargoAt, true), "embargo: " + pressDate(ev.embargoAt, true)) : L("pas encore", "not yet", "nog niet")) },
+      { done: d.downloads.length > 0, title: L("Suivi", "Tracking", "Opvolging"), sub: L(d.downloads.length + " téléchargement(s)", d.downloads.length + " download(s)", d.downloads.length + " download(s)") },
+    ];
+    var nextFound = false;
+    return '<ol class="ad-pr-progress">' + steps.map(function (s) {
+      var cls = s.done ? "is-done" : (!nextFound ? (nextFound = true, "is-next") : "");
+      return '<li class="' + cls + '"><b><span class="ad-pr-progress-mark">' + (s.done ? "✓" : "") + "</span>" + esc(s.title) + "</b><span>" + esc(s.sub) + "</span></li>";
+    }).join("") + "</ol>";
+  }
+
+  function paintPressEvent(d) {
+    var ev = d.event;
+    var tabs = [
+      ["photos", L("Photos", "Photos", "Foto's") + " (" + d.photos.length + ")"],
+      ["people", L("Destinataires", "Recipients", "Ontvangers") + " (" + d.recipients.filter(function (r) { return r.status === "active"; }).length + ")" + (d.recipients.some(function (r) { return r.status === "pending"; }) ? " •" : "")],
+      ["licences", L("Licences", "Licences", "Licenties")],
+      ["journal", L("Journal", "Log", "Logboek")],
+      ["settings", L("Réglages", "Settings", "Instellingen")],
+    ];
+    el.view.innerHTML =
+      '<p class="ad-back"><a href="#/presse" id="ad-pr-back">← ' + L("Salle de presse", "Press room", "Perskamer") + "</a></p>" +
+      '<header class="ad-detail-header ad-pr-head"><div><h2>' + esc(ev.title) + "</h2>" +
+      '<p class="ad-hint">' + pressChip(ev.state) + " " + esc([ev.eventDate ? new Date(ev.eventDate + "T12:00:00").toLocaleDateString(locale(), { day: "numeric", month: "long", year: "numeric" }) : "", ev.venue, ev.city].filter(Boolean).join(" · ")) +
+      (ev.creditLine ? ' · <span class="ad-pr-credit">© ' + esc(ev.creditLine) + "</span>" : "") + "</p></div>" +
+      (d.enabled ? '<div class="ad-pr-actions">' + pressStageActions(ev) + "</div>" : "") + "</header>" +
+      (!d.enabled ? '<p class="ad-banner ad-banner-muted">' + L("La salle de presse est incluse dans la formule Pro.", "The press room is included in the Pro plan.", "De perskamer is inbegrepen in het Pro-abonnement.") + "</p>" : "") +
+      pressProgressHtml(d) +
+      '<nav class="ad-pr-tabs" role="tablist">' + tabs.map(function (t) {
+        return '<button type="button" role="tab" class="ad-pr-tab' + (pressState.tab === t[0] ? " is-on" : "") + '" aria-selected="' + (pressState.tab === t[0]) + '" data-pr-tab="' + t[0] + '">' + esc(t[1]) + "</button>";
+      }).join("") + "</nav>" +
+      '<div id="ad-pr-panel">' + pressPanelHtml(d) + "</div>";
+    document.getElementById("ad-pr-back").addEventListener("click", function (e) { e.preventDefault(); renderPress(); });
+    el.view.querySelectorAll("[data-pr-tab]").forEach(function (b) {
+      b.addEventListener("click", function () { pressState.tab = b.getAttribute("data-pr-tab"); paintPressEvent(d); pressRefresh(); });
+    });
+    el.view.querySelectorAll("[data-pr-stage]").forEach(function (b) {
+      b.addEventListener("click", function () { pressStage(d, b.getAttribute("data-pr-stage"), b); });
+    });
+    bindPressPanel(d);
+  }
+
+  function pressStage(d, action, btn) {
+    var ev = d.event;
+    var validators = d.recipients.filter(function (r) { return r.status === "active" && (r.role === "client" || r.role === "validator"); }).length;
+    var media = d.recipients.filter(function (r) { return r.status === "active" && ["press", "sponsor", "partner"].indexOf(r.role) !== -1; }).length;
+    var texts = {
+      review: L("Ouvrir la validation ? " + validators + " personne(s) (commanditaire, artiste) reçoivent leur lien par e-mail.", "Open approval? " + validators + " person(s) (client, artist) get their link by email.", "Goedkeuring openen? " + validators + " persoon/personen (opdrachtgever, artiest) krijgen hun link per e-mail."),
+      publish: L("Publier pour les médias ? " + media + " destinataire(s) reçoivent leur lien" + (ev.embargoAt && ev.embargoAt > Date.now() / 1000 ? " ; les photos s'afficheront à la fin de l'embargo (" + pressDate(ev.embargoAt, true) + ")." : "."),
+        "Publish to the media? " + media + " recipient(s) get their link" + (ev.embargoAt && ev.embargoAt > Date.now() / 1000 ? "; the photos will appear when the embargo ends (" + pressDate(ev.embargoAt, true) + ")." : "."),
+        "Publiceren voor de media? " + media + " ontvanger(s) krijgen hun link" + (ev.embargoAt && ev.embargoAt > Date.now() / 1000 ? "; de foto's verschijnen na het embargo (" + pressDate(ev.embargoAt, true) + ")." : ".")),
+      close: L("Fermer la salle de presse ? Plus personne ne pourra télécharger ; les licences et le journal restent.", "Close the press room? Nobody can download any more; licences and the log are kept.", "Perskamer sluiten? Niemand kan nog downloaden; licenties en logboek blijven bewaard."),
+      reopen: "",
+    };
+    var go = async function () {
+      btn.disabled = true;
+      try {
+        var res = await api("POST", "/press/" + encodeURIComponent(pressState.slug) + "/" + action, {});
+        toast(action === "close" ? L("Salle de presse fermée.", "Press room closed.", "Perskamer gesloten.") : action === "reopen" ? L("Salle de presse rouverte.", "Press room reopened.", "Perskamer heropend.")
+          : L((res.sent || 0) + " invitation(s) envoyée(s).", (res.sent || 0) + " invitation(s) sent.", (res.sent || 0) + " uitnodiging(en) verzonden."));
+        pressRefresh();
+      } catch (err) {
+        toast(err.message, true);
+        btn.disabled = false;
+      }
+    };
+    if (texts[action]) confirmAction(texts[action], go);
+    else go();
+  }
+
+  function pressPanelHtml(d) {
+    if (pressState.tab === "people") return pressPeopleHtml(d);
+    if (pressState.tab === "licences") return pressLicencesHtml(d);
+    if (pressState.tab === "journal") return pressJournalHtml(d);
+    if (pressState.tab === "settings") return pressSettingsHtml(d);
+    return pressPhotosHtml(d);
+  }
+
+  function bindPressPanel(d) {
+    if (pressState.tab === "people") return bindPressPeople(d);
+    if (pressState.tab === "licences") return bindPressLicences(d);
+    if (pressState.tab === "journal") return;
+    if (pressState.tab === "settings") return bindPressSettings(d);
+    return bindPressPhotos(d);
+  }
+
+  /* --- Photos --- */
+
+  function pressPhotosHtml(d) {
+    var f = pressState.filter;
+    var list = d.photos.filter(function (p) { return f === "all" || p.status === f; });
+    var count = function (s) { return d.photos.filter(function (p) { return p.status === s; }).length; };
+    var sel = Object.keys(pressState.selected).filter(function (id) { return pressState.selected[id]; });
+    return '<section class="ad-pr-upload">' +
+      '<label id="ad-dropzone" class="ad-dropzone ad-pr-dropzone"><input type="file" id="ad-file-input" accept="image/jpeg,image/png,image/tiff" multiple hidden />' +
+      "<b>" + L("Déposez les photos de l'événement", "Drop the event photos here", "Sleep de foto's van het evenement hierheen") + "</b><span>" +
+      L("JPEG en pleine définition : légendes et crédits IPTC (Photo Mechanic, Lightroom) repris automatiquement. Les aperçus sont filigranés « aperçu presse ».",
+        "Full-resolution JPEGs: IPTC captions and credits (Photo Mechanic, Lightroom) are picked up automatically. Previews are watermarked “press preview”.",
+        "JPEG's in volle resolutie: IPTC-bijschriften en -vermeldingen (Photo Mechanic, Lightroom) worden automatisch overgenomen. Voorbeelden krijgen een watermerk “perspreview”.") +
+      "</span></label>" +
+      '<div id="ad-upload-queue" class="ad-upload-queue" data-slug="' + esc(pressState.slug) + '"></div></section>' +
+      (d.photos.length
+        ? '<div class="ad-pr-toolbar"><div class="ad-pr-filters">' +
+          [["all", L("Toutes", "All", "Alle"), d.photos.length], ["pending", L("À valider", "To approve", "Goed te keuren"), count("pending")], ["approved", L("Validées", "Approved", "Goedgekeurd"), count("approved")], ["rejected", L("Refusées", "Rejected", "Afgekeurd"), count("rejected")]].map(function (x) {
+            return '<button type="button" class="ad-pr-filter' + (f === x[0] ? " is-on" : "") + '" data-pr-filter="' + x[0] + '">' + esc(x[1]) + " <span>" + x[2] + "</span></button>";
+          }).join("") + "</div>" +
+          '<div class="ad-pr-bulk">' +
+          '<label class="ad-check"><input type="checkbox" id="ad-pr-all"' + (list.length && sel.length === list.length ? " checked" : "") + " /> " + (sel.length ? L(sel.length + " sélectionnée(s)", sel.length + " selected", sel.length + " geselecteerd") : L("Tout sélectionner", "Select all", "Alles selecteren")) + "</label>" +
+          (sel.length
+            ? '<button type="button" class="ad-btn ad-btn-small" data-pr-bulk="approved">' + L("Valider", "Approve", "Goedkeuren") + "</button>" +
+              '<button type="button" class="ad-btn ad-btn-small" data-pr-bulk="rejected">' + L("Refuser", "Reject", "Afkeuren") + "</button>" +
+              '<button type="button" class="ad-btn ad-btn-small ad-btn-ghost" data-pr-bulk="pending">' + L("Remettre à valider", "Back to review", "Terug naar goedkeuring") + "</button>" +
+              '<select class="ad-pr-people-bulk" id="ad-pr-people-bulk" aria-label="' + esc(L("Droit à l'image", "Image rights", "Portretrecht")) + '"><option value="">' + L("Droit à l'image…", "Image rights…", "Portretrecht…") + "</option>" + PRESS_PEOPLE().map(function (p) { return '<option value="' + p[0] + '">' + esc(p[1]) + "</option>"; }).join("") + "</select>" +
+              '<input class="ad-pr-tags-bulk" id="ad-pr-tags-bulk" placeholder="' + esc(L("Étiquettes (ex. acme)", "Tags (e.g. acme)", "Labels (bv. acme)")) + '" /><button type="button" class="ad-btn ad-btn-small ad-btn-ghost" id="ad-pr-tags-apply">' + L("Étiqueter", "Tag", "Labelen") + "</button>"
+            : "") +
+          "</div></div>" +
+          '<div class="ad-pr-photos">' + list.map(function (p) { return pressPhotoCard(p); }).join("") + "</div>" +
+          (pressState.openPhoto ? "" : "")
+        : '<p class="ad-hint">' + L("Aucune photo pour l'instant.", "No photos yet.", "Nog geen foto's.") + "</p>");
+  }
+
+  function pressPhotoCard(p) {
+    var on = Boolean(pressState.selected[p.id]);
+    var people = PRESS_PEOPLE().filter(function (x) { return x[0] === p.people; })[0];
+    var open = pressState.openPhoto === p.id;
+    return '<article class="ad-pr-photo is-' + esc(p.status) + (on ? " is-selected" : "") + (open ? " is-open" : "") + '" data-pr-photo="' + esc(p.id) + '">' +
+      '<label class="ad-pr-pick"><input type="checkbox" data-pr-pick="' + esc(p.id) + '"' + (on ? " checked" : "") + ' aria-label="' + esc(L("Sélectionner", "Select", "Selecteren")) + '" /></label>' +
+      '<button type="button" class="ad-pr-photo-open" data-pr-edit="' + esc(p.id) + '" style="aspect-ratio:' + p.width + "/" + p.height + '">' + pressThumb(p.id) + "</button>" +
+      '<div class="ad-pr-photo-meta"><span class="ad-pr-status ad-pr-status-' + esc(p.status) + '">' + esc(PRESS_STATUS()[p.status]) + "</span>" +
+      (p.people !== "unknown" ? '<span class="ad-pr-people ad-pr-people-' + esc(p.people) + '" title="' + esc(people ? people[1] : "") + '">' + esc(people ? people[1] : "") + "</span>" : "") +
+      (p.tags ? '<span class="ad-pr-tags">' + esc(p.tags) + "</span>" : "") +
+      '<p class="ad-pr-caption">' + esc(p.headline || p.caption || p.hdName || p.sourceName || "") + "</p>" +
+      '<p class="ad-pr-file">' + (p.hdSize ? (p.stamped ? "✓ " + L("HD · crédit inscrit au téléchargement", "HD · credit written on download", "HD · vermelding bij download") : "✓ HD") + " · " + (p.hdSize / 1e6).toFixed(1) + " Mo" : "⚠ " + L("Pas de fichier HD", "No HD file", "Geen HD-bestand")) + "</p></div>" +
+      (open ? pressPhotoEditor(p) : "") + "</article>";
+  }
+
+  function pressPhotoEditor(p) {
+    return '<form class="ad-pr-editor" data-pr-form="' + esc(p.id) + '">' +
+      '<label class="ad-field"><span>' + L("Titre", "Headline", "Titel") + '</span><input name="headline" maxlength="300" value="' + esc(p.headline) + '" /></label>' +
+      '<label class="ad-field"><span>' + L("Légende", "Caption", "Bijschrift") + '</span><textarea name="caption" rows="3" maxlength="2000">' + esc(p.caption) + "</textarea></label>" +
+      '<label class="ad-field"><span>' + L("Auteur", "Byline", "Auteur") + '</span><input name="byline" maxlength="200" value="' + esc(p.byline) + '" /></label>' +
+      '<label class="ad-field"><span>' + L("Mots-clés", "Keywords", "Trefwoorden") + '</span><input name="keywords" maxlength="1000" value="' + esc(p.keywords) + '" /></label>' +
+      '<label class="ad-field"><span>' + L("Étiquettes (sponsors)", "Tags (sponsors)", "Labels (sponsors)") + '</span><input name="tags" maxlength="300" value="' + esc(p.tags) + '" /></label>' +
+      '<label class="ad-field"><span>' + L("Droit à l'image", "Image rights", "Portretrecht") + '</span><select name="people">' + PRESS_PEOPLE().map(function (x) { return '<option value="' + x[0] + '"' + (p.people === x[0] ? " selected" : "") + ">" + esc(x[1]) + "</option>"; }).join("") + "</select></label>" +
+      (p.status === "rejected" && p.note ? '<p class="ad-hint">' + L("Motif du refus : ", "Reason: ", "Reden: ") + esc(p.note) + "</p>" : "") +
+      '<div class="ad-sc-actions"><button type="submit" class="ad-btn ad-btn-primary ad-btn-small">' + L("Enregistrer", "Save", "Opslaan") + "</button>" +
+      '<button type="button" class="ad-btn ad-btn-small" data-pr-one="approved">' + L("Valider", "Approve", "Goedkeuren") + "</button>" +
+      '<button type="button" class="ad-btn ad-btn-small" data-pr-one="rejected">' + L("Refuser", "Reject", "Afkeuren") + "</button>" +
+      '<button type="button" class="ad-btn ad-btn-small ad-btn-ghost" data-pr-close>' + L("Fermer", "Close", "Sluiten") + "</button></div></form>";
+  }
+
+  async function pressPatchPhotos(ids, patch) {
+    if (!ids.length) return;
+    try {
+      await api("POST", "/press/" + encodeURIComponent(pressState.slug) + "/photos", Object.assign({ ids: ids }, patch));
+      toast(L(ids.length + " photo(s) mise(s) à jour.", ids.length + " photo(s) updated.", ids.length + " foto('s) bijgewerkt."));
+      pressRefresh();
+    } catch (err) {
+      toast(err.message, true);
+    }
+  }
+
+  function bindPressPhotos(d) {
+    var fileInput = document.getElementById("ad-file-input");
+    if (fileInput) {
+      wireUploads(pressState.slug, d.photos.length);
+      attachUploadRows(pressState.slug);
+    }
+    el.view.querySelectorAll("[data-pr-filter]").forEach(function (b) {
+      b.addEventListener("click", function () { pressState.filter = b.getAttribute("data-pr-filter"); pressState.selected = {}; paintPressEvent(d); });
+    });
+    var all = document.getElementById("ad-pr-all");
+    if (all) all.addEventListener("change", function () {
+      pressState.selected = {};
+      if (all.checked) d.photos.filter(function (p) { return pressState.filter === "all" || p.status === pressState.filter; }).forEach(function (p) { pressState.selected[p.id] = true; });
+      paintPressEvent(d);
+    });
+    el.view.querySelectorAll("[data-pr-pick]").forEach(function (c) {
+      c.addEventListener("change", function () { pressState.selected[c.getAttribute("data-pr-pick")] = c.checked; paintPressEvent(d); });
+    });
+    var selectedIds = function () { return Object.keys(pressState.selected).filter(function (id) { return pressState.selected[id]; }); };
+    el.view.querySelectorAll("[data-pr-bulk]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var ids = selectedIds();
+        pressState.selected = {};
+        pressPatchPhotos(ids, { status: b.getAttribute("data-pr-bulk") });
+      });
+    });
+    var peopleBulk = document.getElementById("ad-pr-people-bulk");
+    if (peopleBulk) peopleBulk.addEventListener("change", function () { if (peopleBulk.value) pressPatchPhotos(selectedIds(), { people: peopleBulk.value }); });
+    var tagsApply = document.getElementById("ad-pr-tags-apply");
+    if (tagsApply) tagsApply.addEventListener("click", function () { pressPatchPhotos(selectedIds(), { tags: document.getElementById("ad-pr-tags-bulk").value }); });
+    el.view.querySelectorAll("[data-pr-edit]").forEach(function (b) {
+      b.addEventListener("click", function () { var id = b.getAttribute("data-pr-edit"); pressState.openPhoto = pressState.openPhoto === id ? "" : id; paintPressEvent(d); });
+    });
+    el.view.querySelectorAll("[data-pr-form]").forEach(function (form) {
+      var id = form.getAttribute("data-pr-form");
+      form.addEventListener("submit", async function (e) {
+        e.preventDefault();
+        var f = form.elements;
+        try {
+          await api("POST", "/press/" + encodeURIComponent(pressState.slug) + "/photos/" + encodeURIComponent(id), {
+            headline: f.headline.value, caption: f.caption.value, byline: f.byline.value, keywords: f.keywords.value, tags: f.tags.value, people: f.people.value,
+          });
+          toast(L("Photo enregistrée.", "Photo saved.", "Foto opgeslagen."));
+          pressState.openPhoto = "";
+          pressRefresh();
+        } catch (err) { toast(err.message, true); }
+      });
+      form.querySelectorAll("[data-pr-one]").forEach(function (b) {
+        b.addEventListener("click", function () { pressPatchPhotos([id], { status: b.getAttribute("data-pr-one") }); });
+      });
+      form.querySelector("[data-pr-close]").addEventListener("click", function () { pressState.openPhoto = ""; paintPressEvent(d); });
+    });
+  }
+
+  /* --- Destinataires --- */
+
+  function pressTemplateName(d, family) {
+    var t = d.templates.filter(function (x) { return x.family === family; })[0];
+    return t ? t.name : "";
+  }
+
+  function pressPeopleHtml(d) {
+    var pending = d.recipients.filter(function (r) { return r.status === "pending"; });
+    var active = d.recipients.filter(function (r) { return r.status !== "pending" && r.status !== "refused"; });
+    var ev = d.event;
+    return (pending.length
+      ? '<section class="ad-pr-card ad-pr-requests"><h3>' + L("Demandes d'accréditation", "Accreditation requests", "Accreditatieaanvragen") + " (" + pending.length + ")</h3>" + pending.map(function (r) {
+          return '<div class="ad-pr-request"><div><b>' + esc(r.name) + "</b> · " + esc(r.organisation) + '<span class="ad-hint"> ' + esc(r.email) + (r.pressCard ? " · " + L("carte de presse ", "press card ", "perskaart ") + esc(r.pressCard) : "") + "</span>" +
+            (r.message ? '<p class="ad-pr-msg">« ' + esc(r.message) + " »</p>" : "") + "</div>" +
+            '<div class="ad-pr-request-actions"><button type="button" class="ad-btn ad-btn-primary ad-btn-small" data-pr-r="accept" data-id="' + esc(r.id) + '">' + L("Accepter", "Accept", "Aanvaarden") + "</button>" +
+            '<button type="button" class="ad-btn ad-btn-small ad-btn-ghost" data-pr-r="refuse" data-id="' + esc(r.id) + '">' + L("Refuser", "Decline", "Weigeren") + "</button></div></div>";
+        }).join("") + "</section>"
+      : "") +
+      '<section class="ad-pr-card"><h3>' + L("Ajouter un destinataire", "Add a recipient", "Ontvanger toevoegen") + "</h3>" +
+      '<form id="ad-pr-add" class="ad-pr-grid">' +
+      '<label class="ad-field"><span>' + L("Rôle", "Role", "Rol") + '</span><select name="role">' + PRESS_ROLES().map(function (r) { return '<option value="' + r[0] + '">' + esc(r[1]) + " — " + esc(r[2]) + "</option>"; }).join("") + "</select></label>" +
+      '<label class="ad-field"><span>' + L("Nom", "Name", "Naam") + '</span><input name="name" maxlength="120" /></label>' +
+      '<label class="ad-field"><span>' + L("Organisation ou média", "Organisation or outlet", "Organisatie of medium") + '</span><input name="organisation" maxlength="160" /></label>' +
+      '<label class="ad-field"><span>' + L("E-mail", "Email", "E-mail") + '</span><input type="email" name="email" maxlength="200" /></label>' +
+      '<label class="ad-field"><span>' + L("Langue", "Language", "Taal") + '</span><select name="lang"><option value="fr">Français</option><option value="en">English</option><option value="nl">Nederlands</option></select></label>' +
+      '<label class="ad-field"><span>' + L("Licence", "Licence", "Licentie") + '</span><select name="templateFamily"><option value="">' + L("Selon le rôle", "Based on role", "Volgens de rol") + "</option>" + d.templates.map(function (t) { return '<option value="' + esc(t.family) + '">' + esc(t.name) + "</option>"; }).join("") + "</select></label>" +
+      '<label class="ad-field ad-pr-wide"><span>' + L("Voit seulement les photos étiquetées", "Only sees photos tagged", "Ziet alleen foto's met label") + ' <small>' + L("facultatif, ex. le nom du sponsor", "optional, e.g. the sponsor's name", "optioneel, bv. de naam van de sponsor") + '</small></span><input name="tagFilter" maxlength="200" /></label>' +
+      '<div class="ad-sc-actions ad-pr-wide"><button type="submit" class="ad-btn ad-btn-primary">' + L("Ajouter", "Add", "Toevoegen") + "</button>" +
+      '<span class="ad-hint">' + (ev.state === "draft" ? L("Les invitations partent quand vous ouvrez la validation ou publiez.", "Invitations go out when you open approval or publish.", "Uitnodigingen vertrekken wanneer je de goedkeuring opent of publiceert.")
+        : L("La salle est ouverte : l'invitation part tout de suite.", "The room is open: the invitation goes out right away.", "De perskamer is open: de uitnodiging vertrekt meteen.")) + "</span></div></form></section>" +
+      (ev.accreditationOpen
+        ? '<p class="ad-banner ad-banner-muted">' + L("Page d'accréditation publique : ", "Public accreditation page: ", "Openbare accreditatiepagina: ") + '<a href="' + esc(d.publicUrl) + '" target="_blank" rel="noopener">' + esc(d.publicUrl) + '</a> <button type="button" class="ad-link-btn" id="ad-pr-copy-public">' + L("Copier", "Copy", "Kopiëren") + "</button></p>"
+        : "") +
+      (active.length
+        ? '<section><div class="ad-table-wrap"><table class="ad-table ad-pr-people-table"><thead><tr><th>' + L("Destinataire", "Recipient", "Ontvanger") + "</th><th>" + L("Rôle et licence", "Role and licence", "Rol en licentie") + "</th><th>" + L("Suivi", "Activity", "Activiteit") + '</th><th><span class="ad-visually-hidden">Actions</span></th></tr></thead><tbody>' +
+          active.map(function (r) {
+            var revoked = r.status === "revoked";
+            return '<tr class="' + (revoked ? "is-revoked" : "") + '"><td><b>' + esc(r.name || r.email) + "</b>" + (r.organisation ? "<br><span class=\"ad-hint\">" + esc(r.organisation) + "</span>" : "") + (r.email && r.name ? "<br><span class=\"ad-hint\">" + esc(r.email) + "</span>" : "") + "</td>" +
+              "<td>" + esc(pressRoleLabel(r.role)) + "<br><span class=\"ad-hint\">" + esc(pressTemplateName(d, r.templateFamily)) + (r.tagFilter ? " · " + L("étiquette : ", "tag: ", "label: ") + esc(r.tagFilter) : "") + "</span></td>" +
+              "<td class=\"ad-pr-track\">" + (revoked ? L("Accès retiré", "Access removed", "Toegang ingetrokken")
+                : [r.invitedAt ? L("Invité le ", "Invited ", "Uitgenodigd op ") + pressDate(r.invitedAt) : L("Pas encore invité", "Not invited yet", "Nog niet uitgenodigd"),
+                   r.lastSeenAt ? L("Vu le ", "Seen ", "Gezien op ") + pressDate(r.lastSeenAt, true) : "",
+                   r.acceptedAt ? "✓ " + L("Licence signée le ", "Licence signed ", "Licentie ondertekend op ") + pressDate(r.acceptedAt) : "",
+                   r.downloads ? L(r.downloads + " téléchargement(s)", r.downloads + " download(s)", r.downloads + " download(s)") : ""].filter(Boolean).join("<br>")) + "</td>" +
+              '<td class="ad-pr-row-actions">' + (revoked
+                ? '<button type="button" class="ad-btn ad-btn-small" data-pr-r="restore" data-id="' + esc(r.id) + '">' + L("Rétablir", "Restore", "Herstellen") + "</button>"
+                : '<button type="button" class="ad-btn ad-btn-small" data-pr-copy="' + esc(r.link) + '">' + L("Copier le lien", "Copy link", "Link kopiëren") + "</button>" +
+                  (r.email ? '<button type="button" class="ad-btn ad-btn-small ad-btn-ghost" data-pr-r="invite" data-id="' + esc(r.id) + '">' + (r.invitedAt ? L("Renvoyer", "Resend", "Opnieuw sturen") : L("Inviter", "Invite", "Uitnodigen")) + "</button>" : "") +
+                  '<button type="button" class="ad-btn ad-btn-small ad-btn-ghost" data-pr-r="revoke" data-id="' + esc(r.id) + '">' + L("Retirer l'accès", "Remove access", "Toegang intrekken") + "</button>") + "</td></tr>";
+          }).join("") + "</tbody></table></div></section>"
+        : '<p class="ad-hint">' + L("Ajoutez le commanditaire, l'artiste ou son management, puis les médias et sponsors. Chacun reçoit un lien personnel, sans mot de passe ni compte à créer.",
+            "Add the client, the artist or their management, then media and sponsors. Each gets a personal link, with no password or account to create.",
+            "Voeg de opdrachtgever, de artiest of het management toe, en dan media en sponsors. Elk krijgt een persoonlijke link, zonder wachtwoord of account.") + "</p>");
+  }
+
+  function bindPressPeople(d) {
+    var form = document.getElementById("ad-pr-add");
+    if (form) form.addEventListener("submit", async function (e) {
+      e.preventDefault();
+      var f = form.elements;
+      try {
+        var res = await api("POST", "/press/" + encodeURIComponent(pressState.slug) + "/recipients", {
+          role: f.role.value, name: f.name.value, organisation: f.organisation.value, email: f.email.value, lang: f.lang.value,
+          templateFamily: f.templateFamily.value, tagFilter: f.tagFilter.value,
+        });
+        toast(res.invited ? L("Destinataire ajouté et invité.", "Recipient added and invited.", "Ontvanger toegevoegd en uitgenodigd.") : L("Destinataire ajouté.", "Recipient added.", "Ontvanger toegevoegd."));
+        pressRefresh();
+      } catch (err) { toast(err.message, true); }
+    });
+    var cp = document.getElementById("ad-pr-copy-public");
+    if (cp) cp.addEventListener("click", function () { copyText(d.publicUrl); });
+    el.view.querySelectorAll("[data-pr-copy]").forEach(function (b) {
+      b.addEventListener("click", function () { copyText(b.getAttribute("data-pr-copy")); });
+    });
+    el.view.querySelectorAll("[data-pr-r]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var action = b.getAttribute("data-pr-r");
+        var go = async function () {
+          try {
+            var res = await api("POST", "/press/" + encodeURIComponent(pressState.slug) + "/recipients/" + encodeURIComponent(b.getAttribute("data-id")), { action: action });
+            toast(action === "invite" ? (res.sent ? L("Invitation envoyée.", "Invitation sent.", "Uitnodiging verzonden.") : L("L'e-mail n'a pas pu partir : copiez le lien.", "The email could not be sent: copy the link.", "De e-mail kon niet vertrekken: kopieer de link."))
+              : action === "accept" ? L("Accréditation acceptée.", "Accreditation accepted.", "Accreditatie aanvaard.")
+              : action === "refuse" ? L("Demande refusée.", "Request declined.", "Aanvraag geweigerd.")
+              : action === "revoke" ? L("Accès retiré.", "Access removed.", "Toegang ingetrokken.") : L("Accès rétabli.", "Access restored.", "Toegang hersteld."), action === "invite" && !res.sent);
+            pressRefresh();
+          } catch (err) { toast(err.message, true); }
+        };
+        if (action === "revoke") confirmAction(L("Retirer l'accès ? Le lien ne fonctionnera plus ; sa licence et ses téléchargements restent au journal.", "Remove access? The link will stop working; their licence and downloads stay in the log.", "Toegang intrekken? De link werkt niet meer; licentie en downloads blijven in het logboek."), go);
+        else go();
+      });
+    });
+  }
+
+  /* --- Licences --- */
+
+  function pressTemplateFormHtml(t) {
+    return '<form class="ad-pr-tpl-form" data-pr-tpl="' + esc(t.family) + '">' +
+      '<div class="ad-pr-grid">' +
+      '<label class="ad-field ad-pr-wide"><span>' + L("Nom", "Name", "Naam") + '</span><input name="name" maxlength="120" value="' + esc(t.name) + '" /></label>' +
+      '<label class="ad-field"><span>' + L("Type", "Type", "Type") + '</span><select name="kind">' + Object.keys(PRESS_KINDS()).map(function (k) { return '<option value="' + k + '"' + (t.kind === k ? " selected" : "") + ">" + esc(PRESS_KINDS()[k]) + "</option>"; }).join("") + "</select></label>" +
+      '<label class="ad-field"><span>' + L("Territoire", "Territory", "Grondgebied") + '</span><select name="territory">' + PRESS_TERRITORIES().map(function (x) { return '<option value="' + x[0] + '"' + (t.territory === x[0] ? " selected" : "") + ">" + esc(x[1]) + "</option>"; }).join("") + "</select></label>" +
+      '<label class="ad-field"><span>' + L("Durée (mois, 0 = sans limite)", "Term (months, 0 = no limit)", "Duur (maanden, 0 = onbeperkt)") + '</span><input type="number" min="0" max="240" name="durationMonths" value="' + t.durationMonths + '" /></label>' +
+      '<label class="ad-field"><span>' + L("Prix indicatif HTVA (0 = inclus)", "Indicative price excl. VAT (0 = included)", "Richtprijs excl. btw (0 = inbegrepen)") + '</span><input type="number" min="0" step="1" name="price" value="' + (t.priceCents / 100) + '" /></label>' +
+      "</div>" +
+      '<fieldset class="ad-pr-usages"><legend>' + L("Usages permis", "Permitted uses", "Toegestaan gebruik") + "</legend>" + PRESS_USAGES().map(function (u) {
+        return '<label class="ad-check"><input type="checkbox" name="usage" value="' + u[0] + '"' + (t.usages.indexOf(u[0]) !== -1 ? " checked" : "") + " /> " + esc(u[1]) + "</label>";
+      }).join("") + "</fieldset>" +
+      '<label class="ad-check"><input type="checkbox" name="exclusive"' + (t.exclusive ? " checked" : "") + " /> " + L("Licence exclusive", "Exclusive licence", "Exclusieve licentie") + "</label>" +
+      '<details class="ad-advanced"><summary>' + L("Clause libre (FR, EN, NL)", "Custom clause (FR, EN, NL)", "Vrije clausule (FR, EN, NL)") + "</summary>" +
+      ["fr", "en", "nl"].map(function (l) { return '<label class="ad-field"><span>' + l.toUpperCase() + '</span><textarea name="extra_' + l + '" rows="2" maxlength="2000">' + esc(t.extra[l] || "") + "</textarea></label>"; }).join("") + "</details>" +
+      '<div class="ad-sc-actions"><button type="submit" class="ad-btn ad-btn-primary ad-btn-small">' + L("Enregistrer une nouvelle version", "Save as a new version", "Opslaan als nieuwe versie") + "</button>" +
+      '<button type="button" class="ad-btn ad-btn-small ad-btn-ghost" data-pr-tpl-cancel>' + L("Annuler", "Cancel", "Annuleren") + "</button></div></form>";
+  }
+
+  function pressLicencesHtml(d) {
+    var byId = {};
+    d.recipients.forEach(function (r) { byId[r.id] = r; });
+    return '<p class="ad-hint">' + L("Chaque destinataire accepte sa licence en ligne avant le premier téléchargement. Le texte exact accepté est gardé, avec la date, le nom du signataire et une empreinte : votre preuve. Modifier un modèle crée une nouvelle version ; les licences déjà signées ne changent pas. Ces modèles sont un point de départ, pas un conseil juridique.",
+        "Each recipient accepts their licence online before the first download. The exact text accepted is kept, with the date, the signer's name and a fingerprint: your proof. Editing a template creates a new version; licences already signed do not change. These templates are a starting point, not legal advice.",
+        "Elke ontvanger aanvaardt online de licentie vóór de eerste download. De exacte aanvaarde tekst wordt bewaard, met datum, naam van de ondertekenaar en een vingerafdruk: jouw bewijs. Een sjabloon aanpassen maakt een nieuwe versie; reeds ondertekende licenties veranderen niet. Deze sjablonen zijn een vertrekpunt, geen juridisch advies.") + "</p>" +
+      '<div class="ad-pr-templates">' + d.templates.map(function (t) {
+        var editing = pressState.editingTpl === t.family;
+        return '<article class="ad-pr-card ad-pr-tpl"><div class="ad-pr-tpl-head"><div><span class="ad-pr-kind ad-pr-kind-' + esc(t.kind) + '">' + esc(PRESS_KINDS()[t.kind] || t.kind) + "</span><h3>" + esc(t.name) + "</h3>" +
+          '<p class="ad-hint">' + esc(t.usages.map(function (u) { var x = PRESS_USAGES().filter(function (y) { return y[0] === u; })[0]; return x ? x[1] : u; }).join(", ")) + "<br>" +
+          esc((PRESS_TERRITORIES().filter(function (x) { return x[0] === t.territory; })[0] || ["", t.territory])[1]) + " · " +
+          (t.durationMonths ? L(t.durationMonths + " mois", t.durationMonths + " months", t.durationMonths + " maanden") : L("sans limite de durée", "no time limit", "onbeperkt")) +
+          (t.priceCents ? " · " + (t.priceCents / 100).toLocaleString(locale(), { style: "currency", currency: "EUR" }) : "") + " · v" + t.version + "</p></div>" +
+          (editing ? "" : '<div class="ad-pr-tpl-actions"><button type="button" class="ad-btn ad-btn-small" data-pr-tpl-edit="' + esc(t.family) + '">' + L("Modifier", "Edit", "Bewerken") + "</button>" +
+            '<button type="button" class="ad-btn ad-btn-small ad-btn-ghost" data-pr-tpl-preview="' + esc(t.family) + '">' + L("Lire le texte", "Read the text", "Lees de tekst") + "</button></div>") + "</div>" +
+          (editing ? pressTemplateFormHtml(t) : "") + '<pre class="ad-pr-licence-text" data-pr-preview-box="' + esc(t.family) + '" hidden></pre></article>';
+      }).join("") + "</div>" +
+      '<section><div class="ad-section-header"><h3>' + L("Licences signées", "Signed licences", "Ondertekende licenties") + " (" + d.licences.length + ")</h3></div>" +
+      (d.licences.length
+        ? '<div class="ad-table-wrap"><table class="ad-table"><thead><tr><th>' + L("Signataire", "Signed by", "Ondertekend door") + "</th><th>" + L("Licence", "Licence", "Licentie") + "</th><th>" + L("Date", "Date", "Datum") + "</th><th>" + L("Empreinte", "Fingerprint", "Vingerafdruk") + '</th><th><span class="ad-visually-hidden">Actions</span></th></tr></thead><tbody>' +
+          d.licences.map(function (l) {
+            return "<tr><td><b>" + esc(l.signerName) + "</b><br><span class=\"ad-hint\">" + esc(l.organisation || (byId[l.recipientId] || {}).organisation || "") + "</span></td><td>" + esc(PRESS_KINDS()[l.kind] || l.kind) +
+              (l.expiresAt ? "<br><span class=\"ad-hint\">" + L("jusqu'au ", "until ", "tot ") + pressDate(l.expiresAt) + "</span>" : "") + "</td><td>" + pressDate(l.acceptedAt, true) + '</td><td><code class="ad-pr-sha">' + esc(l.sha256.slice(0, 12)) + "…</code></td>" +
+              '<td><button type="button" class="ad-btn ad-btn-small ad-btn-ghost" data-pr-licence="' + esc(l.id) + '">' + L("Voir", "View", "Bekijken") + "</button></td></tr>";
+          }).join("") + "</tbody></table></div>"
+        : '<p class="ad-hint">' + L("Aucune licence signée pour l'instant.", "No signed licence yet.", "Nog geen ondertekende licentie.") + "</p>") +
+      '<pre class="ad-pr-licence-text" id="ad-pr-licence-view" hidden></pre></section>';
+  }
+
+  function bindPressLicences(d) {
+    el.view.querySelectorAll("[data-pr-tpl-edit]").forEach(function (b) {
+      b.addEventListener("click", function () { pressState.editingTpl = b.getAttribute("data-pr-tpl-edit"); paintPressEvent(d); });
+    });
+    el.view.querySelectorAll("[data-pr-tpl-cancel]").forEach(function (b) {
+      b.addEventListener("click", function () { pressState.editingTpl = ""; paintPressEvent(d); });
+    });
+    el.view.querySelectorAll("[data-pr-tpl-preview]").forEach(function (b) {
+      b.addEventListener("click", async function () {
+        var fam = b.getAttribute("data-pr-tpl-preview");
+        var box = el.view.querySelector('[data-pr-preview-box="' + fam + '"]');
+        if (!box.hidden) { box.hidden = true; return; }
+        try {
+          var res = await api("GET", "/press/" + encodeURIComponent(pressState.slug) + "/licence-preview?family=" + encodeURIComponent(fam) + "&lang=" + LANG);
+          box.textContent = res.text;
+          box.hidden = false;
+        } catch (err) { toast(err.message, true); }
+      });
+    });
+    el.view.querySelectorAll("[data-pr-tpl]").forEach(function (form) {
+      form.addEventListener("submit", async function (e) {
+        e.preventDefault();
+        var f = form.elements;
+        var usages = Array.prototype.slice.call(form.querySelectorAll("[name=usage]:checked")).map(function (c) { return c.value; });
+        try {
+          await api("POST", "/press/templates/" + encodeURIComponent(form.getAttribute("data-pr-tpl")), {
+            name: f.name.value, kind: f.kind.value, territory: f.territory.value, durationMonths: Number(f.durationMonths.value) || 0,
+            priceCents: Math.round((Number(f.price.value) || 0) * 100), exclusive: f.exclusive.checked, usages: usages,
+            extra: { fr: f.extra_fr.value, en: f.extra_en.value, nl: f.extra_nl.value },
+          });
+          pressState.editingTpl = "";
+          toast(L("Nouvelle version enregistrée.", "New version saved.", "Nieuwe versie opgeslagen."));
+          pressRefresh();
+        } catch (err) { toast(err.message, true); }
+      });
+    });
+    el.view.querySelectorAll("[data-pr-licence]").forEach(function (b) {
+      b.addEventListener("click", async function () {
+        var box = document.getElementById("ad-pr-licence-view");
+        try {
+          var res = await api("GET", "/press/" + encodeURIComponent(pressState.slug) + "/licences/" + encodeURIComponent(b.getAttribute("data-pr-licence")));
+          var l = res.licence;
+          box.textContent = l.text + "\n\n— " + L("Accepté le ", "Accepted on ", "Aanvaard op ") + pressDate(l.acceptedAt, true) + " " + L("par ", "by ", "door ") + l.signerName + (l.signerEmail ? " <" + l.signerEmail + ">" : "") +
+            "\nSHA-256 : " + l.sha256 + "\n" + L("Empreinte de connexion : ", "Connection fingerprint: ", "Verbindingsvingerafdruk: ") + l.ipHash + "\n" + l.userAgent;
+          box.hidden = false;
+          box.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        } catch (err) { toast(err.message, true); }
+      });
+    });
+  }
+
+  /* --- Journal --- */
+
+  function pressJournalHtml(d) {
+    var byId = {};
+    d.recipients.forEach(function (r) { byId[r.id] = r; });
+    var photoById = {};
+    d.photos.forEach(function (p) { photoById[p.id] = p; });
+    var outlets = {};
+    d.downloads.forEach(function (x) { outlets[x.recipient_id] = true; });
+    var top = {};
+    d.downloads.forEach(function (x) { top[x.photo_id] = (top[x.photo_id] || 0) + 1; });
+    var best = Object.keys(top).sort(function (a, b) { return top[b] - top[a]; }).slice(0, 4);
+    return '<div class="ad-stats">' +
+      salesStatHtml(L("Téléchargements", "Downloads", "Downloads"), String(d.downloads.length), "") +
+      salesStatHtml(L("Destinataires actifs", "Active recipients", "Actieve ontvangers"), String(Object.keys(outlets).length), "") +
+      salesStatHtml(L("Licences signées", "Signed licences", "Ondertekende licenties"), String(d.licences.length), "") + "</div>" +
+      (best.length ? '<section><div class="ad-section-header"><h3>' + L("Les plus téléchargées", "Most downloaded", "Meest gedownload") + '</h3></div><div class="ad-pr-best">' + best.map(function (id) {
+        return '<figure>' + pressThumb(id) + "<figcaption>" + L(top[id] + " fois", top[id] + " times", top[id] + " keer") + "</figcaption></figure>";
+      }).join("") + "</div></section>" : "") +
+      '<section><div class="ad-section-header"><h3>' + L("Journal des téléchargements", "Download log", "Downloadlogboek") + '</h3><a class="ad-btn ad-btn-small" href="/local/press/' + encodeURIComponent(pressState.slug) + '/journal.csv" download>' + L("Exporter (CSV)", "Export (CSV)", "Exporteren (CSV)") + "</a></div>" +
+      (d.downloads.length
+        ? '<div class="ad-table-wrap"><table class="ad-table"><thead><tr><th>' + L("Date", "Date", "Datum") + "</th><th>" + L("Destinataire", "Recipient", "Ontvanger") + "</th><th>" + L("Fichier", "File", "Bestand") + "</th></tr></thead><tbody>" +
+          d.downloads.map(function (x) {
+            var r = byId[x.recipient_id] || {};
+            var p = photoById[x.photo_id] || {};
+            return "<tr><td>" + pressDate(x.ts, true) + "</td><td>" + esc(r.name || r.email || "?") + (r.organisation ? ' <span class="ad-hint">· ' + esc(r.organisation) + "</span>" : "") + "</td><td>" + esc(p.hdName || p.sourceName || x.photo_id) + (x.batch ? ' <span class="ad-hint">(ZIP)</span>' : "") + "</td></tr>";
+          }).join("") + "</tbody></table></div>"
+        : '<p class="ad-hint">' + L("Aucun téléchargement pour l'instant. Chaque fichier téléchargé est noté ici, avec la licence acceptée.", "No downloads yet. Every downloaded file is recorded here, with the accepted licence.", "Nog geen downloads. Elk gedownload bestand wordt hier genoteerd, met de aanvaarde licentie.") + "</p>") + "</section>";
+  }
+
+  /* --- Réglages --- */
+
+  function pressSettingsHtml(d) {
+    return '<section class="ad-pr-card">' + pressEventFormHtml(d.event, false) + "</section>" +
+      '<section class="ad-danger-zone"><h3>' + L("Supprimer la salle de presse", "Delete the press room", "Perskamer verwijderen") + "</h3><p class=\"ad-hint\">" +
+      L("Photos et fichiers HD sont effacés. Les licences signées restent gardées comme preuve.", "Photos and HD files are erased. Signed licences are kept as proof.", "Foto's en HD-bestanden worden gewist. Ondertekende licenties blijven bewaard als bewijs.") +
+      '</p><button type="button" class="ad-btn ad-btn-danger" id="ad-pr-delete">' + L("Supprimer", "Delete", "Verwijderen") + "</button></section>";
+  }
+
+  function bindPressSettings(d) {
+    var form = document.getElementById("ad-pr-settings");
+    form.addEventListener("submit", async function (e) {
+      e.preventDefault();
+      try {
+        await api("POST", "/press/" + encodeURIComponent(pressState.slug), pressFormBody(form));
+        toast(L("Réglages enregistrés.", "Settings saved.", "Instellingen opgeslagen."));
+        pressRefresh();
+      } catch (err) { toast(err.message, true); }
+    });
+    document.getElementById("ad-pr-delete").addEventListener("click", function () {
+      confirmAction(L("Supprimer « " + d.event.title + " » ? Photos et fichiers HD seront effacés.", "Delete “" + d.event.title + "”? Photos and HD files will be erased.", "“" + d.event.title + "” verwijderen? Foto's en HD-bestanden worden gewist."), async function () {
+        try {
+          await api("DELETE", "/press/" + encodeURIComponent(pressState.slug));
+          toast(L("Salle de presse supprimée.", "Press room deleted.", "Perskamer verwijderd."));
+          pressState.data = null;
+          renderPress();
+        } catch (err) { toast(err.message, true); }
+      });
+    });
+  }
+
   function routeFromHash() {
     var match = /^#\/g\/(.+)$/.exec(location.hash);
     if (match) renderDetail(decodeURIComponent(match[1]), true);
@@ -12680,6 +13393,8 @@
     else if (location.hash === "#/relances") renderMailing(true);
     else if (/^#\/clients\/.+/.test(location.hash)) renderClientDetail(decodeURIComponent(location.hash.slice(10)), true);
     else if (location.hash === "#/contrats") renderContracts(true);
+    else if (location.hash === "#/presse") renderPress(true);
+    else if (location.hash.indexOf("#/presse/") === 0) renderPressEvent(decodeURIComponent(location.hash.slice(9)), true);
     else if (location.hash === "#/portfolio") renderPortfolio(true);
     else if (location.hash.indexOf("#/facturation") === 0) renderBilling(true);
     else if (location.hash.indexOf("#/abonnement") === 0) renderSubscription(true);
@@ -12722,7 +13437,7 @@
       reservations: ["booking", "Réservations"], contrats: ["contracts", "Devis et contrats"], ventes: ["sales", "Ventes"],
       statistiques: ["insights", "Statistiques"], facturation: ["billing", "Facturation"], boutique: ["shop", "Boutique"],
       portfolio: ["portfolio", "Portfolio"], "bons-cadeaux": ["giftcards", "Bons cadeaux"], abonnement: ["subscription", "Abonnement"],
-      parametres: ["settings", "Paramètres"], suggestions: ["feedback", "Nouveautés & suggestions"],
+      parametres: ["settings", "Paramètres"], suggestions: ["feedback", "Nouveautés & suggestions"], presse: ["press", "Salle de presse"],
     };
     function suggestions() {
       return [
@@ -13421,6 +14136,22 @@
   // volet « Comment ça marche » (étapes, bon à savoir) et un raccourci pour
   // poser la question à Lumi. [français, anglais].
   var PAGE_HELP = {
+    press: {
+      title: ["Salle de presse", "Press room"],
+      summary: ["Les photos d'un événement partagées avec le commanditaire, l'artiste, les médias et les sponsors : chacun son lien, sa licence, et votre crédit inscrit dans chaque fichier.", "An event's photos shared with the client, the artist, the media and sponsors: each with their own link and licence, and your credit written into every file."],
+      steps: [
+        ["Créez l'événement : date, lieu, crédit imposé, embargo éventuel.", "Create the event: date, venue, mandatory credit, optional embargo."],
+        ["Déposez vos JPEG en pleine définition : légendes et crédits IPTC sont repris ; les aperçus sont filigranés.", "Upload your full-resolution JPEGs: IPTC captions and credits are picked up; previews are watermarked."],
+        ["Ajoutez les destinataires (commanditaire, artiste, médias, sponsors) puis « Envoyer pour validation » : ils valident photo par photo.", "Add the recipients (client, artist, media, sponsors), then “Send for approval”: they approve photo by photo."],
+        ["« Publier pour les médias » : chacun reçoit son lien ; avec un embargo, les photos s'affichent à l'heure dite.", "“Publish to the media”: everyone gets their link; with an embargo, the photos appear at the set time."],
+        ["Suivez les licences signées et le journal des téléchargements ; exportez-le en CSV.", "Follow signed licences and the download log; export it as CSV."],
+      ],
+      tips: [
+        ["Une photo marquée « usage éditorial seulement » ou « mineur » ne se télécharge pas avec une licence de communication ou de publicité.", "A photo marked “editorial use only” or “minor” cannot be downloaded with a communications or advertising licence."],
+        ["Donnez une étiquette aux photos d'un sponsor (ex. « acme ») : un destinataire limité à cette étiquette ne voit qu'elles.", "Tag a sponsor's photos (e.g. “acme”): a recipient limited to that tag only sees those."],
+        ["Les modèles de licence sont un point de départ, pas un conseil juridique : relisez-les avant votre premier événement.", "The licence templates are a starting point, not legal advice: read them before your first event."],
+      ],
+    },
     mailing: {
       title: ["Relances & e-mails", "Emails"],
       summary: ["Les e-mails que votre studio envoie à ses clients : relances automatiques, campagnes, et ce qu'ils rapportent.", "The emails your studio sends its clients: automatic reminders, campaigns, and what they bring in."],
@@ -13641,6 +14372,7 @@
     if (h.indexOf("#/facturation") === 0) return "billing";
     if (h.indexOf("#/abonnement") === 0) return "subscription";
     if (h.indexOf("#/scolaire") === 0) return "school";
+    if (h.indexOf("#/presse") === 0) return "press";
     if (h === "#/proprietaire") return "";
     return "galleries";
   }

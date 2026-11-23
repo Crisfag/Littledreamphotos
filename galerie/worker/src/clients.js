@@ -313,7 +313,7 @@ export async function collect(env, photographerId) {
   const [galleries, bookings, contracts, payments, records, dates, messages, gifts, invoices, photoCounts] = await Promise.all([
     env.DB.prepare(
       `SELECT id, slug, title, client_name, client_email, session_type, selection_done_at, delivery_open, included_photos, extra_photo_price_cents, created_at, expires_at, language, shop_enabled
-         FROM galleries WHERE photographer_id = ? AND kind != 'school' AND demo = 0 AND (client_email != '' OR client_name != '')`
+         FROM galleries WHERE photographer_id = ? AND kind = 'client' AND demo = 0 AND (client_email != '' OR client_name != '')`
     ).bind(photographerId).all(),
     env.DB.prepare(
       "SELECT id, client_name, client_email, client_phone, offer_title, starts_at, status, deposit_cents, paid_at, created_at FROM bookings WHERE photographer_id = ? AND status IN ('confirmed', 'cancelled', 'conflict')"
@@ -348,7 +348,7 @@ export async function collect(env, photographerId) {
     env.DB.prepare(
       `SELECT p.gallery_id, COUNT(*) AS photos, SUM(p.selected) AS selected
          FROM photos p JOIN galleries g ON g.id = p.gallery_id
-        WHERE g.photographer_id = ? AND g.kind != 'school' AND g.demo = 0 GROUP BY p.gallery_id`
+        WHERE g.photographer_id = ? AND g.kind = 'client' AND g.demo = 0 GROUP BY p.gallery_id`
     ).bind(photographerId).all(),
   ]);
   const rows = (r) => r.results || [];

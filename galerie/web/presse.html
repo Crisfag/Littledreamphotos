@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Salle de presse</title>
+  <meta name="robots" content="noindex, nofollow, noarchive, noai, noimageai" />
+  <meta name="referrer" content="no-referrer" />
+  <link rel="preload" href="/assets/fonts/geist-latin.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="stylesheet" href="/assets/fonts/geist.css" />
+  <link rel="stylesheet" href="presse.css" />
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <script>
+    /* Adresse du Worker ; le lien personnel est lu dans « ?t=… », la page
+       d'accréditation d'un événement dans « ?e=… ». */
+    window.PRESS_CONFIG = {
+      api: "https://galerie-protegee.littledreamphotos-be.workers.dev",
+    };
+  </script>
+</head>
+<body>
+  <div class="pr-shell" id="pr-app">
+    <header class="pr-top">
+      <p class="pr-studio" id="pr-studio"></p>
+      <div class="pr-langs" id="pr-langs" role="group" aria-label="Langue">
+        <button type="button" data-lang="fr">FR</button><button type="button" data-lang="en">EN</button><button type="button" data-lang="nl">NL</button>
+      </div>
+    </header>
+    <main id="pr-main">
+      <p class="pr-state" id="pr-loading">…</p>
+    </main>
+    <footer class="pr-foot" id="pr-foot"></footer>
+  </div>
+  <div class="pr-lightbox" id="pr-lightbox" hidden role="dialog" aria-modal="true">
+    <button type="button" class="pr-lb-close" id="pr-lb-close" aria-label="Fermer">×</button>
+    <button type="button" class="pr-lb-nav pr-lb-prev" id="pr-lb-prev" aria-label="Précédente">‹</button>
+    <button type="button" class="pr-lb-nav pr-lb-next" id="pr-lb-next" aria-label="Suivante">›</button>
+    <div class="pr-lb-body"><div class="pr-lb-image" id="pr-lb-image"></div><div class="pr-lb-side" id="pr-lb-side"></div></div>
+  </div>
+  <script src="presse.js"></script>
+</body>
+</html>

@@ -1125,7 +1125,7 @@ async function bookingForAdmin(env, photographer) {
       `SELECT g.id, g.slug, g.title, lower(g.client_email) AS email, g.created_at, g.invite_sent_at, g.delivery_open, g.delivery_opened_at,
               (SELECT COUNT(*) FROM photos p WHERE p.gallery_id = g.id) AS photo_count
          FROM galleries g
-        WHERE g.photographer_id = ? AND g.kind != 'school'
+        WHERE g.photographer_id = ? AND g.kind = 'client'
           AND (g.id IN (SELECT gallery_id FROM bookings WHERE photographer_id = ? AND gallery_id != '' AND starts_at > ?)
                OR (g.client_email != '' AND lower(g.client_email) IN (SELECT lower(client_email) FROM bookings WHERE photographer_id = ? AND status = 'confirmed' AND starts_at > ?)))
         ORDER BY g.created_at DESC LIMIT 600`
@@ -1388,7 +1388,7 @@ export async function handleBookingAdmin(request, env, photographer, parts) {
       const slug = String(body.slug || "");
       let galleryId = "";
       if (slug) {
-        const gallery = await env.DB.prepare("SELECT id FROM galleries WHERE slug = ? AND photographer_id = ? AND kind != 'school'").bind(slug, photographer.id).first();
+        const gallery = await env.DB.prepare("SELECT id FROM galleries WHERE slug = ? AND photographer_id = ? AND kind = 'client'").bind(slug, photographer.id).first();
         if (!gallery) return fail(404, "Galerie introuvable");
         galleryId = gallery.id;
       }

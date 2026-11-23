@@ -5,6 +5,7 @@
 // lire, modifier ou lister que ses propres galeries, jamais celles d'un
 // autre compte.
 
+import { handlePressAdmin } from "./press.js";
 import { json, fail } from "./http.js";
 import { parseMarks } from "./marks.js";
 import { handleShopAdmin, listPrintOrders } from "./shop.js";
@@ -219,7 +220,7 @@ async function listGalleries(env, photographerId) {
             (SELECT COUNT(*) FROM photos p WHERE p.gallery_id = g.id AND p.selected = 1) AS selected_count,
             (SELECT COUNT(*) FROM photos p WHERE p.gallery_id = g.id AND p.comment != '') AS comment_count,
             (SELECT COALESCE(SUM(extra_count), 0) FROM payments WHERE payments.gallery_id = g.id AND payments.status = 'paid') AS paid_extra_count
-     FROM galleries g WHERE g.photographer_id = ? AND g.kind != 'school' ORDER BY g.created_at DESC`
+     FROM galleries g WHERE g.photographer_id = ? AND g.kind = 'client' ORDER BY g.created_at DESC`
   )
     .bind(photographerId)
     .all();
@@ -292,6 +293,9 @@ async function getGallery(env, photographerId, slug) {
       session_type: cleanSessionType(gallery.session_type),
       session_type_guess: guessSessionType(gallery.title),
       demo: Boolean(gallery.demo),
+      // client, school ou press : une salle de presse garde aussi l'original
+      // HD de chaque photo (voir admin-server.mjs et press.js).
+      kind: gallery.kind || "client",
       // Montré au seul photographe, pour ouvrir sa démo comme un client ;
       // absent de toute autre galerie (aucun mot de passe n'en sort jamais).
       ...(gallery.demo ? { demo_password: gallery.demo_password || "" } : {}),
@@ -782,7 +786,7 @@ async function listInvoices(env, photographerId) {
 // l'onglet Facturation.
 async function getStats(env, photographerId) {
   const galleriesRow = await env.DB.prepare(
-    "SELECT COUNT(*) AS n FROM galleries WHERE photographer_id = ? AND kind != 'school' AND demo = 0"
+    "SELECT COUNT(*) AS n FROM galleries WHERE photographer_id = ? AND kind = 'client' AND demo = 0"
   )
     .bind(photographerId)
     .first();
@@ -1141,6 +1145,11 @@ export async function handleAdmin(request, env, ctx, path) {
     return handleContractsAdmin(request, env, photographer, parts.slice(3));
   }
 
+  if (section === "press") {
+    const photographer = await env.DB.prepare("SELECT * FROM photographers WHERE id = ?").bind(photographerId).first();
+    if (!photographer) return fail(401, "Session invalide");
+    return handlePressAdmin(request, env, photographer, parts.slice(3), { eraseGallery });
+  }
   if (section === "school") {
     const photographer = await env.DB.prepare("SELECT * FROM photographers WHERE id = ?").bind(photographerId).first();
     if (!photographer) return fail(401, "Session invalide");

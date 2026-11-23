@@ -235,7 +235,7 @@ export async function runAutomations(env, options = {}) {
   // 1. Sélection pas commencée.
   const { results: nudges } = await env.DB.prepare(
     `SELECT g.* FROM galleries g JOIN photographers p ON p.id = g.photographer_id
-      WHERE g.client_email != '' AND g.demo = 0 AND g.kind != 'school' AND g.selection_done_at IS NULL
+      WHERE g.client_email != '' AND g.demo = 0 AND g.kind = 'client' AND g.selection_done_at IS NULL
         AND (g.expires_at IS NULL OR g.expires_at > ?) AND p.reminders_enabled = 1 AND ${enabledSql("selection_nudge")}
         AND COALESCE(g.invite_sent_at, g.created_at) <= ? - ${delaySql("selection_nudge")} * ${DAY}
         AND COALESCE(g.invite_sent_at, g.created_at) > ? - 30 * ${DAY}
@@ -257,7 +257,7 @@ export async function runAutomations(env, options = {}) {
   const { results: reviews } = await env.DB.prepare(
     `SELECT g.*, (SELECT s.value FROM automation_settings s WHERE s.photographer_id = p.id AND s.key = 'review') AS review_url
        FROM galleries g JOIN photographers p ON p.id = g.photographer_id
-      WHERE g.client_email != '' AND g.demo = 0 AND g.kind != 'school' AND g.delivery_opened_at IS NOT NULL
+      WHERE g.client_email != '' AND g.demo = 0 AND g.kind = 'client' AND g.delivery_opened_at IS NOT NULL
         AND g.delivery_opened_at <= ? - ${delaySql("review")} * ${DAY} AND g.delivery_opened_at > ? - 60 * ${DAY}
         AND ${enabledSql("review")}
         AND NOT EXISTS (SELECT 1 FROM reminders_sent r WHERE r.gallery_id = g.id AND r.kind = 'review')
@@ -277,7 +277,7 @@ export async function runAutomations(env, options = {}) {
   //    semaine), sans séance plus récente ni à venir.
   const { results: anniversaries } = await env.DB.prepare(
     `SELECT g.* FROM galleries g JOIN photographers p ON p.id = g.photographer_id
-      WHERE g.client_email != '' AND g.demo = 0 AND g.kind != 'school' AND ${enabledSql("anniversary")}
+      WHERE g.client_email != '' AND g.demo = 0 AND g.kind = 'client' AND ${enabledSql("anniversary")}
         AND g.created_at <= ? - ${delaySql("anniversary")} * ${DAY} AND g.created_at > ? - (${delaySql("anniversary")} + 7) * ${DAY}
         AND NOT EXISTS (SELECT 1 FROM galleries g2 WHERE g2.photographer_id = g.photographer_id AND g2.client_email = g.client_email AND g2.created_at > g.created_at + 30 * ${DAY})
         AND NOT EXISTS (SELECT 1 FROM bookings b WHERE b.photographer_id = g.photographer_id AND lower(b.client_email) = g.client_email AND b.status = 'confirmed' AND b.starts_at > ? - 90 * ${DAY})
@@ -301,7 +301,7 @@ export async function runAutomations(env, options = {}) {
             (SELECT g3.language FROM galleries g3 WHERE g3.photographer_id = g.photographer_id AND g3.client_email = g.client_email ORDER BY g3.created_at DESC LIMIT 1) AS language,
             ${delaySql("dormant", "g.photographer_id")} AS delay
        FROM galleries g JOIN photographers p ON p.id = g.photographer_id
-      WHERE g.client_email != '' AND g.demo = 0 AND g.kind != 'school' AND ${enabledSql("dormant", "g.photographer_id")}
+      WHERE g.client_email != '' AND g.demo = 0 AND g.kind = 'client' AND ${enabledSql("dormant", "g.photographer_id")}
       GROUP BY g.photographer_id, g.client_email
      HAVING last_at <= ? - delay * ${DAY} AND last_at > ? - (delay + 14) * ${DAY}
       LIMIT 200`

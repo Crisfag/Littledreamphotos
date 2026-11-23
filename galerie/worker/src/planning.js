@@ -56,7 +56,7 @@ export async function planningFor(env, photographer) {
     env.DB.prepare(
       `SELECT g.id, g.slug, g.title, g.client_name, g.client_email, g.created_at, g.selection_done_at, g.delivery_open,
               (SELECT COUNT(*) FROM photos p WHERE p.gallery_id = g.id AND p.selected = 1) AS selected_count
-         FROM galleries g WHERE g.photographer_id = ? AND g.kind != 'school' AND g.demo = 0`
+         FROM galleries g WHERE g.photographer_id = ? AND g.kind = 'client' AND g.demo = 0`
     ).bind(photographer.id).all(),
     env.DB.prepare("SELECT * FROM planning_items WHERE photographer_id = ? ORDER BY created_at ASC").bind(photographer.id).all(),
     env.DB.prepare("SELECT item_key FROM planning_done WHERE photographer_id = ?").bind(photographer.id).all(),
