@@ -7695,8 +7695,8 @@
       return { value: c.idproduct, label: c.name, sub: "Sur " + c.sheet + " · n° " + c.idproduct + " · " + eurosRange({ min: c.minCents, max: c.maxCents }), img: labPreviewUrl(c.preview), group: "Planches composées par le labo" };
     }).concat(cat.others.map(function (c) {
       var prices = c.prices.map(function (pr) { return pr.cents; });
-      return { value: c.idproduct, label: c.name, sub: "n° " + c.idproduct + (c.dimensions ? " · " + c.dimensions + " mm" : "") + (prices.length ? " · " + eurosRange({ min: Math.min.apply(null, prices), max: Math.max.apply(null, prices) }) : ""), img: "", group: "Tirages et autres produits BePhoto" };
-    }));
+      return { value: c.idproduct, label: c.name, sub: "n° " + c.idproduct + (c.dimensions ? " · " + c.dimensions + " mm" : "") + (prices.length ? " · " + eurosRange({ min: Math.min.apply(null, prices), max: Math.max.apply(null, prices) }) : ""), img: "", group: c.montage ? "Montages de votre compte BePhoto" : "Tirages et autres produits BePhoto", montage: Boolean(c.montage) };
+    }).sort(function (x, y) { return (y.montage ? 1 : 0) - (x.montage ? 1 : 0); }));
     var rows = product.labItems.length ? product.labItems.map(function (i) { return Object.assign({}, i); }) : [{ idproduct: 0, idpaper: 1, quantity: 1 }];
     function draw() {
       var filled = rows.filter(function (r) { return r.idproduct; });
@@ -7767,8 +7767,31 @@
   var BATCH_STATUS = {
     ready: { text: "Prêt", cls: "ad-acc-status-trial" },
     sending: { text: "Envoi en cours", cls: "ad-acc-status-warn" },
+    priced: { text: "Prix à confirmer", cls: "ad-acc-status-warn" },
     sent: { text: "Parti", cls: "ad-acc-status-ok" },
   };
+  var LAB_SHIPPING = {
+    school: "Livrer à l'établissement",
+    account: "Livrer à l'adresse de mon compte BePhoto",
+    pickup: "Enlèvement chez BePhoto",
+    home: "Une commande par famille, livrée chez elle",
+  };
+
+  // Montant insécable (le symbole ne passe pas seul à la ligne).
+  function labEuros(cents) { return formatEuros(cents).replace(/ /g, "\u00a0"); }
+
+  // Prix annoncé par BePhoto (avant confirmation, puis total facturé).
+  function labTotalText(t) {
+    if (!t) return "";
+    var plural = function (n, word) { return n + " " + word + (n > 1 ? "s" : ""); };
+    var what = t.envelopes ? plural(t.envelopes, "enveloppe") : t.orders > 1 ? plural(t.orders, "commande") : "";
+    if (t.totalCents !== null && t.totalCents !== undefined) {
+      return "Total BePhoto : " + labEuros(t.totalCents) + (t.envelopes ? " · " + plural(t.envelopes, "enveloppe") : "");
+    }
+    return "Prix BePhoto : tirages " + labEuros(t.productsCents) +
+      (t.feesCents ? " + frais d'enveloppes " + labEuros(t.feesCents) + " (" + plural(t.feeEnvelopeCount, "enveloppe") + " sous le minimum du compte)" : "") +
+      ", hors livraison" + (what ? " · " + what : "");
+  }
 
   async function loadSchoolLab(year, kind) {
     var host = document.getElementById("ad-sc-lab");
@@ -7786,6 +7809,7 @@
 
   function renderSchoolLab(host, year, kind, data) {
     var base = "/local/school/years/" + encodeURIComponent(year.id) + "/production?batch=";
+    var connected = data.lab.connected;
     var pendingCard = function (delivery, title, hint) {
       var p = data.pending[delivery];
       return '<div class="ad-sc-pending">' +
@@ -7794,18 +7818,39 @@
           : "Rien en attente") + "</span>" + (hint ? '<span class="ad-hint">' + esc(hint) + "</span>" : "") + "</div>" +
         '<button type="button" class="ad-btn' + (p.lines ? " ad-btn-primary" : "") + '" data-new-batch="' + delivery + '"' + (p.lines ? "" : " disabled") + ">Préparer un lot</button></div>";
     };
+    var shipSelect = function (b) {
+      var choices = (data.schoolAddress ? ["school"] : []).concat(["account", "pickup"]);
+      return '<label class="ad-sc-ship"><span class="ad-visually-hidden">Livraison du lot ' + b.number + '</span><select data-ship="' + esc(b.id) + '">' +
+        choices.map(function (c) { return '<option value="' + c + '">' + esc(LAB_SHIPPING[c]) + "</option>"; }).join("") + "</select></label>";
+    };
     var rows = data.batches.map(function (b) {
       var st = BATCH_STATUS[b.status] || BATCH_STATUS.ready;
+      var labRef = b.labOrders.length > 1 ? b.labOrders.length + " commandes BePhoto" : "BePhoto n° " + esc(b.labOrderId);
       var statusText = b.status === "sent"
-        ? "Parti le " + new Date(b.sentAt * 1000).toLocaleDateString("fr-BE") + (b.lab === "bephoto" ? " · BePhoto n° " + esc(b.labOrderId) : " · à la main")
-        : b.status === "sending" ? "Envoi : " + b.progress.sent + " / " + b.progress.total + " lignes" : "Prêt à partir";
+        ? "Parti le " + new Date(b.sentAt * 1000).toLocaleDateString("fr-BE") + (b.lab === "bephoto" ? " · " + labRef : " · à la main") +
+          (b.labTotal ? "<br />" + esc(labTotalText(b.labTotal)) : "")
+        : b.status === "sending" ? "Transmission : " + b.progress.sent + " / " + b.progress.total + " étapes"
+        : b.status === "priced" ? esc(labTotalText(b.labTotal)) + (b.shipping && LAB_SHIPPING[b.shipping] ? "<br />" + esc(LAB_SHIPPING[b.shipping]) : "") +
+          (b.labTotal && b.labTotal.feeEnvelopes && b.labTotal.feeEnvelopes.length
+            ? '<details class="ad-sc-fees"><summary>Enveloppes sous le minimum</summary><ul>' + b.labTotal.feeEnvelopes.map(function (f) {
+                return "<li>" + esc(f.label) + " · " + f.prints + " tirage" + (f.prints > 1 ? "s" : "") + " · " + labEuros(f.feeCents) + "</li>";
+              }).join("") + "</ul></details>"
+            : "")
+        : "Prêt à partir";
       var actions = '<a class="ad-link-btn" href="' + base + encodeURIComponent(b.id) + '" download>Fichier (ZIP)</a>';
       if (b.status === "ready") {
-        if (b.delivery === "school" && data.lab.connected) actions += ' <button type="button" class="ad-btn ad-btn-primary ad-sc-mini" data-send-batch="' + esc(b.id) + '" data-number="' + b.number + '">Envoyer à BePhoto</button>';
+        if (connected) {
+          actions += (b.delivery === "school" ? " " + shipSelect(b) : "") +
+            ' <button type="button" class="ad-link-btn" data-estimate="' + esc(b.id) + '">Estimer le prix</button>' +
+            ' <button type="button" class="ad-btn ad-btn-primary ad-sc-mini" data-send-batch="' + esc(b.id) + '" data-number="' + b.number + '">Envoyer à BePhoto</button>';
+        }
         actions += ' <button type="button" class="ad-link-btn" data-mark-sent="' + esc(b.id) + '">Marquer comme parti</button>' +
           ' <button type="button" class="ad-link-btn ad-sc-del" data-cancel-batch="' + esc(b.id) + '">Annuler</button>';
       } else if (b.status === "sending") {
-        actions += ' <button type="button" class="ad-btn ad-btn-primary ad-sc-mini" data-send-batch="' + esc(b.id) + '" data-resume="1" data-number="' + b.number + '">Reprendre l\'envoi</button>';
+        actions += ' <button type="button" class="ad-btn ad-btn-primary ad-sc-mini" data-send-batch="' + esc(b.id) + '" data-number="' + b.number + '">Reprendre l\'envoi</button>';
+      } else if (b.status === "priced") {
+        actions += ' <button type="button" class="ad-btn ad-btn-primary ad-sc-mini" data-confirm-batch="' + esc(b.id) + '" data-number="' + b.number + '">Confirmer la commande</button>' +
+          ' <button type="button" class="ad-link-btn ad-sc-del" data-cancel-batch="' + esc(b.id) + '">Annuler</button>';
       }
       return "<tr><td><strong>Lot " + b.number + "</strong></td>" +
         "<td>" + (b.delivery === "home" ? "À domicile" : "École") + "</td>" +
@@ -7820,8 +7865,8 @@
       '<section class="ad-sc-shop"><div class="ad-section-header"><h3>Envois au labo · ' + esc(year.label) + "</h3></div>" +
       '<p class="ad-hint">Conseil du labo : regroupez les commandes une ou deux fois pendant la vente (toutes les deux semaines, par exemple) plutôt que de les envoyer une à une. Un article ne part qu\'une fois : il entre dans un seul lot.</p>' +
       '<div class="ad-sc-pendings">' +
-      pendingCard("school", "À livrer à l'établissement", "") +
-      pendingCard("home", "À livrer à domicile", "Adresse des familles dans le fichier du lot") +
+      pendingCard("school", "À livrer à l'établissement", connected ? "Une enveloppe par enfant, triée par classe" : "") +
+      pendingCard("home", "À livrer à domicile", connected ? "Une commande BePhoto par famille, livrée chez elle" : "Adresse des familles dans le fichier du lot") +
       "</div>" +
       (data.unmappedProducts.length
         ? '<p class="ad-hint ad-acc-warn">Pour envoyer à BePhoto, indiquez ce que le labo imprime pour : ' + esc(data.unmappedProducts.join(", ")) + " (Gamme et prix → Labo).</p>"
@@ -7830,17 +7875,31 @@
         ? '<div class="ad-table-wrap"><table class="ad-table"><thead><tr><th>Lot</th><th>Livraison</th><th class="ad-num">Articles</th><th class="ad-num">Enfants</th><th>Statut</th><th><span class="ad-visually-hidden">Actions</span></th></tr></thead><tbody>' + rows + "</tbody></table></div>"
         : '<p class="ad-hint">Aucun lot pour l\'instant.</p>') +
       '<div class="ad-sc-labacct">' +
-      (data.lab.connected
-        ? "<p><strong>Compte BePhoto connecté</strong> · " + esc(data.lab.email) + ' <button type="button" class="ad-link-btn" id="ad-sc-lab-off">Déconnecter</button></p>' +
-          '<p class="ad-hint">Les lots « école » peuvent partir directement chez BePhoto, qui vous facture l\'impression. Les envois à domicile partent encore avec leur fichier : l\'API BePhoto n\'a pas de champ adresse pour l\'instant.</p>'
-        : '<form id="ad-sc-lab-form" class="ad-sc-lab-form"><p><strong>Connecter votre compte BePhoto</strong> <span class="ad-hint">(facultatif)</span></p>' +
-          '<p class="ad-hint">Pour envoyer vos lots directement au labo. Votre mot de passe est chiffré et ne s\'affiche plus jamais ; c\'est vous que BePhoto facture.</p>' +
-          '<label class="ad-field"><span>E-mail du compte BePhoto</span><input type="email" name="email" required autocomplete="off" /></label>' +
-          '<label class="ad-field"><span>Mot de passe</span><input type="password" name="password" required autocomplete="new-password" /></label>' +
-          '<button type="submit" class="ad-btn">Connecter</button></form>') +
+      (connected
+        ? "<p><strong>Compte BePhoto connecté</strong> · " + (data.lab.method === "key" ? "par clé d'API" : esc(data.lab.email)) + ' <button type="button" class="ad-link-btn" id="ad-sc-lab-off">Déconnecter</button></p>' +
+          '<p class="ad-hint">Vos lots partent directement chez BePhoto, qui vous facture l\'impression : pour l\'établissement, une enveloppe par enfant, triée par classe, avec son nom sur l\'étiquette ; à domicile, une commande par famille, livrée à son adresse, avec le nom de l\'enfant au dos des photos. BePhoto annonce son prix avant toute impression : rien ne part sans votre confirmation.</p>' +
+          (data.lab.method === "password" ? '<p class="ad-hint">Conseil : demandez une clé d\'API à BePhoto, puis reconnectez-vous avec elle. Holypixx ne gardera plus votre mot de passe.</p>' : "")
+        : '<form id="ad-sc-lab-form" class="ad-sc-lab-form" data-mode="key"><p><strong>Connecter votre compte BePhoto</strong> <span class="ad-hint">(facultatif)</span></p>' +
+          '<p class="ad-hint">Pour envoyer vos lots directement au labo. BePhoto fournit une clé d\'API sur demande, pour votre compte. Elle est chiffrée et ne s\'affiche plus jamais ; c\'est vous que BePhoto facture.</p>' +
+          '<label class="ad-field" data-lab-mode="key"><span>Clé d\'API BePhoto</span><input type="password" name="apiKey" required autocomplete="off" spellcheck="false" /></label>' +
+          '<label class="ad-field" data-lab-mode="password" hidden><span>E-mail du compte BePhoto</span><input type="email" name="email" autocomplete="off" /></label>' +
+          '<label class="ad-field" data-lab-mode="password" hidden><span>Mot de passe</span><input type="password" name="password" autocomplete="new-password" /></label>' +
+          '<div class="ad-sc-lab-form-actions"><button type="submit" class="ad-btn">Connecter</button> <button type="button" class="ad-link-btn" id="ad-sc-lab-mode">Pas encore de clé ? Utiliser l\'e-mail et le mot de passe</button></div></form>') +
       "</div></section>";
 
     function refresh() { loadSchoolLab(year, kind); }
+    function statusEl(id) { return host.querySelector('[data-batch-status="' + id + '"]'); }
+
+    // Rappelle l'envoi jusqu'au bout, ou jusqu'au prix à confirmer.
+    async function runSend(id, number, body) {
+      var status = statusEl(id);
+      for (var guard = 0; guard < 2000; guard++) {
+        var step = await api("POST", "/school/batches/" + encodeURIComponent(id) + "/send", body || {});
+        if (status) status.textContent = step.done ? "Terminé" : step.awaiting ? "Prix reçu" : "Transmission : " + step.sent + " / " + step.total + " étapes";
+        if (step.done) { toast("Lot " + number + " confirmé chez BePhoto : il part en production."); return; }
+        if (step.awaiting) { toast("Lot " + number + " transmis. Vérifiez le prix annoncé par BePhoto, puis confirmez."); return; }
+      }
+    }
 
     host.querySelectorAll("[data-new-batch]").forEach(function (btn) {
       btn.addEventListener("click", async function () {
@@ -7877,23 +7936,52 @@
         } catch (err) { toast(err.message, true); }
       });
     });
+    var shippingFor = function (id) {
+      var select = host.querySelector('[data-ship="' + id + '"]');
+      return select ? { shipping: select.value } : {};
+    };
+    host.querySelectorAll("[data-estimate]").forEach(function (btn) {
+      btn.addEventListener("click", async function () {
+        var id = btn.getAttribute("data-estimate");
+        var status = statusEl(id);
+        btn.disabled = true;
+        if (status) status.textContent = "Estimation chez BePhoto…";
+        try {
+          var e = await api("POST", "/school/batches/" + encodeURIComponent(id) + "/estimate", shippingFor(id));
+          if (status) status.textContent = "Estimation : tirages " + labEuros(e.productsCents) + " + livraison " + labEuros(e.shippingCents) +
+            " = " + labEuros(e.totalCents) + (e.estimated < e.orders ? " (" + e.estimated + " commandes sur " + e.orders + ")" : "") +
+            (e.envelopes ? ", hors frais d'enveloppes éventuels" : "") + ".";
+        } catch (err) {
+          if (status) status.textContent = "Prêt à partir";
+          toast(err.message, true);
+        }
+        btn.disabled = false;
+      });
+    });
     host.querySelectorAll("[data-send-batch]").forEach(function (btn) {
       btn.addEventListener("click", async function () {
         var id = btn.getAttribute("data-send-batch");
-        if (!btn.getAttribute("data-resume") && btn.getAttribute("data-confirm") !== "1") {
+        btn.disabled = true;
+        try {
+          await runSend(id, btn.getAttribute("data-number"), shippingFor(id));
+        } catch (err) {
+          toast(err.message, true);
+        }
+        refresh();
+      });
+    });
+    host.querySelectorAll("[data-confirm-batch]").forEach(function (btn) {
+      btn.addEventListener("click", async function () {
+        var id = btn.getAttribute("data-confirm-batch");
+        if (btn.getAttribute("data-confirm") !== "1") {
           btn.setAttribute("data-confirm", "1");
-          btn.textContent = "Confirmer : BePhoto imprime et vous facture";
+          btn.textContent = "Sûr ? BePhoto imprime et vous facture";
           return;
         }
         btn.disabled = true;
-        var status = host.querySelector('[data-batch-status="' + id + '"]');
         try {
-          for (var guard = 0; guard < 2000; guard++) {
-            var step = await api("POST", "/school/batches/" + encodeURIComponent(id) + "/send", {});
-            if (status) status.textContent = step.done ? "Terminé" : "Envoi : " + step.sent + " / " + step.total + " lignes";
-            if (step.done) break;
-          }
-          toast("Lot " + btn.getAttribute("data-number") + " envoyé à BePhoto.");
+          await api("POST", "/school/batches/" + encodeURIComponent(id) + "/confirm", {});
+          await runSend(id, btn.getAttribute("data-number"));
         } catch (err) {
           toast(err.message, true);
         }
@@ -7901,12 +7989,25 @@
       });
     });
     var form = document.getElementById("ad-sc-lab-form");
+    var modeBtn = document.getElementById("ad-sc-lab-mode");
+    if (modeBtn) modeBtn.addEventListener("click", function () {
+      var mode = form.getAttribute("data-mode") === "key" ? "password" : "key";
+      form.setAttribute("data-mode", mode);
+      form.querySelectorAll("[data-lab-mode]").forEach(function (label) {
+        var on = label.getAttribute("data-lab-mode") === mode;
+        label.hidden = !on;
+        label.querySelector("input").required = on;
+      });
+      modeBtn.textContent = mode === "key" ? "Pas encore de clé ? Utiliser l'e-mail et le mot de passe" : "J'ai une clé d'API BePhoto";
+    });
     if (form) form.addEventListener("submit", async function (event) {
       event.preventDefault();
       var submit = form.querySelector('[type="submit"]');
       submit.disabled = true;
       try {
-        await api("POST", "/school/lab", { email: form.email.value, password: form.password.value });
+        await api("POST", "/school/lab", form.getAttribute("data-mode") === "key"
+          ? { apiKey: form.apiKey.value }
+          : { email: form.email.value, password: form.password.value });
         schoolLabCatalogue = null;
         toast("Compte BePhoto connecté.");
         refresh();

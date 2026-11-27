@@ -1212,7 +1212,8 @@ main section > p, .ad-share > p { max-width: 75ch; }
 .ad-sc-pending strong { font-weight: 500; color: var(--ink); }
 .ad-sc-pending span { font-size: .84rem; color: var(--muted); }
 .ad-sc-pending .ad-hint { font-size: .76rem; margin: 0; }
-.ad-sc-batch-actions { white-space: nowrap; text-align: right; }
+.ad-sc-batch-actions { text-align: right; line-height: 2.1; min-width: 12rem; }
+.ad-sc-batch-actions > * { white-space: nowrap; }
 .ad-sc-mini { font-size: .8rem; padding: .3rem .7rem; }
 .ad-sc-labacct { margin-top: 1.2rem; padding-top: 1rem; border-top: 1px solid var(--line); }
 .ad-sc-lab-form { display: grid; gap: .6rem; max-width: 420px; }
@@ -3124,3 +3125,10 @@ body:has(.ad-help:not([hidden])) .ad-help-btn::after, body:has(.ad-help:not([hid
   .ad-pr-cover { width: 76px; height: 60px; }
   .ad-pr-row-actions { justify-content: flex-start; }
 }
+
+/* Envois au labo : livraison du lot, enveloppes sous le minimum, connexion par clé. */
+.ad-sc-ship select { font: inherit; font-size: .8rem; padding: .25rem .4rem; border: 1px solid var(--line); border-radius: 6px; background: var(--paper); color: var(--ink); max-width: 16rem; }
+.ad-sc-fees { margin-top: .3rem; }
+.ad-sc-fees summary { cursor: pointer; }
+.ad-sc-fees ul { margin: .3rem 0 0; padding-left: 1.1rem; }
+.ad-sc-lab-form-actions { display: flex; flex-wrap: wrap; gap: .6rem 1rem; align-items: center; }

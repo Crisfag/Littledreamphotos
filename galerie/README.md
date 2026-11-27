@@ -649,27 +649,51 @@ Le tableau de bord s'organise en trois onglets, chacun avec son propre lien
     Mise en service sur une base existante :
     `npx wrangler d1 execute galerie-protegee --remote --file=migrations/2026-10-pack-scolaire.sql`
     (colonne `school_order_lines.pack_size`), puis `npm run deploy`.
-  - *Envois au labo* (`worker/src/schoollab.js`, `worker/src/bephoto.js`) :
+  - *Envois au labo* (`worker/src/schoollab.js`, `worker/src/bephoto.js`,
+    API BePhoto documentée sur https://www.bephoto.be/fr/apiDocumentation) :
     le photographe regroupe les articles payés pas encore partis en *lots*
     (conseil du labo : une ou deux fois pendant la vente), un pour
     l'établissement, un pour les envois à domicile ; un article n'entre que
     dans un lot. Chaque lot a son fichier de production (`?batch=`), part à
     la main (« Marquer comme parti ») ou directement chez **BePhoto** si le
-    photographe a connecté son compte (e-mail et mot de passe BePhoto,
-    chiffrés comme la clé Prodigi ; le jeton de session est gardé chiffré
-    et renouvelé seul quand il expire). Chaque produit de la gamme indique
-    ce que le labo imprime pour un exemplaire (`lab_items` : produits et
-    papiers du catalogue `/products`, avec coût et marge affichés). L'envoi
-    se fait pas à pas (`POST …/batches/:id/send`, 8 lignes par appel, curseur
-    en base : jamais une ligne envoyée deux fois, reprise après coupure) :
-    création de la commande (métadonnées : établissement, année, lot,
-    adresse de livraison), une ligne par tirage avec un nom de fichier qui
-    range par groupe et par enfant (`01_P2_007_Lea_Pochette-Classique_…jpg`)
-    et l'adresse signée du fichier d'impression
-    (`/api/school-lab-files/…?s=`, valable 60 jours après l'envoi), puis
-    confirmation. L'API BePhoto n'ayant pas de champ adresse, les lots à
-    domicile partent encore avec leur fichier. `BEPHOTO_API_BASE` ne sert
-    qu'aux tests locaux (faux labo) : ne la définissez jamais en production.
+    photographe a connecté son compte : par **clé d'API** (recommandé,
+    fournie par BePhoto sur demande, `/user/loginToken`) ou par e-mail et
+    mot de passe. Clé ou mot de passe chiffrés comme la clé Prodigi ; le
+    jeton de session (valable un an) est gardé chiffré et renouvelé seul
+    quand il expire. Chaque produit de la gamme indique ce que le labo
+    imprime pour un exemplaire (`lab_items` : produits et papiers du
+    catalogue `/products?include=montage`, montages du compte compris, avec
+    coût et marge affichés).
+    - *Prix simulé* (`POST …/batches/:id/estimate`) : `/calculate` par
+      commande (tirages additionnés par produit et papier, livraison du
+      compte), sans rien créer chez BePhoto.
+    - *Envoi* (`POST …/batches/:id/send`, rappelé par l'écran) : le lot
+      devient un plan d'opérations figé (`lab_items`), exécuté par étapes
+      (curseur `lab_cursor`, numéros et prix reçus dans `lab_state` : jamais
+      une opération faite deux fois, reprise après coupure, une autre
+      fenêtre qui envoie le même lot s'arrête). Lot *établissement* : une
+      commande, livrée à l'établissement (adresse de sa fiche, texte libre
+      « rue et numéro, code postal localité »), à l'adresse du compte
+      BePhoto ou enlevée chez BePhoto (`lab_shipping`) ; une sous-commande
+      par enfant (« P2 - 007 Léa », triées par classe puis par enfant : une
+      enveloppe chacune, libellé sur l'étiquette et au dos des photos). Lot
+      *à domicile* : une commande par famille, livrée à l'adresse donnée au
+      paiement, nom de l'enfant au dos de chaque photo. Les produits partent
+      par 10 par appel, avec un nom de fichier qui range par groupe et par
+      enfant (`01_P2_007_Lea_Pochette-Classique_…jpg`) et l'adresse signée
+      du fichier d'impression (`/api/school-lab-files/…?s=`, valable 60
+      jours après l'envoi). Puis `/orders/:id/price` : le lot passe *à
+      confirmer* (`priced`) avec le prix annoncé (tirages, frais des
+      enveloppes sous le minimum du compte).
+    - *Confirmation* (`POST …/batches/:id/confirm`, double clic à l'écran) :
+      l'envoi reprend et ferme les commandes (`/close`) ; le total facturé
+      s'affiche. Rien n'est imprimé avant. Un lot *à confirmer* peut encore
+      être annulé : ses articles reviennent en attente, la commande jamais
+      confirmée n'est pas produite.
+    `BEPHOTO_API_BASE` ne sert qu'aux tests locaux (faux labo) : ne la
+    définissez jamais en production.
+    Mise en service : `npx wrangler d1 execute galerie-protegee --remote
+    --file=migrations/2026-11-bephoto-api.sql`, puis `npm run deploy`.
   - *Planches et visuels* : les 26 planches de la grille publique BePhoto
     (`BEPHOTO_PLANCHES`, bephoto.js : numéro, description en français,
     format de feuille, prix par palier) se choisissent sans compte connecté,
@@ -701,8 +725,8 @@ Le tableau de bord s'organise en trois onglets, chacun avec son propre lien
     bord compte les rappels envoyés. Les familles qui n'ont pas encore
     ouvert leur espace ne sont pas connues : la fiche papier reste le
     premier rappel.
-  - *À venir* : réponses de BePhoto (adresse, tri par enfant, pochettes),
-    part de l'établissement, ventes scolaires dans le tableau des ventes.
+  - *À venir* : premier envoi réel chez BePhoto (compte de test), part de
+    l'établissement, ventes scolaires dans le tableau des ventes.
 - **Campagnes de vente des tirages** (`worker/src/campaigns.js`, formules
   Pro et Studio : ailleurs, aucune remise appliquée ni relance envoyée ;
   une promotion déjà lancée peut toujours être arrêtée) :

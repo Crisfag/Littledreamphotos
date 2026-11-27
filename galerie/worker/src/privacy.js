@@ -42,9 +42,10 @@ export async function exportAccount(env, photographerId) {
   const photographer = await env.DB.prepare("SELECT * FROM photographers WHERE id = ?").bind(photographerId).first();
   if (!photographer) return fail(401, "Session invalide");
   const account = { ...photographer };
-  for (const secret of ["password_hash", "password_salt", "prodigi_api_key_enc", "bephoto_password_enc", "bephoto_token_enc"]) delete account[secret];
+  for (const secret of ["password_hash", "password_salt", "prodigi_api_key_enc", "bephoto_password_enc", "bephoto_token_enc", "bephoto_key_enc"]) delete account[secret];
   account.prodigi_api_key = photographer.prodigi_api_key_enc ? "(enregistrée, non exportée)" : "";
   account.bephoto_password = photographer.bephoto_password_enc ? "(enregistré, non exporté)" : "";
+  account.bephoto_api_key = photographer.bephoto_key_enc ? "(enregistrée, non exportée)" : "";
 
   const galleries = await all(env, "SELECT * FROM galleries WHERE photographer_id = ? ORDER BY created_at ASC", photographerId);
   const out = [];

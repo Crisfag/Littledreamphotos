@@ -1,16 +1,27 @@
 // Client de l'API BePhoto (labo belge des photos scolaires).
 //
-// L'API est minimaliste : connexion par e-mail et mot de passe du compte
-// (jeton Bearer), catalogue des produits, puis une commande se crée, reçoit
-// ses lignes une à une (produit, papier, quantité, adresse publique du
-// fichier JPEG que le labo vient télécharger) et se confirme. Chaque
-// photographe connecte SON compte : c'est lui que le labo facture.
+// Documentation : https://www.bephoto.be/fr/apiDocumentation (mise à jour de
+// novembre 2026). Connexion par clé d'API (`/user/loginToken`, fournie par
+// BePhoto par compte) ou par e-mail et mot de passe (`/user/login`) : les
+// deux renvoient un jeton Bearer valable un an. Catalogue (`/products`,
+// montages compris), simulation de prix (`/calculate`), puis une commande se
+// crée, reçoit son mode de livraison (adresse ou enlèvement), ses
+// sous-commandes (une enveloppe par enfant), ses produits (le labo vient
+// télécharger chaque fichier JPEG par son adresse publique), annonce son
+// prix (frais par enveloppe compris) et se confirme. Chaque photographe
+// connecte SON compte : c'est lui que le labo facture.
 //
 // Tout ce qui ne touche pas au réseau est exporté pour être testé sans lui.
 
 export const BEPHOTO_BASE = "https://api.bephoto.be";
 export const PAPERS = { 1: "Brillant", 2: "Lustré" };
 export const METADATA_MAX = 255;
+export const LABEL_MAX = 100;
+export const BACKPRINT_MAX = 30;
+// Produits envoyés par appel à /orders/{id}/products.
+export const PRODUCTS_PER_CALL = 10;
+// Montage composé par le labo (pochette, planche) dans le catalogue.
+export const MONTAGE_TYPE = 100;
 
 // BEPHOTO_API_BASE ne sert qu'aux tests locaux (faux labo sur localhost).
 export function bephotoBase(env) {
@@ -29,7 +40,9 @@ function ok(data) {
   return data && (data.status === 1 || data.status === "1");
 }
 
-async function call(env, method, path, { token, body } = {}) {
+// `loose` : réponse sans champ `status` (/calculate) ; acceptée tant qu'elle
+// n'annonce pas d'erreur.
+async function call(env, method, path, { token, body, loose = false } = {}) {
   let response;
   try {
     response = await fetch(bephotoBase(env) + path, {
@@ -45,36 +58,69 @@ async function call(env, method, path, { token, body } = {}) {
     throw new BephotoError("BePhoto ne répond pas");
   }
   const data = await response.json().catch(() => null);
-  if (response.status === 401 || response.status === 403 || data?.error === "Unauthorized") {
+  if (response.status === 401 || response.status === 403 || /^unauthori[sz]ed$/i.test(String(data?.error || ""))) {
     throw new BephotoError("Connexion à BePhoto refusée", { status: response.status, unauthorized: true });
   }
-  if (!response.ok || !ok(data)) {
+  const accepted = loose ? data && typeof data === "object" && !data.error : ok(data);
+  if (!response.ok || !accepted) {
     const detail = typeof data?.error === "string" ? data.error : typeof data?.message === "string" ? data.message : `HTTP ${response.status}`;
     throw new BephotoError(`BePhoto a refusé la demande (${detail.slice(0, 160)})`, { status: response.status });
   }
   return data;
 }
 
-export async function bephotoLogin(env, email, password) {
-  const data = await call(env, "POST", "/user/login", { body: { email, password } });
+function tokenOf(data) {
   if (typeof data.token !== "string" || !data.token) throw new BephotoError("BePhoto n'a pas renvoyé de jeton");
   return data.token;
 }
 
-// Catalogue normalisé : nombres en nombres, prix en centimes par papier.
-export function normalizeProducts(products) {
-  return (Array.isArray(products) ? products : []).map((p) => ({
-    idproduct: Number(p.idproduct),
-    name: String(p.product ?? "").trim(),
-    dimensions: String(p.dimensions ?? "").trim(),
-    prices: (Array.isArray(p.prices) ? p.prices : [])
-      .map((pr) => ({ idpaper: Number(pr.idpaper), cents: Math.round(Number(pr.price) * 100) }))
-      .filter((pr) => Number.isInteger(pr.idpaper) && Number.isFinite(pr.cents)),
-  })).filter((p) => Number.isInteger(p.idproduct) && p.idproduct > 0 && p.name);
+export async function bephotoLogin(env, email, password) {
+  return tokenOf(await call(env, "POST", "/user/login", { body: { email, password } }));
 }
 
+// Connexion par clé d'API : pas de mot de passe dans l'intégration.
+export async function bephotoLoginKey(env, key) {
+  return tokenOf(await call(env, "POST", "/user/loginToken", { body: { token: key } }));
+}
+
+function cents(value) {
+  if (value === null || value === undefined || value === "") return NaN;
+  return Math.round(Number(value) * 100);
+}
+
+// Catalogue normalisé : nombres en nombres, prix de base en centimes par
+// papier. Accepte le format actuel (objet indexé par idformat : format,
+// largeur, hauteur, prix { idpaper: prix }, idtypeformat) et l'ancien
+// (liste : idproduct, product, dimensions, prices [{ idpaper, price }]).
+export function normalizeProducts(products) {
+  const list = Array.isArray(products) ? products : products && typeof products === "object" ? Object.values(products) : [];
+  return list.filter((p) => p && typeof p === "object").map((p) => {
+    let prices;
+    if (Array.isArray(p.prices)) {
+      prices = p.prices.map((pr) => ({ idpaper: Number(pr?.idpaper), cents: cents(pr?.price) }));
+    } else if (p.prix && typeof p.prix === "object") {
+      prices = Array.isArray(p.prix)
+        ? p.prix.map((pr, i) => (pr && typeof pr === "object" ? { idpaper: Number(pr.idpaper), cents: cents(pr.price ?? pr.prix) } : { idpaper: i, cents: cents(pr) }))
+        : Object.entries(p.prix).map(([idpaper, price]) => ({ idpaper: Number(idpaper), cents: cents(price) }));
+    } else {
+      prices = [];
+    }
+    const width = Number(p.largeur);
+    const height = Number(p.hauteur);
+    return {
+      idproduct: Number(p.idformat ?? p.idproduct),
+      name: String(p.format ?? p.product ?? "").trim(),
+      dimensions: width > 0 && height > 0 ? `${width}x${height}` : String(p.dimensions ?? "").trim(),
+      montage: Number(p.idtypeformat) === MONTAGE_TYPE,
+      prices: prices.filter((pr) => Number.isInteger(pr.idpaper) && pr.idpaper > 0 && Number.isFinite(pr.cents)),
+    };
+  }).filter((p) => Number.isInteger(p.idproduct) && p.idproduct > 0 && p.name)
+    .sort((a, b) => a.idproduct - b.idproduct);
+}
+
+// Montages compris (pochettes, planches d'identité, montages scolaires).
 export async function bephotoProducts(env, token) {
-  return normalizeProducts((await call(env, "GET", "/products", { token })).products);
+  return normalizeProducts((await call(env, "GET", "/products?include=montage", { token })).products);
 }
 
 function firstOrder(data) {
@@ -83,26 +129,177 @@ function firstOrder(data) {
   return order;
 }
 
+const orderPath = (idorder, rest = "") => `/orders/${encodeURIComponent(idorder)}${rest}`;
+
 export async function bephotoCreateOrder(env, token, metadata) {
   return firstOrder(await call(env, "POST", "/orders", { token, body: { metadata: String(metadata || "").slice(0, METADATA_MAX) } }));
 }
 
 export async function bephotoGetOrder(env, token, idorder) {
-  return firstOrder(await call(env, "GET", `/orders/${encodeURIComponent(idorder)}`, { token }));
+  return firstOrder(await call(env, "GET", orderPath(idorder), { token }));
+}
+
+// PICKUP (enlèvement chez BePhoto) ou BPOST (livraison à une adresse).
+export async function bephotoSetShipping(env, token, idorder, method) {
+  if (method !== "PICKUP" && method !== "BPOST") throw new BephotoError("Mode de livraison inconnu");
+  await call(env, "POST", orderPath(idorder, `/shipping/${method}`), { token, body: {} });
+}
+
+// Adresse de livraison (une seule par commande) : la commande passe en BPOST.
+export async function bephotoShippingAddress(env, token, idorder, address) {
+  const data = await call(env, "POST", orderPath(idorder, "/shipping-address"), { token, body: address });
+  return data.idadrliv ?? null;
+}
+
+// Sous-commande = une enveloppe (photo scolaire), emballée dans l'ordre de
+// création ; renvoie son idorder.
+export async function bephotoCreateSuborder(env, token, idorder, label) {
+  return firstOrder(await call(env, "POST", orderPath(idorder, "/suborders"), { token, body: { label: String(label || "").slice(0, LABEL_MAX) } }));
+}
+
+function productBody(item) {
+  return {
+    idproduct: item.idproduct, idpaper: item.idpaper, quantity: item.quantity,
+    fileurl: item.fileurl, filename: item.filename, filesize: item.filesize,
+    ...(item.backprint ? { backprint: String(item.backprint).slice(0, BACKPRINT_MAX) } : {}),
+  };
 }
 
 export async function bephotoAddProduct(env, token, idorder, item) {
-  await call(env, "POST", `/orders/${encodeURIComponent(idorder)}/products`, {
-    token,
-    body: {
-      idproduct: item.idproduct, idpaper: item.idpaper, quantity: item.quantity,
-      fileurl: item.fileurl, filename: item.filename, filesize: item.filesize,
-    },
-  });
+  await call(env, "POST", orderPath(idorder, "/products"), { token, body: productBody(item) });
 }
 
+// Plusieurs produits en un seul appel.
+export async function bephotoAddProducts(env, token, idorder, items) {
+  await call(env, "POST", orderPath(idorder, "/products"), { token, body: { products: items.map(productBody) } });
+}
+
+// Prix appliqué avant confirmation : tirages (paliers dégressifs) et, pour
+// chaque enveloppe, nombre de tirages, montant et frais de traitement.
+export async function bephotoOrderPrice(env, token, idorder) {
+  const data = await call(env, "POST", orderPath(idorder, "/price"), { token, body: {} });
+  return summarizePrice(data);
+}
+
+export function summarizePrice(data) {
+  const products = Array.isArray(data?.products) ? data.products : [];
+  const suborders = Array.isArray(data?.suborders) ? data.suborders : [];
+  const productsCents = products.reduce((sum, p) => sum + (cents(p.prix) || 0) * (Number(p.quantite) || 0), 0);
+  const feeList = suborders.map((s) => ({ label: String(s.label ?? ""), prints: Number(s.prints) || 0, feeCents: cents(s.fee) || 0 }))
+    .filter((s) => s.feeCents > 0);
+  return {
+    productsCents,
+    envelopes: suborders.length,
+    feesCents: feeList.reduce((sum, s) => sum + s.feeCents, 0),
+    feeEnvelopes: feeList.slice(0, 30),
+    feeEnvelopeCount: feeList.length,
+  };
+}
+
+// Confirme la commande (et toutes ses sous-commandes) : elle part en
+// production et ne se modifie plus. Renvoie le total annoncé, en centimes.
 export async function bephotoCloseOrder(env, token, idorder) {
-  await call(env, "POST", `/orders/${encodeURIComponent(idorder)}/close`, { token, body: {} });
+  const data = await call(env, "POST", orderPath(idorder, "/close"), { token, body: {} });
+  const total = cents(data.total_order);
+  return { totalCents: Number.isFinite(total) ? total : null };
+}
+
+// Lignes additionnées par produit et papier (le palier dépend de la quantité
+// totale d'un même produit sur un même papier).
+export function aggregateLabItems(items) {
+  const map = new Map();
+  for (const item of items) {
+    const key = `${item.idproduct}:${item.idpaper}`;
+    const row = map.get(key) || { idproduct: item.idproduct, idpaper: item.idpaper, quantity: 0 };
+    row.quantity += item.quantity;
+    map.set(key, row);
+  }
+  return [...map.values()];
+}
+
+// Simulation sans créer de commande ; frais de livraison du compte si un
+// mode est donné. Montants en centimes.
+export async function bephotoCalculate(env, token, items, shippingmethod) {
+  const data = await call(env, "POST", "/calculate", {
+    token, loose: true,
+    body: { products: JSON.stringify(aggregateLabItems(items)), ...(shippingmethod ? { shippingmethod } : {}) },
+  });
+  const value = (v) => (Number.isFinite(cents(v)) ? cents(v) : 0);
+  return { productsCents: value(data.total_products), shippingCents: value(data.total_shipping), totalCents: value(data.total_order) };
+}
+
+/* ---------- Adresses, étiquettes d'enveloppe, dos des photos ---------- */
+
+function clean(text) {
+  return String(text ?? "").replace(/["“”«»]/g, "").replace(/\//g, "-").replace(/\s+/g, " ").trim();
+}
+
+// Libellé d'une enveloppe : « P2 - 007 Léa » (classe, numéro de l'enfant
+// sur la fiche parent, prénom s'il est connu).
+export function envelopeLabel({ groupName, childNumber, childFirstName }) {
+  const child = [childNumber ? String(childNumber).padStart(3, "0") : "", clean(childFirstName)].filter(Boolean).join(" ");
+  return [clean(groupName) || "Groupe", child || "Famille"].join(" - ").slice(0, LABEL_MAX);
+}
+
+// Texte au dos d'une photo envoyée à domicile : « P2 007 Léa » (30 car.).
+export function backprintText({ groupName, childNumber, childFirstName }) {
+  return [clean(groupName), childNumber ? String(childNumber).padStart(3, "0") : "", clean(childFirstName)]
+    .filter(Boolean).join(" ").slice(0, BACKPRINT_MAX);
+}
+
+// « Marie Dupont » → prénom Marie, nom Dupont ; un seul mot sert aux deux.
+export function splitName(full) {
+  const words = clean(full).split(" ").filter(Boolean);
+  if (!words.length) return null;
+  if (words.length === 1) return { prenom: words[0], nom: words[0] };
+  return { prenom: words[0], nom: words.slice(1).join(" ") };
+}
+
+const COUNTRY_WORDS = {
+  BE: /^(belgique|belgium|belgi[eë]|belgien)$/i,
+  FR: /^(france|frankrijk|frankreich)$/i,
+  LU: /^(luxembourg|luxemburg)$/i,
+  NL: /^(pays-bas|nederland|netherlands|the netherlands)$/i,
+};
+
+// Adresse saisie en texte libre (fiche de l'établissement) :
+// « Rue de l'École 1, 4000 Liège » ou sur deux lignes ; pays facultatif en
+// fin d'adresse (Belgique par défaut). null si rue, code postal ou localité
+// manquent.
+export function parseAddressText(text) {
+  let parts = String(text || "").split(/[,\n]+/).map((x) => x.trim()).filter(Boolean);
+  let pays = "BE";
+  const last = parts[parts.length - 1] || "";
+  const country = Object.keys(COUNTRY_WORDS).find((code) => COUNTRY_WORDS[code].test(last) || last.toUpperCase() === code);
+  if (country && parts.length > 2) { pays = country; parts = parts.slice(0, -1); }
+  if (parts.length < 2) {
+    // Tout sur une ligne : « Rue Haute 3 4000 Liège ».
+    const m = /^(.*\d.*?)\s+((?:[A-Z]{1,2}-)?\d{4,5}(?:\s?[A-Z]{2})?)\s+(\D.*)$/.exec(parts[0] || "");
+    if (!m) return null;
+    return { adresse: m[1].trim(), complement_adresse: "", cp: m[2].replace(/^[A-Z]{1,2}-/, ""), localite: m[3].trim(), pays };
+  }
+  const cityLine = parts[parts.length - 1];
+  const m = /^(?:[A-Z]{1,2}-)?(\d{4}(?:\s?[A-Z]{2})?|\d{5})\s+(.+)$/.exec(cityLine);
+  if (!m) return null;
+  return {
+    adresse: parts[0], complement_adresse: parts.slice(1, -1).join(", "), cp: m[1], localite: m[2].trim(),
+    pays: country ? pays : /^\d{5}$/.test(m[1]) ? "FR" : /[A-Z]{2}$/.test(m[1]) ? "NL" : "BE",
+  };
+}
+
+// Adresse de livraison BePhoto à partir d'un nom et d'une adresse Stripe
+// ({ line1, line2, postal_code, city, country }). null si incomplète.
+export function labShippingAddress(name, stripeAddress, { email = "", societe = "" } = {}) {
+  const who = splitName(name);
+  const a = stripeAddress || {};
+  if (!who || !String(a.line1 || "").trim() || !String(a.postal_code || "").trim() || !String(a.city || "").trim()) return null;
+  return {
+    nom: who.nom.slice(0, 100), prenom: who.prenom.slice(0, 100), societe: clean(societe).slice(0, 100),
+    adresse: clean(a.line1).slice(0, 200), complement_adresse: clean(a.line2).slice(0, 200),
+    cp: clean(a.postal_code).slice(0, 12), localite: clean(a.city).slice(0, 100),
+    pays: /^[A-Z]{2}$/i.test(String(a.country || "")) ? String(a.country).toUpperCase() : "BE",
+    email: String(email || "").slice(0, 200),
+  };
 }
 
 // Nom de fichier lisible au labo, qui trie de lui-même par groupe puis par

@@ -1,9 +1,13 @@
 // Envoi des commandes scolaires au labo, contre le vrai Worker local et un
-// FAUX BePhoto (127.0.0.1:8791, rien n'est imprimé) : connexion du compte,
-// catalogue, composition labo des produits, lots (un article ne part
-// qu'une fois), envoi pas à pas avec reconnexion quand le jeton expire,
-// fichiers téléchargés par le labo via leur adresse signée, cloisonnement ;
-// puis l'écran « Envois au labo » du tableau de bord.
+// FAUX BePhoto (127.0.0.1:8791, rien n'est imprimé) qui suit la
+// documentation de novembre 2026 : connexion du compte (mot de passe puis
+// clé d'API), catalogue (montages compris), composition labo des produits,
+// lots (un article ne part qu'une fois), simulation de prix, envoi pas à pas
+// (une enveloppe par enfant, adresse de l'établissement, une commande par
+// famille livrée chez elle), prix et frais d'enveloppe annoncés avant la
+// confirmation du photographe, reconnexion quand le jeton expire, fichiers
+// téléchargés par le labo via leur adresse signée, cloisonnement ; puis
+// l'écran « Envois au labo » du tableau de bord.
 //
 //   BEPHOTO_API_BASE="http://127.0.0.1:8791" dans worker/.dev.vars
 //   npm run dev:local                      (depuis worker/)
@@ -16,7 +20,11 @@ import { createServer } from "node:http";
 import { WorkerClient } from "../lib/client.mjs";
 import { processPhoto } from "../lib/pipeline.mjs";
 import { createTestAccount, localSql } from "./lib/testAccount.mjs";
-import { labFilename, normalizeLabItems, normalizeProducts, BEPHOTO_PLANCHES, plancheSheet, previewForLabItems } from "../../worker/src/bephoto.js";
+import {
+  labFilename, normalizeLabItems, normalizeProducts, BEPHOTO_PLANCHES, plancheSheet, previewForLabItems, envelopeLabel, backprintText,
+  parseAddressText, labShippingAddress, summarizePrice, aggregateLabItems,
+} from "../../worker/src/bephoto.js";
+import { buildLabPlan } from "../../worker/src/schoollab.js";
 
 const BASE = process.env.ADMIN_BASE || "http://127.0.0.1:4000";
 const API = process.env.GALERIE_API || "http://127.0.0.1:8788";
@@ -38,9 +46,64 @@ check("composition : papier inconnu, quantité absurde ou trop d'éléments refu
       normalizeLabItems([{ idproduct: 3, idpaper: 9, quantity: 1 }]).error && normalizeLabItems([{ idproduct: 3, idpaper: 1, quantity: 0 }]).error &&
       normalizeLabItems(Array.from({ length: 13 }, () => ({ idproduct: 3, idpaper: 1, quantity: 1 }))).error &&
       normalizeLabItems([{ idproduct: "3", idpaper: "2", quantity: "4", label: " 13x18 " }]).items[0].label === "13x18");
-check("catalogue : chaînes converties, prix en centimes",
+check("catalogue (ancien format) : chaînes converties, prix en centimes",
       JSON.stringify(normalizeProducts([{ idproduct: "12", product: "Tirage", dimensions: "127x178", prices: [{ price: "0.35", idpaper: "1" }] }])) ===
-      JSON.stringify([{ idproduct: 12, name: "Tirage", dimensions: "127x178", prices: [{ idpaper: 1, cents: 35 }] }]));
+      JSON.stringify([{ idproduct: 12, name: "Tirage", dimensions: "127x178", montage: false, prices: [{ idpaper: 1, cents: 35 }] }]));
+check("catalogue (format actuel) : objet par idformat, dimensions en mm, prix par papier, montages reconnus",
+      JSON.stringify(normalizeProducts({
+        "2001": { idformat: "2001", format: "Pochette", largeur: "152", hauteur: "210", prix: { "1": "1.90" }, idtypeformat: "100" },
+        "12": { idformat: 12, format: "Tirage 10x15", largeur: 102, hauteur: 152, prix: { "1": "0.35", "2": "0.40" } },
+      })) === JSON.stringify([
+        { idproduct: 12, name: "Tirage 10x15", dimensions: "102x152", montage: false, prices: [{ idpaper: 1, cents: 35 }, { idpaper: 2, cents: 40 }] },
+        { idproduct: 2001, name: "Pochette", dimensions: "152x210", montage: true, prices: [{ idpaper: 1, cents: 190 }] },
+      ]));
+check("enveloppe « classe - numéro prénom » (100 car.), dos des photos en 30 caractères, sans guillemets ni « / »",
+      envelopeLabel({ groupName: "P2", childNumber: 7, childFirstName: "Léa" }) === "P2 - 007 Léa" &&
+      envelopeLabel({ groupName: "3A/B", childNumber: 12, childFirstName: "" }) === "3A-B - 012" &&
+      backprintText({ groupName: "P2", childNumber: 7, childFirstName: "Léa" }) === "P2 007 Léa" &&
+      backprintText({ groupName: "Section des très grands", childNumber: 107, childFirstName: "Marie-Antoinette" }).length === 30);
+const parsedA = parseAddressText("Rue de l'École 1, 4000 Liège");
+const parsedB = parseAddressText("Avenue Louise 54\nBoîte 3\n1050 Ixelles\nBelgique");
+const parsedC = parseAddressText("12 rue des Lilas, 75011 Paris");
+const parsedD = parseAddressText("Dorpsstraat 4, 1012 AB Amsterdam");
+check("adresse d'établissement en texte libre : rue, complément, code postal, localité, pays déduit ; incomplète = refusée",
+      parsedA.adresse === "Rue de l'École 1" && parsedA.cp === "4000" && parsedA.localite === "Liège" && parsedA.pays === "BE" &&
+      parsedB.complement_adresse === "Boîte 3" && parsedB.cp === "1050" && parsedB.pays === "BE" &&
+      parsedC.pays === "FR" && parsedC.cp === "75011" && parsedD.pays === "NL" && parsedD.cp === "1012 AB" &&
+      parseAddressText("Liège") === null && parseAddressText("") === null, JSON.stringify([parsedA, parsedB, parsedC, parsedD]));
+const homeAddress = labShippingAddress("Marie Dupont", { line1: "Rue Haute 3", postal_code: "4000", city: "Liège", country: "be" }, { email: "p@test.invalid" });
+check("adresse Stripe d'une famille → adresse BePhoto (prénom, nom, pays) ; incomplète = null",
+      homeAddress.prenom === "Marie" && homeAddress.nom === "Dupont" && homeAddress.pays === "BE" && homeAddress.cp === "4000" && homeAddress.email === "p@test.invalid" &&
+      labShippingAddress("Marie Dupont", { line1: "Rue Haute 3", city: "Liège" }) === null && labShippingAddress("", { line1: "x", postal_code: "1", city: "y" }) === null);
+const price = summarizePrice({ products: [{ prix: "0.45", quantite: "2" }, { prix: "2.30", quantite: 1 }], suborders: [{ label: "P2 - 001", prints: 6, total: "1.9", fee: "0" }, { label: "P2 - 002", prints: 1, total: "2.3", fee: "1.50" }] });
+check("prix annoncé : tirages, enveloppes, frais des enveloppes sous le minimum",
+      price.productsCents === 320 && price.envelopes === 2 && price.feesCents === 150 && price.feeEnvelopeCount === 1 && price.feeEnvelopes[0].label === "P2 - 002" &&
+      JSON.stringify(aggregateLabItems([{ idproduct: 1, idpaper: 1, quantity: 2 }, { idproduct: 1, idpaper: 1, quantity: 3 }, { idproduct: 1, idpaper: 2, quantity: 1 }])) ===
+      JSON.stringify([{ idproduct: 1, idpaper: 1, quantity: 5 }, { idproduct: 1, idpaper: 2, quantity: 1 }]));
+{
+  const it = (envelope, orderId, extra = {}) => ({ photoId: "p", galleryId: "g", idproduct: 1, idpaper: 1, quantity: 1, filename: "f.jpg", envelope, label: `L-${envelope}`, backprint: `B-${envelope}`, orderId, ...extra });
+  const batchSchool = { delivery: "school", number: 3, school_name: "École", year_label: "2026", school_address: "Rue A 1, 4000 Liège", school_contact: "", school_email: "" };
+  const pickup = buildLabPlan(batchSchool, [it("c:1", "o1"), it("c:1", "o1"), it("c:2", "o2")], "pickup").plan;
+  const toSchool = buildLabPlan(batchSchool, [it("c:1", "o1")], "school").plan;
+  const noAddress = buildLabPlan({ ...batchSchool, school_address: "Liège" }, [it("c:1", "o1")], "school");
+  const many = buildLabPlan(batchSchool, Array.from({ length: 23 }, () => it("c:1", "o1")), "account").plan;
+  const addr = JSON.stringify({ line1: "Rue B 2", postal_code: "4000", city: "Liège", country: "BE" });
+  const home = buildLabPlan({ ...batchSchool, delivery: "home" }, [
+    it("c:1", "o1", { shippingName: "Ann Lee", shippingAddress: addr }), it("c:2", "o1", { shippingName: "Ann Lee", shippingAddress: addr }),
+    it("c:3", "o2", { shippingName: "Bob Ray", shippingAddress: addr }),
+  ], "home").plan;
+  const homeBad = buildLabPlan({ ...batchSchool, delivery: "home" }, [it("c:1", "o1", { shippingName: "Ann Lee", shippingAddress: "" })], "home");
+  check("plan d'envoi : enlèvement, adresse de l'établissement, une enveloppe par enfant, 10 produits par appel, confirmation avant fermeture",
+      pickup.ops.map((o) => o.t).join(",") === "order,shipping,sub,add,sub,add,price,confirm,close" && pickup.ops[1].method === "PICKUP" && pickup.envelopes === 2 &&
+      toSchool.ops.map((o) => o.t).join(",") === "order,address,sub,add,price,confirm,close" && toSchool.ops[1].address.societe === "École" &&
+      noAddress.error && /établissement/.test(noAddress.error) &&
+      many.ops.filter((o) => o.t === "add").map((o) => o.items.length).join(",") === "10,10,3" && !many.ops.some((o) => o.t === "address" || o.t === "shipping"),
+      pickup.ops.map((o) => o.t).join(","));
+  check("plan à domicile : une commande par famille avec son adresse, nom de l'enfant au dos, confirmation puis fermeture de chacune",
+      home.orders === 2 && home.ops.map((o) => o.t).join(",") === "order,address,add,price,order,address,add,price,confirm,close,close" &&
+      home.ops[2].items.map((i) => i.backprint).join("|") === "B-c:1|B-c:2" && home.ops[1].address.nom === "Lee" &&
+      homeBad.error && /Adresse de livraison incomplète/.test(homeBad.error), home.ops.map((o) => o.t).join(","));
+}
 
 check("planches : 26 références, formats de feuille lisibles (305 mm = 30 cm), visuel de la première planche d'une composition",
       BEPHOTO_PLANCHES.length === 26 && new Set(BEPHOTO_PLANCHES.map((p) => p.id)).size === 26 &&
@@ -51,51 +114,122 @@ check("planches : 26 références, formats de feuille lisibles (305 mm = 30 cm),
 
 const LAB_EMAIL = "labo@test.invalid";
 const LAB_PASSWORD = "bon-mot-de-passe";
-const lab = { logins: 0, token: "", orders: new Map(), downloads: [], expireAfterFirstAdd: true, previewFetches: 0 };
-const CATALOGUE = [
-  { idproduct: "101", product: "Tirage 13x18", dimensions: "127x178", prices: [{ price: "0.45", idpaper: "1" }, { price: "0.50", idpaper: "2" }] },
-  { idproduct: "102", product: "Tirage 9x13", dimensions: "89x127", prices: [{ price: "0.25", idpaper: "1" }] },
-  { idproduct: "103", product: "Tirage 20x30", dimensions: "203x305", prices: [{ price: "2.10", idpaper: "1" }, { price: "2.30", idpaper: "2" }] },
-];
+const LAB_KEY = "cle-api-bephoto-de-test";
+const lab = { logins: 0, keyLogins: 0, token: "", orders: new Map(), nextId: 500, downloads: [], expireAfterFirstAdd: true, previewFetches: 0, calculations: [] };
+// Format de novembre 2026 : objet indexé par idformat ; montages avec ?include=montage.
+const CATALOGUE = {
+  "101": { idformat: "101", format: "Tirage 13x18", largeur: "127", hauteur: "178", prix: { "1": "0.45", "2": "0.50" } },
+  "102": { idformat: "102", format: "Tirage 9x13", largeur: "89", hauteur: "127", prix: { "1": "0.25" } },
+  "103": { idformat: "103", format: "Tirage 20x30", largeur: "203", hauteur: "305", prix: { "1": "2.10", "2": "2.30" } },
+};
+const MONTAGES = {
+  "163": { idformat: 163, format: "2 6x9 on9x13", largeur: 127, hauteur: 90, prix: { "1": "0.14" }, idtypeformat: 100 },
+  "2001": { idformat: 2001, format: "Pochette scolaire du studio", largeur: 152, hauteur: 210, prix: { "1": "1.90" }, idtypeformat: 100 },
+};
+const MIN_PRINTS = 3;            // minimum d'une enveloppe sur ce compte
+const FEE = "1.50";              // frais d'une enveloppe sous le minimum
+const SHIPPING = { BPOST: 6.5, PICKUP: 0 };
+const unitPrice = (idproduct, idpaper) => Number(({ ...CATALOGUE, ...MONTAGES })[String(idproduct)]?.prix[String(idpaper)] ?? 0);
+function orderPrice(order) {
+  const subs = order.subs.map((id) => lab.orders.get(id));
+  const lines = order.lines.concat(subs.flatMap((sub) => sub.lines));
+  const products = aggregateLabItems(lines).map((l) => ({ idformat: l.idproduct, idpapier: l.idpaper, prix: unitPrice(l.idproduct, l.idpaper).toFixed(2), quantite: l.quantity }));
+  const suborders = subs.map((sub) => {
+    const prints = sub.lines.reduce((n, l) => n + l.quantity, 0);
+    return { idorder: sub.id, label: sub.label, prints, total: sub.lines.reduce((t, l) => t + unitPrice(l.idproduct, l.idpaper) * l.quantity, 0).toFixed(2), fee: prints < MIN_PRINTS ? FEE : "0" };
+  });
+  const total = products.reduce((t, p) => t + Number(p.prix) * p.quantite, 0) + suborders.reduce((t, s) => t + Number(s.fee), 0) + SHIPPING[order.shipping];
+  return { products, suborders, total: total.toFixed(2) };
+}
 const labServer = createServer(async (req, res) => {
   let body = "";
   for await (const chunk of req) body += chunk;
   const data = body ? JSON.parse(body) : null;
   const reply = (status, payload) => { res.writeHead(status, { "content-type": "application/json" }); res.end(JSON.stringify(payload)); };
   const authed = req.headers.authorization === `Bearer ${lab.token}` && lab.token;
-  if (req.method === "GET" && req.url.startsWith("/images/products/formats/montages/")) {
+  const url = new URL(req.url, "http://lab");
+  if (req.method === "GET" && url.pathname.startsWith("/images/products/formats/montages/")) {
     lab.previewFetches++;
     res.writeHead(200, { "content-type": "image/jpeg" });
     return res.end(await sharp({ create: { width: 120, height: 170, channels: 3, background: "#123a6e" } }).jpeg().toBuffer());
   }
-  if (req.method === "POST" && req.url === "/user/login") {
+  if (req.method === "POST" && url.pathname === "/user/login") {
     if (data?.email !== LAB_EMAIL || data?.password !== LAB_PASSWORD) return reply(401, { error: "Unauthorized" });
     lab.logins++;
     lab.token = `tok-${lab.logins}`;
     return reply(200, { status: 1, token: lab.token });
   }
-  if (!authed) return reply(401, { error: "Unauthorized" });
-  if (req.method === "GET" && req.url === "/products") return reply(200, { status: 1, products: CATALOGUE });
-  if (req.method === "POST" && req.url === "/orders") {
-    const id = 500 + lab.orders.size + 1;
-    lab.orders.set(String(id), { metadata: data.metadata, lines: [], closed: false });
-    return reply(200, { status: 1, order: [{ idorder: id, metadata: data.metadata }] });
+  if (req.method === "POST" && url.pathname === "/user/loginToken") {
+    if (data?.token !== LAB_KEY) return reply(401, { error: "Unauthorised" });
+    lab.keyLogins++;
+    lab.token = `key-${lab.keyLogins}`;
+    return reply(200, { status: 1, token: lab.token });
   }
-  const m = /^\/orders\/(\d+)(\/products|\/close)?$/.exec(req.url);
+  if (!authed) return reply(401, { error: "Unauthorized" });
+  if (req.method === "GET" && url.pathname === "/products") {
+    return reply(200, { status: 1, products: url.searchParams.get("include") === "montage" ? { ...CATALOGUE, ...MONTAGES } : CATALOGUE });
+  }
+  if (req.method === "POST" && url.pathname === "/calculate") {
+    const products = JSON.parse(data.products);
+    lab.calculations.push({ products, shippingmethod: data.shippingmethod });
+    const lines = products.map((p) => ({ ...p, price: unitPrice(p.idproduct, p.idpaper).toFixed(2), total: (unitPrice(p.idproduct, p.idpaper) * p.quantity).toFixed(2) }));
+    const totalProducts = lines.reduce((t, l) => t + Number(l.total), 0);
+    const shipping = data.shippingmethod ? SHIPPING[data.shippingmethod] : 0;
+    return reply(200, { products: lines, total_products: totalProducts.toFixed(2), total_shipping: shipping.toFixed(2), total_order: (totalProducts + shipping).toFixed(2) });
+  }
+  if (req.method === "POST" && url.pathname === "/orders") {
+    const id = String(++lab.nextId);
+    lab.orders.set(id, { id, metadata: data.metadata, lines: [], subs: [], parent: null, closed: false, shipping: "BPOST", address: null });
+    return reply(200, { status: 1, order: { idorder: Number(id), datestart: "2026-11-27 10:00:00", totalorder: "0", totalcost: "0", shippingmethod: "BPOST", metadata: data.metadata } });
+  }
+  const m = /^\/orders\/(\d+)(\/products|\/close|\/price|\/suborders|\/shipping-address|\/shipping\/([A-Z]+))?$/.exec(url.pathname);
   const order = m && lab.orders.get(m[1]);
   if (!order) return reply(404, { error: "Commande inconnue" });
+  const main = order.parent ? lab.orders.get(order.parent) : order;
+  if (main.closed && req.method === "POST") return reply(400, { error: "Commande confirmée" });
+  if (order.parent && ["/close", "/price", "/suborders", "/shipping-address"].includes(m[2] || "") ) return reply(400, { error: "Interdit sur une sous-commande" });
+  if (order.parent && m[3]) return reply(400, { error: "Interdit sur une sous-commande" });
   if (req.method === "POST" && m[2] === "/products") {
-    if (order.closed) return reply(400, { error: "Commande fermée" });
-    order.lines.push(data);
-    // Le labo vient chercher le fichier, comme le vrai.
-    const file = await fetch(data.fileurl);
-    const bytes = Buffer.from(await file.arrayBuffer());
-    lab.downloads.push({ status: file.status, size: bytes.length, announced: data.filesize, type: file.headers.get("content-type") });
+    const products = Array.isArray(data.products) ? data.products : [data];
+    for (const product of products) {
+      if (!product.fileurl) return reply(400, { error: "fileurl obligatoire" });
+      order.lines.push(product);
+      // Le labo vient chercher le fichier, comme le vrai.
+      const file = await fetch(product.fileurl);
+      const bytes = Buffer.from(await file.arrayBuffer());
+      lab.downloads.push({ status: file.status, size: bytes.length, announced: product.filesize, type: file.headers.get("content-type") });
+    }
     if (lab.expireAfterFirstAdd) { lab.expireAfterFirstAdd = false; lab.token = "expire"; }
+    return reply(200, { status: 1, products });
+  }
+  if (req.method === "POST" && m[2] === "/suborders") {
+    if (!data?.label) return reply(400, { error: "label obligatoire" });
+    const id = String(++lab.nextId);
+    lab.orders.set(id, { id, label: data.label, lines: [], subs: [], parent: order.id, closed: false });
+    order.subs.push(id);
+    return reply(200, { status: 1, order: { idorder: Number(id), label: data.label, parent_idorder: Number(order.id) } });
+  }
+  if (req.method === "POST" && m[3]) {
+    if (!(m[3] in SHIPPING)) return reply(400, { error: "Méthode inconnue" });
+    order.shipping = m[3];
     return reply(200, { status: 1 });
   }
-  if (req.method === "POST" && m[2] === "/close") { order.closed = true; return reply(200, { status: 1 }); }
-  if (req.method === "GET" && !m[2]) return reply(200, { status: 1, order: [{ idorder: Number(m[1]), totalorder: "12.40", totalcost: "15.90", shippingmethod: "bpost" }] });
+  if (req.method === "POST" && m[2] === "/shipping-address") {
+    for (const field of ["nom", "prenom", "adresse", "cp", "localite"]) if (!data?.[field]) return reply(400, { error: `${field} obligatoire` });
+    order.address = data;
+    order.shipping = "BPOST";
+    return reply(200, { status: 1, idadrliv: 77 });
+  }
+  if (req.method === "POST" && m[2] === "/price") {
+    const { products, suborders } = orderPrice(order);
+    return reply(200, { status: 1, products, suborders });
+  }
+  if (req.method === "POST" && m[2] === "/close") {
+    order.closed = true;
+    const { products, total } = orderPrice(order);
+    return reply(200, { status: 1, total_order: total, products });
+  }
+  if (req.method === "GET" && !m[2]) return reply(200, { status: 1, order: { idorder: Number(m[1]), shippingmethod: order.shipping } });
   return reply(404, { error: "?" });
 });
 await new Promise((resolve) => labServer.listen(LAB_PORT, "127.0.0.1", resolve));
@@ -167,19 +301,34 @@ check("sans compte BePhoto, le catalogue n'est pas accessible (message clair)", 
 const wrong = await call("POST", "/api/admin/school/lab", { email: LAB_EMAIL, password: "faux" });
 check("un mauvais mot de passe BePhoto est refusé à la connexion", wrong.status === 400 && /refuse/.test(wrong.body.error), wrong.body.error);
 const connected = await call("POST", "/api/admin/school/lab", { email: LAB_EMAIL, password: LAB_PASSWORD });
-const accountView = await call("GET", "/api/admin/school/lab");
-check("le compte se connecte ; le mot de passe n'est jamais renvoyé",
-      connected.status === 200 && accountView.body.connected && accountView.body.email === LAB_EMAIL && !JSON.stringify(accountView.body).includes(LAB_PASSWORD));
-const exported = await call("GET", "/api/admin/account/export");
-check("l'export RGPD du compte ne contient ni le mot de passe ni le jeton BePhoto",
-      exported.status === 200 && !JSON.stringify(exported.body).includes(LAB_PASSWORD) && !JSON.stringify(exported.body).includes("bephoto_password_enc") &&
-      !JSON.stringify(exported.body).includes("bephoto_token_enc"));
+let accountView = await call("GET", "/api/admin/school/lab");
+check("le compte se connecte par e-mail et mot de passe ; le mot de passe n'est jamais renvoyé",
+      connected.status === 200 && accountView.body.connected && accountView.body.method === "password" && accountView.body.email === LAB_EMAIL &&
+      !JSON.stringify(accountView.body).includes(LAB_PASSWORD));
 const catalogue = await call("GET", "/api/admin/school/lab/products");
-check("le catalogue BePhoto se lit, prix en centimes par papier",
-      catalogue.status === 200 && catalogue.body.products.length === 3 && catalogue.body.products[0].prices[1].cents === 50);
+check("le catalogue BePhoto (format actuel, montages compris) se lit, prix en centimes par papier",
+      catalogue.status === 200 && catalogue.body.products.length === 5 && catalogue.body.products[0].idproduct === 101 &&
+      catalogue.body.products[0].prices[1].cents === 50 && catalogue.body.products.find((p) => p.idproduct === 2001)?.montage === true,
+      JSON.stringify(catalogue.body.products?.map((p) => p.idproduct)));
+
+const wrongKey = await call("POST", "/api/admin/school/lab", { apiKey: "mauvaise-cle" });
+check("une clé d'API refusée par BePhoto ne remplace pas la connexion existante",
+      wrongKey.status === 400 && /clé/.test(wrongKey.body.error) && (await call("GET", "/api/admin/school/lab")).body.method === "password", wrongKey.body.error);
+const byKey = await call("POST", "/api/admin/school/lab", { apiKey: LAB_KEY });
+accountView = await call("GET", "/api/admin/school/lab");
+check("connexion par clé d'API : le mot de passe enregistré est effacé, la clé n'est jamais renvoyée",
+      byKey.status === 200 && accountView.body.connected && accountView.body.method === "key" && accountView.body.email === "" &&
+      !JSON.stringify(accountView.body).includes(LAB_KEY) && lab.keyLogins === 1);
+const exported = await call("GET", "/api/admin/account/export");
+const exportedText = JSON.stringify(exported.body);
+check("l'export RGPD du compte ne contient ni mot de passe, ni clé, ni jeton BePhoto",
+      exported.status === 200 && !exportedText.includes(LAB_PASSWORD) && !exportedText.includes(LAB_KEY) && !exportedText.includes("bephoto_password_enc") &&
+      !exportedText.includes("bephoto_token_enc") && !exportedText.includes("bephoto_key_enc") && /enregistrée, non exportée/.test(exportedText));
 const onlineCatalogue = await call("GET", "/api/admin/school/lab/catalogue");
-check("compte connecté : les tirages du catalogue BePhoto s'ajoutent aux planches",
-      onlineCatalogue.body.planches.length === 26 && onlineCatalogue.body.others.length === 3 && onlineCatalogue.body.connected === true);
+check("compte connecté : les montages du compte et les tirages s'ajoutent aux planches (sans doublon avec la grille publique)",
+      onlineCatalogue.body.planches.length === 26 && onlineCatalogue.body.others.length === 4 && onlineCatalogue.body.connected === true &&
+      onlineCatalogue.body.others.filter((p) => p.montage).map((p) => p.idproduct).join() === "2001",
+      JSON.stringify(onlineCatalogue.body.others?.map((p) => [p.idproduct, p.montage])));
 
 /* ---------- Composition labo des produits ---------- */
 
@@ -222,73 +371,127 @@ let batches = (await call("GET", `/api/admin/school/years/${yearId}/batches`)).b
 check("en attente : 2 articles imprimables pour l'école (le numérique ne part pas au labo), 1 à domicile",
       batches.pending.school.lines === 2 && batches.pending.school.quantity === 3 && batches.pending.school.children === 2 && batches.pending.home.lines === 1,
       JSON.stringify(batches.pending));
-check("les produits en vente sans composition labo sont signalés", batches.unmappedProducts.includes("Tirage 13×18"), batches.unmappedProducts.join(", "));
+check("les produits en vente sans composition labo sont signalés ; l'adresse de l'établissement est reconnue",
+      batches.unmappedProducts.includes("Tirage 13×18") && batches.schoolAddress === true, batches.unmappedProducts.join(", "));
 const lot1 = await call("POST", `/api/admin/school/years/${yearId}/batches`, { delivery: "school" });
 const lotAgain = await call("POST", `/api/admin/school/years/${yearId}/batches`, { delivery: "school" });
 const lotHome = await call("POST", `/api/admin/school/years/${yearId}/batches`, { delivery: "home" });
 check("un lot regroupe tout ce qui attend ; rien ne peut entrer dans deux lots",
       lot1.status === 201 && lot1.body.number === 1 && lotAgain.status === 400 && lotHome.status === 201 && lotHome.body.number === 2);
-const homeSend = await call("POST", `/api/admin/school/batches/${lotHome.body.id}/send`, {});
-check("un lot à domicile ne part pas par l'API (pas de champ adresse chez BePhoto) : message clair",
-      homeSend.status === 409 && /adresse/.test(homeSend.body.error), homeSend.body.error);
+const homeUnmapped = await call("POST", `/api/admin/school/batches/${lotHome.body.id}/send`, {});
+check("un lot dont un produit n'a pas de composition labo ne part pas (message clair), et reste prêt",
+      homeUnmapped.status === 409 && /Tirage 13×18/.test(homeUnmapped.body.error) && lab.orders.size === 0, homeUnmapped.body.error);
 const production = await call("POST", `/api/admin/school/years/${yearId}/production`, { batchId: lotHome.body.id });
 check("le fichier d'un lot à domicile ne contient que ce lot, avec l'adresse de la famille",
       production.status === 200 && production.body.lines.length === 1 && production.body.batch.number === 2 && production.body.lines[0].shippingAddress.city === "Liège");
 
-/* ---------- Envoi à BePhoto, pas à pas ---------- */
+/* ---------- Prix simulé, puis envoi à BePhoto pas à pas ---------- */
+
+const estimate = await call("POST", `/api/admin/school/batches/${lot1.body.id}/estimate`, { shipping: "school" });
+check("prix simulé avant l'envoi : quantités additionnées par produit et papier, livraison du compte (rien n'est créé chez BePhoto)",
+      estimate.status === 200 && estimate.body.productsCents === 420 && estimate.body.shippingCents === 650 && estimate.body.totalCents === 1070 &&
+      estimate.body.envelopes === 2 && lab.calculations.length === 1 && lab.calculations[0].shippingmethod === "BPOST" &&
+      lab.calculations[0].products.length === 3 && lab.orders.size === 0, JSON.stringify(estimate.body));
 
 const steps = [];
 for (let i = 0; i < 20; i++) {
-  const step = await call("POST", `/api/admin/school/batches/${lot1.body.id}/send`, {});
+  const step = await call("POST", `/api/admin/school/batches/${lot1.body.id}/send`, { shipping: "school" });
   steps.push(step);
-  if (step.status !== 200 || step.body.done) break;
+  if (step.status !== 200 || step.body.done || step.body.awaiting) break;
 }
 const labOrder = lab.orders.get("501");
-const last = steps.at(-1);
-check("l'envoi se fait pas à pas jusqu'au bout", last.status === 200 && last.body.done === true && steps.length >= 2,
-      steps.map((s) => s.status + ":" + (s.body.sent ?? "") + "/" + (s.body.total ?? "")).join(" "));
-check("BePhoto reçoit une commande annotée (établissement, année, lot, adresse de livraison)",
-      labOrder && /École du labo/.test(labOrder.metadata) && /Lot 1/.test(labOrder.metadata) && /Rue de l'École 1/.test(labOrder.metadata), labOrder?.metadata);
+const envelopes = labOrder ? labOrder.subs.map((id) => lab.orders.get(id)) : [];
+const allLines = envelopes.flatMap((e) => e.lines);
+let last = steps.at(-1);
+check("l'envoi se fait pas à pas jusqu'au prix annoncé, puis attend la confirmation (rien n'est confirmé)",
+      last.status === 200 && last.body.awaiting === true && labOrder && labOrder.closed === false,
+      steps.map((s) => s.status + ":" + (s.body.sent ?? "") + "/" + (s.body.total ?? "") + (s.body.awaiting ? " prix" : "")).join(" ") + " " + (last.body.error || ""));
+check("BePhoto reçoit une commande annotée et l'adresse de l'établissement (contact par défaut : la direction)",
+      /École du labo/.test(labOrder.metadata) && /Lot 1/.test(labOrder.metadata) && labOrder.address?.adresse === "Rue de l'École 1" &&
+      labOrder.address.cp === "4000" && labOrder.address.localite === "Liège" && labOrder.address.pays === "BE" &&
+      labOrder.address.societe === "École du labo" && labOrder.address.prenom === "Direction", JSON.stringify(labOrder.address));
+check("une enveloppe par enfant, dans l'ordre de la classe, avec son libellé ; les tirages vont dans l'enveloppe, pas dans la commande",
+      envelopes.map((e) => e.label).join(" | ") === "P2 - 001 Léa | P2 - 002" && labOrder.lines.length === 0 &&
+      envelopes[0].lines.length === 2 && envelopes[1].lines.length === 1, envelopes.map((e) => e.label + ":" + e.lines.length).join(" | "));
 check("chaque article devient ses tirages : 2 pochettes = 2 × 13×18 + 4 × 9×13, plus la photo de classe en lustré",
-      labOrder.lines.length === 3 &&
-      labOrder.lines.some((l) => l.idproduct === 101 && l.quantity === 2 && l.idpaper === 1) &&
-      labOrder.lines.some((l) => l.idproduct === 102 && l.quantity === 4) &&
-      labOrder.lines.some((l) => l.idproduct === 103 && l.quantity === 1 && l.idpaper === 2),
-      JSON.stringify(labOrder.lines.map((l) => [l.idproduct, l.quantity, l.idpaper])));
+      allLines.length === 3 &&
+      envelopes[0].lines.some((l) => l.idproduct === 101 && l.quantity === 2 && l.idpaper === 1) &&
+      envelopes[0].lines.some((l) => l.idproduct === 102 && l.quantity === 4) &&
+      envelopes[1].lines.some((l) => l.idproduct === 103 && l.quantity === 1 && l.idpaper === 2) && allLines.every((l) => !l.backprint),
+      JSON.stringify(allLines.map((l) => [l.idproduct, l.quantity, l.idpaper])));
 check("les noms de fichiers rangent par classe et par enfant",
-      labOrder.lines.every((l) => /^01_P2_00\d_/.test(l.filename)) && labOrder.lines.some((l) => l.filename.startsWith("01_P2_001_Lea_Pochette-Classique")),
-      labOrder.lines.map((l) => l.filename).join(", "));
+      allLines.every((l) => /^01_P2_00\d_/.test(l.filename)) && allLines.some((l) => l.filename.startsWith("01_P2_001_Lea_Pochette-Classique")),
+      allLines.map((l) => l.filename).join(", "));
 check("le labo télécharge chaque fichier d'impression par son adresse signée (taille annoncée exacte)",
       lab.downloads.length === 3 && lab.downloads.every((d) => d.status === 200 && d.size === d.announced && d.type === "image/jpeg"),
       JSON.stringify(lab.downloads));
-check("quand le jeton BePhoto expire en route, Holypixx se reconnecte seul et poursuit",
-      lab.logins === 2 && lab.token === "tok-2" && labOrder.lines.length === 3, `${lab.logins} connexions`);
-check("la commande est confirmée (fermée) chez BePhoto", labOrder.closed === true);
+check("quand le jeton BePhoto expire en route, Holypixx se reconnecte seul avec la clé d'API et poursuit",
+      lab.keyLogins === 2 && lab.token === "key-2" && allLines.length === 3, `${lab.keyLogins} connexions par clé`);
+check("prix annoncé : tirages 4,20 €, une enveloppe sous le minimum (1,50 € de frais), deux enveloppes",
+      last.body.labTotal?.productsCents === 420 && last.body.labTotal.feesCents === 150 && last.body.labTotal.feeEnvelopeCount === 1 &&
+      last.body.labTotal.feeEnvelopes[0].label === "P2 - 002" && last.body.labTotal.envelopes === 2 && last.body.labTotal.totalCents === null,
+      JSON.stringify(last.body.labTotal));
+batches = (await call("GET", `/api/admin/school/years/${yearId}/batches`)).body;
+let lotView = batches.batches.find((b) => b.id === lot1.body.id);
+const again = await call("POST", `/api/admin/school/batches/${lot1.body.id}/send`, {});
+check("le lot attend la confirmation (« à confirmer », numéro BePhoto, livraison choisie) ; relancer l'envoi ne confirme rien",
+      lotView.status === "priced" && lotView.labOrderId === "501" && lotView.shipping === "school" && lotView.labTotal.feesCents === 150 &&
+      again.body.awaiting === true && labOrder.closed === false);
+const confirmReady = await call("POST", `/api/admin/school/batches/${lotHome.body.id}/confirm`, {});
+check("seul un lot au prix annoncé se confirme", confirmReady.status === 409);
+const confirmed = await call("POST", `/api/admin/school/batches/${lot1.body.id}/confirm`, {});
+const confirmedTwice = await call("POST", `/api/admin/school/batches/${lot1.body.id}/confirm`, {});
+for (let i = 0; i < 10; i++) {
+  last = await call("POST", `/api/admin/school/batches/${lot1.body.id}/send`, {});
+  if (last.status !== 200 || last.body.done) break;
+}
+check("après confirmation, la commande (et ses enveloppes) est confirmée chez BePhoto, une seule fois",
+      confirmed.status === 200 && confirmedTwice.status === 409 && last.body.done === true && labOrder.closed === true, JSON.stringify(last.body));
 batches = (await call("GET", `/api/admin/school/years/${yearId}/batches`)).body;
 const sentLot = batches.batches.find((b) => b.id === lot1.body.id);
-check("le lot est marqué parti, avec le numéro BePhoto et le total annoncé",
-      sentLot.status === "sent" && sentLot.labOrderId === "501" && sentLot.labTotal?.totalCost === "15.90" && batches.pending.school.lines === 0);
+check("le lot est marqué parti, avec le numéro BePhoto et le total facturé (tirages, frais d'enveloppe, livraison)",
+      sentLot.status === "sent" && sentLot.labOrderId === "501" && sentLot.labTotal?.totalCents === 1220 && batches.pending.school.lines === 0,
+      JSON.stringify(sentLot.labTotal));
+const topOrders = () => [...lab.orders.values()].filter((o) => !o.parent).length;
 const resend = await call("POST", `/api/admin/school/batches/${lot1.body.id}/send`, {});
 const cancelSent = await call("DELETE", `/api/admin/school/batches/${lot1.body.id}`);
-check("un lot parti ne repart pas et ne s'annule plus", resend.body.done === true && lab.orders.size === 1 && cancelSent.status === 409);
+check("un lot parti ne repart pas et ne s'annule plus", resend.body.done === true && topOrders() === 1 && cancelSent.status === 409);
 
-const fileUrl = labOrder.lines[0].fileurl;
+const fileUrl = allLines[0].fileurl;
 const forged = await fetch(fileUrl.replace(/s=[^&]+/, "s=faux"));
-const otherPhoto = await fetch(fileUrl.replace(encodeURIComponent(labOrder.lines[0].fileurl.split("/").at(-1).split(".jpg")[0]), photosOf(kidB.id)[0].id));
+const otherPhoto = await fetch(fileUrl.replace(encodeURIComponent(fileUrl.split("/").at(-1).split(".jpg")[0]), photosOf(kidB.id)[0].id));
 check("une adresse de fichier falsifiée, ou vers une autre photo, ne livre rien", forged.status === 403 && otherPhoto.status === 403);
 
+/* ---------- Lot à domicile : une commande par famille, livrée chez elle ---------- */
+
+await call("POST", `/api/admin/school/products/${productNamed("Tirage 13×18").id}/lab`, { items: [{ idproduct: 101, idpaper: 1, quantity: 1, label: "Tirage 13x18" }] });
+let homeLast;
+for (let i = 0; i < 10; i++) {
+  homeLast = await call("POST", `/api/admin/school/batches/${lotHome.body.id}/send`, {});
+  if (homeLast.status !== 200 || homeLast.body.done || homeLast.body.awaiting) break;
+}
+const homeOrder = [...lab.orders.values()].find((o) => !o.parent && o.id !== "501");
+check("à domicile : une commande BePhoto à l'adresse de la famille, le nom de l'enfant au dos de la photo, sans enveloppe",
+      homeLast.body.awaiting === true && homeOrder && /Famille Marie Dupont/.test(homeOrder.metadata) &&
+      homeOrder.address?.prenom === "Marie" && homeOrder.address.nom === "Dupont" && homeOrder.address.adresse === "Rue Haute 3" &&
+      homeOrder.address.cp === "4000" && homeOrder.address.localite === "Liège" && homeOrder.address.pays === "BE" &&
+      homeOrder.address.email === `parent-labo-${RUN}@test.invalid` && homeOrder.subs.length === 0 && homeOrder.lines.length === 1 &&
+      homeOrder.lines[0].backprint === "P2 001 Léa" && homeOrder.closed === false && homeLast.body.labTotal.productsCents === 45,
+      JSON.stringify(homeOrder?.address) + " " + JSON.stringify(homeLast.body));
 const cancelHome = await call("DELETE", `/api/admin/school/batches/${lotHome.body.id}`);
 batches = (await call("GET", `/api/admin/school/years/${yearId}/batches`)).body;
-check("annuler un lot pas encore parti remet ses articles en attente", cancelHome.status === 200 && batches.pending.home.lines === 1 && batches.batches.length === 1);
+check("annuler un lot au prix pas encore confirmé remet ses articles en attente (rien n'est imprimé)",
+      cancelHome.status === 200 && batches.pending.home.lines === 1 && batches.batches.length === 1 && homeOrder.closed === false);
 
 const other = await createTestAccount(API, "labo-autre", { plan: "studio" });
 const otherClient = new WorkerClient({ api: API, ...other });
 await otherClient.login();
 const peek = await fetch(`${API}/api/admin/school/batches/${lot1.body.id}/send`, { method: "POST", headers: { authorization: `Bearer ${otherClient.token}` } });
+const peekConfirm = await fetch(`${API}/api/admin/school/batches/${lot1.body.id}/confirm`, { method: "POST", headers: { authorization: `Bearer ${otherClient.token}` } });
 const peekProduct = await fetch(`${API}/api/admin/school/products/${productNamed("Pochette Classique").id}/lab`, {
   method: "POST", headers: { authorization: `Bearer ${otherClient.token}`, "content-type": "application/json" }, body: JSON.stringify({ items: [] }),
 });
-check("un autre photographe n'atteint ni les lots ni la composition", peek.status === 404 && peekProduct.status === 404);
+check("un autre photographe n'atteint ni les lots ni la composition", peek.status === 404 && peekConfirm.status === 404 && peekProduct.status === 404);
 
 /* ---------- Tableau de bord ---------- */
 
@@ -305,8 +508,9 @@ await page.waitForSelector("#ad-tab-school:not([hidden])", { timeout: 10000 });
 await page.goto(`${BASE}/#/scolaire/${encodeURIComponent(school.id)}/${encodeURIComponent(yearId)}`, { waitUntil: "domcontentloaded" });
 await page.waitForSelector("#ad-sc-lab .ad-sc-pending", { timeout: 15000 });
 const labText = await page.textContent("#ad-sc-lab");
-check("l'écran « Envois au labo » montre l'attente, le lot parti chez BePhoto et le compte connecté",
-      /Lot 1/.test(labText) && /BePhoto n° 501/.test(labText) && /Compte BePhoto connecté/.test(labText) && /1 article/.test(labText), labText.replace(/\s+/g, " ").slice(0, 200));
+check("l'écran « Envois au labo » montre l'attente, le lot parti chez BePhoto avec son total et le compte connecté par clé",
+      /Lot 1/.test(labText) && /BePhoto n° 501/.test(labText) && /Total BePhoto : 12,20/.test(labText) && /Compte BePhoto connecté · par clé d'API/.test(labText) &&
+      /1 article/.test(labText) && /Une commande BePhoto par famille/.test(labText), labText.replace(/\s+/g, " ").slice(0, 300));
 const pochetteRow = page.locator(".ad-sc-products > li", { has: page.locator('[data-pfield="name"][value="Pochette Classique"]') });
 check("chaque produit montre ce que le labo imprime", (await pochetteRow.locator(".ad-sc-prod-lab").textContent()).includes("2× Tirage 9x13"));
 await pochetteRow.locator("[data-lab-product]").click();
@@ -327,7 +531,7 @@ if (process.env.SCREENSHOT_DIR) {
 await famRow.locator('.ad-vsel [role="option"][data-value="118"]').click();
 await famRow.locator("[data-lab-cost]").waitFor();
 check("éditeur : menu déroulant illustré (planches avec vignette, puis tirages), coût et marge mis à jour",
-      groupsShown.join("|") === "Planches composées par le labo|Tirages et autres produits BePhoto" && thumbs === 24 &&
+      groupsShown.join("|") === "Planches composées par le labo|Montages de votre compte BePhoto|Tirages et autres produits BePhoto" && thumbs === 24 &&
       /Coût labo ≈ 1,20 € à 2,19 €/.test(await famRow.locator("[data-lab-cost]").textContent()), `${thumbs} vignettes`);
 await famRow.locator("[data-save-lab]").click();
 await page.waitForFunction(() => [...document.querySelectorAll(".ad-sc-products > li")].some((li) => li.querySelector(".ad-sc-prod-thumb") && li.textContent.includes("Planche 20×30 n°118")));
@@ -336,6 +540,26 @@ await page.click('[data-new-batch="home"]');
 await page.waitForSelector('[data-cancel-batch]');
 check("« Préparer un lot » crée le lot depuis l'écran (le numéro d'un lot annulé est repris)",
       /Lot 2\s*À domicile/.test(await page.textContent("#ad-sc-lab tbody")), (await page.textContent("#ad-sc-lab tbody")).replace(/\s+/g, " ").slice(0, 120));
+const homeRow = page.locator("#ad-sc-lab tbody tr", { hasText: "Lot 2" });
+await homeRow.locator("[data-estimate]").click();
+await page.waitForFunction(() => /Estimation : tirages/.test(document.querySelector("#ad-sc-lab tbody tr:first-child [data-batch-status]")?.textContent || ""));
+const estimateText = await homeRow.locator("[data-batch-status]").textContent();
+check("« Estimer le prix » affiche la simulation BePhoto sans rien envoyer", /Estimation : tirages 0,45\s€ \+ livraison 6,50\s€ = 6,95\s€/.test(estimateText), estimateText);
+await homeRow.locator("[data-send-batch]").click();
+await page.waitForSelector("[data-confirm-batch]", { timeout: 15000 });
+const pricedText = (await page.locator("#ad-sc-lab tbody tr", { hasText: "Lot 2" }).textContent()).replace(/\s+/g, " ");
+check("« Envoyer à BePhoto » transmet le lot puis affiche le prix à confirmer",
+      /Prix à confirmer/.test(pricedText) && /Prix BePhoto : tirages 0,45\s€, hors livraison/.test(pricedText) && /Une commande par famille/.test(pricedText), pricedText);
+if (process.env.SCREENSHOT_DIR) await page.screenshot({ path: `${process.env.SCREENSHOT_DIR}/ecole-labo-prix.png`, fullPage: true });
+const confirmBtn = page.locator("[data-confirm-batch]");
+await confirmBtn.click();
+check("confirmer demande une seconde validation", /BePhoto imprime et vous facture/.test(await confirmBtn.textContent()));
+await confirmBtn.click();
+await page.waitForFunction(() => [...document.querySelectorAll("#ad-sc-lab tbody tr")].some((tr) => /Lot 2/.test(tr.textContent) && /Parti le/.test(tr.textContent)), null, { timeout: 15000 });
+const sentHomeText = (await page.locator("#ad-sc-lab tbody tr", { hasText: "Lot 2" }).textContent()).replace(/\s+/g, " ");
+const uiOrder = [...lab.orders.values()].filter((o) => !o.parent).at(-1);
+check("après confirmation, le lot à domicile est parti, avec son numéro et son total BePhoto",
+      /Parti le/.test(sentHomeText) && new RegExp(`BePhoto n° ${uiOrder.id}`).test(sentHomeText) && /Total BePhoto : 6,95/.test(sentHomeText) && uiOrder.closed === true, sentHomeText);
 if (process.env.SCREENSHOT_DIR) await page.screenshot({ path: `${process.env.SCREENSHOT_DIR}/ecole-labo.png`, fullPage: true });
 check("aucune exception JavaScript", exceptions.length === 0, exceptions.join(" | "));
 

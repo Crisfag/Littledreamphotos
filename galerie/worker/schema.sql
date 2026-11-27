@@ -99,6 +99,8 @@ CREATE TABLE IF NOT EXISTS photographers (
   bephoto_email        TEXT NOT NULL DEFAULT '',
   bephoto_password_enc TEXT NOT NULL DEFAULT '',
   bephoto_token_enc    TEXT NOT NULL DEFAULT '',
+  -- Clé d'API BePhoto (chiffrée), à la place de l'e-mail et du mot de passe.
+  bephoto_key_enc      TEXT NOT NULL DEFAULT '',
   -- Parcours d'inscription (funnel.js) : page du site et source (Google,
   -- Instagram, accès direct…) d'où le photographe est arrivé. Vide pour les
   -- comptes créés avant la mesure ou sans passer par le site.
@@ -896,19 +898,24 @@ CREATE INDEX IF NOT EXISTS idx_school_order_lines_batch ON school_order_lines(ba
 -- payés pas encore partis, une ou deux fois pendant la vente (conseil du
 -- labo), soit pour l'établissement, soit pour les envois à domicile. Un
 -- article n'appartient qu'à un lot : il ne part jamais deux fois. Envoi à
--- BePhoto pas à pas (lab_cursor = lignes déjà transmises), pour rester sous
--- les limites d'un appel et reprendre après une coupure.
+-- BePhoto pas à pas : lab_items = plan d'opérations figé au départ,
+-- lab_cursor = opérations faites, lab_state = numéros BePhoto et prix
+-- reçus ; pour rester sous les limites d'un appel et reprendre après une
+-- coupure. Le lot attend la confirmation du photographe (priced) une fois
+-- le prix annoncé.
 CREATE TABLE IF NOT EXISTS school_lab_batches (
   id               TEXT PRIMARY KEY,
   year_id          TEXT NOT NULL REFERENCES school_years(id) ON DELETE CASCADE,
   number           INTEGER NOT NULL,
   delivery         TEXT NOT NULL DEFAULT 'school',  -- school, home
-  status           TEXT NOT NULL DEFAULT 'ready',   -- ready, sending, sent
+  status           TEXT NOT NULL DEFAULT 'ready',   -- ready, sending, priced, sent
   lab              TEXT NOT NULL DEFAULT '',        -- '' (fichier envoyé à la main), bephoto
   lab_order_id     TEXT NOT NULL DEFAULT '',
   lab_items        TEXT NOT NULL DEFAULT '',        -- JSON figé au début de l'envoi
   lab_cursor       INTEGER NOT NULL DEFAULT 0,
-  lab_total        TEXT NOT NULL DEFAULT '',        -- total annoncé par le labo
+  lab_total        TEXT NOT NULL DEFAULT '',        -- prix annoncé par le labo (JSON)
+  lab_state        TEXT NOT NULL DEFAULT '',        -- JSON : numéros BePhoto, prix par commande
+  lab_shipping     TEXT NOT NULL DEFAULT '',        -- school, account, pickup (lot établissement), home
   error            TEXT NOT NULL DEFAULT '',
   created_at       INTEGER NOT NULL,
   sent_at          INTEGER
@@ -920,6 +927,7 @@ CREATE INDEX IF NOT EXISTS idx_school_lab_batches_year ON school_lab_batches(yea
 --   ALTER TABLE photographers ADD COLUMN bephoto_token_enc TEXT NOT NULL DEFAULT '';
 --   ALTER TABLE school_products ADD COLUMN lab_items TEXT NOT NULL DEFAULT '';
 --   ALTER TABLE school_order_lines ADD COLUMN batch_id TEXT NOT NULL DEFAULT '';
+-- Puis migrations/2026-11-bephoto-api.sql (clé d'API, lab_state, lab_shipping).
 
 -- Rappels de commande envoyés aux familles (schoolreminders.js) : une ligne
 -- par année, famille et rappel (j7, j2, late2) ; jamais deux fois le même.

@@ -24,7 +24,7 @@ Protection honnête et traçable plutôt que promesse impossible : photos décou
 
 - Interface photographe (tableau de bord, hébergé séparément) ; page galerie client ; page portfolio ; espace famille scolaire (`/ecole`).
 - Paiements par Stripe Connect sur le compte du photographe ; frais de paiement retenus 2 % + 0,30 € par vente, aucune commission (formule Scolaire : 4,5 % sur les ventes scolaires, frais bancaires compris).
-- Tirages de la boutique : laboratoire Prodigi ; photos scolaires : laboratoire BePhoto (Belgique), intégration en cours.
+- Tirages de la boutique : laboratoire Prodigi ; photos scolaires : laboratoire BePhoto (Belgique), intégré à son API (clé d'API, une enveloppe par enfant, livraison à domicile, prix confirmé avant impression) ; reste le premier envoi réel avec un compte de test.
 - Inscription et connexion se font sur l'admin (`https://admin.holypixx.com/`, `#/inscription`).
 
 ## Capabilities and Constraints
@@ -40,7 +40,7 @@ Protection honnête et traçable plutôt que promesse impossible : photos décou
     - Studio : 490 €/an, annuel seulement ; tout Pro + scolaire sans commission ; Fondateurs 440 € la 1re année, 30 places.
     - Raison : la photo scolaire est saisonnière, un mensuel serait pris le temps d'une campagne puis résilié ; Studio devient avantageux pour le photographe au-delà d'environ 25 000 € de ventes scolaires par an.
 - Fonctionnalités en ligne : galeries protégées (tuiles, filigrane, empreinte, alerte de capture), sélection et coups de cœur, codes couleur et repères annotés, validation de la sélection, relances automatiques J-7/J-2, forfait et suppléments payés en ligne avec facture PDF, boutique de tirages (Prodigi), campagnes de vente (promotions, paniers retrouvés, relances), tableau de bord des ventes, livraison des fichiers HD, musique d'ambiance, trois mises en page, mot de passe et expiration, sous-domaine à son nom (Pro), portfolio avec formulaire de contact, réservation de séances depuis le portfolio (formules, créneaux et séries de mini-séances, acompte Stripe sur le compte du photographe, e-mails avec invitation d'agenda, rappel la veille ; Essentiel et plus), export de la sélection du client vers Lightroom, devis et contrats signés en ligne (signature électronique simple avec empreinte SHA-256, PDF signé aux deux parties, acompte Stripe, conditions par défaut du studio).
-- Module scolaire : établissements, années et classes ; import et regroupement automatique des photos par enfant ; fiches parents avec QR et code d'accès ; espace famille (frères et sœurs réunis) ; gamme de pochettes et planches avec aperçu de la photo de l'enfant ; panier unique et paiement en ligne ; livraison groupée à l'école puis à domicile ; rappels aux familles ; lots d'envoi au labo BePhoto.
+- Module scolaire : établissements, années et classes ; import et regroupement automatique des photos par enfant ; fiches parents avec QR et code d'accès ; espace famille (frères et sœurs réunis) ; gamme de pochettes et planches avec aperçu de la photo de l'enfant ; panier unique et paiement en ligne ; livraison groupée à l'école puis à domicile ; rappels aux familles ; lots d'envoi au labo BePhoto (prix simulé, une enveloppe par enfant, une commande par famille livrée chez elle, prix annoncé puis confirmé par le photographe).
 - Site statique (HTML/CSS/JS sans framework) publié sur Cloudflare Pages depuis `galerie/web` ; polices via Google Fonts.
 
 ## Brand Commitments
